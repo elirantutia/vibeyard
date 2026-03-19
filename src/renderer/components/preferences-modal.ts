@@ -1,5 +1,6 @@
 import { appState } from '../state.js';
 import { closeModal } from './modal.js';
+import { shortcutManager, displayKeys, eventToAccelerator } from '../shortcuts.js';
 
 
 const overlay = document.getElementById('modal-overlay')!;
@@ -9,7 +10,7 @@ const bodyEl = document.getElementById('modal-body')!;
 const btnCancel = document.getElementById('modal-cancel')!;
 const btnConfirm = document.getElementById('modal-confirm')!;
 
-type Section = 'general' | 'about';
+type Section = 'general' | 'shortcuts' | 'about';
 
 export function showPreferencesModal(): void {
   titleEl.textContent = 'Preferences';
@@ -26,6 +27,7 @@ export function showPreferencesModal(): void {
 
   const sections: { id: Section; label: string }[] = [
     { id: 'general', label: 'General' },
+    { id: 'shortcuts', label: 'Shortcuts' },
     { id: 'about', label: 'About' },
   ];
 
@@ -50,9 +52,17 @@ export function showPreferencesModal(): void {
   // Build section content
   let currentSection: Section = 'general';
   let soundCheckbox: HTMLInputElement | null = null;
+  let activeRecorder: { cleanup: () => void } | null = null;
 
+  function cleanupRecorder() {
+    if (activeRecorder) {
+      activeRecorder.cleanup();
+      activeRecorder = null;
+    }
+  }
 
   function renderSection(section: Section) {
+    cleanupRecorder();
     currentSection = section;
     content.innerHTML = '';
 
@@ -78,6 +88,9 @@ export function showPreferencesModal(): void {
       row.appendChild(soundCheckbox);
       content.appendChild(row);
 
+    } else if (section === 'shortcuts') {
+      renderShortcutsSection(content);
+
     } else if (section === 'about') {
       const aboutDiv = document.createElement('div');
       aboutDiv.className = 'about-section';
@@ -97,6 +110,93 @@ export function showPreferencesModal(): void {
       window.claudeIde.app.getVersion().then((ver) => {
         versionLine.textContent = `Version: ${ver}`;
       });
+    }
+  }
+
+  function renderShortcutsSection(container: HTMLElement) {
+    const grouped = shortcutManager.getAll();
+
+    for (const [category, shortcuts] of grouped) {
+      const header = document.createElement('div');
+      header.className = 'shortcut-category-header';
+      header.textContent = category;
+      container.appendChild(header);
+
+      for (const shortcut of shortcuts) {
+        const row = document.createElement('div');
+        row.className = 'shortcut-row';
+
+        const label = document.createElement('div');
+        label.className = 'shortcut-row-label';
+        label.textContent = shortcut.label;
+
+        const keyBtn = document.createElement('button');
+        keyBtn.className = 'shortcut-key-btn';
+        keyBtn.textContent = displayKeys(shortcut.resolvedKeys);
+
+        const hasOverride = shortcutManager.hasOverride(shortcut.id);
+        if (hasOverride) {
+          keyBtn.classList.add('customized');
+        }
+
+        const resetBtn = document.createElement('button');
+        resetBtn.className = 'shortcut-reset-btn';
+        resetBtn.textContent = 'Reset';
+        resetBtn.title = 'Reset to default';
+        if (!hasOverride) {
+          resetBtn.style.visibility = 'hidden';
+        }
+
+        // Click key button to start recording
+        keyBtn.addEventListener('click', () => {
+          cleanupRecorder();
+          keyBtn.textContent = 'Press keys...';
+          keyBtn.classList.add('recording');
+
+          const onKeydown = (e: KeyboardEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const accelerator = eventToAccelerator(e);
+            if (!accelerator) return; // Bare modifier press
+
+            // Save the override
+            shortcutManager.setOverride(shortcut.id, accelerator);
+            cleanup();
+            // Re-render to update display
+            renderSection('shortcuts');
+          };
+
+          const onBlur = () => {
+            cleanup();
+            keyBtn.textContent = displayKeys(shortcutManager.getKeys(shortcut.id));
+            keyBtn.classList.remove('recording');
+          };
+
+          const cleanup = () => {
+            document.removeEventListener('keydown', onKeydown, true);
+            keyBtn.removeEventListener('blur', onBlur);
+            keyBtn.classList.remove('recording');
+            activeRecorder = null;
+          };
+
+          document.addEventListener('keydown', onKeydown, true);
+          keyBtn.addEventListener('blur', onBlur);
+          activeRecorder = { cleanup };
+        });
+
+        // Reset button
+        resetBtn.addEventListener('click', () => {
+          cleanupRecorder();
+          shortcutManager.resetOverride(shortcut.id);
+          renderSection('shortcuts');
+        });
+
+        row.appendChild(label);
+        row.appendChild(keyBtn);
+        row.appendChild(resetBtn);
+        container.appendChild(row);
+      }
     }
   }
 
@@ -127,6 +227,7 @@ export function showPreferencesModal(): void {
   };
 
   const handleConfirm = () => {
+    cleanupRecorder();
     save();
     closeModal();
     modal.classList.remove('modal-wide');
@@ -134,12 +235,15 @@ export function showPreferencesModal(): void {
   };
 
   const handleCancel = () => {
+    cleanupRecorder();
     closeModal();
     modal.classList.remove('modal-wide');
     btnConfirm.textContent = 'Create';
   };
 
   const handleKeydown = (e: KeyboardEvent) => {
+    // Don't intercept if we're recording a shortcut
+    if (activeRecorder) return;
     if (e.key === 'Enter') {
       e.preventDefault();
       handleConfirm();
@@ -154,6 +258,7 @@ export function showPreferencesModal(): void {
   overlay.addEventListener('keydown', handleKeydown);
 
   (overlay as any)._cleanup = () => {
+    cleanupRecorder();
     btnConfirm.removeEventListener('click', handleConfirm);
     btnCancel.removeEventListener('click', handleCancel);
     overlay.removeEventListener('keydown', handleKeydown);

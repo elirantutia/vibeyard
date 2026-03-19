@@ -4,7 +4,7 @@ import { initTabBar } from './components/tab-bar.js';
 import { initSplitLayout } from './components/split-layout.js';
 import { initKeybindings } from './keybindings.js';
 import { handlePtyData, destroyTerminal, updateCostDisplay, updateContextDisplay } from './components/terminal-pane.js';
-import { setIdle, setHookStatus } from './session-activity.js';
+import { setIdle, setHookStatus, notifyPtyData } from './session-activity.js';
 import { parseCost, setCostData, onChange as onCostChange } from './session-cost.js';
 import { setContextData, onChange as onContextChange } from './session-context.js';
 import { initConfigSections } from './components/config-sections.js';
@@ -15,6 +15,9 @@ import { initDebugPanel, logDebugEvent, setDebugVisible } from './components/deb
 import { initGitPanel } from './components/git-panel.js';
 import { disconnectInspector } from './components/mcp-inspector.js';
 
+let isQuitting = false;
+window.claudeIde.app.onQuitting(() => { isQuitting = true; });
+
 async function main(): Promise<void> {
   // Wire PTY data/exit events from main process
   window.claudeIde.pty.onData((sessionId, data) => {
@@ -24,6 +27,7 @@ async function main(): Promise<void> {
     } else if (!isMcpSession(sessionId)) {
       handlePtyData(sessionId, data);
       parseCost(sessionId, data);
+      notifyPtyData(sessionId);
     }
   });
 
@@ -59,8 +63,8 @@ async function main(): Promise<void> {
     logDebugEvent('ptyExit', sessionId, { exitCode });
     if (isShellSessionId(sessionId)) {
       handleShellPtyExit(sessionId, exitCode);
-    } else if (!isMcpSession(sessionId)) {
-      // Auto-close the session when CLI exits
+    } else if (!isMcpSession(sessionId) && !isQuitting) {
+      // Auto-close the session when CLI exits (skip during app quit to preserve session state)
       const project = appState.projects.find(p => p.sessions.some(s => s.id === sessionId));
       if (project) {
         destroyTerminal(sessionId);

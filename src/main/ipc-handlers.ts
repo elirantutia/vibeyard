@@ -1,6 +1,6 @@
 import { ipcMain, BrowserWindow, app, dialog } from 'electron';
 import * as fs from 'fs';
-import { spawnPty, spawnShellPty, writePty, resizePty, killPty } from './pty-manager';
+import { spawnPty, spawnShellPty, writePty, resizePty, killPty, isSilencedExit } from './pty-manager';
 import { loadState, saveState, PersistedState } from './store';
 import { getClaudeConfig } from './claude-cli';
 import { startWatching, cleanupSessionStatus } from './hook-status';
@@ -8,6 +8,10 @@ import { getGitStatus, getGitFiles } from './git-status';
 import { registerMcpHandlers } from './mcp-ipc-handlers';
 
 let hookWatcherStarted = false;
+
+export function resetHookWatcher(): void {
+  hookWatcherStarted = false;
+}
 
 export function registerIpcHandlers(): void {
   ipcMain.handle('pty:create', (_event, sessionId: string, cwd: string, claudeSessionId: string | null, isResume: boolean, extraArgs: string) => {
@@ -34,6 +38,7 @@ export function registerIpcHandlers(): void {
       },
       (exitCode, signal) => {
         cleanupSessionStatus(sessionId);
+        if (isSilencedExit(sessionId)) return; // old PTY killed for re-spawn
         const w = BrowserWindow.getAllWindows()[0];
         if (w && !w.isDestroyed()) {
           w.webContents.send('pty:exit', sessionId, exitCode, signal);

@@ -58,6 +58,7 @@ export interface ClaudeIdeApi {
   };
   app: {
     getVersion(): Promise<string>;
+    onQuitting(callback: () => void): () => void;
   };
   mcp: {
     connect(id: string, url: string): Promise<McpResult>;

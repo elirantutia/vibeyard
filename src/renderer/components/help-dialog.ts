@@ -1,4 +1,5 @@
 import { closeModal } from './modal.js';
+import { shortcutManager, displayKeys } from '../shortcuts.js';
 
 const overlay = document.getElementById('modal-overlay')!;
 const modal = document.getElementById('modal')!;
@@ -72,8 +73,45 @@ function buildSection(title: string, rows: IndicatorRow[]): HTMLElement {
   return section;
 }
 
+function buildShortcutSections(): HTMLElement[] {
+  const sections: HTMLElement[] = [];
+  const grouped = shortcutManager.getAll();
+
+  for (const [category, shortcuts] of grouped) {
+    // Collapse goto-session-1..9 into a single row
+    const rows: IndicatorRow[] = [];
+    let gotoHandled = false;
+
+    for (const shortcut of shortcuts) {
+      if (shortcut.id.startsWith('goto-session-')) {
+        if (!gotoHandled) {
+          gotoHandled = true;
+          const first = displayKeys(shortcutManager.getKeys('goto-session-1'));
+          const last = displayKeys(shortcutManager.getKeys('goto-session-9'));
+          rows.push({
+            visual: () => mono(`${first} - ${last}`),
+            label: 'Go to Session N',
+            description: 'Switch to session by number',
+          });
+        }
+        continue;
+      }
+
+      rows.push({
+        visual: () => mono(displayKeys(shortcut.resolvedKeys)),
+        label: shortcut.label,
+        description: '',
+      });
+    }
+
+    sections.push(buildSection(`Shortcuts: ${category}`, rows));
+  }
+
+  return sections;
+}
+
 export function showHelpDialog(): void {
-  titleEl.textContent = 'Session State Indicators';
+  titleEl.textContent = 'Help';
   bodyEl.innerHTML = '';
   modal.classList.add('modal-wide');
   btnCancel.style.display = 'none';
@@ -109,6 +147,11 @@ export function showHelpDialog(): void {
     { visual: () => mono('!1', '#e94560'), label: 'Conflicted', description: 'Files with merge conflicts' },
     { visual: () => mono('\u21912 \u21933', '#606070'), label: 'Ahead/Behind', description: 'Commits ahead/behind remote' },
   ]));
+
+  // Keyboard shortcuts sections
+  for (const section of buildShortcutSections()) {
+    container.appendChild(section);
+  }
 
   bodyEl.appendChild(container);
 

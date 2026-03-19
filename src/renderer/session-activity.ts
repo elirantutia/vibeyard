@@ -44,6 +44,23 @@ export function initSession(sessionId: string): void {
   for (const cb of listeners) cb(sessionId, 'waiting');
 }
 
+/**
+ * Called when PTY data is received — keeps the session in "working" state
+ * as a fallback in case fs.watch misses hook status file changes.
+ * Only extends an existing "working" state; does NOT upgrade from "waiting".
+ */
+export function notifyPtyData(sessionId: string): void {
+  const state = sessions.get(sessionId);
+  if (!state || state.status !== 'working') return;
+
+  // Reset the staleness timer since we're still receiving output
+  if (state.stalenessTimer !== null) clearTimeout(state.stalenessTimer);
+  state.stalenessTimer = setTimeout(() => {
+    state.stalenessTimer = null;
+    setStatus(sessionId, 'waiting');
+  }, STALENESS_TIMEOUT_MS);
+}
+
 export function setIdle(sessionId: string): void {
   const state = sessions.get(sessionId);
   if (!state) return;

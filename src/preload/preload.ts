@@ -47,6 +47,7 @@ export interface ClaudeIdeApi {
   };
   app: {
     getVersion(): Promise<string>;
+    onQuitting(callback: () => void): () => void;
   };
   mcp: {
     connect(id: string, url: string): Promise<{ success: boolean; data?: unknown; error?: string }>;
@@ -121,6 +122,7 @@ const api: ClaudeIdeApi = {
   },
   app: {
     getVersion: () => ipcRenderer.invoke('app:getVersion'),
+    onQuitting: (cb: () => void) => onChannel('app:quitting', cb),
   },
   mcp: {
     connect: (id: string, url: string) => ipcRenderer.invoke('mcp:connect', id, url),

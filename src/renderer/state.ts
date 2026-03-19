@@ -34,6 +34,7 @@ export interface ProjectRecord {
 export interface Preferences {
   soundOnSessionWaiting: boolean;
   debugMode: boolean;
+  keybindings?: Record<string, string>;
 }
 
 export interface PersistedState {

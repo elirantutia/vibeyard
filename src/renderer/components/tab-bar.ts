@@ -23,7 +23,11 @@ function buildTooltip(status: SessionStatus, claudeSessionId?: string): string {
 }
 
 export function initTabBar(): void {
-  btnAddSession.addEventListener('click', promptNewSession);
+  btnAddSession.addEventListener('click', () => quickNewSession());
+  btnAddSession.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    showAddSessionContextMenu(e.clientX, e.clientY);
+  });
   btnAddMcpInspector.addEventListener('click', promptNewMcpInspector);
   btnToggleSplit.addEventListener('click', () => appState.toggleSplit());
   btnHelp.addEventListener('click', () => showHelpDialog());
@@ -386,6 +390,49 @@ function renderGitStatus(): void {
   if (status.conflicted > 0) parts.push(`<span class="git-conflicted">!${status.conflicted}</span>`);
 
   gitStatusEl.innerHTML = parts.join(' ');
+}
+
+export function quickNewSession(): void {
+  const project = appState.activeProject;
+  if (!project) return;
+  const sessionNum = project.sessions.length + 1;
+  appState.addSession(project.id, `Session ${sessionNum}`);
+}
+
+function showAddSessionContextMenu(x: number, y: number): void {
+  hideTabContextMenu();
+
+  const menu = document.createElement('div');
+  menu.className = 'tab-context-menu';
+  menu.style.left = `${x}px`;
+  menu.style.top = `${y}px`;
+
+  const quickItem = document.createElement('div');
+  quickItem.className = 'tab-context-menu-item';
+  quickItem.textContent = 'New Session';
+  quickItem.addEventListener('click', (e) => {
+    e.stopPropagation();
+    hideTabContextMenu();
+    quickNewSession();
+  });
+
+  const customItem = document.createElement('div');
+  customItem.className = 'tab-context-menu-item';
+  customItem.textContent = 'New Custom Session\u2026';
+  customItem.addEventListener('click', (e) => {
+    e.stopPropagation();
+    hideTabContextMenu();
+    promptNewSession();
+  });
+
+  menu.appendChild(quickItem);
+  menu.appendChild(customItem);
+  document.body.appendChild(menu);
+  activeContextMenu = menu;
+
+  const rect = menu.getBoundingClientRect();
+  if (rect.right > window.innerWidth) menu.style.left = `${window.innerWidth - rect.width - 4}px`;
+  if (rect.bottom > window.innerHeight) menu.style.top = `${window.innerHeight - rect.height - 4}px`;
 }
 
 export function promptNewSession(): void {

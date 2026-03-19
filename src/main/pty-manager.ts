@@ -10,6 +10,7 @@ interface PtyInstance {
 }
 
 const ptys = new Map<string, PtyInstance>();
+const silencedExits = new Set<string>();
 
 /**
  * Get a full PATH that includes common binary directories.
@@ -87,6 +88,8 @@ export function spawnPty(
   onExit: (exitCode: number, signal?: number) => void
 ): void {
   if (ptys.has(sessionId)) {
+    // Silence the old PTY's exit event so it doesn't remove the new session
+    silencedExits.add(sessionId);
     killPty(sessionId);
   }
 
@@ -120,7 +123,11 @@ export function spawnPty(
 
   ptyProcess.onData((data) => onData(data));
   ptyProcess.onExit(({ exitCode, signal }) => {
-    ptys.delete(sessionId);
+    // Only remove from map if this PTY is still the active one for this session
+    const current = ptys.get(sessionId);
+    if (current?.process === ptyProcess) {
+      ptys.delete(sessionId);
+    }
     onExit(exitCode, signal);
   });
 
@@ -176,6 +183,10 @@ export function spawnShellPty(
   });
 
   ptys.set(sessionId, { process: ptyProcess, sessionId });
+}
+
+export function isSilencedExit(sessionId: string): boolean {
+  return silencedExits.delete(sessionId);
 }
 
 export function killAllPtys(): void {
