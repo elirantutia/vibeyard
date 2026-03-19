@@ -48,6 +48,14 @@ export interface ClaudeIdeApi {
     getFiles(path: string): Promise<unknown>;
     getDiff(path: string, file: string, area: string): Promise<string>;
   };
+  update: {
+    checkNow(): Promise<void>;
+    install(): Promise<void>;
+    onAvailable(cb: (info: { version: string }) => void): () => void;
+    onDownloadProgress(cb: (info: { percent: number }) => void): () => void;
+    onDownloaded(cb: (info: { version: string }) => void): () => void;
+    onError(cb: (info: { message: string }) => void): () => void;
+  };
   app: {
     getVersion(): Promise<string>;
     onQuitting(callback: () => void): () => void;
@@ -125,6 +133,14 @@ const api: ClaudeIdeApi = {
     getStatus: (path) => ipcRenderer.invoke('git:getStatus', path),
     getFiles: (path) => ipcRenderer.invoke('git:getFiles', path),
     getDiff: (path: string, file: string, area: string) => ipcRenderer.invoke('git:getDiff', path, file, area),
+  },
+  update: {
+    checkNow: () => ipcRenderer.invoke('update:checkNow'),
+    install: () => ipcRenderer.invoke('update:install'),
+    onAvailable: (cb) => onChannel('update:available', (info) => cb(info as { version: string })),
+    onDownloadProgress: (cb) => onChannel('update:download-progress', (info) => cb(info as { percent: number })),
+    onDownloaded: (cb) => onChannel('update:downloaded', (info) => cb(info as { version: string })),
+    onError: (cb) => onChannel('update:error', (info) => cb(info as { message: string })),
   },
   app: {
     getVersion: () => ipcRenderer.invoke('app:getVersion'),

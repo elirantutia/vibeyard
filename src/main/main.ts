@@ -6,6 +6,7 @@ import { flushState } from './store';
 import { createAppMenu } from './menu';
 import { cleanupAll as cleanupHookStatus, installStatusLineScript, restartAndResync } from './hook-status';
 import { installHooks } from './claude-cli';
+import { initAutoUpdater } from './auto-updater';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -44,6 +45,7 @@ app.whenReady().then(() => {
   registerIpcHandlers();
   createAppMenu();
   createWindow();
+  initAutoUpdater();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

@@ -14,6 +14,7 @@ import { startPolling as startGitPolling } from './git-status.js';
 import { initDebugPanel, logDebugEvent, setDebugVisible } from './components/debug-panel.js';
 import { initGitPanel } from './components/git-panel.js';
 import { disconnectInspector } from './components/mcp-inspector.js';
+import { initUpdateBanner } from './components/update-banner.js';
 
 let isQuitting = false;
 window.claudeIde.app.onQuitting(() => { isQuitting = true; });
@@ -83,6 +84,7 @@ async function main(): Promise<void> {
   initProjectTerminal();
   initDebugPanel();
   initGitPanel();
+  initUpdateBanner();
   startGitPolling();
 
   function isMcpSession(sessionId: string): boolean {

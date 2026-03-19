@@ -8,6 +8,7 @@ import { getClaudeConfig } from './claude-cli';
 import { startWatching, cleanupSessionStatus } from './hook-status';
 import { getGitStatus, getGitFiles, getGitDiff } from './git-status';
 import { registerMcpHandlers } from './mcp-ipc-handlers';
+import { checkForUpdates, quitAndInstall } from './auto-updater';
 
 let hookWatcherStarted = false;
 
@@ -168,6 +169,9 @@ export function registerIpcHandlers(): void {
       return '';
     }
   });
+
+  ipcMain.handle('update:checkNow', () => checkForUpdates());
+  ipcMain.handle('update:install', () => quitAndInstall());
 
   registerMcpHandlers();
 }

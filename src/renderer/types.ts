@@ -63,6 +63,14 @@ export interface ClaudeIdeApi {
     getFiles(path: string): Promise<unknown>;
     getDiff(path: string, file: string, area: string): Promise<string>;
   };
+  update: {
+    checkNow(): Promise<void>;
+    install(): Promise<void>;
+    onAvailable(cb: (info: { version: string }) => void): () => void;
+    onDownloadProgress(cb: (info: { percent: number }) => void): () => void;
+    onDownloaded(cb: (info: { version: string }) => void): () => void;
+    onError(cb: (info: { message: string }) => void): () => void;
+  };
   app: {
     getVersion(): Promise<string>;
     onQuitting(callback: () => void): () => void;

@@ -103,8 +103,48 @@ export function showPreferencesModal(): void {
       versionLine.className = 'about-version';
       versionLine.textContent = 'Version: loading...';
 
+      const updateRow = document.createElement('div');
+      updateRow.className = 'about-update-row';
+
+      const updateBtn = document.createElement('button');
+      updateBtn.className = 'about-update-btn';
+      updateBtn.textContent = 'Check for Updates';
+
+      const updateStatus = document.createElement('span');
+      updateStatus.className = 'about-update-status';
+
+      updateBtn.addEventListener('click', () => {
+        updateBtn.disabled = true;
+        updateStatus.textContent = 'Checking...';
+        window.claudeIde.update.checkNow().then(() => {
+          // If no update event fires within a few seconds, show "up to date"
+          const timeout = setTimeout(() => {
+            updateStatus.textContent = 'You\u2019re up to date.';
+            updateBtn.disabled = false;
+          }, 5000);
+          const unsub = window.claudeIde.update.onAvailable((info) => {
+            clearTimeout(timeout);
+            updateStatus.textContent = `Update v${info.version} available — downloading...`;
+            unsub();
+          });
+          const unsubErr = window.claudeIde.update.onError(() => {
+            clearTimeout(timeout);
+            updateStatus.textContent = 'Update check failed.';
+            updateBtn.disabled = false;
+            unsubErr();
+          });
+        }).catch(() => {
+          updateStatus.textContent = 'Update check failed.';
+          updateBtn.disabled = false;
+        });
+      });
+
+      updateRow.appendChild(updateBtn);
+      updateRow.appendChild(updateStatus);
+
       aboutDiv.appendChild(appName);
       aboutDiv.appendChild(versionLine);
+      aboutDiv.appendChild(updateRow);
       content.appendChild(aboutDiv);
 
       window.claudeIde.app.getVersion().then((ver) => {

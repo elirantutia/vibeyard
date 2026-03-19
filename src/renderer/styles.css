@@ -164,6 +164,43 @@ body.debug-panel-open #app {
   color: var(--accent);
 }
 
+/* Update banner */
+#update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+#update-banner.hidden {
+  display: none;
+}
+
+.update-banner-btn {
+  padding: 4px 14px;
+  background: var(--accent);
+  border: none;
+  border-radius: 4px;
+  color: white;
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.update-banner-btn:hover {
+  background: var(--accent-dim);
+}
+
+.update-banner-btn.hidden {
+  display: none;
+}
+
 /* Main area */
 #main-area {
   flex: 1;
@@ -901,6 +938,38 @@ body.debug-panel-open #app {
 
 .about-version {
   font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.about-update-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.about-update-btn {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  padding: 5px 14px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.about-update-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.about-update-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.about-update-status {
+  font-size: 12px;
   color: var(--text-secondary);
 }
 

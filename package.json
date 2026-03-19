@@ -41,6 +41,11 @@
       "target": [
         "nsis"
       ]
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "elirantutia",
+      "repo": "ccide"
     }
   },
   "devDependencies": {
@@ -57,6 +62,7 @@
     "@xterm/addon-search": "^0.16.0",
     "@xterm/addon-webgl": "^0.18.0",
     "@xterm/xterm": "^5.5.0",
+    "electron-updater": "^6.8.3",
     "node-pty": "^1.1.0"
   }
 }
