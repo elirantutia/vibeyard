@@ -1,6 +1,6 @@
 {
   "name": "ccide",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Terminal-centric IDE built on Claude Code",
   "main": "dist/main/main.js",
   "scripts": {

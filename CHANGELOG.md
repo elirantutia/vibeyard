@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.3] - 2026-03-19
+
+### Changes
+- Build and release to macOS-only with unsigned app and add README
+
 ## [0.2.2] - 2026-03-19
 
 ### Features
