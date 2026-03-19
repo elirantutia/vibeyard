@@ -84,6 +84,14 @@ export function createTerminalPane(
     if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
       return false;
     }
+    // Send CSI u encoding for Shift+Enter so Claude CLI treats it as newline
+    if (e.shiftKey && e.key === 'Enter') {
+      if (e.type === 'keydown') {
+        window.claudeIde.pty.write(sessionId, '\x1b[13;2u');
+      }
+      e.preventDefault();
+      return false;
+    }
     return true;
   });
 
