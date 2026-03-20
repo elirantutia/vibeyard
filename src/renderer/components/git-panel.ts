@@ -8,6 +8,8 @@ const MAX_FILES = 100;
 
 let collapsed = false;
 let lastCountKey = '';
+let lastFilesKey = '';
+let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 function esc(s: string): string {
   const d = document.createElement('div');
@@ -85,6 +87,15 @@ function applyGitPanelVisibility(): void {
   container.classList.toggle('hidden', !visible);
 }
 
+/** Debounced refresh — coalesces rapid-fire events into a single render */
+function scheduleRefresh(): void {
+  if (refreshTimer) clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(() => {
+    refreshTimer = null;
+    refresh();
+  }, 100);
+}
+
 async function refresh(): Promise<void> {
   const container = document.getElementById('git-panel');
   if (!container) return;
@@ -122,13 +133,40 @@ async function refresh(): Promise<void> {
     }
   }
 
-  // Build section shell
+  const headerHTML = `<span class="config-section-toggle ${collapsed ? 'collapsed' : ''}">&#x25BC;</span>Git Changes${headerSuffix}<span class="config-section-count">${total}</span>`;
+
+  // Try to update existing section in-place instead of rebuilding
+  const existingSection = container.querySelector('.config-section');
+  if (existingSection) {
+    // Update header in-place
+    const existingHeader = existingSection.querySelector('.config-section-header');
+    if (existingHeader) {
+      existingHeader.innerHTML = headerHTML;
+    }
+
+    // Update worktree selector
+    if (hasMultipleWorktrees) {
+      renderWorktreeSelector(container, project);
+    } else {
+      const selector = container.querySelector('.git-worktree-selector');
+      if (selector) selector.remove();
+    }
+
+    // Reload files if expanded
+    if (!collapsed) {
+      const body = existingSection.querySelector('.config-section-body') as HTMLElement | null;
+      if (body) loadFiles(body, activeGitPath);
+    }
+    return;
+  }
+
+  // First render — build from scratch
   const section = document.createElement('div');
   section.className = 'config-section';
 
   const header = document.createElement('div');
   header.className = 'config-section-header';
-  header.innerHTML = `<span class="config-section-toggle ${collapsed ? 'collapsed' : ''}">&#x25BC;</span>Git Changes${headerSuffix}<span class="config-section-count">${total}</span>`;
+  header.innerHTML = headerHTML;
 
   const body = document.createElement('div');
   body.className = `config-section-body${collapsed ? ' hidden' : ''}`;
@@ -159,15 +197,24 @@ async function refresh(): Promise<void> {
 }
 
 async function loadFiles(body: HTMLElement, gitPath: string): Promise<void> {
-  body.innerHTML = '<div class="config-loading">Loading...</div>';
+  // Show loading only on first load (when body is empty)
+  if (!body.hasChildNodes()) {
+    body.innerHTML = '<div class="config-loading">Loading...</div>';
+  }
 
   let files: GitFileEntry[];
   try {
     files = await window.claudeIde.git.getFiles(gitPath) as GitFileEntry[];
   } catch {
     body.innerHTML = '';
+    lastFilesKey = '';
     return;
   }
+
+  // Skip DOM rebuild if file list hasn't changed
+  const filesKey = JSON.stringify(files);
+  if (filesKey === lastFilesKey) return;
+  lastFilesKey = filesKey;
 
   body.innerHTML = '';
 
@@ -248,8 +295,8 @@ export function toggleGitPanel(): void {
 }
 
 export function initGitPanel(): void {
-  appState.on('project-changed', () => refresh());
-  appState.on('state-loaded', () => refresh());
+  appState.on('project-changed', () => { lastFilesKey = ''; scheduleRefresh(); });
+  appState.on('state-loaded', () => { lastFilesKey = ''; scheduleRefresh(); });
 
   // Refresh when git status counts change
   onGitStatusChange((projectId, status) => {
@@ -257,6 +304,7 @@ export function initGitPanel(): void {
     const key = `${status.staged}:${status.modified}:${status.untracked}:${status.conflicted}`;
     if (key !== lastCountKey) {
       lastCountKey = key;
+      lastFilesKey = '';
       refresh();
     }
   });
@@ -264,14 +312,15 @@ export function initGitPanel(): void {
   // Refresh on session working → waiting transition
   onStatusChange((_sessionId, status) => {
     if (status === 'waiting' || status === 'completed') {
-      refresh();
+      lastFilesKey = '';
+      scheduleRefresh();
     }
   });
 
   // Refresh when worktree list or active worktree changes
-  onWorktreeChange(() => refresh());
+  onWorktreeChange(() => { lastFilesKey = ''; scheduleRefresh(); });
 
   // Auto-switch on session change
-  appState.on('session-changed', () => refresh());
+  appState.on('session-changed', () => { lastFilesKey = ''; scheduleRefresh(); });
   appState.on('preferences-changed', () => applyGitPanelVisibility());
 }
