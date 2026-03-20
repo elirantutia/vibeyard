@@ -64,6 +64,21 @@ export interface SessionRecord {
   createdAt: string;
 }
 
+export interface ArchivedSession {
+  id: string;
+  name: string;
+  providerId: ProviderId;
+  cliSessionId: string | null;
+  createdAt: string;
+  closedAt: string;
+  cost: {
+    totalCostUsd: number;
+    totalInputTokens: number;
+    totalOutputTokens: number;
+    totalDurationMs: number;
+  } | null;
+}
+
 export interface ProjectRecord {
   id: string;
   name: string;
@@ -75,6 +90,7 @@ export interface ProjectRecord {
     splitPanes: string[];
     splitDirection: 'horizontal' | 'vertical';
   };
+  sessionHistory?: ArchivedSession[];
   terminalPanelOpen?: boolean;
   terminalPanelHeight?: number;
 }

@@ -1,7 +1,8 @@
 import type { ClaudeIdeApi } from './types.js';
-import type { SessionRecord, ProjectRecord, Preferences, PersistedState } from '../shared/types.js';
+import type { SessionRecord, ProjectRecord, Preferences, PersistedState, ArchivedSession, ProviderId } from '../shared/types.js';
+import { getCost } from './session-cost.js';
 
-export type { SessionRecord, ProjectRecord, Preferences, PersistedState } from '../shared/types.js';
+export type { SessionRecord, ProjectRecord, Preferences, PersistedState, ArchivedSession } from '../shared/types.js';
 
 declare global {
   interface Window {
@@ -19,6 +20,7 @@ type EventType =
   | 'layout-changed'
   | 'preferences-changed'
   | 'terminal-panel-changed'
+  | 'history-changed'
   | 'state-loaded';
 
 type EventCallback = (data?: unknown) => void;
@@ -250,6 +252,12 @@ class AppState {
     const project = this.state.projects.find((p) => p.id === projectId);
     if (!project) return;
 
+    // Archive CLI sessions before removing (cost data must be captured before session-removed triggers destroyTerminal)
+    const session = project.sessions.find((s) => s.id === sessionId);
+    if (session && (!session.type || session.type === 'claude')) {
+      this.archiveSession(project, session);
+    }
+
     const closingIndex = project.sessions.findIndex((s) => s.id === sessionId);
     project.sessions = project.sessions.filter((s) => s.id !== sessionId);
     if (project.activeSessionId === sessionId) {
@@ -261,6 +269,99 @@ class AppState {
     this.persist();
     this.emit('session-removed', { projectId, sessionId });
     this.emit('session-changed');
+  }
+
+  private archiveSession(project: ProjectRecord, session: SessionRecord): void {
+    const costInfo = getCost(session.id);
+    const archived: ArchivedSession = {
+      id: session.id,
+      name: session.name,
+      providerId: (session.providerId || 'claude') as ProviderId,
+      cliSessionId: session.cliSessionId,
+      createdAt: session.createdAt,
+      closedAt: new Date().toISOString(),
+      cost: costInfo ? {
+        totalCostUsd: costInfo.totalCostUsd,
+        totalInputTokens: costInfo.totalInputTokens,
+        totalOutputTokens: costInfo.totalOutputTokens,
+        totalDurationMs: costInfo.totalDurationMs,
+      } : null,
+    };
+
+    if (!project.sessionHistory) project.sessionHistory = [];
+
+    // If a history entry with the same cliSessionId exists, update it instead of creating a duplicate
+    const existingIndex = archived.cliSessionId
+      ? project.sessionHistory.findIndex((a) => a.cliSessionId === archived.cliSessionId)
+      : -1;
+    if (existingIndex !== -1) {
+      project.sessionHistory[existingIndex].closedAt = archived.closedAt;
+      if (archived.cost) project.sessionHistory[existingIndex].cost = archived.cost;
+      if (archived.name !== project.sessionHistory[existingIndex].name) {
+        project.sessionHistory[existingIndex].name = archived.name;
+      }
+    } else {
+      project.sessionHistory.push(archived);
+    }
+
+    // Cap at 500 entries per project
+    if (project.sessionHistory.length > 500) {
+      project.sessionHistory = project.sessionHistory.slice(-500);
+    }
+
+    this.emit('history-changed', project.id);
+  }
+
+  getSessionHistory(projectId: string): ArchivedSession[] {
+    const project = this.state.projects.find((p) => p.id === projectId);
+    return project?.sessionHistory ?? [];
+  }
+
+  removeHistoryEntry(projectId: string, archivedSessionId: string): void {
+    const project = this.state.projects.find((p) => p.id === projectId);
+    if (!project?.sessionHistory) return;
+    project.sessionHistory = project.sessionHistory.filter((a) => a.id !== archivedSessionId);
+    this.persist();
+    this.emit('history-changed', projectId);
+  }
+
+  clearSessionHistory(projectId: string): void {
+    const project = this.state.projects.find((p) => p.id === projectId);
+    if (!project) return;
+    project.sessionHistory = [];
+    this.persist();
+    this.emit('history-changed', projectId);
+  }
+
+  resumeFromHistory(projectId: string, archivedSessionId: string): SessionRecord | undefined {
+    const project = this.state.projects.find((p) => p.id === projectId);
+    if (!project) return undefined;
+
+    const archived = project.sessionHistory?.find((a) => a.id === archivedSessionId);
+    if (!archived || !archived.cliSessionId) return undefined;
+
+    // If a tab with the same cliSessionId is already open, just activate it
+    const existing = project.sessions.find((s) => s.cliSessionId === archived.cliSessionId);
+    if (existing) {
+      project.activeSessionId = existing.id;
+      this.persist();
+      this.emit('session-changed');
+      return existing;
+    }
+
+    const session: SessionRecord = {
+      id: crypto.randomUUID(),
+      name: archived.name,
+      providerId: archived.providerId,
+      cliSessionId: archived.cliSessionId,
+      createdAt: new Date().toISOString(),
+    };
+    project.sessions.push(session);
+    project.activeSessionId = session.id;
+    this.persist();
+    this.emit('session-added', { projectId, session });
+    this.emit('session-changed');
+    return session;
   }
 
   setActiveSession(projectId: string, sessionId: string): void {
@@ -292,6 +393,14 @@ class AppState {
     const session = project.sessions.find((s) => s.id === sessionId);
     if (!session) return;
     session.name = name;
+    // Keep history entry in sync if this session was resumed from history
+    if (session.cliSessionId && project.sessionHistory) {
+      const historyEntry = project.sessionHistory.find((a) => a.cliSessionId === session.cliSessionId);
+      if (historyEntry) {
+        historyEntry.name = name;
+        this.emit('history-changed', project.id);
+      }
+    }
     this.persist();
     this.emit('session-changed');
   }
