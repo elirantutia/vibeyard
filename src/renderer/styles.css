@@ -719,6 +719,32 @@ body.debug-panel-open #app {
   background: var(--bg-hover);
 }
 
+.modal-field-checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.modal-field-checkbox input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.modal-field-checkbox label {
+  margin-bottom: 0;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
 .modal-error {
   color: var(--accent);
   font-size: 12px;

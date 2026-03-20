@@ -308,6 +308,26 @@ describe('addSession()', () => {
     expect(addedCb).toHaveBeenCalledTimes(1);
     expect(changedCb).toHaveBeenCalledTimes(1);
   });
+
+  it('uses project defaultArgs when no explicit args provided', () => {
+    const project = addProject();
+    project.defaultArgs = '--model sonnet';
+    const session = appState.addSession(project.id, 'S1')!;
+    expect(session.args).toBe('--model sonnet');
+  });
+
+  it('explicit args override project defaultArgs', () => {
+    const project = addProject();
+    project.defaultArgs = '--model sonnet';
+    const session = appState.addSession(project.id, 'S1', '--model opus')!;
+    expect(session.args).toBe('--model opus');
+  });
+
+  it('no args when neither explicit args nor defaultArgs set', () => {
+    const project = addProject();
+    const session = appState.addSession(project.id, 'S1')!;
+    expect(session.args).toBeUndefined();
+  });
 });
 
 describe('addDiffViewerSession()', () => {

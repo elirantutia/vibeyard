@@ -125,6 +125,7 @@ export interface ProjectRecord {
   };
   sessionHistory?: ArchivedSession[];
   insights?: ProjectInsightsData;
+  defaultArgs?: string;
   terminalPanelOpen?: boolean;
   terminalPanelHeight?: number;
 }

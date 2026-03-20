@@ -165,10 +165,11 @@ class AppState {
     const project = this.state.projects.find((p) => p.id === projectId);
     if (!project) return undefined;
 
+    const effectiveArgs = args ?? project.defaultArgs;
     const session: SessionRecord = {
       id: crypto.randomUUID(),
       name,
-      ...(args ? { args } : {}),
+      ...(effectiveArgs ? { args: effectiveArgs } : {}),
       cliSessionId: null,
       createdAt: new Date().toISOString(),
     };

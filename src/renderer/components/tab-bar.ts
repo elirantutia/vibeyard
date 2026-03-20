@@ -1,5 +1,5 @@
 import { appState, type ProjectRecord, type SessionRecord } from '../state.js';
-import { showModal, closeModal } from './modal.js';
+import { showModal, closeModal, FieldDef } from './modal.js';
 import { onChange as onStatusChange, getStatus, type SessionStatus } from '../session-activity.js';
 import { onChange as onGitStatusChange, getGitStatus, type GitStatus } from '../git-status.js';
 
@@ -422,14 +422,25 @@ export function promptNewSession(): void {
   if (!project) return;
 
   const sessionNum = project.sessions.length + 1;
-  showModal('New Session', [
+
+  const fields: FieldDef[] = [
     { label: 'Name', id: 'session-name', placeholder: `Session ${sessionNum}`, defaultValue: `Session ${sessionNum}` },
-    { label: 'Arguments', id: 'session-args', placeholder: 'e.g. --model sonnet' },
-  ], (values) => {
+    { label: 'Arguments', id: 'session-args', placeholder: 'e.g. --model sonnet', defaultValue: project.defaultArgs ?? '' },
+    {
+      label: 'Keep args for future sessions',
+      id: 'keep-args',
+      type: 'checkbox',
+      defaultValue: project.defaultArgs ? 'true' : undefined,
+    },
+  ];
+
+  showModal('New Session', fields, (values) => {
     const name = values['session-name']?.trim();
     if (name) {
       closeModal();
       const args = values['session-args']?.trim() || undefined;
+      const keepArgs = values['keep-args'] === 'true';
+      project.defaultArgs = keepArgs ? (args || undefined) : undefined;
       appState.addSession(project.id, name, args);
     }
   });
