@@ -3,6 +3,7 @@ import { showModal, closeModal } from './modal.js';
 import { onChange as onStatusChange, getStatus, type SessionStatus } from '../session-activity.js';
 import { onChange as onGitStatusChange, getGitStatus, type GitStatus } from '../git-status.js';
 import { onChange as onCostChange, getCost } from '../session-cost.js';
+import { isUnread, onChange as onUnreadChange } from '../session-unread.js';
 import { showHelpDialog } from './help-dialog.js';
 import { scrollToGitPanel } from './git-panel.js';
 
@@ -14,7 +15,6 @@ const btnToggleSplit = document.getElementById('btn-toggle-split')!;
 const btnHelp = document.getElementById('btn-help')!;
 
 let activeContextMenu: HTMLElement | null = null;
-const unreadSessions = new Set<string>();
 const prevStatus = new Map<string, SessionStatus>();
 
 function buildTooltip(status: SessionStatus, cliSessionId?: string): string {
@@ -40,7 +40,6 @@ export function initTabBar(): void {
     const d = data as { sessionId?: string } | undefined;
     if (d?.sessionId) {
       prevStatus.delete(d.sessionId);
-      unreadSessions.delete(d.sessionId);
     }
     render();
   });
@@ -61,23 +60,9 @@ export function initTabBar(): void {
       tab.title = buildTooltip(status, session?.cliSessionId);
     }
 
-    // Mark as unread if working → waiting/completed and not the active session
-    if (prev === 'working' && (status === 'waiting' || status === 'completed' || status === 'permission')) {
-      const project = appState.activeProject;
-      if (project && sessionId !== project.activeSessionId) {
-        unreadSessions.add(sessionId);
-        const tab = tabListEl.querySelector(`.tab-item[data-session-id="${sessionId}"]`);
-        if (tab) tab.classList.add('unread');
-      }
-    }
   });
 
-  appState.on('session-changed', () => {
-    const project = appState.activeProject;
-    if (project) {
-      unreadSessions.delete(project.activeSessionId);
-    }
-  });
+  onUnreadChange(render);
 
   onCostChange((sessionId, cost) => {
     const span = tabListEl.querySelector(`.tab-item[data-session-id="${sessionId}"] .tab-cost`) as HTMLElement | null;
@@ -237,13 +222,12 @@ function render(): void {
   for (const session of project.sessions) {
     const tab = document.createElement('div');
     const isActive = session.id === project.activeSessionId;
-    if (isActive) unreadSessions.delete(session.id);
-    const isUnread = !isActive && unreadSessions.has(session.id);
+    const unread = !isActive && isUnread(session.id);
     const isMcp = session.type === 'mcp-inspector';
     const isDiff = session.type === 'diff-viewer';
     const isFileReader = session.type === 'file-reader';
     const isSpecial = isMcp || isDiff || isFileReader;
-    tab.className = 'tab-item' + (isActive ? ' active' : '') + (isUnread ? ' unread' : '');
+    tab.className = 'tab-item' + (isActive ? ' active' : '') + (unread ? ' unread' : '');
     tab.dataset.sessionId = session.id;
     tab.title = isDiff ? `Diff: ${session.diffFilePath || session.name}` : isMcp ? `MCP Inspector` : isFileReader ? `File: ${session.fileReaderPath || session.name}` : buildTooltip(getStatus(session.id), session.cliSessionId);
     const costInfo = isSpecial ? null : getCost(session.id);

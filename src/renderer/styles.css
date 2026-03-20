@@ -135,6 +135,10 @@ body.debug-panel-open #app {
   white-space: nowrap;
 }
 
+.project-item .project-name.unread {
+  color: var(--accent);
+}
+
 .project-item .project-path {
   font-size: 10px;
   color: var(--text-muted);

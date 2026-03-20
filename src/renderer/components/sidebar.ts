@@ -2,6 +2,7 @@ import { appState } from '../state.js';
 import { showModal, setModalError, closeModal } from './modal.js';
 import { showPreferencesModal } from './preferences-modal.js';
 import { onChange as onCostChange, getAggregateCost } from '../session-cost.js';
+import { hasUnreadInProject, onChange as onUnreadChange } from '../session-unread.js';
 
 const projectListEl = document.getElementById('project-list')!;
 const btnAddProject = document.getElementById('btn-add-project')!;
@@ -34,6 +35,8 @@ export function initSidebar(): void {
     renderCostFooter();
   });
 
+  onUnreadChange(render);
+
   render();
 }
 
@@ -45,7 +48,7 @@ function render(): void {
     el.className = 'project-item' + (project.id === appState.activeProjectId ? ' active' : '');
     el.innerHTML = `
       <div style="flex:1;min-width:0">
-        <div class="project-name">${esc(project.name)}${project.sessions.length ? ` <span class="project-session-count">(${project.sessions.length})</span>` : ''}</div>
+        <div class="project-name${hasUnreadInProject(project.id) ? ' unread' : ''}">${esc(project.name)}${project.sessions.length ? ` <span class="project-session-count">(${project.sessions.length})</span>` : ''}</div>
         <div class="project-path">${esc(project.path)}</div>
       </div>
       <span class="project-delete" title="Remove project">&times;</span>

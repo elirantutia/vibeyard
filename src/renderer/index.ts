@@ -9,6 +9,7 @@ import { parseCost, setCostData, onChange as onCostChange } from './session-cost
 import { setContextData, onChange as onContextChange } from './session-context.js';
 import { initConfigSections } from './components/config-sections.js';
 import { initNotificationSound } from './notification-sound.js';
+import { init as initSessionUnread } from './session-unread.js';
 import { initProjectTerminal, handleShellPtyData, handleShellPtyExit, isShellSessionId } from './components/project-terminal.js';
 import { startPolling as startGitPolling } from './git-status.js';
 import { initDebugPanel, logDebugEvent, setDebugVisible } from './components/debug-panel.js';
@@ -75,6 +76,7 @@ async function main(): Promise<void> {
   });
 
   // Initialize components
+  initSessionUnread();
   initSidebar();
   initTabBar();
   initSplitLayout();
