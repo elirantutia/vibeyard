@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.6] - 2026-03-20
+
+### Features
+- Session archiving on /clear (CLI session ID change)
+
+### Fixes
+- Capture CLI session ID on SessionStart hook for /clear detection
+- Map Stop hook event to completed instead of waiting
+
+### Changes
+- Make history item row clickable instead of resume button
+- Remove Linux build target from release workflow
+
 ## [0.2.5] - 2026-03-20
 
 ### Features
