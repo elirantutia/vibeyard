@@ -20,6 +20,7 @@ import { initSessionHistory } from './components/session-history.js';
 import { showUsageModal } from './components/usage-modal.js';
 import { captureInitialContext } from './session-insights.js';
 import { initInsightAlert } from './components/insight-alert.js';
+import { initReadinessSection } from './components/readiness-section.js';
 
 let isQuitting = false;
 window.claudeIde.app.onQuitting(() => { isQuitting = true; });
@@ -96,6 +97,7 @@ async function main(): Promise<void> {
   initSessionHistory();
   initUpdateBanner();
   initInsightAlert();
+  initReadinessSection();
   startGitPolling();
 
   window.claudeIde.menu.onUsageStats(() => showUsageModal());

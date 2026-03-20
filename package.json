@@ -69,6 +69,7 @@
     }
   },
   "devDependencies": {
+    "@types/picomatch": "^4.0.2",
     "@vitest/coverage-v8": "^4.1.0",
     "electron": "^41.0.0",
     "electron-builder": "^26.8.1",

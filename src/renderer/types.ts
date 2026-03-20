@@ -1,5 +1,5 @@
-export type { McpServer, Agent, Skill, Command, ClaudeConfig, GitWorktree, GitFileEntry, CostData, McpResult, ProviderId, CliProviderMeta, CliProviderCapabilities, StatsCache } from '../shared/types.js';
-import type { CostData, ClaudeConfig, GitWorktree, McpResult, ProviderId, CliProviderMeta, StatsCache } from '../shared/types.js';
+export type { McpServer, Agent, Skill, Command, ClaudeConfig, GitWorktree, GitFileEntry, CostData, McpResult, ProviderId, CliProviderMeta, CliProviderCapabilities, StatsCache, ReadinessResult, ReadinessCategory, ReadinessCheck, ReadinessCheckStatus } from '../shared/types.js';
+import type { CostData, ClaudeConfig, GitWorktree, McpResult, ProviderId, CliProviderMeta, StatsCache, ReadinessResult } from '../shared/types.js';
 
 export interface ClaudeIdeApi {
   pty: {
@@ -65,6 +65,9 @@ export interface ClaudeIdeApi {
     callTool(id: string, name: string, args: Record<string, unknown>): Promise<McpResult>;
     readResource(id: string, uri: string): Promise<McpResult>;
     getPrompt(id: string, name: string, args: Record<string, string>): Promise<McpResult>;
+  };
+  readiness: {
+    analyze(projectPath: string): Promise<ReadinessResult>;
   };
   stats: {
     getCache(): Promise<StatsCache | null>;

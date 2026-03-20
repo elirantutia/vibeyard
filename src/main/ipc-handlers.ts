@@ -11,6 +11,7 @@ import { registerMcpHandlers } from './mcp-ipc-handlers';
 import { checkForUpdates, quitAndInstall } from './auto-updater';
 import { getProvider, getProviderMeta, getAllProviderMetas } from './providers/registry';
 import type { ProviderId } from '../shared/types';
+import { analyzeReadiness } from './readiness/analyzer';
 
 /**
  * Check if a resolved path is within one of the known project directories.
@@ -219,6 +220,8 @@ export function registerIpcHandlers(): void {
       return null;
     }
   });
+
+  ipcMain.handle('readiness:analyze', (_event, projectPath: string) => analyzeReadiness(projectPath));
 
   ipcMain.handle('update:checkNow', () => checkForUpdates());
   ipcMain.handle('update:install', () => quitAndInstall());

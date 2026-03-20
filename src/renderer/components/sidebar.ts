@@ -31,6 +31,7 @@ export function initSidebar(): void {
   appState.on('session-added', render);
   appState.on('session-removed', render);
 
+
   onCostChange(() => {
     renderCostFooter();
   });

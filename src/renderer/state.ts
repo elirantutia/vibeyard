@@ -1,5 +1,5 @@
 import type { ClaudeIdeApi } from './types.js';
-import type { SessionRecord, ProjectRecord, Preferences, PersistedState, ArchivedSession, ProviderId, CostInfo, ContextWindowInfo, InitialContextSnapshot } from '../shared/types.js';
+import type { SessionRecord, ProjectRecord, Preferences, PersistedState, ArchivedSession, ProviderId, CostInfo, ContextWindowInfo, InitialContextSnapshot, ReadinessResult } from '../shared/types.js';
 import { getCost, restoreCost } from './session-cost.js';
 import { restoreContext } from './session-context.js';
 
@@ -23,6 +23,7 @@ type EventType =
   | 'terminal-panel-changed'
   | 'history-changed'
   | 'insights-changed'
+  | 'readiness-changed'
   | 'state-loaded';
 
 type EventCallback = (data?: unknown) => void;
@@ -32,7 +33,7 @@ const defaultPreferences: Preferences = {
   debugMode: false,
   sessionHistoryEnabled: true,
   insightsEnabled: true,
-  sidebarViews: { configSections: true, gitPanel: true, sessionHistory: true, costFooter: true },
+  sidebarViews: { configSections: true, gitPanel: true, sessionHistory: true, costFooter: true, readinessSection: true },
 };
 
 class AppState {
@@ -557,6 +558,14 @@ class AppState {
   isInsightDismissed(projectId: string, insightId: string): boolean {
     const project = this.state.projects.find((p) => p.id === projectId);
     return project?.insights?.dismissed.includes(insightId) ?? false;
+  }
+
+  setProjectReadiness(projectId: string, result: ReadinessResult): void {
+    const project = this.state.projects.find((p) => p.id === projectId);
+    if (!project) return;
+    project.readiness = result;
+    this.persist();
+    this.emit('readiness-changed', projectId);
   }
 
   reorderSession(projectId: string, sessionId: string, toIndex: number): void {

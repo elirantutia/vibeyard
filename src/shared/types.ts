@@ -128,6 +128,7 @@ export interface ProjectRecord {
   defaultArgs?: string;
   terminalPanelOpen?: boolean;
   terminalPanelHeight?: number;
+  readiness?: ReadinessResult;
 }
 
 export interface Preferences {
@@ -141,6 +142,7 @@ export interface Preferences {
     gitPanel: boolean;
     sessionHistory: boolean;
     costFooter: boolean;
+    readinessSection: boolean;
   };
 }
 
@@ -150,6 +152,34 @@ export interface PersistedState {
   activeProjectId: string | null;
   preferences: Preferences;
   sidebarWidth?: number;
+}
+
+// --- AI Readiness ---
+
+export type ReadinessCheckStatus = 'pass' | 'fail' | 'warning';
+
+export interface ReadinessCheck {
+  id: string;
+  name: string;
+  status: ReadinessCheckStatus;
+  description: string;
+  score: number;
+  maxScore: number;
+  fixPrompt?: string;
+}
+
+export interface ReadinessCategory {
+  id: string;
+  name: string;
+  weight: number;
+  score: number;
+  checks: ReadinessCheck[];
+}
+
+export interface ReadinessResult {
+  overallScore: number;
+  categories: ReadinessCategory[];
+  scannedAt: string;
 }
 
 // --- Cost / Context ---

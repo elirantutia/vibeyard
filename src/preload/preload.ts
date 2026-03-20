@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { CostData, ProviderId, CliProviderMeta, StatsCache } from '../shared/types';
+import type { CostData, ProviderId, CliProviderMeta, StatsCache, ReadinessResult } from '../shared/types';
 
 export type { CostData } from '../shared/types';
 
@@ -67,6 +67,9 @@ export interface ClaudeIdeApi {
     callTool(id: string, name: string, args: Record<string, unknown>): Promise<{ success: boolean; data?: unknown; error?: string }>;
     readResource(id: string, uri: string): Promise<{ success: boolean; data?: unknown; error?: string }>;
     getPrompt(id: string, name: string, args: Record<string, string>): Promise<{ success: boolean; data?: unknown; error?: string }>;
+  };
+  readiness: {
+    analyze(projectPath: string): Promise<ReadinessResult>;
   };
   stats: {
     getCache(): Promise<StatsCache | null>;
@@ -168,6 +171,9 @@ const api: ClaudeIdeApi = {
     callTool: (id: string, name: string, args: Record<string, unknown>) => ipcRenderer.invoke('mcp:callTool', id, name, args),
     readResource: (id: string, uri: string) => ipcRenderer.invoke('mcp:readResource', id, uri),
     getPrompt: (id: string, name: string, args: Record<string, string>) => ipcRenderer.invoke('mcp:getPrompt', id, name, args),
+  },
+  readiness: {
+    analyze: (projectPath: string) => ipcRenderer.invoke('readiness:analyze', projectPath),
   },
   stats: {
     getCache: () => ipcRenderer.invoke('stats:getCache'),

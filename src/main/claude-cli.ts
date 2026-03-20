@@ -2,26 +2,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { homedir } from 'os';
 import { STATUS_DIR, getStatusLineScriptPath } from './hook-status';
+import { readJsonSafe, readDirSafe } from './fs-utils';
 import type { McpServer, Agent, Skill, Command, ClaudeConfig } from '../shared/types';
 
 export type { McpServer, Agent, Skill, Command, ClaudeConfig } from '../shared/types';
-
-function readJsonSafe(filePath: string): Record<string, unknown> | null {
-  try {
-    const content = fs.readFileSync(filePath, 'utf-8');
-    return JSON.parse(content);
-  } catch {
-    return null;
-  }
-}
-
-function readDirSafe(dirPath: string): string[] {
-  try {
-    return fs.readdirSync(dirPath);
-  } catch {
-    return [];
-  }
-}
 
 /** Parse YAML-ish frontmatter from an .md file (between --- delimiters) */
 function parseFrontmatter(filePath: string): Record<string, string> {
