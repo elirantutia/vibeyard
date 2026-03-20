@@ -165,15 +165,40 @@ export function onWorktreeChange(callback: WorktreeChangeCallback): void {
   worktreeChangeListeners.push(callback);
 }
 
-export function startPolling(): void {
-  // Poll immediately, then every 10s
+function startInterval(): void {
+  if (pollTimer) return; // Already polling
+  if (document.hidden || !appState.activeProject) return; // No reason to poll
   poll();
   pollTimer = setInterval(poll, 10_000);
+}
 
-  // Immediate poll on project/session changes
+function stopInterval(): void {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+}
+
+export function startPolling(): void {
+  startInterval();
+
+  // Pause/resume when window visibility changes
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      stopInterval();
+    } else {
+      startInterval();
+    }
+  });
+
+  // Immediate poll on project/session changes; manage interval lifecycle
   appState.on('project-changed', () => {
     worktreePollCounter = 0; // Force worktree refresh on project switch
-    poll();
+    if (!appState.activeProject) {
+      stopInterval();
+    } else {
+      startInterval();
+    }
   });
   appState.on('session-added', () => poll());
 
@@ -202,8 +227,5 @@ export function startPolling(): void {
 }
 
 export function stopPolling(): void {
-  if (pollTimer) {
-    clearInterval(pollTimer);
-    pollTimer = null;
-  }
+  stopInterval();
 }
