@@ -142,3 +142,33 @@ export interface McpResult {
   data?: unknown;
   error?: string;
 }
+
+// --- Usage Stats ---
+
+export interface StatsDailyActivity {
+  date: string;
+  messageCount: number;
+  sessionCount: number;
+  toolCallCount: number;
+}
+
+export interface StatsModelUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
+  webSearchRequests: number;
+}
+
+export interface StatsCache {
+  version: number;
+  lastComputedDate: string;
+  dailyActivity: StatsDailyActivity[];
+  dailyModelTokens: { date: string; tokensByModel: Record<string, number> }[];
+  modelUsage: Record<string, StatsModelUsage>;
+  totalSessions: number;
+  totalMessages: number;
+  longestSession: { sessionId: string; duration: number; messageCount: number; timestamp: string };
+  firstSessionDate: string;
+  hourCounts: Record<string, number>;
+}

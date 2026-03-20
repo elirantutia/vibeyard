@@ -53,6 +53,11 @@ export function createAppMenu(): void {
         },
         { type: 'separator' },
         {
+          label: 'Usage Stats',
+          accelerator: 'CmdOrCtrl+Shift+U',
+          click: () => sendToRenderer('menu:usage-stats'),
+        },
+        {
           label: 'Toggle Debug Panel',
           accelerator: 'CmdOrCtrl+Shift+D',
           click: () => sendToRenderer('menu:toggle-debug'),

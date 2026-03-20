@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { CostData, ProviderId, CliProviderMeta } from '../shared/types';
+import type { CostData, ProviderId, CliProviderMeta, StatsCache } from '../shared/types';
 
 export type { CostData } from '../shared/types';
 
@@ -68,6 +68,9 @@ export interface ClaudeIdeApi {
     readResource(id: string, uri: string): Promise<{ success: boolean; data?: unknown; error?: string }>;
     getPrompt(id: string, name: string, args: Record<string, string>): Promise<{ success: boolean; data?: unknown; error?: string }>;
   };
+  stats: {
+    getCache(): Promise<StatsCache | null>;
+  };
   menu: {
     onNewProject(callback: () => void): () => void;
     onNewSession(callback: () => void): () => void;
@@ -76,6 +79,7 @@ export interface ClaudeIdeApi {
     onPrevSession(callback: () => void): () => void;
     onGotoSession(callback: (index: number) => void): () => void;
     onToggleDebug(callback: () => void): () => void;
+    onUsageStats(callback: () => void): () => void;
   };
 }
 
@@ -165,6 +169,9 @@ const api: ClaudeIdeApi = {
     readResource: (id: string, uri: string) => ipcRenderer.invoke('mcp:readResource', id, uri),
     getPrompt: (id: string, name: string, args: Record<string, string>) => ipcRenderer.invoke('mcp:getPrompt', id, name, args),
   },
+  stats: {
+    getCache: () => ipcRenderer.invoke('stats:getCache'),
+  },
   menu: {
     onNewProject: (cb) => onChannel('menu:new-project', cb),
     onNewSession: (cb) => onChannel('menu:new-session', cb),
@@ -173,6 +180,7 @@ const api: ClaudeIdeApi = {
     onPrevSession: (cb) => onChannel('menu:prev-session', cb),
     onGotoSession: (cb) => onChannel('menu:goto-session', (index) => cb(index as number)),
     onToggleDebug: (cb) => onChannel('menu:toggle-debug', cb),
+    onUsageStats: (cb) => onChannel('menu:usage-stats', cb),
   },
 };
 

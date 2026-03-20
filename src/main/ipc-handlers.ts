@@ -1,6 +1,7 @@
 import { ipcMain, BrowserWindow, app, dialog } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { execSync } from 'child_process';
 import { spawnPty, spawnShellPty, writePty, resizePty, killPty, isSilencedExit, getPtyCwd } from './pty-manager';
 import { loadState, saveState, PersistedState } from './store';
@@ -206,6 +207,16 @@ export function registerIpcHandlers(): void {
     } catch (err) {
       console.warn('fs:readFile failed:', err);
       return '';
+    }
+  });
+
+  ipcMain.handle('stats:getCache', () => {
+    try {
+      const statsPath = path.join(os.homedir(), '.claude', 'stats-cache.json');
+      const raw = fs.readFileSync(statsPath, 'utf-8');
+      return JSON.parse(raw);
+    } catch {
+      return null;
     }
   });
 
