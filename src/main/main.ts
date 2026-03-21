@@ -17,7 +17,7 @@ function createWindow(): void {
     minWidth: 800,
     minHeight: 500,
     title: 'CCIDE',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#000000',
     webPreferences: {
       preload: path.join(__dirname, '..', '..', 'preload', 'preload', 'preload.js'),
       nodeIntegration: false,

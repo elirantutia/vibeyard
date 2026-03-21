@@ -1,18 +1,18 @@
 :root {
-  --bg-primary: #1a1a2e;
-  --bg-secondary: #16213e;
-  --bg-tertiary: #0f3460;
-  --bg-hover: #1a3a5c;
+  --bg-primary: #000000;
+  --bg-secondary: #0a0a0a;
+  --bg-tertiary: #1a1a1a;
+  --bg-hover: #222222;
   --text-primary: #e0e0e0;
   --text-secondary: #a0a0b0;
   --text-muted: #606070;
   --accent: #e94560;
   --accent-dim: #c73e55;
-  --border: #2a2a4a;
-  --tab-active: #1a1a2e;
-  --tab-inactive: #0d1025;
+  --border: #333333;
+  --tab-active: #000000;
+  --tab-inactive: #0a0a0a;
   --pane-focus: #e94560;
-  --pane-unfocus: #2a2a4a;
+  --pane-unfocus: #333333;
   --debug-panel-height: 300px;
 }
 
@@ -1284,7 +1284,7 @@ body.debug-panel-open #app {
   left: 0;
   right: 0;
   height: var(--debug-panel-height);
-  background: #0d0d1a;
+  background: #000000;
   border-top: 2px solid var(--accent);
   z-index: 300;
   display: flex;
@@ -1302,7 +1302,7 @@ body.debug-panel-open #app {
   align-items: center;
   justify-content: space-between;
   padding: 4px 10px;
-  background: #12122a;
+  background: #0a0a0a;
   border-bottom: 1px solid var(--border);
   min-height: 30px;
   flex-shrink: 0;
@@ -1357,7 +1357,7 @@ body.debug-panel-open #app {
   padding: 2px 10px;
   font-size: 10px;
   color: var(--text-muted);
-  background: #0f0f20;
+  background: #050505;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -1788,7 +1788,7 @@ select.mcp-form-input {
 }
 
 .mcp-result {
-  background: #0d0d1a;
+  background: #000000;
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 10px 12px;

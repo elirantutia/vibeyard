@@ -61,11 +61,11 @@ export function createTerminalPane(
 
   const terminal = new Terminal({
     theme: {
-      background: '#1a1a2e',
+      background: '#000000',
       foreground: '#e0e0e0',
       cursor: '#e94560',
       selectionBackground: '#e9456040',
-      black: '#1a1a2e',
+      black: '#000000',
       red: '#e94560',
       green: '#0f9b58',
       yellow: '#f4b400',
