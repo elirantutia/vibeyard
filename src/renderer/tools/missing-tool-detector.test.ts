@@ -219,6 +219,38 @@ describe('missing-tool-detector', () => {
       expect(alerts).toHaveLength(1);
       expect(alerts[0].tool.command).toBe('gh');
     });
+
+    it('falls back to first part when all parts are env vars', () => {
+      const projectId = setupProject();
+      const session = appState.addSession(projectId, 'Session 1')!;
+
+      const alerts: ToolAlert[] = [];
+      onToolAlert((alert) => alerts.push(alert));
+
+      // All parts look like env vars — falls back to first part which is not a known tool
+      handleToolFailure(session.id, makeFailure('FOO=bar BAZ=qux'));
+
+      expect(alerts).toHaveLength(0);
+    });
+
+    it('clears dedup state when session is removed', () => {
+      const projectId = setupProject();
+      const session = appState.addSession(projectId, 'Session 1')!;
+
+      const alerts: ToolAlert[] = [];
+      onToolAlert((alert) => alerts.push(alert));
+
+      handleToolFailure(session.id, makeFailure('gh pr list'));
+      expect(alerts).toHaveLength(1);
+
+      // Simulate session removal
+      appState.removeSession(projectId, session.id);
+
+      // Re-add session with same ID pattern and try again
+      const session2 = appState.addSession(projectId, 'Session 2')!;
+      handleToolFailure(session2.id, makeFailure('gh pr list'));
+      expect(alerts).toHaveLength(2);
+    });
   });
 
   describe('_resetForTesting', () => {

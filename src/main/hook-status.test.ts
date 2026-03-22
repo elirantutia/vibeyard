@@ -142,6 +142,40 @@ describe('hook-status', () => {
       expect(mockSend).toHaveBeenCalledWith('session:costData', 'abc123', costData);
     });
 
+    it('.toolfailure parses JSON, sends session:toolFailure, and deletes file', () => {
+      const win = createMockWin();
+      startWatching(win);
+
+      const failureData = { tool_name: 'Bash', tool_input: { command: 'gh pr list' }, error: 'exit 127' };
+      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(failureData));
+      watchCallback!('change', 'abc123-xyzabc.toolfailure');
+
+      expect(mockSend).toHaveBeenCalledWith('session:toolFailure', 'abc123', failureData);
+      expect(fs.unlinkSync).toHaveBeenCalledWith('/tmp/ccide/abc123-xyzabc.toolfailure');
+    });
+
+    it('.toolfailure extracts session ID from filename with random suffix', () => {
+      const win = createMockWin();
+      startWatching(win);
+
+      const failureData = { tool_name: 'Bash', tool_input: { command: 'jq .' }, error: 'exit 127' };
+      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(failureData));
+      watchCallback!('change', 'my-session-id-abcdef.toolfailure');
+
+      expect(mockSend).toHaveBeenCalledWith('session:toolFailure', 'my-session-id', failureData);
+    });
+
+    it('.toolfailure cleans up file even when JSON parsing fails', () => {
+      const win = createMockWin();
+      startWatching(win);
+
+      vi.mocked(fs.readFileSync).mockReturnValue('invalid json');
+      watchCallback!('change', 'abc123-xyzabc.toolfailure');
+
+      expect(mockSend).not.toHaveBeenCalled();
+      expect(fs.unlinkSync).toHaveBeenCalledWith('/tmp/ccide/abc123-xyzabc.toolfailure');
+    });
+
     it('handles read errors gracefully', () => {
       const win = createMockWin();
       startWatching(win);
