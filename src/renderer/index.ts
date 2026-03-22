@@ -1,5 +1,5 @@
 import { appState } from './state.js';
-import { initSidebar } from './components/sidebar.js';
+import { initSidebar, promptNewProject } from './components/sidebar.js';
 import { initTabBar } from './components/tab-bar.js';
 import { initSplitLayout } from './components/split-layout.js';
 import { initKeybindings } from './keybindings.js';
@@ -136,6 +136,11 @@ async function main(): Promise<void> {
 
   // Load persisted state
   await appState.load();
+
+  // Auto-open new project modal when no projects exist
+  if (appState.projects.length === 0) {
+    promptNewProject();
+  }
 
   // Show debug panel if preference is enabled
   if (appState.preferences.debugMode) {
