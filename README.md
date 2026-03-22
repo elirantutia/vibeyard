@@ -12,88 +12,56 @@
 </p>
 
 <p align="center">
-  Running AI coding agents in a bare terminal gets messy fast. Vibeyard is a lightweight IDE and the best setup for coding agents — multi-session management, split panes, swarm mode for running agents in parallel, cost tracking, context monitoring, and session resume — built around Claude Code with support for more AI CLIs coming.
+  <strong>The IDE built for AI coding agents.</strong><br/>
+  Manage multiple agent sessions, run them in parallel, track costs, and never lose context — starting with Claude Code.
 </p>
 
-## Features
+---
 
-- **Multi-session terminal management** — run multiple CLI sessions per project, each backed by a real PTY
-- **Split panes** — side-by-side terminal layout for parallel workflows
-- **Swarm mode** — grid view displaying all sessions simultaneously with unread indicators and one-click new session cells (`Cmd+\`)
-- **Missing tool alerts** — detects failed CLI tools (e.g., `gh`, `jq`) and offers one-click install via new session
-- **Session cost tracking** — per-session and aggregate cost, token, and cache usage (USD)
-- **CLI provider abstraction** — built for Claude Code today, extensible to other AI CLI tools
-- **Auto-updater** — in-app updates via GitHub Releases
-- **Keyboard-driven** — full keyboard shortcut support for navigation, session management, and layout
-- **Session resume** — sessions persist across app restarts via CLI session IDs
-- **Project terminal** — built-in shell terminal per project for quick commands
-- **MCP Inspector** — integrated MCP server inspection tool
-- **Session insights** — smart alerts that monitor session health, starting with pre-context usage. When a new session's pre-context exceeds 15% of the context window, Vibeyard shows an alert with exact token counts and a one-click "Fix in New Session" action that launches Claude to analyze and reduce context bloat. Dismissible per-project and toggleable in preferences.
-- **AI Readiness Score** — per-project readiness analysis that evaluates how well-prepared a project is for AI coding assistance. Displays an overall percentage score with color-coded category breakdowns in the sidebar. Click into any category for detailed checks with one-click "Fix" buttons that open a new session to resolve issues automatically.
-- **Context window tracking** — real-time context usage displayed in the status bar, persisted across restarts
-- **Session history** — archived sessions with resume support, automatic archiving on `/clear`
-- **Usage stats** — aggregated CLI usage statistics from Claude Code's stats cache
-- **Clickable file paths** — click file paths in terminal output to navigate to them
-- **Unread indicators** — visual indicators on sidebar projects for sessions with new activity
-- **Tab reordering** — drag-and-drop and context menu (move left/right) tab management
+## Why Vibeyard?
 
-## Prerequisites
+Running AI coding agents in a bare terminal gets messy fast. Vibeyard gives you a proper workspace — multi-session management, split panes, swarm mode, cost tracking, and session resume — so you can focus on building, not juggling terminals.
 
-- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
-- Node v24+ (only if building from source — see `.nvmrc`)
+## Highlights
 
-## Installation
+- **Multi-session management** — run multiple agent sessions per project, each in its own PTY
+- **Swarm mode** — grid view of all sessions at once, spin up new ones with `Cmd+\`
+- **Cost & context tracking** — real-time spend, token usage, and context window monitoring per session
+- **AI Readiness Score** — see how well-prepared your project is for AI-assisted coding, with one-click fixes
+- **Session resume** — pick up where you left off, even after restarting the app
+- **Smart alerts** — detects missing tools, context bloat, and session health issues
+- **Keyboard-driven** — full shortcut support, built for speed
 
-### macOS (DMG)
+> Built for Claude Code today. More AI CLI providers coming soon.
 
-1. Download the `.dmg` from [GitHub Releases](https://github.com/elirantutia/vibeyard/releases)
-2. Open the `.dmg` and drag **Vibeyard** to your Applications folder
-3. Launch **Vibeyard** — the app is signed and notarized by Apple
+## Install
+
+### macOS
+
+Download the latest `.dmg` from [GitHub Releases](https://github.com/elirantutia/vibeyard/releases), drag to Applications, and launch. Signed and notarized by Apple.
+
+Requires [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated.
 
 ### Build from Source
 
 ```bash
 git clone https://github.com/elirantutia/vibeyard.git
 cd vibeyard
-nvm use        # or ensure Node v24+
-npm install
-npm start      # builds and launches the app
+npm install && npm start
 ```
 
-## Development
-
-```bash
-npm run build         # compile main, preload, and renderer
-npm start             # build + launch (alias: npm run dev)
-npm test              # run all tests
-npm run test:watch    # watch mode
-npm run test:coverage # coverage report (HTML at coverage/index.html)
-```
-
-No hot reload — changes require a full rebuild and app restart.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development guide.
-
-## Architecture
-
-Vibeyard uses a three-process Electron architecture with strict context isolation:
-
-- **Main process** — Node.js: window management, PTY lifecycle via `node-pty`, filesystem access, persistent state
-- **Preload** — secure bridge exposing `window.vibeyard` API via `contextBridge`
-- **Renderer** — vanilla TypeScript DOM UI (no framework), reactive state via event emitter pattern
-
-CLI-specific behavior is encapsulated behind a provider interface, making it straightforward to add support for additional AI CLI tools.
-
-For full architecture details, see [CLAUDE.md](CLAUDE.md).
+Requires Node v24+ (see `.nvmrc`).
 
 ## Contributing
 
-Contributions are welcome! Please read the [Contributing Guide](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) before submitting a PR.
+PRs welcome! See the [Contributing Guide](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
 [MIT](LICENSE)
 
-## Disclaimer
+---
 
-Vibeyard is an independent project and is not affiliated with or endorsed by Anthropic.
+<p align="center">
+  <sub>Vibeyard is an independent project and is not affiliated with or endorsed by Anthropic.</sub>
+</p>
