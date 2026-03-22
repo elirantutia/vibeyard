@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="build/icon.png" alt="Vibeyard" width="128" />
+  <img src="build/vibeyard-black.png" alt="Vibeyard" width="128" />
 </p>
 
 <h1 align="center">Vibeyard</h1>
