@@ -28,7 +28,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.main.json && tsc -p tsconfig.preload.json && npm run build:renderer && npm run copy-assets",
     "build:renderer": "esbuild src/renderer/index.ts --bundle --outfile=dist/renderer/index.js --platform=browser --format=iife --target=es2022 --sourcemap --loader:.ts=ts",
-    "copy-assets": "cp src/renderer/index.html dist/renderer/ && cp src/renderer/styles.css dist/renderer/ && cp node_modules/@xterm/xterm/css/xterm.css dist/renderer/xterm.css",
+    "copy-assets": "cp src/renderer/index.html dist/renderer/ && cp src/renderer/styles.css dist/renderer/ && cp node_modules/@xterm/xterm/css/xterm.css dist/renderer/xterm.css && cp build/icon.png dist/renderer/icon.png",
     "start": "npm run build && electron .",
     "dev": "npm run build && electron .",
     "postinstall": "electron-builder install-app-deps",
@@ -41,6 +41,7 @@
   "build": {
     "appId": "com.vibeyard.app",
     "productName": "Vibeyard",
+    "icon": "build/icon.png",
     "files": [
       "dist/**/*",
       "node_modules/**/*",
@@ -52,14 +53,16 @@
         "zip"
       ],
       "category": "public.app-category.developer-tools",
-      "identity": null
+      "identity": null,
+      "icon": "build/icon.icns"
     },
     "linux": {
       "target": [
         "AppImage",
         "deb"
       ],
-      "category": "Development"
+      "category": "Development",
+      "icon": "build/icon.png"
     },
     "publish": {
       "provider": "github",

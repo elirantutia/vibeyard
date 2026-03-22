@@ -17,6 +17,7 @@ function createWindow(): void {
     minWidth: 800,
     minHeight: 500,
     title: 'Vibeyard',
+    icon: path.join(__dirname, '..', '..', '..', 'build', 'icon.png'),
     backgroundColor: '#000000',
     webPreferences: {
       preload: path.join(__dirname, '..', '..', 'preload', 'preload', 'preload.js'),
