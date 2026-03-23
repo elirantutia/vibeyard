@@ -127,6 +127,8 @@ export function renderLayout(): void {
   }
 
   removeEmptyState();
+  container.querySelectorAll('.swarm-grid-wrapper').forEach(el => el.remove());
+  container.querySelectorAll('.swarm-empty-cell').forEach(el => el.remove());
 
   // Ensure all sessions have their respective instances
   for (const session of project.sessions) {
@@ -248,9 +250,6 @@ function renderSwarmMode(project: ProjectRecord): void {
   const count = project.layout.splitPanes.length;
   const cols = Math.ceil(Math.sqrt(count));
   const rows = Math.ceil(count / cols);
-
-  container.querySelectorAll('.swarm-grid-wrapper').forEach(el => el.remove());
-  container.querySelectorAll('.swarm-empty-cell').forEach(el => el.remove());
 
   const activeSession = project.sessions.find(s => s.id === project.activeSessionId);
   const isNonCliActive = activeSession?.type && activeSession.type !== 'claude';
