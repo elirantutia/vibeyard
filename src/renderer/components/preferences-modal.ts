@@ -482,6 +482,23 @@ export function showPreferencesModal(): void {
       onFix: hooksOk ? undefined : fixAndRerender,
     });
 
+    const hookList = document.createElement('div');
+    hookList.className = 'setup-hook-details';
+    for (const [event, installed] of Object.entries(validation.hookDetails)) {
+      const item = document.createElement('div');
+      item.className = 'setup-hook-item';
+      const icon = document.createElement('span');
+      icon.className = installed ? 'setup-check-icon ok' : 'setup-check-icon error';
+      icon.textContent = installed ? '\u2713' : '\u2717';
+      const name = document.createElement('span');
+      name.className = 'setup-hook-name';
+      name.textContent = event;
+      item.appendChild(icon);
+      item.appendChild(name);
+      hookList.appendChild(item);
+    }
+    section.appendChild(hookList);
+
     if (!slOk && !hooksOk) {
       const fixAllRow = document.createElement('div');
       fixAllRow.className = 'setup-fix-all-row';

@@ -1321,6 +1321,25 @@ body.debug-panel-open #app {
   cursor: default;
 }
 
+.setup-hook-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 6px 0 10px 30px;
+  border-bottom: 1px solid var(--border);
+}
+
+.setup-hook-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.setup-hook-name {
+  color: var(--text-muted);
+}
+
 .setup-fix-all-row {
   display: flex;
   justify-content: flex-end;

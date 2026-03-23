@@ -156,6 +156,7 @@ export interface SettingsValidationResult {
   statusLine: 'missing' | 'vibeyard' | 'foreign';
   hooks: 'missing' | 'complete' | 'partial';
   foreignStatusLineCommand?: string;
+  hookDetails: Record<string, boolean>;
 }
 
 export interface SettingsWarningData {

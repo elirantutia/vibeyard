@@ -38,14 +38,15 @@ export function validateSettings(): SettingsValidationResult {
   }
 
   let hooks: SettingsValidationResult['hooks'] = 'missing';
+  const hookDetails: Record<string, boolean> = Object.fromEntries(EXPECTED_HOOK_EVENTS.map(e => [e, false]));
   const existingHooks = settings.hooks as Record<string, Array<{ hooks?: Array<{ command?: string }> }>> | undefined;
   if (existingHooks) {
     let found = 0;
     for (const event of EXPECTED_HOOK_EVENTS) {
       const matchers = existingHooks[event];
-      if (matchers?.some(m => m.hooks?.some(h => h.command?.includes(HOOK_MARKER)))) {
-        found++;
-      }
+      const installed = matchers?.some(m => m.hooks?.some(h => h.command?.includes(HOOK_MARKER))) ?? false;
+      hookDetails[event] = installed;
+      if (installed) found++;
     }
     if (found === EXPECTED_HOOK_EVENTS.length) {
       hooks = 'complete';
@@ -54,7 +55,7 @@ export function validateSettings(): SettingsValidationResult {
     }
   }
 
-  return { statusLine, hooks, foreignStatusLineCommand };
+  return { statusLine, hooks, foreignStatusLineCommand, hookDetails };
 }
 
 /**
