@@ -493,18 +493,19 @@ class AppState {
 
     if (project.layout.mode === 'swarm') {
       project.layout.mode = 'tabs';
-      project.layout.splitPanes = [];
+      // Keep splitPanes as-is so order is preserved when switching back
     } else {
       const cliSessions = project.sessions.filter(
         (s) => !s.type || s.type === 'claude'
       );
       project.layout.mode = 'swarm';
-      project.layout.splitPanes = [];
 
-      if (project.activeSessionId && cliSessions.some((s) => s.id === project.activeSessionId)) {
-        project.layout.splitPanes.push(project.activeSessionId);
-      }
+      // Remove stale IDs (deleted sessions)
+      project.layout.splitPanes = project.layout.splitPanes.filter(
+        (id) => cliSessions.some((s) => s.id === id)
+      );
 
+      // Add any new CLI sessions not yet in splitPanes
       for (const s of cliSessions) {
         if (!project.layout.splitPanes.includes(s.id)) {
           project.layout.splitPanes.push(s.id);
