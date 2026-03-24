@@ -3104,7 +3104,7 @@ select.mcp-form-input {
 
 /* Readiness Modal */
 .readiness-modal-container {
-  max-height: 400px;
+  height: 400px;
   overflow-y: auto;
 }
 
