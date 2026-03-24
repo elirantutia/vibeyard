@@ -37,9 +37,13 @@ if not sid:
     sys.exit(0)
 cost=d.get('cost',{})
 ctx=d.get('context_window',{})
-if cost or ctx:
+model=d.get('model',{}).get('display_name','')
+if cost or ctx or model:
+    payload={'cost':cost,'context_window':ctx}
+    if model:
+        payload['model']=model
     with open(f'${STATUS_DIR}/{sid}.cost','w') as f:
-        json.dump({'cost':cost,'context_window':ctx},f)
+        json.dump(payload,f)
 claude_sid=d.get('session_id','')
 if claude_sid:
     with open(f'${STATUS_DIR}/{sid}.sessionid','w') as f:

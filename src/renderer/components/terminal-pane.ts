@@ -293,13 +293,14 @@ export function updateCostDisplay(sessionId: string, cost: CostInfo): void {
   if (!el) return;
 
   const costStr = `$${cost.totalCostUsd.toFixed(4)}`;
+  const modelPrefix = cost.model ? `${cost.model}  \u00b7  ` : '';
   if (cost.totalInputTokens > 0 || cost.totalOutputTokens > 0) {
-    el.textContent = `${costStr}  \u00b7  ${formatTokens(cost.totalInputTokens)} in / ${formatTokens(cost.totalOutputTokens)} out`;
+    el.textContent = `${modelPrefix}${costStr}  \u00b7  ${formatTokens(cost.totalInputTokens)} in / ${formatTokens(cost.totalOutputTokens)} out`;
     const durationSec = (cost.totalDurationMs / 1000).toFixed(1);
     const apiDurationSec = (cost.totalApiDurationMs / 1000).toFixed(1);
     (el as HTMLElement).title = `Cache read: ${formatTokens(cost.cacheReadTokens)} · Cache create: ${formatTokens(cost.cacheCreationTokens)} · Duration: ${durationSec}s · API: ${apiDurationSec}s`;
   } else {
-    el.textContent = `${costStr}`;
+    el.textContent = `${modelPrefix}${costStr}`;
     (el as HTMLElement).title = '';
   }
   showStatusBar(instance);

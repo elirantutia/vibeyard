@@ -1,5 +1,5 @@
 import { stripAnsi } from './ansi';
-import type { CostInfo } from '../shared/types';
+import type { CostData, CostInfo } from '../shared/types';
 
 export type { CostInfo } from '../shared/types';
 
@@ -11,17 +11,10 @@ const listeners: CostChangeCallback[] = [];
 // Search for dollar cost patterns (fallback)
 const COST_RE = /\$(\d+\.\d{2,})/g;
 
-export function setCostData(sessionId: string, rawData: { cost: Record<string, unknown>; context_window: Record<string, unknown> }): void {
-  const cost = rawData.cost as { total_cost_usd?: number; total_duration_ms?: number; total_api_duration_ms?: number };
-  const ctx = rawData.context_window as {
-    total_input_tokens?: number;
-    total_output_tokens?: number;
-    current_usage?: {
-      cache_read_input_tokens?: number;
-      cache_creation_input_tokens?: number;
-    };
-  };
+export function setCostData(sessionId: string, rawData: CostData): void {
+  const { cost, context_window: ctx, model } = rawData;
 
+  const existing = costs.get(sessionId);
   const info: CostInfo = {
     totalCostUsd: cost.total_cost_usd ?? 0,
     totalInputTokens: ctx.total_input_tokens ?? 0,
@@ -30,13 +23,14 @@ export function setCostData(sessionId: string, rawData: { cost: Record<string, u
     cacheCreationTokens: ctx.current_usage?.cache_creation_input_tokens ?? 0,
     totalDurationMs: cost.total_duration_ms ?? 0,
     totalApiDurationMs: cost.total_api_duration_ms ?? 0,
+    model: model ?? existing?.model,
   };
 
-  const existing = costs.get(sessionId);
   if (existing && existing.totalCostUsd === info.totalCostUsd
     && existing.totalInputTokens === info.totalInputTokens
     && existing.totalOutputTokens === info.totalOutputTokens
-    && existing.totalDurationMs === info.totalDurationMs) return;
+    && existing.totalDurationMs === info.totalDurationMs
+    && existing.model === info.model) return;
 
   costs.set(sessionId, info);
   for (const cb of listeners) cb(sessionId, info);
