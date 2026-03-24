@@ -33,6 +33,7 @@ type EventCallback = (data?: unknown) => void;
 
 const defaultPreferences: Preferences = {
   soundOnSessionWaiting: true,
+  notificationsDesktop: true,
   debugMode: false,
   sessionHistoryEnabled: true,
   insightsEnabled: true,

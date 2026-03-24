@@ -10,6 +10,7 @@ import { parseTitle, clearSession as clearTitleSession } from './session-title.j
 import { setContextData, onChange as onContextChange } from './session-context.js';
 import { initConfigSections } from './components/config-sections.js';
 import { initNotificationSound } from './notification-sound.js';
+import { initNotificationDesktop } from './notification-desktop.js';
 import { init as initSessionUnread } from './session-unread.js';
 import { initProjectTerminal, handleShellPtyData, handleShellPtyExit, isShellSessionId } from './components/project-terminal.js';
 import { startPolling as startGitPolling } from './git-status.js';
@@ -101,6 +102,7 @@ async function main(): Promise<void> {
   initKeybindings();
   initConfigSections();
   initNotificationSound();
+  initNotificationDesktop();
   initProjectTerminal();
   initDebugPanel();
   initGitPanel();

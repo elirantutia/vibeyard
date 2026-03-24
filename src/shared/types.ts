@@ -135,6 +135,7 @@ export interface ProjectRecord {
 
 export interface Preferences {
   soundOnSessionWaiting: boolean;
+  notificationsDesktop: boolean;
   debugMode: boolean;
   sessionHistoryEnabled: boolean;
   insightsEnabled: boolean;

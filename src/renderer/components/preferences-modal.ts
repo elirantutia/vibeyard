@@ -54,6 +54,7 @@ export function showPreferencesModal(): void {
   // Build section content
   let currentSection: Section = 'general';
   let soundCheckbox: HTMLInputElement | null = null;
+  let notificationsCheckbox: HTMLInputElement | null = null;
   let historyCheckbox: HTMLInputElement | null = null;
   let insightsCheckbox: HTMLInputElement | null = null;
   let autoTitleCheckbox: HTMLInputElement | null = null;
@@ -93,6 +94,22 @@ export function showPreferencesModal(): void {
       row.appendChild(label);
       row.appendChild(soundCheckbox);
       content.appendChild(row);
+
+      const notifRow = document.createElement('div');
+      notifRow.className = 'modal-toggle-field';
+
+      const notifLabel = document.createElement('label');
+      notifLabel.htmlFor = 'pref-notifications-desktop';
+      notifLabel.textContent = 'Desktop notifications when sessions need attention';
+
+      notificationsCheckbox = document.createElement('input');
+      notificationsCheckbox.type = 'checkbox';
+      notificationsCheckbox.id = 'pref-notifications-desktop';
+      notificationsCheckbox.checked = appState.preferences.notificationsDesktop;
+
+      notifRow.appendChild(notifLabel);
+      notifRow.appendChild(notificationsCheckbox);
+      content.appendChild(notifRow);
 
       const historyRow = document.createElement('div');
       historyRow.className = 'modal-toggle-field';
@@ -561,6 +578,9 @@ export function showPreferencesModal(): void {
   const save = () => {
     if (soundCheckbox) {
       appState.setPreference('soundOnSessionWaiting', soundCheckbox.checked);
+    }
+    if (notificationsCheckbox) {
+      appState.setPreference('notificationsDesktop', notificationsCheckbox.checked);
     }
     if (historyCheckbox) {
       appState.setPreference('sessionHistoryEnabled', historyCheckbox.checked);
