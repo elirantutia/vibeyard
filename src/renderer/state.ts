@@ -144,6 +144,15 @@ class AppState {
     this.persist();
   }
 
+  get lastSeenVersion(): string | undefined {
+    return this.state.lastSeenVersion;
+  }
+
+  setLastSeenVersion(version: string): void {
+    this.state.lastSeenVersion = version;
+    this.persist();
+  }
+
   get preferences(): Preferences {
     return this.state.preferences;
   }

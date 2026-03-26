@@ -178,6 +178,7 @@ export interface PersistedState {
   preferences: Preferences;
   sidebarWidth?: number;
   sidebarCollapsed?: boolean;
+  lastSeenVersion?: string;
 }
 
 // --- AI Readiness ---

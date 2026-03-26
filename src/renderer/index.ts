@@ -26,6 +26,7 @@ import { initReadinessSection } from './components/readiness-section.js';
 import { initToolDetector } from './tools/missing-tool-detector.js';
 import { initToolAlert } from './components/tool-alert.js';
 import { initSettingsGuard } from './components/settings-guard-ui.js';
+import { checkWhatsNew } from './components/whats-new-dialog.js';
 
 let isQuitting = false;
 window.vibeyard.app.onQuitting(() => { isQuitting = true; });
@@ -148,6 +149,8 @@ async function main(): Promise<void> {
   if (appState.preferences.debugMode) {
     setDebugVisible(true);
   }
+
+  checkWhatsNew();
 }
 
 main().catch(console.error);

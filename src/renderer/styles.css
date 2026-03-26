@@ -1868,6 +1868,52 @@ body.debug-panel-open #app {
   white-space: nowrap;
 }
 
+/* What's New dialog */
+.whats-new-container {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.whats-new-date {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.whats-new-section {
+  margin-bottom: 12px;
+}
+
+.whats-new-section-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.whats-new-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.whats-new-list li {
+  font-size: 13px;
+  color: var(--text-primary);
+  padding: 3px 0;
+  padding-left: 16px;
+  position: relative;
+}
+
+.whats-new-list li::before {
+  content: '\2022';
+  position: absolute;
+  left: 4px;
+  color: var(--text-secondary);
+}
+
 /* MCP Inspector */
 .mcp-inspector-pane {
   position: absolute;
