@@ -9,6 +9,7 @@ import type { McpServerConfig } from './claude-cli';
 import { loadState, saveState, PersistedState } from './store';
 import { startWatching, cleanupSessionStatus } from './hook-status';
 import { getGitStatus, getGitFiles, getGitDiff, getGitWorktrees, gitStageFile, gitUnstageFile, gitDiscardFile } from './git-status';
+import { startGitWatcher, stopGitWatcher, notifyGitChanged } from './git-watcher';
 import { registerMcpHandlers } from './mcp-ipc-handlers';
 import { checkForUpdates, quitAndInstall } from './auto-updater';
 import { getProvider, getProviderMeta, getAllProviderMetas } from './providers/registry';
@@ -210,11 +211,26 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('git:getWorktrees', (_event, projectPath: string) => getGitWorktrees(projectPath));
 
-  ipcMain.handle('git:stageFile', (_event, projectPath: string, filePath: string) => gitStageFile(projectPath, filePath));
+  ipcMain.handle('git:stageFile', async (_event, projectPath: string, filePath: string) => {
+    await gitStageFile(projectPath, filePath);
+    notifyGitChanged();
+  });
 
-  ipcMain.handle('git:unstageFile', (_event, projectPath: string, filePath: string) => gitUnstageFile(projectPath, filePath));
+  ipcMain.handle('git:unstageFile', async (_event, projectPath: string, filePath: string) => {
+    await gitUnstageFile(projectPath, filePath);
+    notifyGitChanged();
+  });
 
-  ipcMain.handle('git:discardFile', (_event, projectPath: string, filePath: string, area: string) => gitDiscardFile(projectPath, filePath, area as GitFileEntry['area']));
+  ipcMain.handle('git:discardFile', async (_event, projectPath: string, filePath: string, area: string) => {
+    await gitDiscardFile(projectPath, filePath, area as GitFileEntry['area']);
+    notifyGitChanged();
+  });
+
+  ipcMain.on('git:watchProject', (_event, projectPath: string) => {
+    const win = BrowserWindow.getAllWindows()[0];
+    if (!win) return;
+    startGitWatcher(win, projectPath);
+  });
 
   ipcMain.handle('git:openInEditor', (_event, projectPath: string, filePath: string) => {
     const fullPath = path.join(projectPath, filePath);

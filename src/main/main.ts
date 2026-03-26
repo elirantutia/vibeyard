@@ -7,6 +7,7 @@ import { createAppMenu } from './menu';
 import { restartAndResync } from './hook-status';
 import { initProviders, getAllProviders } from './providers/registry';
 import { initAutoUpdater } from './auto-updater';
+import { stopGitWatcher } from './git-watcher';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -95,6 +96,7 @@ app.on('before-quit', () => {
     win.webContents.send('app:quitting');
   }
   killAllPtys();
+  stopGitWatcher();
   // Cleanup all providers
   for (const provider of getAllProviders()) {
     provider.cleanup();

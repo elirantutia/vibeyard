@@ -29,6 +29,7 @@ const sessionWorktreeMap = new Map<string, string>();
 // Manual override: projectId → worktree path
 const manualOverride = new Map<string, string>();
 let worktreePollCounter = 0;
+let unwatchGitChanged: (() => void) | null = null;
 
 async function refreshWorktrees(projectId: string, projectPath: string): Promise<void> {
   try {
@@ -169,7 +170,7 @@ function startInterval(): void {
   if (pollTimer) return; // Already polling
   if (document.hidden || !appState.activeProject) return; // No reason to poll
   poll();
-  pollTimer = setInterval(poll, 10_000);
+  pollTimer = setInterval(poll, 60_000);
 }
 
 function stopInterval(): void {
@@ -181,6 +182,16 @@ function stopInterval(): void {
 
 export function startPolling(): void {
   startInterval();
+
+  // Subscribe to main-process file system watcher push events (once)
+  if (!unwatchGitChanged) {
+    unwatchGitChanged = window.vibeyard.git.onChanged(() => poll());
+  }
+
+  // Start watcher for current project
+  if (appState.activeProject) {
+    window.vibeyard.git.watchProject(appState.activeProject.path);
+  }
 
   // Pause/resume when window visibility changes
   document.addEventListener('visibilitychange', () => {
@@ -197,6 +208,7 @@ export function startPolling(): void {
     if (!appState.activeProject) {
       stopInterval();
     } else {
+      window.vibeyard.git.watchProject(appState.activeProject.path);
       startInterval();
     }
   });

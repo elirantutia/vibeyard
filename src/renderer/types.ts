@@ -45,6 +45,8 @@ export interface VibeyardApi {
     getFiles(path: string): Promise<unknown>;
     getDiff(path: string, file: string, area: string): Promise<string>;
     getWorktrees(path: string): Promise<GitWorktree[]>;
+    watchProject(path: string): void;
+    onChanged(callback: () => void): () => void;
   };
   update: {
     checkNow(): Promise<void>;
