@@ -422,6 +422,7 @@ function renderGitStatus(): void {
 export function quickNewSession(): void {
   const project = appState.activeProject;
   if (!project) return;
+  (document.activeElement as HTMLElement)?.blur?.();
   const sessionNum = project.sessions.length + 1;
   appState.addSession(project.id, `Session ${sessionNum}`);
 }
