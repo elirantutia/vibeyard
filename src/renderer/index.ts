@@ -4,7 +4,7 @@ import { initTabBar } from './components/tab-bar.js';
 import { initSplitLayout } from './components/split-layout.js';
 import { initKeybindings } from './keybindings.js';
 import { handlePtyData, destroyTerminal, updateCostDisplay, updateContextDisplay } from './components/terminal-pane.js';
-import { setIdle, setHookStatus, notifyPtyData, notifyInterrupt } from './session-activity.js';
+import { setIdle, setHookStatus, notifyInterrupt } from './session-activity.js';
 import { parseCost, setCostData, onChange as onCostChange } from './session-cost.js';
 import { parseTitle, clearSession as clearTitleSession } from './session-title.js';
 import { setContextData, onChange as onContextChange } from './session-context.js';
@@ -41,8 +41,6 @@ async function main(): Promise<void> {
       parseTitle(sessionId, data);
       if (data.includes('Interrupted')) {
         notifyInterrupt(sessionId);
-      } else {
-        notifyPtyData(sessionId);
       }
     }
   });
