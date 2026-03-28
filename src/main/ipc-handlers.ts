@@ -75,13 +75,15 @@ export function registerIpcHandlers(): void {
 
     // Validate provider settings and warn renderer if missing/tampered
     const provider = getProvider(providerId);
-    const validation = provider.validateSettings();
-    if (validation.statusLine !== 'vibeyard' || validation.hooks !== 'complete') {
-      win.webContents.send('settings:warning', {
-        sessionId,
-        statusLine: validation.statusLine,
-        hooks: validation.hooks,
-      });
+    if (provider.meta.capabilities.hookStatus) {
+      const validation = provider.validateSettings();
+      if (validation.statusLine !== 'vibeyard' || validation.hooks !== 'complete') {
+        win.webContents.send('settings:warning', {
+          sessionId,
+          statusLine: validation.statusLine,
+          hooks: validation.hooks,
+        });
+      }
     }
 
     spawnPty(

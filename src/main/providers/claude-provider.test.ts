@@ -108,7 +108,7 @@ describe('validatePrerequisites', () => {
     mockExecSync.mockImplementation(() => { throw new Error('not found'); });
     const result = provider.validatePrerequisites();
     expect(result.ok).toBe(false);
-    expect(result.message).toContain('Claude CLI not found');
+    expect(result.message).toContain('Claude Code CLI not found');
   });
 });
 

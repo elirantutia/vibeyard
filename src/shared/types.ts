@@ -2,7 +2,7 @@
 
 // --- Provider ---
 
-export type ProviderId = 'claude' | 'copilot' | 'gemini';
+export type ProviderId = 'claude' | 'codex' | 'copilot' | 'gemini';
 
 export interface CliProviderCapabilities {
   sessionResume: boolean;

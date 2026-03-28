@@ -1,11 +1,13 @@
 import type { ProviderId, CliProviderMeta } from '../../shared/types';
 import type { CliProvider } from './provider';
 import { ClaudeProvider } from './claude-provider';
+import { CodexProvider } from './codex-provider';
 
 const providers = new Map<ProviderId, CliProvider>();
 
 export function initProviders(): void {
   registerProvider(new ClaudeProvider());
+  registerProvider(new CodexProvider());
 }
 
 export function registerProvider(provider: CliProvider): void {

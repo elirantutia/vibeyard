@@ -1,4 +1,5 @@
 import { appState, MAX_SESSION_NAME_LENGTH, type ProjectRecord, type SessionRecord } from '../state.js';
+import type { ProviderId, CliProviderMeta } from '../../shared/types.js';
 import { showModal, closeModal, setModalError, FieldDef } from './modal.js';
 import { onChange as onStatusChange, getStatus, type SessionStatus } from '../session-activity.js';
 import { onChange as onGitStatusChange, getGitStatus, getActiveGitPath, refreshGitStatus } from '../git-status.js';
@@ -10,6 +11,8 @@ import { showJoinDialog } from './join-dialog.js';
 import { isSharing } from '../sharing/peer-host.js';
 import { endShare, onShareChange } from '../sharing/share-manager.js';
 import { openInspector, isInspectorOpen, getInspectedSessionId, closeInspector } from './session-inspector.js';
+
+let cachedProviders: CliProviderMeta[] | null = null;
 
 const tabListEl = document.getElementById('tab-list')!;
 const gitStatusEl = document.getElementById('git-status')!;
@@ -354,7 +357,8 @@ function render(): void {
     tab.dataset.sessionId = session.id;
     tab.draggable = true;
     tab.title = isDiff ? `Diff: ${session.diffFilePath || session.name}` : isMcp ? `MCP Inspector` : isFileReader ? `File: ${session.fileReaderPath || session.name}` : isRemoteTab ? `Remote: ${session.remoteHostName || session.name}` : buildTooltip(getStatus(session.id), session.cliSessionId);
-    const namePrefix = isDiff ? '<span class="tab-diff-badge">DIFF</span> ' : isMcp ? '<span class="tab-mcp-badge">MCP</span> ' : isFileReader ? '<span class="tab-file-badge">FILE</span> ' : isRemoteTab ? '<span class="tab-remote-badge">P2P</span> ' : '';
+    const isCodex = !isSpecial && session.providerId === 'codex';
+    const namePrefix = isDiff ? '<span class="tab-diff-badge">DIFF</span> ' : isMcp ? '<span class="tab-mcp-badge">MCP</span> ' : isFileReader ? '<span class="tab-file-badge">FILE</span> ' : isRemoteTab ? '<span class="tab-remote-badge">P2P</span> ' : isCodex ? '<span class="tab-codex-badge">CDX</span> ' : '';
     const shareIndicator = sharing ? '<span class="tab-share-indicator" title="Sharing"></span>' : '';
     const statusDot = isSpecial ? '' : `<span class="tab-status ${getStatus(session.id)}"></span>`;
     tab.innerHTML = `
@@ -756,11 +760,16 @@ function showAddSessionContextMenu(x: number, y: number): void {
   if (rect.bottom > window.innerHeight) menu.style.top = `${window.innerHeight - rect.height - 4}px`;
 }
 
-export function promptNewSession(): void {
+export async function promptNewSession(): Promise<void> {
   const project = appState.activeProject;
   if (!project) return;
 
   const sessionNum = project.sessions.length + 1;
+
+  if (!cachedProviders) {
+    cachedProviders = await window.vibeyard.provider.listProviders();
+  }
+  const providers = cachedProviders;
 
   const fields: FieldDef[] = [
     { label: 'Name', id: 'session-name', placeholder: `Session ${sessionNum}`, defaultValue: `Session ${sessionNum}` },
@@ -773,6 +782,16 @@ export function promptNewSession(): void {
     },
   ];
 
+  if (providers.length > 1) {
+    fields.unshift({
+      label: 'Provider',
+      id: 'provider',
+      type: 'select',
+      defaultValue: 'claude',
+      options: providers.map(p => ({ value: p.id, label: p.displayName })),
+    });
+  }
+
   showModal('New Session', fields, (values) => {
     const name = values['session-name']?.trim();
     if (name) {
@@ -780,7 +799,8 @@ export function promptNewSession(): void {
       const args = values['session-args']?.trim() || undefined;
       const keepArgs = values['keep-args'] === 'true';
       project.defaultArgs = keepArgs ? (args || undefined) : undefined;
-      appState.addSession(project.id, name, args);
+      const providerId = (values['provider'] || 'claude') as ProviderId;
+      appState.addSession(project.id, name, args, providerId);
     }
   });
 }

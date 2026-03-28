@@ -1,7 +1,3 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
-import { execSync } from 'child_process';
 import type { BrowserWindow } from 'electron';
 import type { CliProvider } from './provider';
 import type { CliProviderMeta, ClaudeConfig, SettingsValidationResult } from '../../shared/types';
@@ -10,8 +6,9 @@ import { installStatusLineScript, cleanupAll as cleanupHookStatus } from '../hoo
 import { startConfigWatcher as startConfigWatch, stopConfigWatcher as stopConfigWatch } from '../config-watcher';
 import { installHooksOnly, installStatusLine, getClaudeConfig } from '../claude-cli';
 import { guardedInstall, validateSettings, reinstallSettings } from '../settings-guard';
+import { resolveBinary, validateBinaryExists } from './resolve-binary';
 
-let cachedBinaryPath: string | null = null;
+const binaryCache = { path: null as string | null };
 
 export class ClaudeProvider implements CliProvider {
   readonly meta: CliProviderMeta = {
@@ -30,94 +27,11 @@ export class ClaudeProvider implements CliProvider {
   };
 
   resolveBinaryPath(): string {
-    if (cachedBinaryPath) return cachedBinaryPath;
-
-    const fullPath = getFullPath();
-
-    // Check common locations directly
-    const candidates = [
-      '/usr/local/bin/claude',
-      '/opt/homebrew/bin/claude',
-      path.join(os.homedir(), '.local', 'bin', 'claude'),
-      path.join(os.homedir(), '.npm-global', 'bin', 'claude'),
-    ];
-    for (const candidate of candidates) {
-      try {
-        if (fs.existsSync(candidate)) {
-          cachedBinaryPath = candidate;
-          return candidate;
-        }
-      } catch {}
-    }
-
-    // Try `which` with augmented PATH
-    try {
-      const resolved = execSync('which claude', {
-        env: { ...process.env, PATH: fullPath },
-        encoding: 'utf-8',
-        timeout: 3000,
-      }).trim();
-      if (resolved) {
-        cachedBinaryPath = resolved;
-        return resolved;
-      }
-    } catch (err) {
-      console.warn('Failed to resolve claude path via which:', err);
-    }
-
-    cachedBinaryPath = 'claude';
-    return 'claude';
+    return resolveBinary('claude', binaryCache);
   }
 
   validatePrerequisites(): { ok: boolean; message: string } {
-    const home = os.homedir();
-    const candidates = [
-      '/usr/local/bin/claude',
-      '/opt/homebrew/bin/claude',
-      path.join(home, '.local', 'bin', 'claude'),
-      path.join(home, '.npm-global', 'bin', 'claude'),
-    ];
-
-    for (const candidate of candidates) {
-      try {
-        if (fs.existsSync(candidate)) return { ok: true, message: '' };
-      } catch {}
-    }
-
-    // Try `which` with augmented PATH
-    try {
-      const currentPath = process.env.PATH || '';
-      const extraDirs = [
-        '/usr/local/bin',
-        '/opt/homebrew/bin',
-        path.join(home, '.local', 'bin'),
-        path.join(home, '.npm-global', 'bin'),
-        '/usr/local/sbin',
-        '/opt/homebrew/sbin',
-      ];
-      const pathSet = new Set(currentPath.split(':'));
-      for (const dir of extraDirs) {
-        pathSet.add(dir);
-      }
-      const augmentedPath = Array.from(pathSet).join(':');
-
-      const resolved = execSync('which claude', {
-        env: { ...process.env, PATH: augmentedPath },
-        encoding: 'utf-8',
-        timeout: 3000,
-      }).trim();
-      if (resolved) return { ok: true, message: '' };
-    } catch {}
-
-    return {
-      ok: false,
-      message:
-        'Claude CLI not found.\n\n' +
-        'Vibeyard requires the Claude Code CLI to be installed.\n\n' +
-        'Install it with:\n' +
-        '  npm install -g @anthropic-ai/claude-code\n\n' +
-        'After installing, restart Vibeyard.',
-    };
+    return validateBinaryExists('claude', 'Claude Code CLI', 'npm install -g @anthropic-ai/claude-code');
   }
 
   buildEnv(sessionId: string, baseEnv: Record<string, string>): Record<string, string> {
@@ -197,5 +111,5 @@ export class ClaudeProvider implements CliProvider {
 
 /** @internal Test-only: reset cached binary path */
 export function _resetCachedPath(): void {
-  cachedBinaryPath = null;
+  binaryCache.path = null;
 }

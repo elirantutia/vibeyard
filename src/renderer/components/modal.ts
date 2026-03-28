@@ -1,9 +1,10 @@
 export interface FieldDef {
   label: string;
   id: string;
-  type?: 'text' | 'checkbox';
+  type?: 'text' | 'checkbox' | 'select';
   placeholder?: string;
   defaultValue?: string;
+  options?: { value: string; label: string }[];
   buttonLabel?: string;
   onButtonClick?: (input: HTMLInputElement) => void;
   onChange?: (checked: boolean) => void;
@@ -63,6 +64,18 @@ export function showModal(
       }
       div.appendChild(input);
       div.appendChild(label);
+    } else if (field.type === 'select') {
+      div.appendChild(label);
+      const select = document.createElement('select');
+      select.id = `modal-${field.id}`;
+      for (const opt of field.options ?? []) {
+        const option = document.createElement('option');
+        option.value = opt.value;
+        option.textContent = opt.label;
+        if (opt.value === field.defaultValue) option.selected = true;
+        select.appendChild(option);
+      }
+      div.appendChild(select);
     } else {
       input.type = 'text';
       input.placeholder = field.placeholder ?? '';
@@ -105,8 +118,12 @@ export function showModal(
   const handleConfirm = async () => {
     const values: Record<string, string> = {};
     for (const field of fields) {
-      const input = document.getElementById(`modal-${field.id}`) as HTMLInputElement;
-      values[field.id] = field.type === 'checkbox' ? String(input?.checked ?? false) : (input?.value ?? '');
+      const el = document.getElementById(`modal-${field.id}`) as HTMLInputElement | HTMLSelectElement;
+      if (field.type === 'checkbox') {
+        values[field.id] = String((el as HTMLInputElement)?.checked ?? false);
+      } else {
+        values[field.id] = el?.value ?? '';
+      }
     }
     await onConfirm(values);
   };

@@ -65,6 +65,20 @@
   border-color: var(--accent);
 }
 
+.modal-field select {
+  padding: 8px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+}
+
+.modal-field select:focus {
+  border-color: var(--accent);
+}
+
 .modal-field-row {
   display: flex;
   gap: 6px;
