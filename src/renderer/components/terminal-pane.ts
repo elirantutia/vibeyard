@@ -8,7 +8,7 @@ import { markFreshSession } from '../session-insights.js';
 import { removeSession as removeCostSession, type CostInfo } from '../session-cost.js';
 import { removeSession as removeContextSession, type ContextWindowInfo } from '../session-context.js';
 import type { ProviderId } from '../types.js';
-import { FilePathLinkProvider, GithubLinkProvider } from './terminal-link-provider.js';
+import { FilePathLinkProvider, GithubLinkProvider, PrLinkProvider } from './terminal-link-provider.js';
 
 interface TerminalInstance {
   terminal: Terminal;
@@ -135,7 +135,8 @@ export function createTerminalPane(
 
   instances.set(sessionId, instance);
 
-  // Register file path link provider for Cmd+Click
+  // Register link providers for Cmd+Click
+  terminal.registerLinkProvider(new PrLinkProvider(projectPath, terminal));
   if (projectId) {
     terminal.registerLinkProvider(new FilePathLinkProvider(projectId, projectPath, terminal));
   }

@@ -88,3 +88,85 @@ export class FilePathLinkProvider implements ILinkProvider {
     callback(links.length > 0 ? links : undefined);
   }
 }
+
+export class UrlLinkProvider implements ILinkProvider {
+  constructor(private terminal: Terminal) {}
+
+  provideLinks(bufferLineNumber: number, callback: (links: ILink[] | undefined) => void): void {
+    const line = this.terminal.buffer.active.getLine(bufferLineNumber - 1);
+    if (!line) { callback(undefined); return; }
+
+    const lineText = line.translateToString(true);
+    const links: ILink[] = [];
+
+    for (const match of lineText.matchAll(/https?:\/\/\S+/g)) {
+      // Strip trailing punctuation that is unlikely to be part of the URL
+      const url = match[0].replace(/[.,;:!?()[\]'"]+$/, '');
+      const startX = match.index! + 1; // 1-based xterm coordinate
+      const endX = startX + url.length - 1;
+
+      links.push({
+        range: {
+          start: { x: startX, y: bufferLineNumber },
+          end: { x: endX, y: bufferLineNumber },
+        },
+        text: url,
+        activate: (event: MouseEvent) => {
+          if (!event.metaKey) return;
+          window.vibeyard.app.openExternal(url);
+        },
+      });
+    }
+
+    callback(links.length > 0 ? links : undefined);
+  }
+}
+
+function buildGitHubPrUrl(remoteUrl: string, prNumber: string): string | null {
+  const match = remoteUrl.match(/(?:git@github\.com:|https?:\/\/github\.com\/)([^/]+\/[^/]+?)(?:\.git)?$/);
+  if (match) return `https://github.com/${match[1]}/pull/${prNumber}`;
+  return null;
+}
+
+export class PrLinkProvider implements ILinkProvider {
+  private static readonly remoteUrlCache = new Map<string, Promise<string | null>>();
+
+  constructor(private projectPath: string, private terminal: Terminal) {}
+
+  provideLinks(bufferLineNumber: number, callback: (links: ILink[] | undefined) => void): void {
+    const line = this.terminal.buffer.active.getLine(bufferLineNumber - 1);
+    if (!line) { callback(undefined); return; }
+
+    const lineText = line.translateToString(true);
+    const links: ILink[] = [];
+
+    for (const match of lineText.matchAll(/PR\s+#(\d+)/g)) {
+      const fullText = match[0];
+      const prNumber = match[1];
+      const startX = match.index! + 1; // 1-based xterm coordinate
+      const endX = startX + fullText.length - 1;
+
+      links.push({
+        range: {
+          start: { x: startX, y: bufferLineNumber },
+          end: { x: endX, y: bufferLineNumber },
+        },
+        text: fullText,
+        activate: (event: MouseEvent) => {
+          if (!event.metaKey) return;
+          (async () => {
+            if (!PrLinkProvider.remoteUrlCache.has(this.projectPath)) {
+              PrLinkProvider.remoteUrlCache.set(this.projectPath, window.vibeyard.git.getRemoteUrl(this.projectPath));
+            }
+            const remoteUrl = await PrLinkProvider.remoteUrlCache.get(this.projectPath)!;
+            if (!remoteUrl) return;
+            const prUrl = buildGitHubPrUrl(remoteUrl, prNumber);
+            if (prUrl) window.vibeyard.app.openExternal(prUrl);
+          })();
+        },
+      });
+    }
+
+    callback(links.length > 0 ? links : undefined);
+  }
+}
