@@ -7,7 +7,7 @@ import {
   onChange as onInspectorChange,
   clearSession,
 } from '../session-inspector-state.js';
-import { fitAllVisible } from './terminal-pane.js';
+import { fitAllVisible, getTerminalInstance } from './terminal-pane.js';
 
 let inspectorPanel: HTMLElement | null = null;
 let inspectedSessionId: string | null = null;
@@ -15,6 +15,9 @@ let activeTab: 'timeline' | 'costs' | 'tools' | 'context' = 'timeline';
 let updateTimer: ReturnType<typeof setTimeout> | null = null;
 let resizing = false;
 let reopenOnNextSession = false;
+
+const expandedRows = new Set<string>();
+let autoScroll = true;
 
 export function isInspectorOpen(): boolean {
   return inspectorPanel !== null && inspectedSessionId !== null;
@@ -24,12 +27,18 @@ export function getInspectedSessionId(): string | null {
   return inspectedSessionId;
 }
 
+function resetUIState(): void {
+  expandedRows.clear();
+  autoScroll = true;
+}
+
 export function openInspector(sessionId: string): void {
   if (inspectorPanel && inspectedSessionId === sessionId) {
     closeInspector();
     return;
   }
 
+  if (inspectedSessionId !== sessionId) resetUIState();
   inspectedSessionId = sessionId;
 
   if (!inspectorPanel) {
@@ -81,6 +90,7 @@ export function initSessionInspector(): void {
     if (project?.activeSessionId && project.activeSessionId !== inspectedSessionId) {
       const session = project.sessions.find(s => s.id === project.activeSessionId);
       if (session && (!session.type || session.type === 'claude')) {
+        resetUIState();
         inspectedSessionId = project.activeSessionId;
         renderActiveTab();
       }
@@ -185,9 +195,33 @@ function createPanel(): HTMLElement {
   }
   panel.appendChild(tabBar);
 
+  const scrollToggle = document.createElement('button');
+  scrollToggle.className = 'inspector-autoscroll-toggle active';
+  scrollToggle.textContent = 'Auto-scroll';
+  scrollToggle.title = 'Toggle auto-scroll to bottom';
+  scrollToggle.addEventListener('click', () => {
+    autoScroll = !autoScroll;
+    scrollToggle.classList.toggle('active', autoScroll);
+    if (autoScroll) {
+      const content = panel.querySelector('.inspector-content') as HTMLElement;
+      if (content) content.scrollTop = content.scrollHeight;
+    }
+  });
+  panel.appendChild(scrollToggle);
+
   // Content area
   const content = document.createElement('div');
   content.className = 'inspector-content';
+
+  content.addEventListener('scroll', () => {
+    if (activeTab !== 'timeline') return;
+    const atBottom = content.scrollHeight - content.scrollTop - content.clientHeight < 30;
+    if (atBottom !== autoScroll) {
+      autoScroll = atBottom;
+      scrollToggle.classList.toggle('active', autoScroll);
+    }
+  });
+
   panel.appendChild(content);
 
   return panel;
@@ -197,6 +231,9 @@ function renderActiveTab(): void {
   if (!inspectorPanel || !inspectedSessionId) return;
   const content = inspectorPanel.querySelector('.inspector-content') as HTMLElement;
   if (!content) return;
+
+  const toggle = inspectorPanel.querySelector('.inspector-autoscroll-toggle') as HTMLElement;
+  if (toggle) toggle.style.display = activeTab === 'timeline' ? '' : 'none';
 
   content.innerHTML = '';
 
@@ -213,7 +250,7 @@ function renderActiveTab(): void {
 function renderTimeline(container: HTMLElement): void {
   const events = getEvents(inspectedSessionId!);
   if (events.length === 0) {
-    container.innerHTML = '<div class="inspector-empty">No events yet</div>';
+    container.innerHTML = `<div class="inspector-empty">${emptyMessage('No events yet')}</div>`;
     return;
   }
 
@@ -290,17 +327,21 @@ function renderTimeline(container: HTMLElement): void {
     // Expandable tool input
     if (ev.tool_input) {
       row.classList.add('inspector-expandable');
+      const key = `${ev.timestamp}:${ev.type}:${ev.tool_name || ''}`;
+
+      if (expandedRows.has(key)) {
+        row.appendChild(createToolInputEl(ev.tool_input));
+      }
+
       row.addEventListener('click', () => {
         const existing = row.querySelector('.inspector-tool-input');
         if (existing) {
           existing.remove();
+          expandedRows.delete(key);
           return;
         }
-        const inputEl = document.createElement('pre');
-        inputEl.className = 'inspector-tool-input';
-        const text = JSON.stringify(ev.tool_input, null, 2);
-        inputEl.textContent = text.length > 2000 ? text.slice(0, 2000) + '\n...' : text;
-        row.appendChild(inputEl);
+        expandedRows.add(key);
+        row.appendChild(createToolInputEl(ev.tool_input));
       });
     }
 
@@ -316,10 +357,11 @@ function renderTimeline(container: HTMLElement): void {
 
   container.appendChild(list);
 
-  // Auto-scroll to bottom
-  requestAnimationFrame(() => {
-    container.scrollTop = container.scrollHeight;
-  });
+  if (autoScroll) {
+    requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight;
+    });
+  }
 }
 
 // --- Costs View ---
@@ -329,7 +371,7 @@ function renderCosts(container: HTMLElement): void {
   const costDeltas = getCostDeltas(inspectedSessionId!);
 
   if (events.length === 0) {
-    container.innerHTML = '<div class="inspector-empty">No events yet</div>';
+    container.innerHTML = `<div class="inspector-empty">${emptyMessage('No events yet')}</div>`;
     return;
   }
 
@@ -389,7 +431,7 @@ function renderTools(container: HTMLElement): void {
   const stats = getToolStats(inspectedSessionId!);
 
   if (stats.length === 0) {
-    container.innerHTML = '<div class="inspector-empty">No tool calls yet</div>';
+    container.innerHTML = `<div class="inspector-empty">${emptyMessage('No tool calls yet')}</div>`;
     return;
   }
 
@@ -442,7 +484,7 @@ function renderContext(container: HTMLElement): void {
   const history = getContextHistory(inspectedSessionId!);
 
   if (history.length === 0) {
-    container.innerHTML = '<div class="inspector-empty">No context data yet</div>';
+    container.innerHTML = `<div class="inspector-empty">${emptyMessage('No context data yet')}</div>`;
     return;
   }
 
@@ -517,6 +559,20 @@ function renderContext(container: HTMLElement): void {
 }
 
 // --- Helpers ---
+
+function emptyMessage(fallback: string): string {
+  if (!inspectedSessionId) return fallback;
+  const instance = getTerminalInstance(inspectedSessionId);
+  return instance?.isResume ? 'Session resumed — history not available' : fallback;
+}
+
+function createToolInputEl(toolInput: unknown): HTMLPreElement {
+  const el = document.createElement('pre');
+  el.className = 'inspector-tool-input';
+  const text = JSON.stringify(toolInput, null, 2);
+  el.textContent = text.length > 2000 ? text.slice(0, 2000) + '\n...' : text;
+  return el;
+}
 
 function formatRelativeTime(ms: number): string {
   const totalSec = Math.floor(ms / 1000);
