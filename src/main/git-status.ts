@@ -259,3 +259,17 @@ export function getGitWorktrees(cwd: string): Promise<GitWorktree[]> {
     );
   });
 }
+
+export function getGitRemoteUrl(cwd: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    execFile('git', ['remote', 'get-url', 'origin'], { cwd }, (err, stdout) => {
+      if (err) { resolve(null); return; }
+      const raw = stdout.trim();
+      // Normalize SSH (git@github.com:owner/repo.git) to HTTPS
+      const ssh = raw.match(/^git@([^:]+):(.+?)(?:\.git)?$/);
+      if (ssh) { resolve(`https://${ssh[1]}/${ssh[2]}`); return; }
+      // Strip trailing .git from HTTPS URLs
+      resolve(raw.replace(/\.git$/, '') || null);
+    });
+  });
+}

@@ -8,7 +8,7 @@ import { markFreshSession } from '../session-insights.js';
 import { removeSession as removeCostSession, type CostInfo } from '../session-cost.js';
 import { removeSession as removeContextSession, type ContextWindowInfo } from '../session-context.js';
 import type { ProviderId } from '../types.js';
-import { FilePathLinkProvider } from './terminal-link-provider.js';
+import { FilePathLinkProvider, GithubLinkProvider } from './terminal-link-provider.js';
 
 interface TerminalInstance {
   terminal: Terminal;
@@ -137,6 +137,13 @@ export function createTerminalPane(
   if (projectId) {
     terminal.registerLinkProvider(new FilePathLinkProvider(projectId, projectPath, terminal));
   }
+
+  // Register GitHub #123 link provider
+  window.vibeyard.git.getRemoteUrl(projectPath).then((repoUrl) => {
+    if (repoUrl) {
+      terminal.registerLinkProvider(new GithubLinkProvider(repoUrl, terminal));
+    }
+  });
 
   // Handle user input → PTY
   terminal.onData((data) => {

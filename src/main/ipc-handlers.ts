@@ -8,7 +8,7 @@ import { addMcpServer, removeMcpServer } from './claude-cli';
 import type { McpServerConfig } from './claude-cli';
 import { loadState, saveState, PersistedState } from './store';
 import { startWatching, cleanupSessionStatus } from './hook-status';
-import { getGitStatus, getGitFiles, getGitDiff, getGitWorktrees, gitStageFile, gitUnstageFile, gitDiscardFile } from './git-status';
+import { getGitStatus, getGitFiles, getGitDiff, getGitWorktrees, gitStageFile, gitUnstageFile, gitDiscardFile, getGitRemoteUrl } from './git-status';
 import { startGitWatcher, stopGitWatcher, notifyGitChanged } from './git-watcher';
 import { registerMcpHandlers } from './mcp-ipc-handlers';
 import { checkForUpdates, quitAndInstall } from './auto-updater';
@@ -209,6 +209,8 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('git:getStatus', (_event, projectPath: string) => getGitStatus(projectPath));
+
+  ipcMain.handle('git:getRemoteUrl', (_event, projectPath: string) => getGitRemoteUrl(projectPath));
 
   ipcMain.handle('git:getFiles', (_event, projectPath: string) => getGitFiles(projectPath));
 
