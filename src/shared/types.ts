@@ -244,8 +244,21 @@ export interface ToolFailureData {
 // --- Session Inspector ---
 
 export type InspectorEventType =
+  // Core 7 (status + inspector)
   | 'session_start' | 'user_prompt' | 'tool_use' | 'tool_failure'
-  | 'stop' | 'stop_failure' | 'permission_request';
+  | 'stop' | 'stop_failure' | 'permission_request'
+  // Inspector-only events
+  | 'pre_tool_use'
+  | 'subagent_start' | 'subagent_stop'
+  | 'notification'
+  | 'pre_compact' | 'post_compact'
+  | 'session_end'
+  | 'task_created' | 'task_completed'
+  | 'worktree_create' | 'worktree_remove'
+  | 'cwd_changed' | 'file_changed' | 'config_change'
+  | 'elicitation' | 'elicitation_result'
+  | 'instructions_loaded'
+  | 'teammate_idle';
 
 export interface InspectorEvent {
   type: InspectorEventType;
@@ -256,6 +269,15 @@ export interface InspectorEvent {
   error?: string;
   cost_snapshot?: { total_cost_usd: number; total_duration_ms: number };
   context_snapshot?: { total_tokens: number; context_window_size: number; used_percentage: number };
+  agent_id?: string;
+  message?: string;
+  task_id?: string;
+  worktree_path?: string;
+  cwd?: string;
+  file_path?: string;
+  config_key?: string;
+  question?: string;
+  answer?: string;
 }
 
 export interface ToolUsageStats {

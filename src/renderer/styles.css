@@ -3810,6 +3810,11 @@ select.mcp-form-input {
 .inspector-badge-stop { background: rgba(160,160,176,0.15); color: var(--text-secondary); }
 .inspector-badge-start { background: rgba(187,134,252,0.2); color: #bb86fc; }
 .inspector-badge-input { background: rgba(244,180,0,0.2); color: #f4b400; }
+.inspector-badge-agent { background: rgba(0,188,212,0.2); color: #4dd0e1; }
+.inspector-badge-lifecycle { background: rgba(171,130,255,0.2); color: #ab82ff; }
+.inspector-badge-task { background: rgba(38,198,166,0.2); color: #26c6a6; }
+.inspector-badge-system { background: rgba(120,144,176,0.18); color: #90a4ae; }
+.inspector-badge-notify { background: rgba(255,152,0,0.2); color: #ffb74d; }
 .inspector-badge-default { background: var(--bg-tertiary); color: var(--text-muted); }
 
 .inspector-desc {

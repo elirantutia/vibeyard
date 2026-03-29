@@ -1,6 +1,8 @@
 # Hooks & Session State Map
 
-## 7 Hook Events → Session Status
+## 25 Hook Events (7 core + 18 inspector-only)
+
+### Core Hook Events → Session Status
 
 | Hook Event | Session Status | Description |
 |---|---|---|
@@ -52,6 +54,31 @@ waiting
 | `.cost` | `statusline.sh` (Python script via statusLine setting) | Cost, tokens, context window |
 | `.toolfailure` | `PostToolUseFailure` hook | tool_name, tool_input, error |
 
+## Inspector-Only Hook Events (18 additional)
+
+These hooks write only to the `.events` inspector log — they do NOT change session status.
+
+| Hook Event | Inspector Event Type | Description |
+|---|---|---|
+| `PreToolUse` | `pre_tool_use` | Before a tool executes |
+| `SubagentStart` | `subagent_start` | Subagent spawned |
+| `SubagentStop` | `subagent_stop` | Subagent finished |
+| `Notification` | `notification` | Claude sent a notification |
+| `PreCompact` | `pre_compact` | Context compaction starting |
+| `PostCompact` | `post_compact` | Context compaction finished |
+| `SessionEnd` | `session_end` | Session terminated |
+| `TaskCreated` | `task_created` | Background task created |
+| `TaskCompleted` | `task_completed` | Background task finished |
+| `WorktreeCreate` | `worktree_create` | Git worktree created |
+| `WorktreeRemove` | `worktree_remove` | Git worktree removed |
+| `CwdChanged` | `cwd_changed` | Working directory changed |
+| `FileChanged` | `file_changed` | File modification detected |
+| `ConfigChange` | `config_change` | Configuration changed |
+| `Elicitation` | `elicitation` | MCP server requests user input |
+| `ElicitationResult` | `elicitation_result` | User answered elicitation |
+| `InstructionsLoaded` | `instructions_loaded` | CLAUDE.md / instructions loaded |
+| `TeammateIdle` | `teammate_idle` | Teammate agent became idle |
+
 ## Validation (`settings-guard.ts`)
 
-On each PTY creation, the app validates all 7 hooks are installed and the statusLine is configured. Returns `'missing'`, `'partial'`, or `'complete'` — shows a warning banner if incomplete.
+On each PTY creation, the app validates the 7 core hooks are installed and the statusLine is configured. Returns `'missing'`, `'partial'`, or `'complete'` — shows a warning banner if incomplete. Inspector-only hooks are not validated.

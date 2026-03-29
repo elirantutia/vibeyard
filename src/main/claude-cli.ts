@@ -3,7 +3,7 @@ import * as path from 'path';
 import { homedir } from 'os';
 import { STATUS_DIR, getStatusLineScriptPath } from './hook-status';
 import { readJsonSafe, readDirSafe } from './fs-utils';
-import type { McpServer, Agent, Skill, Command, ClaudeConfig } from '../shared/types';
+import type { McpServer, Agent, Skill, Command, ClaudeConfig, InspectorEventType } from '../shared/types';
 
 export type { McpServer, Agent, Skill, Command, ClaudeConfig } from '../shared/types';
 
@@ -255,6 +255,10 @@ if ti:
 er=d.get(\\"error\\",\\"\\")
 if er:
  e[\\"error\\"]=er
+for fld in (\\"agent_id\\",\\"message\\",\\"task_id\\",\\"worktree_path\\",\\"cwd\\",\\"file_path\\",\\"config_key\\",\\"question\\",\\"answer\\"):
+ v=d.get(fld,\\"\\")
+ if v:
+  e[fld]=v
 if cs:
  e[\\"cost_snapshot\\"]={k:cs[k] for k in (\\"total_cost_usd\\",\\"total_duration_ms\\") if k in cs}
 if cw:
@@ -279,7 +283,7 @@ with open(f\\"${STATUS_DIR}/\\"+sid+\\".events\\",\\"a\\") as f:
     PermissionRequest: 'input',
   };
 
-  const eventTypeMap: Record<string, string> = {
+  const eventTypeMap: Record<string, InspectorEventType> = {
     SessionStart: 'session_start',
     UserPromptSubmit: 'user_prompt',
     PostToolUse: 'tool_use',
@@ -305,6 +309,37 @@ with open(f\\"${STATUS_DIR}/\\"+sid+\\".events\\",\\"a\\") as f:
     existing.push({
       matcher: '',
       hooks,
+    });
+    cleaned[event] = existing;
+  }
+
+  // Inspector-only hooks: log to .events file without changing session status
+  const inspectorOnlyEvents: Record<string, InspectorEventType> = {
+    PreToolUse: 'pre_tool_use',
+    SubagentStart: 'subagent_start',
+    SubagentStop: 'subagent_stop',
+    Notification: 'notification',
+    PreCompact: 'pre_compact',
+    PostCompact: 'post_compact',
+    SessionEnd: 'session_end',
+    TaskCreated: 'task_created',
+    TaskCompleted: 'task_completed',
+    WorktreeCreate: 'worktree_create',
+    WorktreeRemove: 'worktree_remove',
+    CwdChanged: 'cwd_changed',
+    FileChanged: 'file_changed',
+    ConfigChange: 'config_change',
+    Elicitation: 'elicitation',
+    ElicitationResult: 'elicitation_result',
+    InstructionsLoaded: 'instructions_loaded',
+    TeammateIdle: 'teammate_idle',
+  };
+
+  for (const [event, eventType] of Object.entries(inspectorOnlyEvents)) {
+    const existing = cleaned[event] ?? [];
+    existing.push({
+      matcher: '',
+      hooks: [{ type: 'command', command: captureEventCmd(event, eventType) }],
     });
     cleaned[event] = existing;
   }

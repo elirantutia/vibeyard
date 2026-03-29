@@ -418,4 +418,49 @@ describe('installHooks', () => {
     // Should have exactly 2 vibeyard hooks (status hook + inspector event capture hook)
     expect(vibeyardHookCount).toBe(2);
   });
+
+  it('installs all 25 hook events (7 core + 18 inspector-only)', () => {
+    mockReadFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
+
+    installHooks();
+
+    const written = JSON.parse(String(mockWriteFileSync.mock.calls[0][1]));
+    const hookEvents = Object.keys(written.hooks);
+
+    // Core 7 hooks
+    const coreEvents = ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'PostToolUseFailure', 'Stop', 'StopFailure', 'PermissionRequest'];
+    for (const event of coreEvents) {
+      expect(hookEvents).toContain(event);
+    }
+
+    // Inspector-only 18 hooks
+    const inspectorEvents = [
+      'PreToolUse', 'SubagentStart', 'SubagentStop', 'Notification',
+      'PreCompact', 'PostCompact', 'SessionEnd', 'TaskCreated', 'TaskCompleted',
+      'WorktreeCreate', 'WorktreeRemove', 'CwdChanged', 'FileChanged',
+      'ConfigChange', 'Elicitation', 'ElicitationResult', 'InstructionsLoaded',
+      'TeammateIdle',
+    ];
+    for (const event of inspectorEvents) {
+      expect(hookEvents).toContain(event);
+    }
+
+    expect(hookEvents).toHaveLength(25);
+
+    // Core hooks should have status writer + event logger (at least 2 hooks)
+    for (const event of coreEvents) {
+      const matchers = written.hooks[event];
+      const allHooks = matchers.flatMap((m: { hooks: Array<{ command: string }> }) => m.hooks);
+      expect(allHooks.some((h: { command: string }) => h.command.includes('.status'))).toBe(true);
+      expect(allHooks.some((h: { command: string }) => h.command.includes('.events'))).toBe(true);
+    }
+
+    // Inspector-only hooks should have only event logger (no status writer)
+    for (const event of inspectorEvents) {
+      const matchers = written.hooks[event];
+      const allHooks = matchers.flatMap((m: { hooks: Array<{ command: string }> }) => m.hooks);
+      expect(allHooks.some((h: { command: string }) => h.command.includes('.status'))).toBe(false);
+      expect(allHooks.some((h: { command: string }) => h.command.includes('.events'))).toBe(true);
+    }
+  });
 });

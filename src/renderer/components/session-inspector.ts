@@ -301,8 +301,42 @@ function renderTimeline(container: HTMLElement): void {
       desc.textContent = ev.error || 'Response stopped with error';
     } else if (ev.type === 'session_start') {
       desc.textContent = 'Session started';
+    } else if (ev.type === 'session_end') {
+      desc.textContent = 'Session ended';
     } else if (ev.type === 'permission_request') {
       desc.textContent = 'Waiting for permission';
+    } else if (ev.type === 'subagent_start') {
+      desc.textContent = ev.agent_id ? `Subagent started: ${ev.agent_id}` : 'Subagent started';
+    } else if (ev.type === 'subagent_stop') {
+      desc.textContent = ev.agent_id ? `Subagent stopped: ${ev.agent_id}` : 'Subagent stopped';
+    } else if (ev.type === 'notification') {
+      desc.textContent = ev.message || 'Notification';
+    } else if (ev.type === 'pre_compact') {
+      desc.textContent = 'Context compaction starting';
+    } else if (ev.type === 'post_compact') {
+      desc.textContent = 'Context compaction complete';
+    } else if (ev.type === 'task_created') {
+      desc.textContent = ev.task_id ? `Task created: ${ev.task_id}` : 'Task created';
+    } else if (ev.type === 'task_completed') {
+      desc.textContent = ev.task_id ? `Task completed: ${ev.task_id}` : 'Task completed';
+    } else if (ev.type === 'worktree_create') {
+      desc.textContent = ev.worktree_path || 'Worktree created';
+    } else if (ev.type === 'worktree_remove') {
+      desc.textContent = ev.worktree_path || 'Worktree removed';
+    } else if (ev.type === 'cwd_changed') {
+      desc.textContent = ev.cwd || 'Working directory changed';
+    } else if (ev.type === 'file_changed') {
+      desc.textContent = ev.file_path || 'File changed';
+    } else if (ev.type === 'config_change') {
+      desc.textContent = ev.config_key ? `Config: ${ev.config_key}` : 'Config changed';
+    } else if (ev.type === 'elicitation') {
+      desc.textContent = ev.question || 'Elicitation requested';
+    } else if (ev.type === 'elicitation_result') {
+      desc.textContent = 'Elicitation answered';
+    } else if (ev.type === 'instructions_loaded') {
+      desc.textContent = 'Instructions loaded';
+    } else if (ev.type === 'teammate_idle') {
+      desc.textContent = ev.agent_id ? `Teammate idle: ${ev.agent_id}` : 'Teammate idle';
     }
 
     // Duration to next event
@@ -605,12 +639,16 @@ function formatTokenCount(n: number): string {
 function badgeClass(type: string): string {
   switch (type) {
     case 'user_prompt': return 'prompt';
-    case 'tool_use': return 'tool';
-    case 'tool_failure': return 'failure';
+    case 'tool_use': case 'pre_tool_use': return 'tool';
+    case 'tool_failure': case 'stop_failure': return 'failure';
     case 'stop': return 'stop';
-    case 'stop_failure': return 'failure';
     case 'session_start': return 'start';
-    case 'permission_request': return 'input';
+    case 'permission_request': case 'elicitation': case 'elicitation_result': return 'input';
+    case 'subagent_start': case 'subagent_stop': case 'teammate_idle': return 'agent';
+    case 'session_end': case 'pre_compact': case 'post_compact': case 'instructions_loaded': return 'lifecycle';
+    case 'task_created': case 'task_completed': return 'task';
+    case 'cwd_changed': case 'file_changed': case 'config_change': case 'worktree_create': case 'worktree_remove': return 'system';
+    case 'notification': return 'notify';
     default: return 'default';
   }
 }
@@ -619,11 +657,29 @@ function badgeLabel(type: string): string {
   switch (type) {
     case 'user_prompt': return 'Prompt';
     case 'tool_use': return 'Tool';
+    case 'pre_tool_use': return 'Pre-Tool';
     case 'tool_failure': return 'Failure';
     case 'stop': return 'Done';
     case 'stop_failure': return 'Error';
     case 'session_start': return 'Start';
+    case 'session_end': return 'End';
     case 'permission_request': return 'Input';
+    case 'subagent_start': return 'Agent+';
+    case 'subagent_stop': return 'Agent-';
+    case 'notification': return 'Notify';
+    case 'pre_compact': return 'Compact';
+    case 'post_compact': return 'Compact';
+    case 'task_created': return 'Task+';
+    case 'task_completed': return 'Task OK';
+    case 'worktree_create': return 'Worktree+';
+    case 'worktree_remove': return 'Worktree-';
+    case 'cwd_changed': return 'CWD';
+    case 'file_changed': return 'File';
+    case 'config_change': return 'Config';
+    case 'elicitation': return 'Ask';
+    case 'elicitation_result': return 'Answer';
+    case 'instructions_loaded': return 'Instr';
+    case 'teammate_idle': return 'Idle';
     default: return escapeHtml(type);
   }
 }
