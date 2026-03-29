@@ -15,7 +15,7 @@ export function parseTitle(sessionId: string, rawData: string): void {
   const clean = stripAnsi(rawData);
 
   // Process line-by-line to avoid matching text spanning across separate separator lines
-  for (const line of clean.split('\n')) {
+  for (const line of clean.split(/\r?\n|\r/)) {
     const match = TITLE_RE.exec(line);
     if (!match) continue;
 

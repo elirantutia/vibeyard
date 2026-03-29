@@ -68,6 +68,13 @@ describe('parseTitle', () => {
     expect(updated.name).toBe('Session 1');
   });
 
+  it('does not extract text between separator lines joined by \\r', () => {
+    const { project, session } = addProjectAndSession();
+    parseTitle(session.id, '────────────────────\reliran\r────────────────────');
+    const updated = project.sessions.find((s) => s.id === session.id)!;
+    expect(updated.name).toBe('Session 1');
+  });
+
   it('ignores plain separator lines without a title', () => {
     const { project, session } = addProjectAndSession();
     parseTitle(session.id, '────────────────────────────────────────────────────');
