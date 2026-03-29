@@ -25,6 +25,8 @@ import { initInsightAlert } from './components/insight-alert.js';
 import { initReadinessSection } from './components/readiness-section.js';
 import { initToolDetector } from './tools/missing-tool-detector.js';
 import { initToolAlert } from './components/tool-alert.js';
+import { initLargeFileDetector } from './tools/large-file-detector.js';
+import { initLargeFileAlert } from './components/large-file-alert.js';
 import { initSettingsGuard } from './components/settings-guard-ui.js';
 import { checkWhatsNew } from './components/whats-new-dialog.js';
 import { initShareManager, forwardPtyData, endShare, cleanupAllShares } from './sharing/share-manager.js';
@@ -124,6 +126,8 @@ async function main(): Promise<void> {
   initInsightAlert();
   initToolDetector();
   initToolAlert();
+  initLargeFileDetector();
+  initLargeFileAlert();
   initSettingsGuard();
   initReadinessSection();
   initShareManager();
