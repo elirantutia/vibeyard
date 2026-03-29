@@ -285,14 +285,15 @@ describe('hook-status', () => {
   });
 
   describe('cleanupSessionStatus', () => {
-    it('unlinks all 4 file types', () => {
+    it('unlinks all 5 file types', () => {
       cleanupSessionStatus('sess-1');
 
       expect(fs.unlinkSync).toHaveBeenCalledWith('/tmp/vibeyard/sess-1.status');
       expect(fs.unlinkSync).toHaveBeenCalledWith('/tmp/vibeyard/sess-1.sessionid');
       expect(fs.unlinkSync).toHaveBeenCalledWith('/tmp/vibeyard/sess-1.cost');
       expect(fs.unlinkSync).toHaveBeenCalledWith('/tmp/vibeyard/sess-1.toolfailure');
-      expect(fs.unlinkSync).toHaveBeenCalledTimes(4);
+      expect(fs.unlinkSync).toHaveBeenCalledWith('/tmp/vibeyard/sess-1.events');
+      expect(fs.unlinkSync).toHaveBeenCalledTimes(5);
     });
 
     it('handles errors when files do not exist', () => {

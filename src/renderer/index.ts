@@ -30,6 +30,8 @@ import { checkWhatsNew } from './components/whats-new-dialog.js';
 import { initShareManager, forwardPtyData, endShare, cleanupAllShares } from './sharing/share-manager.js';
 import { isSharing } from './sharing/peer-host.js';
 import { checkStarPrompt } from './components/star-prompt-dialog.js';
+import { addEvents as addInspectorEvents } from './session-inspector-state.js';
+import { initSessionInspector } from './components/session-inspector.js';
 
 let isQuitting = false;
 window.vibeyard.app.onQuitting(() => {
@@ -76,6 +78,11 @@ async function main(): Promise<void> {
   window.vibeyard.session.onHookStatus((sessionId, status, hookName) => {
     logDebugEvent('hookStatus', sessionId, hookName ? `${hookName}: ${status}` : status);
     setHookStatus(sessionId, status, hookName);
+  });
+
+  window.vibeyard.session.onInspectorEvents((sessionId, events) => {
+    logDebugEvent('inspectorEvents', sessionId, { count: events.length });
+    addInspectorEvents(sessionId, events);
   });
 
   window.vibeyard.session.onCliSessionId((sessionId, cliSessionId) => {
@@ -127,6 +134,7 @@ async function main(): Promise<void> {
   initSettingsGuard();
   initReadinessSection();
   initShareManager();
+  initSessionInspector();
   startGitPolling();
 
   window.vibeyard.menu.onUsageStats(() => showUsageModal());

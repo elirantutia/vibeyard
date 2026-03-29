@@ -415,7 +415,7 @@ describe('installHooks', () => {
     const vibeyardHookCount = stopHooks.reduce((count: number, m: { hooks: Array<{ command: string }> }) =>
       count + m.hooks.filter((h: { command: string }) => h.command.includes('# vibeyard-hook')).length, 0
     );
-    // Should have exactly 1 vibeyard hook (the freshly installed status hook)
-    expect(vibeyardHookCount).toBe(1);
+    // Should have exactly 2 vibeyard hooks (status hook + inspector event capture hook)
+    expect(vibeyardHookCount).toBe(2);
   });
 });

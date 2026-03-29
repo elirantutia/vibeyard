@@ -241,6 +241,36 @@ export interface ToolFailureData {
   error: string;
 }
 
+// --- Session Inspector ---
+
+export type InspectorEventType =
+  | 'session_start' | 'user_prompt' | 'tool_use' | 'tool_failure'
+  | 'stop' | 'stop_failure' | 'permission_request';
+
+export interface InspectorEvent {
+  type: InspectorEventType;
+  timestamp: number;
+  hookEvent: string;
+  tool_name?: string;
+  tool_input?: Record<string, unknown>;
+  error?: string;
+  cost_snapshot?: { total_cost_usd: number; total_duration_ms: number };
+  context_snapshot?: { total_tokens: number; context_window_size: number; used_percentage: number };
+}
+
+export interface ToolUsageStats {
+  tool_name: string;
+  calls: number;
+  failures: number;
+  totalCost: number;
+}
+
+export interface ContextDataPoint {
+  timestamp: number;
+  usedPercentage: number;
+  totalTokens: number;
+}
+
 // --- MCP ---
 
 export interface McpResult {
