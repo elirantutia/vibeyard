@@ -17,6 +17,7 @@ import { createAppMenu } from './menu';
 import { getProvider, getProviderMeta, getAllProviderMetas } from './providers/registry';
 import type { ProviderId, GitFileEntry, SettingsValidationResult } from '../shared/types';
 import { analyzeReadiness } from './readiness/analyzer';
+import { expandUserPath } from './fs-utils';
 
 /**
  * Check if a resolved path is within one of the known project directories.
@@ -141,11 +142,28 @@ export function registerIpcHandlers(): void {
     killPty(sessionId);
   });
 
-  ipcMain.handle('fs:isDirectory', (_event, path: string) => {
+  ipcMain.handle('fs:isDirectory', (_event, filePath: string) => {
     try {
-      return fs.statSync(path).isDirectory();
+      return fs.statSync(expandUserPath(filePath)).isDirectory();
     } catch {
       return false;
+    }
+  });
+
+  ipcMain.handle('fs:expandPath', (_event, filePath: string): string => {
+    return expandUserPath(filePath);
+  });
+
+  ipcMain.handle('fs:listDirs', (_event, dirPath: string) => {
+    try {
+      const expanded = expandUserPath(dirPath);
+      const entries = fs.readdirSync(expanded, { withFileTypes: true });
+      return entries
+        .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+        .map(e => path.join(expanded, e.name))
+        .slice(0, 20);
+    } catch {
+      return [];
     }
   });
 
