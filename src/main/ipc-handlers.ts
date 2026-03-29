@@ -221,6 +221,17 @@ export function registerIpcHandlers(): void {
     return shell.openPath(fullPath);
   });
 
+  ipcMain.handle('git:getRemoteUrl', (_event, projectPath: string) => {
+    try {
+      const resolved = path.resolve(projectPath);
+      if (!isWithinKnownProject(resolved)) return null;
+      const result = execSync('git remote get-url origin', { cwd: resolved, encoding: 'utf-8', timeout: 5000 });
+      return result.trim();
+    } catch {
+      return null;
+    }
+  });
+
   ipcMain.handle('pty:getCwd', (_event, sessionId: string) => getPtyCwd(sessionId));
 
   ipcMain.handle('fs:listFiles', (_event, cwd: string, query: string) => {

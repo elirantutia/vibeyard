@@ -53,6 +53,7 @@ export interface VibeyardApi {
     unstageFile(path: string, file: string): Promise<void>;
     discardFile(path: string, file: string, area: string): Promise<void>;
     openInEditor(path: string, file: string): Promise<void>;
+    getRemoteUrl(path: string): Promise<string | null>;
   };
   update: {
     checkNow(): Promise<void>;
@@ -177,6 +178,7 @@ const api: VibeyardApi = {
     unstageFile: (path: string, file: string) => ipcRenderer.invoke('git:unstageFile', path, file),
     discardFile: (path: string, file: string, area: string) => ipcRenderer.invoke('git:discardFile', path, file, area),
     openInEditor: (path: string, file: string) => ipcRenderer.invoke('git:openInEditor', path, file),
+    getRemoteUrl: (path: string) => ipcRenderer.invoke('git:getRemoteUrl', path),
   },
   update: {
     checkNow: () => ipcRenderer.invoke('update:checkNow'),
