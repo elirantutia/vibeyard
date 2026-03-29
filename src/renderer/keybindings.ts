@@ -41,6 +41,7 @@ export function initKeybindings(): void {
   shortcutManager.registerHandler('toggle-sidebar', () => toggleSidebar());
   shortcutManager.registerHandler('toggle-split', () => appState.toggleSwarm());
   shortcutManager.registerHandler('project-terminal', () => toggleProjectTerminal());
+  shortcutManager.registerHandler('project-terminal-alt', () => toggleProjectTerminal());
   shortcutManager.registerHandler('debug-panel', () => toggleDebugPanel());
   shortcutManager.registerHandler('git-panel', () => toggleGitPanel());
   shortcutManager.registerHandler('quick-open', () => showQuickOpen());
