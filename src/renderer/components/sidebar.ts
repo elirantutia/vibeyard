@@ -115,18 +115,53 @@ export function promptNewProject(): void {
     },
   ], async (values) => {
     const name = values['project-name']?.trim();
-    const path = values['project-path']?.trim();
-    if (!name || !path) return;
+    const rawPath = values['project-path']?.trim();
+    if (!name || !rawPath) return;
 
-    const isDir = await window.vibeyard.fs.isDirectory(path);
+    const projectPath = await window.vibeyard.fs.expandPath(rawPath);
+    const isDir = await window.vibeyard.fs.isDirectory(projectPath);
     if (!isDir) {
       setModalError('project-path', 'Directory does not exist');
       return;
     }
 
     closeModal();
-    appState.addProject(name, path);
+    appState.addProject(name, projectPath);
   });
+
+  // Attach path autocomplete to the rendered input
+  const pathInput = document.getElementById('modal-project-path') as HTMLInputElement | null;
+  if (pathInput) {
+    const datalistId = 'modal-project-path-suggestions';
+    document.getElementById(datalistId)?.remove();
+    const datalist = document.createElement('datalist');
+    datalist.id = datalistId;
+    document.body.appendChild(datalist);
+    pathInput.setAttribute('list', datalistId);
+
+    pathInput.addEventListener('input', async () => {
+      const value = pathInput.value;
+      const lastSlash = value.lastIndexOf('/');
+      if (lastSlash === -1) { datalist.innerHTML = ''; return; }
+
+      const dirPart = value.substring(0, lastSlash + 1);
+      const namePart = value.substring(lastSlash + 1).toLowerCase();
+
+      const dirs = await window.vibeyard.fs.listDirs(dirPart);
+      const filtered = namePart
+        ? dirs.filter(d => (d.split('/').pop() ?? '').toLowerCase().startsWith(namePart))
+        : dirs;
+
+      // Build suggestions using the user's original prefix (e.g. "~/") so the
+      // browser's datalist matching sees values that start with what was typed.
+      datalist.innerHTML = '';
+      for (const dir of filtered) {
+        const opt = document.createElement('option');
+        opt.value = dirPart + (dir.split('/').pop() ?? '');
+        datalist.appendChild(opt);
+      }
+    });
+  }
 }
 
 function initResizeHandle(): void {

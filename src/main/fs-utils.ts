@@ -1,4 +1,13 @@
 import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+
+export function expandUserPath(filePath: string): string {
+  if (filePath.startsWith('~/') || filePath === '~') {
+    return path.join(os.homedir(), filePath.slice(1));
+  }
+  return filePath;
+}
 
 export function readFileSafe(filePath: string): string | null {
   try {
