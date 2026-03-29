@@ -218,7 +218,7 @@ function checkLargeFiles(projectPath: string, trackedFiles: string[]): Readiness
       id: 'large-files', name: 'No extremely large files', status: 'warning',
       description: `${count} file(s) over 2000 lines: ${largeFiles.slice(0, 3).join(', ')}. Edit .vibeyardignore to exclude files from scanning.`,
       score: 50, maxScore: 100,
-      fixPrompt: `These files are very large and may consume excessive AI context: ${largeFiles.join(', ')}. Consider splitting them into smaller, focused modules.`,
+      fixPrompt: `These files are very large and may consume excessive AI context: ${largeFiles.join(', ')}. Split them into smaller, focused modules.`,
     };
   }
   return {
