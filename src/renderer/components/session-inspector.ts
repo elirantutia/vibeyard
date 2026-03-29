@@ -18,6 +18,7 @@ let reopenOnNextSession = false;
 
 const expandedRows = new Set<string>();
 let autoScroll = true;
+let programmaticScroll = false;
 
 export function isInspectorOpen(): boolean {
   return inspectorPanel !== null && inspectedSessionId !== null;
@@ -214,11 +215,13 @@ function createPanel(): HTMLElement {
   content.className = 'inspector-content';
 
   content.addEventListener('scroll', () => {
-    if (activeTab !== 'timeline') return;
+    if (activeTab !== 'timeline' || programmaticScroll) return;
     const atBottom = content.scrollHeight - content.scrollTop - content.clientHeight < 30;
-    if (atBottom !== autoScroll) {
-      autoScroll = atBottom;
-      scrollToggle.classList.toggle('active', autoScroll);
+    // Only disable auto-scroll when user scrolls away from bottom;
+    // re-enabling should only happen via the toggle button
+    if (autoScroll && !atBottom) {
+      autoScroll = false;
+      scrollToggle.classList.toggle('active', false);
     }
   });
 
@@ -359,7 +362,9 @@ function renderTimeline(container: HTMLElement): void {
 
   if (autoScroll) {
     requestAnimationFrame(() => {
+      programmaticScroll = true;
       container.scrollTop = container.scrollHeight;
+      programmaticScroll = false;
     });
   }
 }
