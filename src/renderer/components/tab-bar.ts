@@ -9,6 +9,7 @@ import { showShareDialog } from './share-dialog.js';
 import { showJoinDialog } from './join-dialog.js';
 import { isSharing } from '../sharing/peer-host.js';
 import { endShare, onShareChange } from '../sharing/share-manager.js';
+import { openInspector, isInspectorOpen, getInspectedSessionId, closeInspector } from './session-inspector.js';
 
 const tabListEl = document.getElementById('tab-list')!;
 const gitStatusEl = document.getElementById('git-status')!;
@@ -280,6 +281,23 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
     menu.appendChild(copySessionIdItem);
   }
 
+  // Inspect item — only for CLI sessions
+  const inspectItem = document.createElement('div');
+  const isCurrentlyInspecting = isInspectorOpen() && getInspectedSessionId() === session.id;
+  inspectItem.className = 'tab-context-menu-item' + (!isCliSession ? ' disabled' : '');
+  inspectItem.textContent = isCurrentlyInspecting ? 'Close Inspector' : 'Inspect';
+  if (isCliSession) {
+    inspectItem.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hideTabContextMenu();
+      if (isCurrentlyInspecting) {
+        closeInspector();
+      } else {
+        openInspector(session.id);
+      }
+    });
+  }
+
   const moveSeparator = document.createElement('div');
   moveSeparator.className = 'tab-context-menu-separator';
   menu.appendChild(moveSeparator);
@@ -287,6 +305,12 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
     menu.appendChild(shareSeparator);
     if (!currentlySharing) menu.appendChild(shareItem);
     if (currentlySharing) menu.appendChild(stopShareItem);
+  }
+  if (isCliSession) {
+    const inspectSeparator = document.createElement('div');
+    inspectSeparator.className = 'tab-context-menu-separator';
+    menu.appendChild(inspectSeparator);
+    menu.appendChild(inspectItem);
   }
   menu.appendChild(closeItem);
   menu.appendChild(separator);

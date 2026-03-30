@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { CostData, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, ToolFailureData, SettingsWarningData, SettingsValidationResult, StatusLineConflictData } from '../shared/types';
+import type { CostData, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, ToolFailureData, SettingsWarningData, SettingsValidationResult, StatusLineConflictData, InspectorEvent } from '../shared/types';
 
 export type { CostData } from '../shared/types';
 
@@ -21,6 +21,7 @@ export interface VibeyardApi {
     onClaudeSessionId(callback: (sessionId: string, claudeSessionId: string) => void): () => void;
     onCostData(callback: (sessionId: string, costData: CostData) => void): () => void;
     onToolFailure(callback: (sessionId: string, data: ToolFailureData) => void): () => void;
+    onInspectorEvents(callback: (sessionId: string, events: InspectorEvent[]) => void): () => void;
   };
   fs: {
     isDirectory(path: string): Promise<boolean>;
@@ -159,6 +160,9 @@ const api: VibeyardApi = {
     onToolFailure: (callback) =>
       onChannel('session:toolFailure', (sessionId, data) =>
         callback(sessionId as string, data as ToolFailureData)),
+    onInspectorEvents: (callback) =>
+      onChannel('session:inspectorEvents', (sessionId, events) =>
+        callback(sessionId as string, events as InspectorEvent[])),
   },
   fs: {
     isDirectory: (path) => ipcRenderer.invoke('fs:isDirectory', path),

@@ -27,6 +27,7 @@ type EventType =
   | 'insights-changed'
   | 'readiness-changed'
   | 'sidebar-toggled'
+  | 'cli-session-cleared'
   | 'state-loaded';
 
 type EventCallback = (data?: unknown) => void;
@@ -504,6 +505,7 @@ class AppState {
       this.archiveSession(project, session);
       session.name = `Session ${project.sessions.length + (project.sessionHistory?.length || 0)}`;
       session.userRenamed = false;
+      this.emit('cli-session-cleared', { sessionId });
     }
 
     session.cliSessionId = cliSessionId;

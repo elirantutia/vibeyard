@@ -20,6 +20,7 @@ import {
   getInspectorInstance,
   disconnectInspector,
 } from './mcp-inspector.js';
+import { isInspectorOpen } from './session-inspector.js';
 import {
   createFileViewerPane,
   destroyFileViewerPane,
@@ -47,6 +48,13 @@ import {
 import { quickNewSession } from './tab-bar.js';
 
 const container = document.getElementById('terminal-container')!;
+
+/** Set the container's layout class while preserving the inspector-open class if active. */
+function setContainerClass(cls: string): void {
+  const hasInspector = isInspectorOpen();
+  container.className = cls;
+  if (hasInspector) container.classList.add('inspector-open');
+}
 
 export function initSplitLayout(): void {
   appState.on('state-loaded', renderLayout);
@@ -133,7 +141,7 @@ export function renderLayout(): void {
 
   if (!project || project.sessions.length === 0) {
     hideAllPanes();
-    container.className = '';
+    setContainerClass('');
     showEmptyState(project);
     return;
   }
@@ -203,7 +211,7 @@ function attachNonCliPane(session: { id: string; type?: string; fileReaderLine?:
 }
 
 function renderTabMode(project: ProjectRecord): void {
-  container.className = '';
+  setContainerClass('');
   container.style.gridTemplateColumns = '';
   container.style.gridTemplateRows = '';
 
@@ -264,7 +272,7 @@ function focusActivePane(project: ProjectRecord): void {
 }
 
 function renderSplitMode(project: ProjectRecord): void {
-  container.className = `split-${project.layout.splitDirection}`;
+  setContainerClass(`split-${project.layout.splitDirection}`);
   container.style.gridTemplateColumns = '';
   container.style.gridTemplateRows = '';
   showPanes(project);
@@ -281,10 +289,18 @@ function renderSwarmMode(project: ProjectRecord): void {
     ? activeSession
     : [...project.sessions].reverse().find(s => s.type && s.type !== 'claude');
 
-  container.className = 'swarm-mode';
+  const hasInspector = isInspectorOpen();
 
-  if (nonCliSession) {
-    container.style.gridTemplateColumns = '1fr 1fr';
+  setContainerClass('swarm-mode');
+
+  const needsWrapper = nonCliSession || hasInspector;
+
+  if (needsWrapper) {
+    const colParts: string[] = ['1fr'];
+    if (nonCliSession) colParts.push('1fr');
+    if (hasInspector) colParts.push('var(--inspector-width, 350px)');
+
+    container.style.gridTemplateColumns = colParts.join(' ');
     container.style.gridTemplateRows = '1fr';
 
     const gridWrapper = document.createElement('div');
@@ -295,7 +311,17 @@ function renderSwarmMode(project: ProjectRecord): void {
 
     showPanes(project, gridWrapper);
     appendEmptyCells(cols * rows - count, gridWrapper);
-    attachNonCliPane(nonCliSession, container, true);
+
+    if (nonCliSession) {
+      attachNonCliPane(nonCliSession, container, true);
+    }
+
+    if (hasInspector) {
+      const inspectorEl = container.querySelector('#session-inspector');
+      if (inspectorEl) {
+        container.appendChild(inspectorEl);
+      }
+    }
   } else {
     container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
     container.style.gridTemplateRows = `repeat(${rows}, 1fr)`;

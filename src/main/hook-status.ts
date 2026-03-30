@@ -6,11 +6,12 @@ import { BrowserWindow } from 'electron';
 export const STATUS_DIR = path.join(os.tmpdir(), 'vibeyard');
 const STATUSLINE_SCRIPT = path.join(STATUS_DIR, 'statusline.sh');
 
-const KNOWN_EXTENSIONS = ['.status', '.sessionid', '.cost', '.toolfailure'];
+const KNOWN_EXTENSIONS = ['.status', '.sessionid', '.cost', '.toolfailure', '.events'];
 
 let watcher: fs.FSWatcher | null = null;
 let pollInterval: ReturnType<typeof setInterval> | null = null;
 const lastMtimes = new Map<string, number>();
+const eventFileOffsets = new Map<string, number>();
 
 function isKnownExtension(filename: string): boolean {
   return KNOWN_EXTENSIONS.some(ext => filename.endsWith(ext));
@@ -118,6 +119,36 @@ function handleFileChange(win: BrowserWindow, filename: string): void {
     }
     // Always attempt cleanup — each failure is a one-shot event
     try { fs.unlinkSync(filePath); } catch { /* already gone */ }
+  } else if (filename.endsWith('.events')) {
+    const sessionId = filename.replace('.events', '');
+    const filePath = path.join(STATUS_DIR, filename);
+    const offset = eventFileOffsets.get(sessionId) ?? 0;
+
+    let fd: number | null = null;
+    try {
+      fd = fs.openSync(filePath, 'r');
+      const stat = fs.fstatSync(fd);
+      if (stat.size > offset) {
+        const buf = Buffer.alloc(stat.size - offset);
+        fs.readSync(fd, buf, 0, buf.length, offset);
+        eventFileOffsets.set(sessionId, stat.size);
+
+        const lines = buf.toString('utf-8').trim().split('\n').filter(Boolean);
+        const events = [];
+        for (const line of lines) {
+          try { events.push(JSON.parse(line)); } catch { /* skip malformed */ }
+        }
+        if (events.length > 0 && !win.isDestroyed()) {
+          win.webContents.send('session:inspectorEvents', sessionId, events);
+        }
+      }
+    } catch {
+      // File may not exist yet
+    } finally {
+      if (fd !== null) {
+        try { fs.closeSync(fd); } catch { /* already closed */ }
+      }
+    }
   }
 }
 
@@ -212,6 +243,7 @@ export function cleanupSessionStatus(sessionId: string): void {
       // Already gone
     }
   }
+  eventFileOffsets.delete(sessionId);
 }
 
 export function cleanupAll(): void {

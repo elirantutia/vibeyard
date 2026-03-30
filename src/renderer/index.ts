@@ -32,6 +32,10 @@ import { checkWhatsNew } from './components/whats-new-dialog.js';
 import { initShareManager, forwardPtyData, endShare, cleanupAllShares } from './sharing/share-manager.js';
 import { isSharing } from './sharing/peer-host.js';
 import { checkStarPrompt } from './components/star-prompt-dialog.js';
+import { addEvents as addInspectorEvents } from './session-inspector-state.js';
+import type { InspectorEvent } from '../shared/types.js';
+import { getContext } from './session-context.js';
+import { initSessionInspector } from './components/session-inspector.js';
 
 let isQuitting = false;
 window.vibeyard.app.onQuitting(() => {
@@ -63,8 +67,30 @@ async function main(): Promise<void> {
   window.vibeyard.session.onCostData((sessionId, costData) => {
     logDebugEvent('costData', sessionId, costData);
     setCostData(sessionId, costData);
+    const contextBefore = getContext(sessionId);
     setContextData(sessionId, costData.context_window);
     captureInitialContext(sessionId, costData.context_window);
+
+    // Bridge cost/context into inspector events so Costs & Context tabs work.
+    // Only emit when context actually changed (avoids filling the event buffer with duplicates).
+    const contextAfter = getContext(sessionId);
+    if (contextAfter && contextAfter !== contextBefore) {
+      const syntheticEvent: InspectorEvent = {
+        type: 'status_update',
+        timestamp: Date.now(),
+        hookEvent: 'StatusLine',
+        cost_snapshot: {
+          total_cost_usd: costData.cost.total_cost_usd ?? 0,
+          total_duration_ms: costData.cost.total_duration_ms ?? 0,
+        },
+        context_snapshot: {
+          total_tokens: contextAfter.totalTokens,
+          context_window_size: contextAfter.contextWindowSize,
+          used_percentage: contextAfter.usedPercentage,
+        },
+      };
+      addInspectorEvents(sessionId, [syntheticEvent]);
+    }
   });
 
   onCostChange((sessionId, cost) => {
@@ -80,6 +106,11 @@ async function main(): Promise<void> {
   window.vibeyard.session.onHookStatus((sessionId, status, hookName) => {
     logDebugEvent('hookStatus', sessionId, hookName ? `${hookName}: ${status}` : status);
     setHookStatus(sessionId, status, hookName);
+  });
+
+  window.vibeyard.session.onInspectorEvents((sessionId, events) => {
+    logDebugEvent('inspectorEvents', sessionId, { count: events.length });
+    addInspectorEvents(sessionId, events);
   });
 
   window.vibeyard.session.onCliSessionId((sessionId, cliSessionId) => {
@@ -133,6 +164,7 @@ async function main(): Promise<void> {
   initSettingsGuard();
   initReadinessSection();
   initShareManager();
+  initSessionInspector();
   startGitPolling();
 
   window.vibeyard.menu.onUsageStats(() => showUsageModal());
