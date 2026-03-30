@@ -8,6 +8,7 @@ import { addMcpServer, removeMcpServer } from './claude-cli';
 import type { McpServerConfig } from './claude-cli';
 import { loadState, saveState, PersistedState } from './store';
 import { startWatching, cleanupSessionStatus } from './hook-status';
+import { startCodexSessionWatcher, registerPendingCodexSession, unregisterCodexSession } from './codex-session-watcher';
 import { getGitStatus, getGitFiles, getGitDiff, getGitWorktrees, gitStageFile, gitUnstageFile, gitDiscardFile, getGitRemoteUrl, listGitBranches, checkoutGitBranch, createGitBranch } from './git-status';
 import { startGitWatcher, stopGitWatcher, notifyGitChanged } from './git-watcher';
 import { watchFile as watchFileForChanges, unwatchFile as unwatchFileForChanges, setFileWatcherWindow } from './file-watcher';
@@ -86,6 +87,12 @@ export function registerIpcHandlers(): void {
       }
     }
 
+    // For Codex sessions without a cliSessionId, start watching history.jsonl
+    if (providerId === 'codex' && !cliSessionId) {
+      startCodexSessionWatcher(win);
+      registerPendingCodexSession(sessionId);
+    }
+
     spawnPty(
       sessionId,
       cwd,
@@ -101,6 +108,7 @@ export function registerIpcHandlers(): void {
       },
       (exitCode, signal) => {
         cleanupSessionStatus(sessionId);
+        unregisterCodexSession(sessionId);
         if (isSilencedExit(sessionId)) return; // old PTY killed for re-spawn
         const w = BrowserWindow.getAllWindows()[0];
         if (w && !w.isDestroyed()) {
