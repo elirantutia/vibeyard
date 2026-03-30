@@ -1,6 +1,7 @@
 import { appState } from '../state.js';
 import { closeModal } from './modal.js';
 import { shortcutManager, displayKeys, eventToAccelerator } from '../shortcuts.js';
+import type { CliProviderMeta, SettingsValidationResult } from '../../shared/types.js';
 
 
 const overlay = document.getElementById('modal-overlay')!;
@@ -455,9 +456,41 @@ export function showPreferencesModal(): void {
     parent.appendChild(row);
   }
 
-  async function fixAndRerender() {
-    await window.vibeyard.settings.reinstall();
+  async function fixAndRerender(providerId?: string) {
+    await window.vibeyard.settings.reinstall(providerId);
     renderSection('setup');
+  }
+
+  function renderProviderHeader(parent: HTMLElement, displayName: string) {
+    const header = document.createElement('div');
+    header.className = 'setup-provider-header';
+    header.textContent = displayName;
+    parent.appendChild(header);
+  }
+
+  interface ProviderStatus {
+    meta: CliProviderMeta;
+    validation: SettingsValidationResult;
+    binary: { ok: boolean; message: string };
+  }
+
+  async function fetchProviderStatuses(): Promise<ProviderStatus[]> {
+    const providers = await window.vibeyard.provider.listProviders();
+    return Promise.all(
+      providers.map(meta =>
+        Promise.all([
+          window.vibeyard.settings.validate(meta.id),
+          window.vibeyard.provider.checkBinary(meta.id),
+        ]).then(([validation, binary]) => ({ meta, validation, binary })),
+      ),
+    );
+  }
+
+  function hasProviderIssue({ meta, validation, binary }: ProviderStatus): boolean {
+    if (!binary.ok) return true;
+    if ((meta.capabilities.costTracking || meta.capabilities.contextWindow) && validation.statusLine !== 'vibeyard') return true;
+    if (meta.capabilities.hookStatus && validation.hooks !== 'complete') return true;
+    return false;
   }
 
   async function renderSetupSection(container: HTMLElement) {
@@ -470,89 +503,95 @@ export function showPreferencesModal(): void {
     section.appendChild(loading);
     container.appendChild(section);
 
-    const [validation, binary] = await Promise.all([
-      window.vibeyard.settings.validate(),
-      window.vibeyard.provider.checkBinary(),
-    ]);
+    const results = await fetchProviderStatuses();
 
     if (currentSection !== 'setup') return;
 
-    // Update badge from the data we already have
-    applySetupBadge(!binary.ok || validation.statusLine !== 'vibeyard' || validation.hooks !== 'complete');
+    applySetupBadge(results.some(hasProviderIssue));
 
     section.innerHTML = '';
 
-    renderCheckItem(section, {
-      label: 'Claude Code CLI',
-      description: 'The claude binary must be installed for sessions to work.',
-      ok: binary.ok,
-      statusText: binary.ok ? 'Installed' : 'Not found',
-      helpText: binary.ok ? undefined : 'Install with: npm install -g @anthropic-ai/claude-code',
-    });
+    for (const { meta, validation, binary } of results) {
+      renderProviderHeader(section, meta.displayName);
 
-    const slOk = validation.statusLine === 'vibeyard';
-    let slStatus = 'Configured';
-    if (validation.statusLine === 'missing') slStatus = 'Not configured';
-    else if (validation.statusLine === 'foreign') slStatus = 'Overwritten by another tool';
-
-    renderCheckItem(section, {
-      label: 'Status Line',
-      description: 'Required for cost tracking and context window monitoring.',
-      ok: slOk,
-      statusText: slStatus,
-      onFix: slOk ? undefined : fixAndRerender,
-    });
-
-    const hooksOk = validation.hooks === 'complete';
-    let hooksStatus = 'All hooks installed';
-    if (validation.hooks === 'missing') hooksStatus = 'No hooks installed';
-    else if (validation.hooks === 'partial') hooksStatus = 'Some hooks missing';
-
-    renderCheckItem(section, {
-      label: 'Session Hooks',
-      description: 'Required for session activity tracking.',
-      ok: hooksOk,
-      statusText: hooksStatus,
-      onFix: hooksOk ? undefined : fixAndRerender,
-    });
-
-    const hookList = document.createElement('div');
-    hookList.className = 'setup-hook-details';
-    for (const [event, installed] of Object.entries(validation.hookDetails)) {
-      const item = document.createElement('div');
-      item.className = 'setup-hook-item';
-      const icon = document.createElement('span');
-      icon.className = installed ? 'setup-check-icon ok' : 'setup-check-icon error';
-      icon.textContent = installed ? '\u2713' : '\u2717';
-      const name = document.createElement('span');
-      name.className = 'setup-hook-name';
-      name.textContent = event;
-      item.appendChild(icon);
-      item.appendChild(name);
-      hookList.appendChild(item);
-    }
-    section.appendChild(hookList);
-
-    if (!slOk && !hooksOk) {
-      const fixAllRow = document.createElement('div');
-      fixAllRow.className = 'setup-fix-all-row';
-
-      const fixAllBtn = document.createElement('button');
-      fixAllBtn.className = 'setup-fix-btn';
-      fixAllBtn.textContent = 'Fix All';
-      fixAllBtn.addEventListener('click', async () => {
-        fixAllBtn.disabled = true;
-        fixAllBtn.textContent = 'Fixing\u2026';
-        try {
-          await fixAndRerender();
-        } catch {
-          fixAllBtn.disabled = false;
-          fixAllBtn.textContent = 'Fix All';
-        }
+      renderCheckItem(section, {
+        label: `${meta.displayName} CLI`,
+        description: `The ${meta.binaryName} binary must be installed for sessions to work.`,
+        ok: binary.ok,
+        statusText: binary.ok ? 'Installed' : 'Not found',
+        helpText: binary.ok ? undefined : binary.message,
       });
 
-      fixAllRow.appendChild(fixAllBtn);
-      section.appendChild(fixAllRow);
+      const { capabilities } = meta;
+
+      if (capabilities.costTracking || capabilities.contextWindow) {
+        const slOk = validation.statusLine === 'vibeyard';
+        let slStatus = 'Configured';
+        if (validation.statusLine === 'missing') slStatus = 'Not configured';
+        else if (validation.statusLine === 'foreign') slStatus = 'Overwritten by another tool';
+
+        renderCheckItem(section, {
+          label: 'Status Line',
+          description: 'Required for cost tracking and context window monitoring.',
+          ok: slOk,
+          statusText: slStatus,
+          onFix: slOk ? undefined : () => fixAndRerender(meta.id),
+        });
+      }
+
+      if (capabilities.hookStatus) {
+        const hooksOk = validation.hooks === 'complete';
+        let hooksStatus = 'All hooks installed';
+        if (validation.hooks === 'missing') hooksStatus = 'No hooks installed';
+        else if (validation.hooks === 'partial') hooksStatus = 'Some hooks missing';
+
+        renderCheckItem(section, {
+          label: 'Session Hooks',
+          description: 'Required for session activity tracking.',
+          ok: hooksOk,
+          statusText: hooksStatus,
+          onFix: hooksOk ? undefined : () => fixAndRerender(meta.id),
+        });
+
+        const hookList = document.createElement('div');
+        hookList.className = 'setup-hook-details';
+        for (const [event, installed] of Object.entries(validation.hookDetails)) {
+          const item = document.createElement('div');
+          item.className = 'setup-hook-item';
+          const icon = document.createElement('span');
+          icon.className = installed ? 'setup-check-icon ok' : 'setup-check-icon error';
+          icon.textContent = installed ? '\u2713' : '\u2717';
+          const name = document.createElement('span');
+          name.className = 'setup-hook-name';
+          name.textContent = event;
+          item.appendChild(icon);
+          item.appendChild(name);
+          hookList.appendChild(item);
+        }
+        section.appendChild(hookList);
+
+        if (capabilities.costTracking && validation.statusLine !== 'vibeyard' && !hooksOk) {
+          const fixAllRow = document.createElement('div');
+          fixAllRow.className = 'setup-fix-all-row';
+
+          const fixAllBtn = document.createElement('button');
+          fixAllBtn.className = 'setup-fix-btn';
+          fixAllBtn.textContent = 'Fix All';
+          fixAllBtn.addEventListener('click', async () => {
+            fixAllBtn.disabled = true;
+            fixAllBtn.textContent = 'Fixing\u2026';
+            try {
+              await fixAndRerender(meta.id);
+            } catch {
+              fixAllBtn.disabled = false;
+              fixAllBtn.textContent = 'Fix All';
+            }
+          });
+
+          fixAllRow.appendChild(fixAllBtn);
+          section.appendChild(fixAllRow);
+        }
+      }
     }
   }
 
@@ -564,11 +603,8 @@ export function showPreferencesModal(): void {
   }
 
   async function updateSetupBadge() {
-    const [validation, binary] = await Promise.all([
-      window.vibeyard.settings.validate(),
-      window.vibeyard.provider.checkBinary(),
-    ]);
-    applySetupBadge(!binary.ok || validation.statusLine !== 'vibeyard' || validation.hooks !== 'complete');
+    const results = await fetchProviderStatuses();
+    applySetupBadge(results.some(hasProviderIssue));
   }
   updateSetupBadge();
 

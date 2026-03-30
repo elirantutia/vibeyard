@@ -232,6 +232,18 @@
   cursor: default;
 }
 
+.setup-provider-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 12px 0 4px;
+  margin-bottom: 4px;
+}
+
+.setup-provider-header:first-child {
+  padding-top: 0;
+}
+
 .setup-hook-details {
   display: flex;
   flex-wrap: wrap;

@@ -71,7 +71,7 @@ export function showModal(
       for (const opt of field.options ?? []) {
         const option = document.createElement('option');
         option.value = opt.value;
-        option.textContent = opt.disabled ? `${opt.label} (not installed)` : opt.label;
+        option.textContent = opt.label;
         if (opt.value === field.defaultValue) option.selected = true;
         if (opt.disabled) option.disabled = true;
         select.appendChild(option);

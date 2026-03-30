@@ -795,7 +795,10 @@ export async function promptNewSession(): Promise<void> {
       id: 'provider',
       type: 'select',
       defaultValue: firstAvailable,
-      options: providers.map(p => ({ value: p.id, label: p.displayName, disabled: !availabilityMap.get(p.id) })),
+      options: providers.map(p => {
+        const available = availabilityMap.get(p.id);
+        return { value: p.id, label: available ? p.displayName : `${p.displayName} (not installed)`, disabled: !available };
+      }),
     });
   }
 
