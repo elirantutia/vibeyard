@@ -515,7 +515,7 @@ export function showPreferencesModal(): void {
       renderProviderHeader(section, meta.displayName);
 
       renderCheckItem(section, {
-        label: `${meta.displayName} CLI`,
+        label: meta.displayName,
         description: `The ${meta.binaryName} binary must be installed for sessions to work.`,
         ok: binary.ok,
         statusText: binary.ok ? 'Installed' : 'Not found',
