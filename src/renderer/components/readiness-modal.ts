@@ -1,6 +1,7 @@
 import { appState } from '../state.js';
 import { closeModal } from './modal.js';
 import { esc, scoreColor } from '../dom-utils.js';
+import { setPendingPrompt } from './terminal-pane.js';
 import type { ReadinessResult, ReadinessCategory, ReadinessCheck, ReadinessCheckStatus } from '../../shared/types.js';
 
 const overlay = document.getElementById('modal-overlay')!;
@@ -9,8 +10,6 @@ const titleEl = document.getElementById('modal-title')!;
 const bodyEl = document.getElementById('modal-body')!;
 const btnCancel = document.getElementById('modal-cancel')!;
 const btnConfirm = document.getElementById('modal-confirm')!;
-
-let pendingActionTimer: ReturnType<typeof setTimeout> | null = null;
 
 function statusIcon(status: ReadinessCheckStatus): string {
   if (status === 'pass') return '\u2713';
@@ -34,11 +33,7 @@ function handleFix(check: ReadinessCheck): void {
 
   closeReadinessModal();
 
-  if (pendingActionTimer !== null) clearTimeout(pendingActionTimer);
-  pendingActionTimer = setTimeout(() => {
-    pendingActionTimer = null;
-    window.vibeyard.pty.write(session.id, check.fixPrompt + '\r');
-  }, 2000);
+  setPendingPrompt(session.id, check.fixPrompt!);
 }
 
 function renderCategory(category: ReadinessCategory): HTMLElement {

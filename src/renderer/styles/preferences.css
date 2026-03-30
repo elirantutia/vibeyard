@@ -1,0 +1,348 @@
+/* Preferences toggle */
+.modal-toggle-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.modal-toggle-field label {
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.modal-toggle-field input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+
+/* Preferences layout */
+#modal.modal-wide {
+  width: 750px;
+  max-width: 750px;
+}
+
+.preferences-layout {
+  display: flex;
+  gap: 0;
+  height: 340px;
+}
+
+.preferences-menu {
+  width: 140px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  padding: 4px 0;
+}
+
+.preferences-menu-item {
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px 0 0 4px;
+}
+
+.preferences-menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.preferences-menu-item.active {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.preferences-content {
+  flex: 1;
+  padding: 4px 16px;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.about-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.about-app-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.about-version {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.about-update-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.about-update-btn {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  padding: 5px 14px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.about-update-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.about-update-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.about-update-status {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.about-links {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.about-link {
+  font-size: 13px;
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.about-link:hover {
+  text-decoration: underline;
+}
+
+.about-community {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+/* Setup section */
+.setup-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.setup-loading {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 12px 0;
+}
+
+.setup-check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.setup-check-row:last-child {
+  border-bottom: none;
+}
+
+.setup-check-icon {
+  font-size: 16px;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.setup-check-icon.ok { color: #4caf50; }
+.setup-check-icon.error { color: #f44336; }
+
+.setup-check-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.setup-check-label {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.setup-check-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.setup-check-status {
+  font-size: 11px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.setup-check-status.ok { color: #4caf50; }
+.setup-check-status.error { color: #f44336; }
+
+.setup-check-help {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  font-family: monospace;
+  background: var(--bg-primary);
+  padding: 4px 8px;
+  border-radius: 3px;
+}
+
+.setup-fix-btn {
+  font-size: 11px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.setup-fix-btn:hover {
+  background: var(--bg-hover);
+}
+
+.setup-fix-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.setup-hook-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 6px 0 10px 30px;
+  border-bottom: 1px solid var(--border);
+}
+
+.setup-hook-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.setup-hook-name {
+  color: var(--text-muted);
+}
+
+.setup-fix-all-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 0 4px;
+}
+
+.preferences-menu-item.has-badge::after {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: #f44336;
+  border-radius: 50%;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* Shortcut preferences */
+.shortcut-category-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  padding: 10px 0 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2px;
+}
+
+.shortcut-category-header:first-child {
+  padding-top: 4px;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.shortcut-row-label {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-primary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shortcut-key-btn {
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace;
+  font-size: 11px;
+  padding: 3px 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  min-width: 80px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.shortcut-key-btn:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.shortcut-key-btn.recording {
+  border-color: var(--accent);
+  background: rgba(233, 69, 96, 0.1);
+  color: var(--accent);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.shortcut-key-btn.customized {
+  color: var(--accent);
+}
+
+.shortcut-reset-btn {
+  font-size: 11px;
+  padding: 2px 6px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.shortcut-reset-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border);
+}

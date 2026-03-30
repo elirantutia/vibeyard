@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.19] - 2026-03-29
+
+### Features
+
+- Large file read failure detector with split suggestion alert
+- Cmd+J as alternate shortcut to toggle project terminal
+
+### Fixes
+
+- Large-file alert fix button by using SessionStart hook instead of setTimeout
+- Alert banner flickering by disabling animation after initial fade-in
+- Fix-prompt not delivered to new session by using SessionStart hook
+- Session auto-naming capturing prompt text between separator lines via bare \r
+
+### Changes
+
+- Css style.css by splitting it into smaller files
+- Large-files fix prompt to use direct CTA instead of suggestion
+- Large file threshold from 5000 to 2000 lines in AI readiness checker
+- Delete-project warning dialog to clarify only internal data is removed
+- Ubuntu from CI matrix since app is macOS-only
+- What's new dialog dismiss behavior and fix event listener cleanup
+
 ## [0.2.18] - 2026-03-29
 
 ### Features

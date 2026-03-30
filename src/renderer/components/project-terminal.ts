@@ -5,6 +5,7 @@ import { SearchAddon } from '@xterm/addon-search';
 import { appState } from '../state.js';
 import { fitAllVisible } from './terminal-pane.js';
 import { destroySearchBar, hideSearchBar } from './search-bar.js';
+import { shortcutManager, displayKeys } from '../shortcuts.js';
 
 interface ShellTerminalInstance {
   terminal: Terminal;
@@ -247,6 +248,9 @@ export function initProjectTerminal(): void {
     hidePanel();
     appState.setTerminalPanelOpen(false);
   });
+
+  const primaryKey = displayKeys(shortcutManager.getKeys('project-terminal-alt'));
+  toggleBtn.title = `Toggle Terminal (${primaryKey})`;
 
   toggleBtn.addEventListener('click', () => toggleProjectTerminal());
 

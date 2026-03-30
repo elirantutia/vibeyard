@@ -1,0 +1,249 @@
+/* Terminal container */
+#terminal-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+#terminal-container.split-horizontal {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 2px;
+}
+
+#terminal-container.split-vertical {
+  display: grid;
+  grid-template-rows: repeat(auto-fit, minmax(0, 1fr));
+  gap: 2px;
+}
+
+#terminal-container.swarm-mode {
+  display: grid;
+  gap: 2px;
+}
+
+.swarm-grid-wrapper {
+  display: grid;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.swarm-empty-cell {
+  position: relative;
+  border: 2px solid var(--pane-unfocus);
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.swarm-empty-add-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid var(--pane-unfocus);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 24px;
+  cursor: pointer;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.swarm-empty-add-btn:hover {
+  border-color: var(--pane-focus);
+  color: var(--text-primary);
+}
+
+.terminal-pane.swarm-dimmed::after,
+.swarm-empty-cell::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.25);
+  pointer-events: none;
+  z-index: 10;
+  transition: opacity 0.15s ease;
+}
+
+.terminal-pane {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: 2px solid var(--pane-unfocus);
+  border-radius: 2px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.terminal-pane.split {
+  position: relative;
+}
+
+.terminal-pane.focused {
+  border-color: var(--pane-focus);
+}
+
+.terminal-pane.swarm-unread {
+  border-color: var(--accent);
+}
+
+.terminal-pane .xterm-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.terminal-pane .xterm {
+  height: 100%;
+  padding: 4px;
+}
+
+.terminal-pane.hidden {
+  display: none;
+}
+
+/* Session status bar */
+.session-status-bar {
+  height: 20px;
+  min-height: 20px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 20px;
+  padding: 0 8px;
+  display: flex;
+  justify-content: space-between;
+  user-select: none;
+}
+
+.session-status-bar.hidden {
+  display: none;
+}
+
+.context-indicator {
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace;
+  white-space: nowrap;
+}
+
+.context-indicator:empty {
+  display: none;
+}
+
+.context-indicator.warning {
+  color: #f4b400;
+}
+
+.context-indicator.critical {
+  color: var(--accent);
+}
+
+.cost-display {
+  white-space: nowrap;
+}
+
+.terminal-exit-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 10;
+}
+
+.terminal-exit-message {
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.terminal-exit-message button {
+  margin-top: 10px;
+  padding: 6px 16px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.terminal-exit-message button:hover {
+  background: var(--accent-dim);
+}
+
+/* Project terminal panel */
+#project-terminal-panel {
+  display: flex;
+  flex-direction: column;
+  height: 200px;
+  min-height: 80px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-primary);
+}
+
+#project-terminal-panel.hidden {
+  display: none;
+}
+
+#project-terminal-resize-handle {
+  height: 4px;
+  cursor: row-resize;
+  background: transparent;
+  flex-shrink: 0;
+}
+
+#project-terminal-resize-handle:hover,
+#project-terminal-resize-handle.active {
+  background: var(--accent);
+}
+
+#project-terminal-resize-handle.hidden {
+  display: none;
+}
+
+#project-terminal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  height: 28px;
+  min-height: 28px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.project-terminal-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+#project-terminal-container {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+#project-terminal-container .xterm {
+  height: 100%;
+  padding: 4px;
+}

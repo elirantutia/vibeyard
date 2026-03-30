@@ -82,6 +82,10 @@ export function showAlertBanner(config: AlertBannerConfig): void {
     pane.prepend(banner);
   }
 
+  banner.addEventListener('animationend', () => {
+    banner.style.animation = 'none';
+  }, { once: true });
+
   currentBanner = banner;
 }
 

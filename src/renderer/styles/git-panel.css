@@ -1,0 +1,97 @@
+/* Git panel */
+#git-panel {
+  border-top: 1px solid var(--border);
+}
+
+#git-panel.hidden {
+  display: none;
+}
+
+#git-panel:empty {
+  border-top: none;
+}
+
+.git-worktree-selector {
+  padding: 4px 12px 4px;
+}
+
+.git-worktree-select {
+  width: 100%;
+  padding: 3px 6px;
+  font-size: 11px;
+  background: var(--bg-tertiary, #2a2a2a);
+  color: var(--text-primary);
+  border: 1px solid var(--border, #3a3a3a);
+  border-radius: 4px;
+  outline: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.git-worktree-select:focus {
+  border-color: var(--accent);
+}
+
+.git-group-header {
+  padding: 6px 12px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.git-file-badge {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 3px;
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace;
+}
+
+.git-file-badge.added { color: #34a853; }
+.git-file-badge.modified { color: #f4b400; }
+.git-file-badge.deleted { color: var(--accent); }
+.git-file-badge.renamed { color: #4a90d9; }
+.git-file-badge.untracked { color: var(--text-muted); }
+.git-file-badge.conflicted { color: #e67e22; }
+
+.git-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.config-item:hover .git-item-actions {
+  opacity: 1;
+}
+
+.git-action-btn {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 18px;
+  text-align: center;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.git-action-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+

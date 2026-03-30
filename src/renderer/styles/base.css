@@ -1,0 +1,57 @@
+:root {
+  --bg-primary: #000000;
+  --bg-secondary: #0a0a0a;
+  --bg-tertiary: #1a1a1a;
+  --bg-hover: #222222;
+  --text-primary: #e0e0e0;
+  --text-secondary: #a0a0b0;
+  --text-muted: #606070;
+  --accent: #e94560;
+  --accent-dim: #c73e55;
+  --border: #333333;
+  --tab-active: #000000;
+  --tab-inactive: #0a0a0a;
+  --pane-focus: #333333;
+  --pane-unfocus: #333333;
+  --bookmark: #e8a317;
+  --debug-panel-height: 300px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+}
+
+#app {
+  display: flex;
+  height: 100vh;
+}
+
+body.debug-panel-open #app {
+  height: calc(100vh - var(--debug-panel-height));
+}
+
+/* Empty state */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-muted);
+  gap: 12px;
+}
+
+.empty-state .hint {
+  font-size: 12px;
+}

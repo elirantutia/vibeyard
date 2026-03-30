@@ -1,0 +1,184 @@
+/* Session History */
+#session-history {
+  border-top: 1px solid var(--border);
+}
+
+#session-history.hidden {
+  display: none;
+}
+
+#session-history:empty {
+  border-top: none;
+}
+
+.history-body {
+  padding: 0 0 4px;
+}
+
+.history-search {
+  width: calc(100% - 24px);
+  margin: 4px 12px;
+  padding: 4px 8px;
+  font-size: 12px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  outline: none;
+  font-family: inherit;
+}
+
+.history-search:focus {
+  border-color: var(--accent);
+}
+
+.history-clear-btn {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  background: none;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.history-clear-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+}
+
+.history-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  cursor: default;
+}
+
+.history-item:hover {
+  background: var(--bg-hover);
+}
+
+.history-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.history-item-name {
+  font-size: 12px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-item-details {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.history-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.history-remove-btn {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  font-size: 13px;
+  line-height: 18px;
+  text-align: center;
+  background: transparent;
+  color: var(--text-dim);
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: inherit;
+  opacity: 0;
+}
+
+.history-item:hover .history-remove-btn {
+  opacity: 1;
+}
+
+.history-remove-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+
+.history-bookmark-btn {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  font-size: 13px;
+  line-height: 18px;
+  text-align: center;
+  background: transparent;
+  color: var(--text-dim);
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: inherit;
+  opacity: 0;
+}
+
+.history-item:hover .history-bookmark-btn {
+  opacity: 1;
+}
+
+.history-bookmark-btn.bookmarked {
+  opacity: 1;
+  color: var(--bookmark);
+}
+
+.history-bookmark-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--bookmark);
+}
+
+.history-actions {
+  display: flex;
+  gap: 6px;
+  padding: 2px 12px 4px;
+}
+
+.history-bookmark-filter {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  background: none;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.history-bookmark-filter:hover {
+  color: var(--bookmark);
+  border-color: var(--bookmark);
+}
+
+.history-bookmark-filter.active {
+  color: var(--bookmark);
+  border-color: var(--bookmark);
+}
+
+.history-empty {
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--text-dim);
+  font-style: italic;
+}

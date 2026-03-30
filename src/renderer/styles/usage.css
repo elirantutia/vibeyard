@@ -1,0 +1,142 @@
+/* Usage modal */
+.usage-content {
+  padding: 4px 0;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.usage-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.usage-stat-card {
+  background: var(--bg-hover);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.usage-stat-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.usage-stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.usage-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin: 14px 0 6px;
+}
+
+.usage-activity-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 60px;
+}
+
+.usage-activity-bar {
+  flex: 1;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
+  min-height: 2px;
+  transition: opacity 0.15s;
+}
+
+.usage-activity-bar:hover {
+  opacity: 0.8;
+}
+
+.usage-activity-labels {
+  display: flex;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.usage-activity-labels span {
+  flex: 1;
+  text-align: center;
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+.usage-model-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.usage-model-row:last-of-type {
+  border-bottom: none;
+}
+
+.usage-model-name {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.usage-model-tokens {
+  color: var(--text-secondary);
+}
+
+.usage-hour-heatmap {
+  display: flex;
+  gap: 2px;
+}
+
+.usage-hour-cell {
+  flex: 1;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.usage-hour-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  padding: 0 2px;
+}
+
+.usage-refresh-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 4px;
+  margin-top: 14px;
+}
+
+.usage-refresh-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.usage-refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.usage-empty {
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 40px 20px;
+}

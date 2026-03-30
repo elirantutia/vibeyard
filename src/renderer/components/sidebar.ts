@@ -183,8 +183,8 @@ function renderCostFooter(): void {
 function confirmRemoveProject(project: ProjectRecord): void {
   const historyCount = project.sessionHistory?.length ?? 0;
   const message = historyCount > 0
-    ? `This project has ${historyCount} session(s) in history. Removing it will delete all history. Continue?`
-    : `Remove project "${project.name}"?`;
+    ? `Remove project "${project.name}"? This will delete all sessions and history (${historyCount} entries) from Vibeyard. No files on disk will be affected.`
+    : `Remove project "${project.name}"? No files on disk will be affected.`;
   if (!confirm(message)) return;
   appState.removeProject(project.id);
 }

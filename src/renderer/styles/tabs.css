@@ -1,0 +1,307 @@
+/* Main area */
+#main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Tab bar */
+#tab-bar {
+  display: flex;
+  align-items: center;
+  background: var(--tab-inactive);
+  border-bottom: 1px solid var(--border);
+  height: 36px;
+  min-height: 36px;
+  user-select: none;
+}
+
+#tab-list {
+  display: flex;
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 100%;
+}
+
+#tab-list::-webkit-scrollbar {
+  height: 2px;
+}
+
+#tab-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+}
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  height: 100%;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+  border-right: 1px solid var(--border);
+  position: relative;
+}
+
+.tab-item:hover {
+  background: var(--bg-hover);
+}
+
+.tab-item.active {
+  background: var(--tab-active);
+  color: var(--text-primary);
+}
+
+.tab-item.unread .tab-name {
+  color: var(--accent);
+}
+
+.tab-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+}
+
+/* Session status indicator */
+.tab-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.tab-status.working {
+  background: var(--accent);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.tab-status.waiting {
+  background: #f4b400;
+}
+
+.tab-status.completed {
+  background: #34a853;
+}
+
+.tab-status.input {
+  background: #e67e22;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.tab-status.idle {
+  background: var(--text-muted);
+}
+
+.tab-name input {
+  background: transparent;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  color: inherit;
+  font: inherit;
+  padding: 0 2px;
+  outline: none;
+  width: 100%;
+  min-width: 40px;
+}
+
+.tab-cost {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+
+.tab-cost:empty {
+  display: none;
+}
+
+.tab-close {
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.tab-item:hover .tab-close {
+  opacity: 1;
+}
+
+.tab-close:hover {
+  color: var(--accent);
+}
+
+/* Git status indicator */
+#git-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  font-size: 11px;
+  white-space: nowrap;
+  user-select: none;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+#git-status:empty {
+  display: none;
+}
+
+#git-status .git-branch {
+  color: var(--text-secondary);
+}
+
+#git-status .git-ahead-behind {
+  color: var(--text-muted);
+}
+
+#git-status .git-staged {
+  color: #34a853;
+}
+
+#git-status .git-modified {
+  color: #f4b400;
+}
+
+#git-status .git-untracked {
+  color: var(--text-muted);
+}
+
+#git-status .git-conflicted {
+  color: var(--accent);
+}
+
+#tab-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px;
+}
+
+.icon-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 16px;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.icon-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+/* Tab context menu */
+.tab-context-menu {
+  position: fixed;
+  z-index: 200;
+  min-width: 140px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.tab-context-menu-item {
+  padding: 6px 14px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.tab-context-menu-item:hover:not(.disabled):not(.active) {
+  background: var(--bg-hover);
+}
+
+.tab-context-menu-item.disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.tab-context-menu-item.active {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.tab-context-menu-separator {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+/* Branch search input */
+.branch-search-input {
+  -webkit-appearance: none;
+  width: calc(100% - 16px);
+  margin: 8px;
+  padding: 4px 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  font-family: inherit;
+}
+
+.branch-search-input:focus {
+  border-color: var(--accent);
+}
+
+.branch-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* Scrollable branch list */
+.branch-list-container {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.branch-list-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.branch-list-container::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+/* Keyboard navigation highlight */
+.tab-context-menu-item.keyboard-active {
+  background: var(--bg-hover);
+}
+
+/* Tab drag reorder */
+.tab-item.dragging {
+  opacity: 0.4;
+}
+
+.tab-item.drag-over-left {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.tab-item.drag-over-right {
+  box-shadow: inset -3px 0 0 var(--accent);
+}

@@ -10,6 +10,7 @@ import { loadState, saveState, PersistedState } from './store';
 import { startWatching, cleanupSessionStatus } from './hook-status';
 import { getGitStatus, getGitFiles, getGitDiff, getGitWorktrees, gitStageFile, gitUnstageFile, gitDiscardFile, getGitRemoteUrl, listGitBranches, checkoutGitBranch, createGitBranch } from './git-status';
 import { startGitWatcher, stopGitWatcher, notifyGitChanged } from './git-watcher';
+import { watchFile as watchFileForChanges, unwatchFile as unwatchFileForChanges, setFileWatcherWindow } from './file-watcher';
 import { registerMcpHandlers } from './mcp-ipc-handlers';
 import { checkForUpdates, quitAndInstall } from './auto-updater';
 import { createAppMenu } from './menu';
@@ -266,7 +267,7 @@ export function registerIpcHandlers(): void {
       }
       let files: string[];
       try {
-        const output = execSync('git ls-files', { cwd: resolvedCwd, encoding: 'utf-8', timeout: 5000 });
+        const output = execSync('git ls-files --cached --others --exclude-standard', { cwd: resolvedCwd, encoding: 'utf-8', timeout: 5000 });
         files = output.split('\n').filter(Boolean);
       } catch {
         // Not a git repo — fallback to recursive readdir with depth limit
@@ -294,7 +295,18 @@ export function registerIpcHandlers(): void {
 
       if (query) {
         const lower = query.toLowerCase();
-        files = files.filter(f => f.toLowerCase().includes(lower));
+        const exact: string[] = [];
+        const startsWith: string[] = [];
+        const nameContains: string[] = [];
+        const pathContains: string[] = [];
+        for (const f of files) {
+          const fileName = path.basename(f).toLowerCase();
+          if (fileName === lower) exact.push(f);
+          else if (fileName.startsWith(lower)) startsWith.push(f);
+          else if (fileName.includes(lower)) nameContains.push(f);
+          else if (f.toLowerCase().includes(lower)) pathContains.push(f);
+        }
+        files = [...exact, ...startsWith, ...nameContains, ...pathContains];
       }
       return files.slice(0, 50);
     } catch (err) {
@@ -316,6 +328,19 @@ export function registerIpcHandlers(): void {
       console.warn('fs:readFile failed:', err);
       return '';
     }
+  });
+
+  ipcMain.on('fs:watchFile', (event, filePath: string) => {
+    const resolved = path.resolve(filePath);
+    if (!isAllowedReadPath(resolved)) return;
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) setFileWatcherWindow(win);
+    watchFileForChanges(resolved);
+  });
+
+  ipcMain.on('fs:unwatchFile', (_event, filePath: string) => {
+    const resolved = path.resolve(filePath);
+    unwatchFileForChanges(resolved);
   });
 
   ipcMain.handle('stats:getCache', () => {

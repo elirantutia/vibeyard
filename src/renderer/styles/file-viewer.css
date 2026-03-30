@@ -1,0 +1,407 @@
+/* File viewer overlay */
+#file-viewer-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+}
+
+.file-viewer-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.file-viewer-path {
+  flex: 1;
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace;
+  font-size: 13px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-viewer-area-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.file-viewer-area-badge.staged { background: rgba(52, 168, 83, 0.15); color: #34a853; }
+.file-viewer-area-badge.working { background: rgba(244, 180, 0, 0.15); color: #f4b400; }
+.file-viewer-area-badge.untracked { background: rgba(96, 96, 112, 0.15); color: var(--text-muted); }
+.file-viewer-area-badge.conflicted { background: rgba(230, 126, 34, 0.15); color: #e67e22; }
+
+.file-viewer-close {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.file-viewer-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+.file-viewer-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace;
+}
+
+.file-viewer-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.file-viewer-content::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.diff-line {
+  padding: 0 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre;
+}
+
+.diff-line.added {
+  background: rgba(52, 168, 83, 0.15);
+  color: #34a853;
+}
+
+.diff-line.removed {
+  background: rgba(233, 69, 96, 0.15);
+  color: var(--accent);
+}
+
+.diff-line.hunk {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.diff-line.context {
+  color: var(--text-secondary);
+}
+
+/* File Viewer (diff) pane */
+.file-viewer-pane {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  overflow: hidden;
+  position: absolute;
+  inset: 0;
+}
+
+.file-viewer-pane.split {
+  position: relative;
+  border: 1px solid var(--pane-unfocus);
+  border-radius: 4px;
+}
+
+.file-viewer-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.file-viewer-path {
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace;
+  font-size: 12px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-viewer-area-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.file-viewer-area-badge.staged { background: rgba(52, 168, 83, 0.15); color: #34a853; }
+.file-viewer-area-badge.working { background: rgba(244, 180, 0, 0.15); color: #f4b400; }
+.file-viewer-area-badge.untracked { background: rgba(96, 96, 112, 0.15); color: var(--text-muted); }
+.file-viewer-area-badge.conflicted { background: rgba(233, 69, 96, 0.15); color: var(--accent); }
+
+.file-viewer-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.file-viewer-content {
+  padding: 4px 0;
+}
+
+.diff-line {
+  padding: 1px 12px;
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.diff-line.added {
+  background: rgba(52, 168, 83, 0.12);
+  color: #5fba7d;
+}
+
+.diff-line.removed {
+  background: rgba(233, 69, 96, 0.12);
+  color: #e8788a;
+}
+
+.diff-line.hunk {
+  color: var(--text-muted);
+  font-style: italic;
+  padding-top: 8px;
+  padding-bottom: 4px;
+}
+
+.diff-line.context {
+  color: var(--text-secondary);
+}
+
+/* Diff tab badge */
+.tab-diff-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(244, 180, 0, 0.2);
+  color: #f4b400;
+  vertical-align: middle;
+}
+
+/* Clickable config items in git panel */
+.config-item-clickable {
+  cursor: pointer;
+}
+
+.config-item-clickable:hover {
+  background: var(--bg-hover);
+}
+
+/* Quick Open overlay */
+.quick-open-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  padding-top: 15vh;
+  z-index: 500;
+}
+
+.quick-open-container {
+  width: 600px;
+  max-height: 60vh;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  align-self: flex-start;
+}
+
+.quick-open-input {
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--bg-primary);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+  font-family: inherit;
+}
+
+.quick-open-input::placeholder {
+  color: var(--text-muted);
+}
+
+.quick-open-results {
+  overflow-y: auto;
+  max-height: calc(60vh - 50px);
+}
+
+.quick-open-results::-webkit-scrollbar {
+  width: 6px;
+}
+
+.quick-open-results::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.quick-open-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.quick-open-item:hover,
+.quick-open-item.active {
+  background: var(--bg-hover);
+}
+
+.quick-open-item.active {
+  background: var(--bg-tertiary);
+}
+
+.quick-open-filename {
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.quick-open-dir {
+  color: var(--text-muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quick-open-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* File Reader pane */
+.file-reader-pane {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  overflow: hidden;
+  position: absolute;
+  inset: 0;
+}
+
+.file-reader-pane.split {
+  position: relative;
+  border: 1px solid var(--pane-unfocus);
+  border-radius: 4px;
+}
+
+.file-reader-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(74, 144, 217, 0.15);
+  color: #4a90d9;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.file-reader-body {
+  flex: 1;
+  overflow-y: auto;
+  outline: none;
+}
+
+.file-reader-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.file-reader-body::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.file-reader-content {
+  padding: 4px 0;
+}
+
+.file-reader-line {
+  display: flex;
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.file-reader-line-num {
+  display: inline-block;
+  width: 50px;
+  min-width: 50px;
+  text-align: right;
+  padding-right: 12px;
+  color: var(--text-muted);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.file-reader-line-text {
+  flex: 1;
+  color: var(--text-secondary);
+  padding-right: 12px;
+}
+
+.file-reader-line-highlight {
+  background: rgba(233, 69, 96, 0.15);
+}
+
+.file-reader-line-highlight .file-reader-line-num {
+  color: var(--accent);
+}
+
+/* File reader tab badge */
+.tab-file-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(74, 144, 217, 0.2);
+  color: #4a90d9;
+  vertical-align: middle;
+}

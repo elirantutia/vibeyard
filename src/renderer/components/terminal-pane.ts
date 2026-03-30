@@ -23,6 +23,7 @@ interface TerminalInstance {
   isResume: boolean;
   spawned: boolean;
   exited: boolean;
+  pendingPrompt: string | null;
 }
 
 const instances = new Map<string, TerminalInstance>();
@@ -129,6 +130,7 @@ export function createTerminalPane(
     isResume,
     spawned: false,
     exited: false,
+    pendingPrompt: null,
   };
 
   instances.set(sessionId, instance);
@@ -169,6 +171,24 @@ export function getTerminalInstance(sessionId: string): TerminalInstance | undef
 
 export function getAllInstances(): Map<string, TerminalInstance> {
   return instances;
+}
+
+export function setPendingPrompt(sessionId: string, prompt: string): void {
+  const instance = instances.get(sessionId);
+  if (instance) {
+    instance.pendingPrompt = prompt;
+  }
+}
+
+export function initPendingPromptListener(): void {
+  window.vibeyard.session.onHookStatus((sessionId, _status, hookName) => {
+    if (hookName !== 'SessionStart') return;
+    const instance = instances.get(sessionId);
+    if (!instance?.pendingPrompt) return;
+    const prompt = instance.pendingPrompt;
+    instance.pendingPrompt = null;
+    window.vibeyard.pty.write(sessionId, prompt + '\r');
+  });
 }
 
 export async function spawnTerminal(sessionId: string): Promise<void> {

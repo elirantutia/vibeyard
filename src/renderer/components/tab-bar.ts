@@ -522,20 +522,111 @@ async function showBranchContextMenu(e: MouseEvent): Promise<void> {
     if (activeContextMenu !== menu) return;
 
     menu.innerHTML = '';
+    menu.addEventListener('click', (ev) => ev.stopPropagation());
 
-    for (const branch of branches) {
-      const item = document.createElement('div');
-      item.className = 'tab-context-menu-item' + (branch.current ? ' active' : '');
-      item.textContent = (branch.current ? '\u2713 ' : '  ') + branch.name;
-      if (!branch.current) {
-        item.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          hideTabContextMenu();
-          switchBranch(gitPath, branch.name);
-        });
+    const searchInput = document.createElement('input');
+    searchInput.className = 'branch-search-input';
+    searchInput.type = 'text';
+    searchInput.placeholder = 'Filter branches\u2026';
+    menu.appendChild(searchInput);
+
+    const container = document.createElement('div');
+    container.className = 'branch-list-container';
+    menu.appendChild(container);
+
+    let filteredBranches = branches;
+    let activeIndex = 0;
+    let itemElements: HTMLElement[] = [];
+
+    function renderBranchItems(query: string): void {
+      const lowerQuery = query.toLowerCase();
+      filteredBranches = lowerQuery
+        ? branches.filter(b => b.name.toLowerCase().includes(lowerQuery))
+        : branches;
+      activeIndex = 0;
+      itemElements = [];
+      container.innerHTML = '';
+
+      if (filteredBranches.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'tab-context-menu-item disabled';
+        empty.textContent = 'No matching branches';
+        container.appendChild(empty);
+        return;
       }
-      menu.appendChild(item);
+
+      for (let i = 0; i < filteredBranches.length; i++) {
+        const branch = filteredBranches[i];
+        const item = document.createElement('div');
+        item.className = 'tab-context-menu-item'
+          + (branch.current ? ' active' : '')
+          + (i === activeIndex ? ' keyboard-active' : '');
+        item.textContent = (branch.current ? '\u2713 ' : '  ') + branch.name;
+
+        item.addEventListener('mouseenter', () => {
+          activeIndex = i;
+          setActiveHighlight();
+        });
+
+        if (!branch.current) {
+          item.addEventListener('click', () => {
+            hideTabContextMenu();
+            switchBranch(gitPath, branch.name);
+          });
+        }
+        itemElements.push(item);
+        container.appendChild(item);
+      }
     }
+
+    function setActiveHighlight(): void {
+      itemElements.forEach((el, i) => {
+        el.classList.toggle('keyboard-active', i === activeIndex);
+      });
+    }
+
+    function setActiveAndScroll(): void {
+      setActiveHighlight();
+      itemElements[activeIndex]?.scrollIntoView({ block: 'nearest' });
+    }
+
+    searchInput.addEventListener('input', () => renderBranchItems(searchInput.value));
+
+    searchInput.addEventListener('keydown', (ev) => {
+      ev.stopPropagation();
+      switch (ev.key) {
+        case 'ArrowDown':
+          ev.preventDefault();
+          if (filteredBranches.length > 0) {
+            activeIndex = (activeIndex + 1) % filteredBranches.length;
+            setActiveAndScroll();
+          }
+          break;
+        case 'ArrowUp':
+          ev.preventDefault();
+          if (filteredBranches.length > 0) {
+            activeIndex = (activeIndex - 1 + filteredBranches.length) % filteredBranches.length;
+            setActiveAndScroll();
+          }
+          break;
+        case 'Enter':
+          ev.preventDefault();
+          if (activeIndex < filteredBranches.length) {
+            const selected = filteredBranches[activeIndex];
+            if (!selected.current) {
+              hideTabContextMenu();
+              switchBranch(gitPath, selected.name);
+            }
+          }
+          break;
+        case 'Escape':
+          ev.preventDefault();
+          hideTabContextMenu();
+          break;
+      }
+    });
+
+    renderBranchItems('');
 
     // Separator + Create New Branch
     const separator = document.createElement('div');
@@ -545,8 +636,7 @@ async function showBranchContextMenu(e: MouseEvent): Promise<void> {
     const createItem = document.createElement('div');
     createItem.className = 'tab-context-menu-item';
     createItem.textContent = 'Create New Branch\u2026';
-    createItem.addEventListener('click', (ev) => {
-      ev.stopPropagation();
+    createItem.addEventListener('click', () => {
       hideTabContextMenu();
       promptCreateBranch(gitPath);
     });
@@ -556,6 +646,8 @@ async function showBranchContextMenu(e: MouseEvent): Promise<void> {
     const rect = menu.getBoundingClientRect();
     if (rect.right > window.innerWidth) menu.style.left = `${window.innerWidth - rect.width - 4}px`;
     if (rect.bottom > window.innerHeight) menu.style.top = `${window.innerHeight - rect.height - 4}px`;
+
+    searchInput.focus();
   } catch {
     if (activeContextMenu !== menu) return;
     menu.innerHTML = '';

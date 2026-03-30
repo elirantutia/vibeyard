@@ -24,6 +24,9 @@ export interface VibeyardApi {
     browseDirectory(): Promise<string | null>;
     listFiles(cwd: string, query: string): Promise<string[]>;
     readFile(filePath: string): Promise<string>;
+    watchFile(filePath: string): void;
+    unwatchFile(filePath: string): void;
+    onFileChanged(callback: (filePath: string) => void): () => void;
   };
   store: {
     load(): Promise<unknown>;

@@ -1,0 +1,164 @@
+/* Help dialog */
+.help-container {
+  max-height: 400px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.help-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.help-container::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.help-section-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.help-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.help-visual {
+  width: 160px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.help-label {
+  width: 90px;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.help-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.help-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.help-badge {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--bg-primary);
+}
+
+.help-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* What's New dialog */
+.whats-new-container {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.whats-new-date {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.whats-new-section {
+  margin-bottom: 12px;
+}
+
+.whats-new-section-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.whats-new-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.whats-new-list li {
+  font-size: 13px;
+  color: var(--text-primary);
+  padding: 3px 0;
+  padding-left: 16px;
+  position: relative;
+}
+
+.whats-new-list li::before {
+  content: '\2022';
+  position: absolute;
+  left: 4px;
+  color: var(--text-secondary);
+}
+
+/* Star prompt dialog */
+.star-prompt-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 8px 0;
+}
+
+.star-prompt-icon {
+  font-size: 36px;
+  margin-bottom: 12px;
+}
+
+.star-prompt-message {
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin-bottom: 20px;
+  max-width: 320px;
+}
+
+.star-prompt-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.star-prompt-dont-ask {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.star-prompt-dont-ask:hover {
+  color: var(--text-primary);
+}

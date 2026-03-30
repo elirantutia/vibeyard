@@ -3,7 +3,7 @@ import { initSidebar, promptNewProject } from './components/sidebar.js';
 import { initTabBar } from './components/tab-bar.js';
 import { initSplitLayout } from './components/split-layout.js';
 import { initKeybindings } from './keybindings.js';
-import { handlePtyData, destroyTerminal, updateCostDisplay, updateContextDisplay } from './components/terminal-pane.js';
+import { handlePtyData, destroyTerminal, updateCostDisplay, updateContextDisplay, initPendingPromptListener } from './components/terminal-pane.js';
 import { setIdle, setHookStatus, notifyInterrupt } from './session-activity.js';
 import { parseCost, setCostData, onChange as onCostChange } from './session-cost.js';
 import { parseTitle, clearSession as clearTitleSession } from './session-title.js';
@@ -25,6 +25,8 @@ import { initInsightAlert } from './components/insight-alert.js';
 import { initReadinessSection } from './components/readiness-section.js';
 import { initToolDetector } from './tools/missing-tool-detector.js';
 import { initToolAlert } from './components/tool-alert.js';
+import { initLargeFileDetector } from './tools/large-file-detector.js';
+import { initLargeFileAlert } from './components/large-file-alert.js';
 import { initSettingsGuard } from './components/settings-guard-ui.js';
 import { checkWhatsNew } from './components/whats-new-dialog.js';
 import { initShareManager, forwardPtyData, endShare, cleanupAllShares } from './sharing/share-manager.js';
@@ -40,6 +42,8 @@ window.vibeyard.app.onQuitting(() => {
 });
 
 async function main(): Promise<void> {
+  initPendingPromptListener();
+
   // Wire PTY data/exit events from main process
   window.vibeyard.pty.onData((sessionId, data) => {
     if (isShellSessionId(sessionId)) {
@@ -131,6 +135,8 @@ async function main(): Promise<void> {
   initInsightAlert();
   initToolDetector();
   initToolAlert();
+  initLargeFileDetector();
+  initLargeFileAlert();
   initSettingsGuard();
   initReadinessSection();
   initShareManager();

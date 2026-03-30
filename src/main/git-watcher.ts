@@ -75,6 +75,18 @@ async function setupWatchers(projectPath: string): Promise<void> {
 
   // Watch working tree for file edits, filtering out ignored directories
   watchDir(projectPath, shouldIgnore);
+
+  // Watch HEAD file directly for reliable branch-switch detection.
+  // The recursive .git/ watcher may miss HEAD changes when macOS FSEvents
+  // reports null filenames, which the shouldSkip filter discards.
+  const headPath = path.join(gitDir, 'HEAD');
+  try {
+    const watcher = fs.watch(headPath, () => notify());
+    watcher.on('error', () => {});
+    dirWatchers.push(watcher);
+  } catch {
+    // HEAD doesn't exist (unlikely for a valid git repo)
+  }
 }
 
 export async function startGitWatcher(win: BrowserWindow, projectPath: string): Promise<void> {

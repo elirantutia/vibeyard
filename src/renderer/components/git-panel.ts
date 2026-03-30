@@ -305,7 +305,7 @@ async function loadFiles(body: HTMLElement, gitPath: string): Promise<void> {
   if (filesKey === lastFilesKey) return;
   lastFilesKey = filesKey;
 
-  body.innerHTML = '';
+  const fragment = document.createDocumentFragment();
 
   // Group by area in display order
   const order: string[] = ['conflicted', 'staged', 'working', 'untracked'];
@@ -324,7 +324,7 @@ async function loadFiles(body: HTMLElement, gitPath: string): Promise<void> {
     const groupHeader = document.createElement('div');
     groupHeader.className = 'git-group-header';
     groupHeader.textContent = `${areaLabel(area)} (${group.length})`;
-    body.appendChild(groupHeader);
+    fragment.appendChild(groupHeader);
 
     for (const entry of group) {
       if (rendered >= MAX_FILES) break;
@@ -367,7 +367,7 @@ async function loadFiles(body: HTMLElement, gitPath: string): Promise<void> {
         e.stopPropagation();
         showGitFileContextMenu(e.clientX, e.clientY, entry, gitPath);
       });
-      body.appendChild(item);
+      fragment.appendChild(item);
       rendered++;
     }
     if (rendered >= MAX_FILES) break;
@@ -378,8 +378,11 @@ async function loadFiles(body: HTMLElement, gitPath: string): Promise<void> {
     const overflow = document.createElement('div');
     overflow.className = 'config-empty';
     overflow.textContent = `and ${remaining} more...`;
-    body.appendChild(overflow);
+    fragment.appendChild(overflow);
   }
+
+  body.innerHTML = '';
+  body.appendChild(fragment);
 }
 
 export function scrollToGitPanel(): void {
@@ -436,10 +439,10 @@ export function initGitPanel(): void {
     }
   });
 
-  // Refresh on session working → waiting transition
+  // Refresh on session working → waiting transition (don't clear lastFilesKey —
+  // poll() in git-status.ts handles that when status actually changes)
   onStatusChange((_sessionId, status) => {
     if (status === 'waiting' || status === 'completed') {
-      lastFilesKey = '';
       scheduleRefresh();
     }
   });
@@ -447,7 +450,6 @@ export function initGitPanel(): void {
   // Refresh when worktree list or active worktree changes
   onWorktreeChange(() => { lastFilesKey = ''; scheduleRefresh(); });
 
-  // Auto-switch on session change
-  appState.on('session-changed', () => { lastFilesKey = ''; scheduleRefresh(); });
+  appState.on('session-changed', () => { scheduleRefresh(); });
   appState.on('preferences-changed', () => applyGitPanelVisibility());
 }
