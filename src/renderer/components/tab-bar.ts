@@ -771,6 +771,12 @@ export async function promptNewSession(): Promise<void> {
   }
   const providers = cachedProviders;
 
+  // Check which providers have their CLI binary available
+  const binaryChecks = await Promise.all(
+    providers.map(async p => ({ id: p.id, available: (await window.vibeyard.provider.checkBinary(p.id)).ok }))
+  );
+  const availabilityMap = new Map(binaryChecks.map(c => [c.id, c.available]));
+
   const fields: FieldDef[] = [
     { label: 'Name', id: 'session-name', placeholder: `Session ${sessionNum}`, defaultValue: `Session ${sessionNum}` },
     { label: 'Arguments', id: 'session-args', placeholder: 'e.g. --model sonnet', defaultValue: project.defaultArgs ?? '' },
@@ -783,12 +789,13 @@ export async function promptNewSession(): Promise<void> {
   ];
 
   if (providers.length > 1) {
+    const firstAvailable = providers.find(p => availabilityMap.get(p.id))?.id ?? 'claude';
     fields.unshift({
       label: 'Provider',
       id: 'provider',
       type: 'select',
-      defaultValue: 'claude',
-      options: providers.map(p => ({ value: p.id, label: p.displayName })),
+      defaultValue: firstAvailable,
+      options: providers.map(p => ({ value: p.id, label: p.displayName, disabled: !availabilityMap.get(p.id) })),
     });
   }
 

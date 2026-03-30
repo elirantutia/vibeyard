@@ -4,7 +4,7 @@ export interface FieldDef {
   type?: 'text' | 'checkbox' | 'select';
   placeholder?: string;
   defaultValue?: string;
-  options?: { value: string; label: string }[];
+  options?: { value: string; label: string; disabled?: boolean }[];
   buttonLabel?: string;
   onButtonClick?: (input: HTMLInputElement) => void;
   onChange?: (checked: boolean) => void;
@@ -71,8 +71,9 @@ export function showModal(
       for (const opt of field.options ?? []) {
         const option = document.createElement('option');
         option.value = opt.value;
-        option.textContent = opt.label;
+        option.textContent = opt.disabled ? `${opt.label} (not installed)` : opt.label;
         if (opt.value === field.defaultValue) option.selected = true;
+        if (opt.disabled) option.disabled = true;
         select.appendChild(option);
       }
       div.appendChild(select);
