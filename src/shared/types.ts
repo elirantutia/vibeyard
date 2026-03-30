@@ -258,7 +258,8 @@ export type InspectorEventType =
   | 'cwd_changed' | 'file_changed' | 'config_change'
   | 'elicitation' | 'elicitation_result'
   | 'instructions_loaded'
-  | 'teammate_idle';
+  | 'teammate_idle'
+  | 'status_update';
 
 export interface InspectorEvent {
   type: InspectorEventType;
