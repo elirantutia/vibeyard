@@ -1,6 +1,6 @@
 import { appState } from '../state.js';
 import { showMcpAddModal } from './mcp-add-modal.js';
-import type { ClaudeConfig, McpServer, Agent, Skill, Command } from '../types.js';
+import type { ProviderConfig, ProviderId, McpServer, Agent, Skill, Command } from '../types.js';
 
 const collapsed: Record<string, boolean> = {};
 
@@ -121,6 +121,19 @@ function applyVisibility(): void {
   container.classList.toggle('hidden', !visible);
 }
 
+export function getConfigProviderId(): ProviderId {
+  const project = appState.activeProject;
+  if (!project) return 'claude';
+
+  const activeSession = appState.activeSession;
+  if (activeSession && !activeSession.type) {
+    return (activeSession.providerId || 'claude') as ProviderId;
+  }
+
+  const recentCliSession = [...project.sessions].reverse().find(session => !session.type);
+  return (recentCliSession?.providerId || 'claude') as ProviderId;
+}
+
 async function refresh(): Promise<void> {
   const container = document.getElementById('config-sections');
   if (!container) return;
@@ -139,9 +152,10 @@ async function refresh(): Promise<void> {
     container.innerHTML = '<div class="config-loading">Loading...</div>';
   }
 
-  let config: ClaudeConfig;
+  const providerId = getConfigProviderId();
+  let config: ProviderConfig;
   try {
-    config = await window.vibeyard.claude.getConfig(project.path);
+    config = await window.vibeyard.provider.getConfig(providerId, project.path);
   } catch {
     container.innerHTML = '';
     return;
@@ -154,7 +168,7 @@ async function refresh(): Promise<void> {
     'MCP Servers',
     config.mcpServers.map(mcpItem),
     config.mcpServers.length,
-    () => showMcpAddModal(() => refresh()),
+    providerId === 'claude' ? () => showMcpAddModal(() => refresh()) : undefined,
   ));
 
   container.appendChild(renderSection(
@@ -171,24 +185,27 @@ async function refresh(): Promise<void> {
     config.skills.length,
   ));
 
-  container.appendChild(renderSection(
-    'commands',
-    'Commands',
-    config.commands.map(commandItem),
-    config.commands.length,
-  ));
+  if (providerId !== 'codex') {
+    container.appendChild(renderSection(
+      'commands',
+      'Commands',
+      config.commands.map(commandItem),
+      config.commands.length,
+    ));
+  }
 }
 
 function watchActiveProject(): void {
   const project = appState.activeProject;
   if (project) {
-    window.vibeyard.provider.watchProject('claude', project.path);
+    window.vibeyard.provider.watchProject(getConfigProviderId(), project.path);
   }
 }
 
 export function initConfigSections(): void {
   appState.on('project-changed', () => { watchActiveProject(); refresh(); });
   appState.on('state-loaded', () => { watchActiveProject(); refresh(); });
+  appState.on('session-changed', () => { watchActiveProject(); refresh(); });
   appState.on('preferences-changed', () => applyVisibility());
   window.vibeyard.provider.onConfigChanged(() => refresh());
 }

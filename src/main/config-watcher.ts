@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import type { BrowserWindow } from 'electron';
+import type { ProviderId } from '../shared/types';
 
 const DEBOUNCE_MS = 500;
 
@@ -10,6 +11,7 @@ let watchedFiles: string[] = [];
 let dirWatchers: fs.FSWatcher[] = [];
 let currentProjectPath: string | null = null;
 let currentWin: BrowserWindow | null = null;
+let currentProviderId: ProviderId | null = null;
 
 function notify(): void {
   if (debounceTimer) clearTimeout(debounceTimer);
@@ -46,7 +48,7 @@ function stopAll(): void {
   dirWatchers = [];
 }
 
-function setupWatchers(projectPath: string): void {
+function setupClaudeWatchers(projectPath: string): void {
   const home = os.homedir();
   const claudeDir = path.join(home, '.claude');
 
@@ -72,16 +74,41 @@ function setupWatchers(projectPath: string): void {
   for (const d of dirs) watchDir(d);
 }
 
-export function startConfigWatcher(win: BrowserWindow, projectPath: string): void {
-  if (projectPath === currentProjectPath) return;
+function setupCodexWatchers(projectPath: string): void {
+  const home = os.homedir();
+  const codexDir = path.join(home, '.codex');
+
+  const files = [
+    path.join(codexDir, 'config.toml'),
+    path.join(projectPath, '.codex', 'config.toml'),
+  ];
+  for (const f of files) watchFile(f);
+
+  const dirs = [
+    path.join(codexDir, 'agents'),
+    path.join(codexDir, 'skills'),
+    path.join(projectPath, '.codex', 'agents'),
+    path.join(projectPath, '.codex', 'skills'),
+  ];
+  for (const d of dirs) watchDir(d);
+}
+
+export function startConfigWatcher(win: BrowserWindow, projectPath: string, providerId: ProviderId = 'claude'): void {
+  if (projectPath === currentProjectPath && providerId === currentProviderId) return;
   stopAll();
   currentWin = win;
   currentProjectPath = projectPath;
-  setupWatchers(projectPath);
+  currentProviderId = providerId;
+  if (providerId === 'codex') {
+    setupCodexWatchers(projectPath);
+  } else {
+    setupClaudeWatchers(projectPath);
+  }
 }
 
 export function stopConfigWatcher(): void {
   stopAll();
   currentWin = null;
   currentProjectPath = null;
+  currentProviderId = null;
 }

@@ -1,5 +1,5 @@
-export type { McpServer, Agent, Skill, Command, ClaudeConfig, GitWorktree, GitFileEntry, CostData, McpResult, ProviderId, CliProviderMeta, CliProviderCapabilities, StatsCache, ReadinessResult, ReadinessCategory, ReadinessCheck, ReadinessCheckStatus } from '../shared/types.js';
-import type { CostData, ClaudeConfig, GitWorktree, McpResult, ProviderId, CliProviderMeta, StatsCache, ReadinessResult } from '../shared/types.js';
+export type { McpServer, Agent, Skill, Command, ProviderConfig, ClaudeConfig, GitWorktree, GitFileEntry, CostData, McpResult, ProviderId, CliProviderMeta, CliProviderCapabilities, StatsCache, ReadinessResult, ReadinessCategory, ReadinessCheck, ReadinessCheckStatus } from '../shared/types.js';
+import type { CostData, ProviderConfig, GitWorktree, McpResult, ProviderId, CliProviderMeta, StatsCache, ReadinessResult } from '../shared/types.js';
 
 export interface VibeyardApi {
   pty: {
@@ -35,7 +35,7 @@ export interface VibeyardApi {
     save(state: unknown): Promise<void>;
   };
   provider: {
-    getConfig(providerId: ProviderId, projectPath: string): Promise<ClaudeConfig>;
+    getConfig(providerId: ProviderId, projectPath: string): Promise<ProviderConfig>;
     getMeta(providerId: ProviderId): Promise<CliProviderMeta>;
     listProviders(): Promise<CliProviderMeta[]>;
     watchProject(providerId: ProviderId, projectPath: string): void;
@@ -43,7 +43,7 @@ export interface VibeyardApi {
   };
   /** @deprecated Use provider namespace */
   claude: {
-    getConfig(projectPath: string): Promise<ClaudeConfig>;
+    getConfig(projectPath: string): Promise<ProviderConfig>;
   };
   git: {
     getStatus(path: string): Promise<unknown>;

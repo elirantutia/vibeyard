@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron';
 import type { CliProvider } from './provider';
-import type { CliProviderMeta, ClaudeConfig, SettingsValidationResult } from '../../shared/types';
+import type { CliProviderMeta, ProviderConfig, SettingsValidationResult } from '../../shared/types';
 import { getFullPath } from '../pty-manager';
 import { installStatusLineScript, cleanupAll as cleanupHookStatus } from '../hook-status';
 import { startConfigWatcher as startConfigWatch, stopConfigWatcher as stopConfigWatch } from '../config-watcher';
@@ -71,14 +71,14 @@ export class ClaudeProvider implements CliProvider {
   }
 
   startConfigWatcher(win: BrowserWindow, projectPath: string): void {
-    startConfigWatch(win, projectPath);
+    startConfigWatch(win, projectPath, 'claude');
   }
 
   stopConfigWatcher(): void {
     stopConfigWatch();
   }
 
-  async getConfig(projectPath: string): Promise<ClaudeConfig | null> {
+  async getConfig(projectPath: string): Promise<ProviderConfig> {
     return getClaudeConfig(projectPath);
   }
 

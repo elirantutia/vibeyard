@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { CostData, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, ToolFailureData, SettingsWarningData, SettingsValidationResult, StatusLineConflictData, InspectorEvent } from '../shared/types';
+import type { CostData, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, ToolFailureData, SettingsWarningData, SettingsValidationResult, StatusLineConflictData, InspectorEvent, ProviderConfig } from '../shared/types';
 
 export type { CostData } from '../shared/types';
 
@@ -39,7 +39,7 @@ export interface VibeyardApi {
     save(state: unknown): Promise<void>;
   };
   provider: {
-    getConfig(providerId: ProviderId, projectPath: string): Promise<unknown>;
+    getConfig(providerId: ProviderId, projectPath: string): Promise<ProviderConfig>;
     getMeta(providerId: ProviderId): Promise<CliProviderMeta>;
     listProviders(): Promise<CliProviderMeta[]>;
     checkBinary(providerId?: ProviderId): Promise<{ ok: boolean; message: string }>;
@@ -48,7 +48,7 @@ export interface VibeyardApi {
   };
   /** @deprecated Use provider namespace instead */
   claude: {
-    getConfig(projectPath: string): Promise<unknown>;
+    getConfig(projectPath: string): Promise<ProviderConfig>;
   };
   git: {
     getStatus(path: string): Promise<unknown>;

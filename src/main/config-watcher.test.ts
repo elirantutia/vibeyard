@@ -168,4 +168,35 @@ describe('config-watcher', () => {
     // Should not throw
     expect(() => startConfigWatcher(win, '/projects/test')).not.toThrow();
   });
+
+  it('watches codex config files and directories for a project', () => {
+    const win = createMockWin();
+    vi.mocked(fs.watchFile).mockClear();
+    vi.mocked(fs.watch).mockClear();
+    startConfigWatcher(win, '/projects/test', 'codex');
+
+    expect(fs.watchFile).toHaveBeenCalledTimes(2);
+    expect(watchFileCallbacks.has('/home/testuser/.codex/config.toml')).toBe(true);
+    expect(watchFileCallbacks.has('/projects/test/.codex/config.toml')).toBe(true);
+
+    expect(fs.watch).toHaveBeenCalledTimes(4);
+    expect(watchDirCallbacks.has('/home/testuser/.codex/agents')).toBe(true);
+    expect(watchDirCallbacks.has('/home/testuser/.codex/skills')).toBe(true);
+    expect(watchDirCallbacks.has('/projects/test/.codex/agents')).toBe(true);
+    expect(watchDirCallbacks.has('/projects/test/.codex/skills')).toBe(true);
+  });
+
+  it('restarts watchers when switching providers for the same project', () => {
+    const win = createMockWin();
+    startConfigWatcher(win, '/projects/test');
+
+    vi.mocked(fs.watchFile).mockClear();
+    vi.mocked(fs.watch).mockClear();
+
+    startConfigWatcher(win, '/projects/test', 'codex');
+
+    expect(fs.watchFile).toHaveBeenCalledTimes(2);
+    expect(fs.watch).toHaveBeenCalledTimes(4);
+    expect(watchFileCallbacks.has('/home/testuser/.codex/config.toml')).toBe(true);
+  });
 });

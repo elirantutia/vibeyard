@@ -16,12 +16,26 @@ vi.mock('../pty-manager', () => ({
   getFullPath: vi.fn(() => '/usr/local/bin:/usr/bin'),
 }));
 
+vi.mock('../codex-config', () => ({
+  getCodexConfig: vi.fn(async () => ({ mcpServers: [], agents: [], skills: [], commands: [] })),
+}));
+
+vi.mock('../config-watcher', () => ({
+  startConfigWatcher: vi.fn(),
+  stopConfigWatcher: vi.fn(),
+}));
+
 import * as fs from 'fs';
 import { execSync } from 'child_process';
 import { CodexProvider, _resetCachedPath } from './codex-provider';
+import { getCodexConfig } from '../codex-config';
+import { startConfigWatcher, stopConfigWatcher } from '../config-watcher';
 
 const mockExistsSync = vi.mocked(fs.existsSync);
 const mockExecSync = vi.mocked(execSync);
+const mockGetCodexConfig = vi.mocked(getCodexConfig);
+const mockStartConfigWatcher = vi.mocked(startConfigWatcher);
+const mockStopConfigWatcher = vi.mocked(stopConfigWatcher);
 
 let provider: CodexProvider;
 
@@ -44,7 +58,7 @@ describe('meta', () => {
     expect(caps.costTracking).toBe(false);
     expect(caps.contextWindow).toBe(false);
     expect(caps.hookStatus).toBe(false);
-    expect(caps.configReading).toBe(false);
+    expect(caps.configReading).toBe(true);
     expect(caps.shiftEnterNewline).toBe(false);
   });
 
@@ -148,8 +162,11 @@ describe('getShiftEnterSequence', () => {
 });
 
 describe('stubs', () => {
-  it('getConfig returns null', async () => {
-    expect(await provider.getConfig('/some/path')).toBeNull();
+  it('getConfig delegates to codex config reader', async () => {
+    const config = { mcpServers: [{ name: 'a', url: 'b', status: 'configured', scope: 'user', filePath: '/x' }], agents: [], skills: [], commands: [] };
+    mockGetCodexConfig.mockResolvedValueOnce(config);
+    await expect(provider.getConfig('/some/path')).resolves.toEqual(config);
+    expect(mockGetCodexConfig).toHaveBeenCalledWith('/some/path');
   });
 
   it('validateSettings returns all-ok', () => {
@@ -166,6 +183,7 @@ describe('stubs', () => {
 
   it('cleanup does not throw', () => {
     expect(() => provider.cleanup()).not.toThrow();
+    expect(mockStopConfigWatcher).toHaveBeenCalled();
   });
 
   it('reinstallSettings does not throw', () => {
@@ -174,5 +192,11 @@ describe('stubs', () => {
 
   it('installStatusScripts does not throw', () => {
     expect(() => provider.installStatusScripts()).not.toThrow();
+  });
+
+  it('starts a codex config watcher', () => {
+    const win = { id: 1 } as any;
+    provider.startConfigWatcher(win, '/project');
+    expect(mockStartConfigWatcher).toHaveBeenCalledWith(win, '/project', 'codex');
   });
 });

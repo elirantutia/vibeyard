@@ -38,12 +38,13 @@ function isAllowedReadPath(resolvedPath: string): boolean {
     return true;
   }
 
-  // Allow known config files/directories used by Claude CLI
+  // Allow known config files/directories used by supported CLIs
   const home = os.homedir();
   const allowedPaths = [
     path.join(home, '.claude.json'),
     path.join(home, '.mcp.json'),
     path.join(home, '.claude') + path.sep,
+    path.join(home, '.codex') + path.sep,
   ];
 
   if (process.platform === 'darwin') {

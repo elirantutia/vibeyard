@@ -1,7 +1,10 @@
 import type { CliProvider } from './provider';
-import type { CliProviderMeta, ClaudeConfig, SettingsValidationResult } from '../../shared/types';
+import type { CliProviderMeta, ProviderConfig, SettingsValidationResult } from '../../shared/types';
 import { getFullPath } from '../pty-manager';
 import { resolveBinary, validateBinaryExists } from './resolve-binary';
+import { getCodexConfig } from '../codex-config';
+import { startConfigWatcher as startConfigWatch, stopConfigWatcher as stopConfigWatch } from '../config-watcher';
+import type { BrowserWindow } from 'electron';
 
 const binaryCache = { path: null as string | null };
 
@@ -15,7 +18,7 @@ export class CodexProvider implements CliProvider {
       costTracking: false,
       contextWindow: false,
       hookStatus: false,
-      configReading: false,
+      configReading: true,
       shiftEnterNewline: false,
     },
     defaultContextWindowSize: 200_000,
@@ -50,10 +53,20 @@ export class CodexProvider implements CliProvider {
 
   installStatusScripts(): void {}
 
-  cleanup(): void {}
+  cleanup(): void {
+    stopConfigWatch();
+  }
 
-  async getConfig(_projectPath: string): Promise<ClaudeConfig | null> {
-    return null;
+  startConfigWatcher(win: BrowserWindow, projectPath: string): void {
+    startConfigWatch(win, projectPath, 'codex');
+  }
+
+  stopConfigWatcher(): void {
+    stopConfigWatch();
+  }
+
+  async getConfig(projectPath: string): Promise<ProviderConfig> {
+    return getCodexConfig(projectPath);
   }
 
   getShiftEnterSequence(): string | null {

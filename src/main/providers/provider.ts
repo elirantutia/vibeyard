@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron';
-import type { CliProviderMeta, ClaudeConfig, SettingsValidationResult } from '../../shared/types';
+import type { CliProviderMeta, ProviderConfig, SettingsValidationResult } from '../../shared/types';
 
 export interface CliProvider {
   readonly meta: CliProviderMeta;
@@ -10,7 +10,7 @@ export interface CliProvider {
   installHooks(win?: BrowserWindow | null): Promise<void>;
   installStatusScripts(): void;
   cleanup(): void;
-  getConfig(projectPath: string): Promise<ClaudeConfig | null>;
+  getConfig(projectPath: string): Promise<ProviderConfig>;
   getShiftEnterSequence(): string | null;
   validateSettings(): SettingsValidationResult;
   reinstallSettings(): void;

@@ -36,13 +36,14 @@ export interface GitFileEntry {
   area: 'staged' | 'working' | 'untracked' | 'conflicted';
 }
 
-// --- Claude Config ---
+// --- Provider Config ---
 
 export interface McpServer { name: string; url: string; status: string; scope: 'user' | 'project'; filePath: string }
 export interface Agent { name: string; model: string; category: 'plugin' | 'built-in'; scope: 'user' | 'project'; filePath: string }
 export interface Skill { name: string; description: string; scope: 'user' | 'project'; filePath: string }
 export interface Command { name: string; description: string; scope: 'user' | 'project'; filePath: string }
-export interface ClaudeConfig { mcpServers: McpServer[]; agents: Agent[]; skills: Skill[]; commands: Command[] }
+export interface ProviderConfig { mcpServers: McpServer[]; agents: Agent[]; skills: Skill[]; commands: Command[] }
+export type ClaudeConfig = ProviderConfig;
 
 // --- Cost / Context (shared with renderer modules) ---
 

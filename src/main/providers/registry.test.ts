@@ -25,11 +25,13 @@ function makeFakeProvider(meta: CliProviderMeta): CliProvider {
     validatePrerequisites: () => ({ ok: true, message: '' }),
     buildEnv: (_sid, env) => env,
     buildArgs: () => [],
-    installHooks: () => {},
+    installHooks: async () => {},
     installStatusScripts: () => {},
     cleanup: () => {},
-    getConfig: async () => null,
+    getConfig: async () => ({ mcpServers: [], agents: [], skills: [], commands: [] }),
     getShiftEnterSequence: () => null,
+    validateSettings: () => ({ statusLine: 'vibeyard', hooks: 'complete', hookDetails: {} }),
+    reinstallSettings: () => {},
   };
 }
 
