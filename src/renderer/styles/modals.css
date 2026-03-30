@@ -65,18 +65,100 @@
   border-color: var(--accent);
 }
 
-.modal-field select {
+/* Custom select dropdown */
+.custom-select {
+  position: relative;
+}
+
+.custom-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
   padding: 8px 10px;
   background: var(--bg-primary);
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text-primary);
   font-size: 13px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
   outline: none;
 }
 
-.modal-field select:focus {
+.custom-select-trigger:focus {
   border-color: var(--accent);
+}
+
+.custom-select-trigger::after {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 4px solid var(--text-muted);
+  flex-shrink: 0;
+  margin-left: 8px;
+  transition: transform 0.15s;
+}
+
+.custom-select-trigger.open::after {
+  transform: rotate(180deg);
+}
+
+.custom-select-dropdown {
+  display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  max-height: 180px;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 200;
+  margin-top: 2px;
+}
+
+.custom-select-dropdown.visible {
+  display: block;
+}
+
+.custom-select-item {
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.custom-select-item:hover:not(.disabled),
+.custom-select-item.active:not(.disabled) {
+  background: var(--bg-hover);
+}
+
+.custom-select-item.selected {
+  background: var(--bg-tertiary);
+}
+
+.custom-select-item.disabled {
+  color: var(--text-muted);
+  cursor: default;
+  opacity: 0.5;
+}
+
+.custom-select-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-select-dropdown::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
 }
 
 .modal-field-row {

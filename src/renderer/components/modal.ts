@@ -66,17 +66,7 @@ export function showModal(
       div.appendChild(label);
     } else if (field.type === 'select') {
       div.appendChild(label);
-      const select = document.createElement('select');
-      select.id = `modal-${field.id}`;
-      for (const opt of field.options ?? []) {
-        const option = document.createElement('option');
-        option.value = opt.value;
-        option.textContent = opt.label;
-        if (opt.value === field.defaultValue) option.selected = true;
-        if (opt.disabled) option.disabled = true;
-        select.appendChild(option);
-      }
-      div.appendChild(select);
+      div.appendChild(createCustomSelect(field));
     } else {
       input.type = 'text';
       input.placeholder = field.placeholder ?? '';
@@ -160,4 +150,139 @@ function cleanup(): void {
     (overlay as any)._cleanup();
     (overlay as any)._cleanup = null;
   }
+  if ((overlay as any)._selectCleanups) {
+    for (const fn of (overlay as any)._selectCleanups) fn();
+    (overlay as any)._selectCleanups = null;
+  }
+}
+
+function createCustomSelect(field: FieldDef): HTMLElement {
+  const options = field.options ?? [];
+  const defaultOpt = options.find(o => o.value === field.defaultValue) ?? options.find(o => !o.disabled) ?? options[0];
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'custom-select';
+
+  const hidden = document.createElement('input');
+  hidden.type = 'hidden';
+  hidden.id = `modal-${field.id}`;
+  hidden.value = defaultOpt?.value ?? '';
+
+  const trigger = document.createElement('button');
+  trigger.type = 'button';
+  trigger.className = 'custom-select-trigger';
+  trigger.textContent = defaultOpt?.label ?? '';
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'custom-select-dropdown';
+
+  let activeIndex = -1;
+  const items: HTMLElement[] = [];
+
+  for (let i = 0; i < options.length; i++) {
+    const opt = options[i];
+    const item = document.createElement('div');
+    item.className = 'custom-select-item';
+    item.textContent = opt.label;
+    item.dataset.value = opt.value;
+    if (opt.disabled) item.classList.add('disabled');
+    if (opt.value === hidden.value) item.classList.add('selected');
+
+    item.addEventListener('mouseenter', () => {
+      if (!opt.disabled) {
+        activeIndex = i;
+        updateActive();
+      }
+    });
+
+    item.addEventListener('click', () => {
+      if (!opt.disabled) selectOption(i);
+    });
+
+    items.push(item);
+    dropdown.appendChild(item);
+  }
+
+  function selectOption(index: number): void {
+    const opt = options[index];
+    if (!opt || opt.disabled) return;
+    hidden.value = opt.value;
+    trigger.textContent = opt.label;
+    items.forEach(el => el.classList.remove('selected'));
+    items[index].classList.add('selected');
+    closeDropdown();
+  }
+
+  function updateActive(): void {
+    items.forEach((el, i) => el.classList.toggle('active', i === activeIndex));
+    if (activeIndex >= 0) items[activeIndex]?.scrollIntoView({ block: 'nearest' });
+  }
+
+  function openDropdown(): void {
+    dropdown.classList.add('visible');
+    trigger.classList.add('open');
+    activeIndex = options.findIndex(o => o.value === hidden.value);
+    updateActive();
+  }
+
+  function closeDropdown(): void {
+    dropdown.classList.remove('visible');
+    trigger.classList.remove('open');
+    activeIndex = -1;
+    items.forEach(el => el.classList.remove('active'));
+  }
+
+  function isOpen(): boolean {
+    return dropdown.classList.contains('visible');
+  }
+
+  trigger.addEventListener('click', () => {
+    if (isOpen()) closeDropdown();
+    else openDropdown();
+  });
+
+  trigger.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!isOpen()) openDropdown();
+      const dir = e.key === 'ArrowDown' ? 1 : -1;
+      let next = activeIndex;
+      for (let attempt = 0; attempt < options.length; attempt++) {
+        next = (next + dir + options.length) % options.length;
+        if (!options[next].disabled) {
+          activeIndex = next;
+          break;
+        }
+      }
+      updateActive();
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (isOpen() && activeIndex >= 0) selectOption(activeIndex);
+      else if (!isOpen()) openDropdown();
+    } else if (e.key === 'Escape') {
+      if (isOpen()) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeDropdown();
+      }
+    } else if (e.key === 'Tab') {
+      closeDropdown();
+    }
+  });
+
+  const onOutsideClick = (e: MouseEvent) => {
+    if (!isOpen()) return;
+    if (!wrapper.contains(e.target as Node)) closeDropdown();
+  };
+  document.addEventListener('mousedown', onOutsideClick);
+
+  if (!(overlay as any)._selectCleanups) (overlay as any)._selectCleanups = [];
+  (overlay as any)._selectCleanups.push(() => document.removeEventListener('mousedown', onOutsideClick));
+
+  wrapper.appendChild(hidden);
+  wrapper.appendChild(trigger);
+  wrapper.appendChild(dropdown);
+  return wrapper;
 }
