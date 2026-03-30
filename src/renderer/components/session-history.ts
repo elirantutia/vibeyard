@@ -1,6 +1,12 @@
 import { appState, ArchivedSession } from '../state.js';
 
 const MAX_VISIBLE = 50;
+const PROVIDER_LABELS: Record<string, string> = {
+  claude: 'Claude Code',
+  codex: 'Codex CLI',
+  copilot: 'GitHub Copilot',
+  gemini: 'Gemini CLI',
+};
 
 let container: HTMLElement;
 let searchInput: HTMLInputElement;
@@ -178,6 +184,7 @@ function renderList(history: ArchivedSession[]): void {
     if (archived.cost) {
       parts.push(`$${archived.cost.totalCostUsd.toFixed(2)}`);
     }
+    parts.push(getProviderLabel(archived.providerId));
     details.textContent = parts.join(' · ');
     info.appendChild(details);
 
@@ -240,4 +247,8 @@ function formatDate(iso: string): string {
     return `${diffDays}d ago`;
   }
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+function getProviderLabel(providerId: string): string {
+  return PROVIDER_LABELS[providerId] ?? providerId;
 }

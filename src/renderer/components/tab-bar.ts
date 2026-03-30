@@ -1,5 +1,5 @@
 import { appState, MAX_SESSION_NAME_LENGTH, type ProjectRecord, type SessionRecord } from '../state.js';
-import type { ProviderId, CliProviderMeta } from '../../shared/types.js';
+import type { ProviderId } from '../../shared/types.js';
 import { showModal, closeModal, setModalError, FieldDef } from './modal.js';
 import { onChange as onStatusChange, getStatus, type SessionStatus } from '../session-activity.js';
 import { onChange as onGitStatusChange, getGitStatus, getActiveGitPath, refreshGitStatus } from '../git-status.js';
@@ -11,9 +11,7 @@ import { showJoinDialog } from './join-dialog.js';
 import { isSharing } from '../sharing/peer-host.js';
 import { endShare, onShareChange } from '../sharing/share-manager.js';
 import { openInspector, isInspectorOpen, getInspectedSessionId, closeInspector } from './session-inspector.js';
-
-let cachedProviders: CliProviderMeta[] | null = null;
-let cachedAvailability: Map<ProviderId, boolean> | null = null;
+import { loadProviderAvailability, hasMultipleAvailableProviders, getProviderAvailabilitySnapshot } from '../provider-availability.js';
 
 const tabListEl = document.getElementById('tab-list')!;
 const gitStatusEl = document.getElementById('git-status')!;
@@ -30,26 +28,6 @@ function buildTooltip(status: SessionStatus, cliSessionId?: string): string {
   return cliSessionId ? `${statusLine}\nSession: ${cliSessionId}` : statusLine;
 }
 
-async function loadProviderAvailability(): Promise<void> {
-  if (!cachedProviders) {
-    cachedProviders = await window.vibeyard.provider.listProviders();
-  }
-  const checks = await Promise.all(
-    cachedProviders.map(async p => ({ id: p.id, ok: (await window.vibeyard.provider.checkBinary(p.id)).ok }))
-  );
-  cachedAvailability = new Map(checks.map(c => [c.id, c.ok]));
-}
-
-function hasMultipleProviders(): boolean {
-  if (!cachedAvailability) return false;
-  let count = 0;
-  for (const ok of cachedAvailability.values()) {
-    if (ok) count++;
-    if (count > 1) return true;
-  }
-  return false;
-}
-
 export function initTabBar(): void {
   btnAddSession.addEventListener('click', () => quickNewSession());
   btnAddSession.addEventListener('contextmenu', (e) => {
@@ -63,7 +41,7 @@ export function initTabBar(): void {
 
   // Icons only distinguish providers when multiple are installed
   loadProviderAvailability().then(() => {
-    if (hasMultipleProviders()) render();
+    if (hasMultipleAvailableProviders()) render();
   }).catch(() => {});
 
   appState.on('state-loaded', render);
@@ -384,7 +362,7 @@ function render(): void {
     tab.draggable = true;
     tab.title = isDiff ? `Diff: ${session.diffFilePath || session.name}` : isMcp ? `MCP Inspector` : isFileReader ? `File: ${session.fileReaderPath || session.name}` : isRemoteTab ? `Remote: ${session.remoteHostName || session.name}` : buildTooltip(getStatus(session.id), session.cliSessionId);
     const providerId = session.providerId || 'claude';
-    const providerIcon = hasMultipleProviders() ? `<img class="tab-provider-icon" src="assets/providers/${providerId}.png" alt="${providerId}" onerror="this.style.display='none'"> ` : '';
+    const providerIcon = hasMultipleAvailableProviders() ? `<img class="tab-provider-icon" src="assets/providers/${providerId}.png" alt="${providerId}" onerror="this.style.display='none'"> ` : '';
     const namePrefix = isDiff ? '<span class="tab-diff-badge">DIFF</span> ' : isMcp ? '<span class="tab-mcp-badge">MCP</span> ' : isFileReader ? '<span class="tab-file-badge">FILE</span> ' : isRemoteTab ? '<span class="tab-remote-badge">P2P</span> ' : !isSpecial ? providerIcon : '';
     const shareIndicator = sharing ? '<span class="tab-share-indicator" title="Sharing"></span>' : '';
     const statusDot = isSpecial ? '' : `<span class="tab-status ${getStatus(session.id)}"></span>`;
@@ -793,11 +771,13 @@ export async function promptNewSession(): Promise<void> {
 
   const sessionNum = project.sessions.length + 1;
 
-  if (!cachedAvailability) {
+  let providerSnapshot = getProviderAvailabilitySnapshot();
+  if (!providerSnapshot) {
     await loadProviderAvailability();
+    providerSnapshot = getProviderAvailabilitySnapshot();
   }
-  const providers = cachedProviders!;
-  const availabilityMap = cachedAvailability!;
+  const providers = providerSnapshot?.providers ?? [];
+  const availabilityMap = providerSnapshot?.availability ?? new Map();
 
   const fields: FieldDef[] = [
     { label: 'Name', id: 'session-name', placeholder: `Session ${sessionNum}`, defaultValue: `Session ${sessionNum}` },
