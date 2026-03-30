@@ -267,7 +267,7 @@ export function registerIpcHandlers(): void {
       }
       let files: string[];
       try {
-        const output = execSync('git ls-files --cached --others', { cwd: resolvedCwd, encoding: 'utf-8', timeout: 5000 });
+        const output = execSync('git ls-files --cached --others --exclude-standard', { cwd: resolvedCwd, encoding: 'utf-8', timeout: 5000 });
         files = output.split('\n').filter(Boolean);
       } catch {
         // Not a git repo — fallback to recursive readdir with depth limit
@@ -295,7 +295,18 @@ export function registerIpcHandlers(): void {
 
       if (query) {
         const lower = query.toLowerCase();
-        files = files.filter(f => f.toLowerCase().includes(lower));
+        const exact: string[] = [];
+        const startsWith: string[] = [];
+        const nameContains: string[] = [];
+        const pathContains: string[] = [];
+        for (const f of files) {
+          const fileName = path.basename(f).toLowerCase();
+          if (fileName === lower) exact.push(f);
+          else if (fileName.startsWith(lower)) startsWith.push(f);
+          else if (fileName.includes(lower)) nameContains.push(f);
+          else if (f.toLowerCase().includes(lower)) pathContains.push(f);
+        }
+        files = [...exact, ...startsWith, ...nameContains, ...pathContains];
       }
       return files.slice(0, 50);
     } catch (err) {
