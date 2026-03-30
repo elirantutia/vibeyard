@@ -1,4 +1,4 @@
-import type { ProviderId, CliProviderMeta } from '../shared/types.js';
+import type { ProviderId, CliProviderMeta, CliProviderCapabilities } from '../shared/types.js';
 
 let cachedProviders: CliProviderMeta[] | null = null;
 let cachedAvailability: Map<ProviderId, boolean> | null = null;
@@ -32,4 +32,9 @@ export function getProviderAvailabilitySnapshot(): {
     providers: cachedProviders,
     availability: cachedAvailability,
   };
+}
+
+export function getProviderCapabilities(providerId: ProviderId): CliProviderCapabilities | null {
+  if (!cachedProviders) return null;
+  return cachedProviders.find(provider => provider.id === providerId)?.capabilities ?? null;
 }

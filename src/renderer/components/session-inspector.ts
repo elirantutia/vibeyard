@@ -1,4 +1,4 @@
-import { appState } from '../state.js';
+import { appState, type SessionRecord } from '../state.js';
 import {
   getEvents,
   getToolStats,
@@ -7,6 +7,7 @@ import {
   onChange as onInspectorChange,
   clearSession,
 } from '../session-inspector-state.js';
+import { getProviderCapabilities } from '../provider-availability.js';
 import { fitAllVisible, getTerminalInstance } from './terminal-pane.js';
 
 let inspectorPanel: HTMLElement | null = null;
@@ -33,7 +34,15 @@ function resetUIState(): void {
   autoScroll = true;
 }
 
+function canInspectSession(session: Pick<SessionRecord, 'type' | 'providerId'>): boolean {
+  if (session.type && session.type !== 'claude') return false;
+  return getProviderCapabilities(session.providerId || 'claude')?.hookStatus !== false;
+}
+
 export function openInspector(sessionId: string): void {
+  const session = appState.activeProject?.sessions.find(s => s.id === sessionId);
+  if (!session || !canInspectSession(session)) return;
+
   if (inspectorPanel && inspectedSessionId === sessionId) {
     closeInspector();
     return;
@@ -76,7 +85,7 @@ export function toggleInspector(): void {
   const project = appState.activeProject;
   if (!project?.activeSessionId) return;
   const session = project.sessions.find(s => s.id === project.activeSessionId);
-  if (!session || (session.type && session.type !== 'claude')) return;
+  if (!session || !canInspectSession(session)) return;
 
   if (isInspectorOpen()) {
     closeInspector();
@@ -88,17 +97,28 @@ export function toggleInspector(): void {
 export function initSessionInspector(): void {
   // Auto-follow active session
   appState.on('session-changed', () => {
+    const project = appState.activeProject;
+    const activeSession = project?.activeSessionId
+      ? project.sessions.find(s => s.id === project.activeSessionId)
+      : undefined;
+
     if (!isInspectorOpen()) {
-      reopenOnNextSession = false;
+      if (reopenOnNextSession && project?.activeSessionId && activeSession && canInspectSession(activeSession)) {
+        resetUIState();
+        reopenOnNextSession = false;
+        requestAnimationFrame(() => openInspector(project.activeSessionId!));
+      }
       return;
     }
-    const project = appState.activeProject;
+
     if (project?.activeSessionId && project.activeSessionId !== inspectedSessionId) {
-      const session = project.sessions.find(s => s.id === project.activeSessionId);
-      if (session && (!session.type || session.type === 'claude')) {
+      if (activeSession && canInspectSession(activeSession)) {
         resetUIState();
         inspectedSessionId = project.activeSessionId;
         renderActiveTab();
+      } else {
+        reopenOnNextSession = true;
+        closeInspector();
       }
     }
   });
@@ -132,9 +152,10 @@ export function initSessionInspector(): void {
   // Re-open inspector when a new session is added after a clear/removal
   appState.on('session-added', (data) => {
     if (!reopenOnNextSession) return;
-    reopenOnNextSession = false;
     const d = data as { session?: { id: string; type?: string } } | undefined;
-    if (d?.session && (!d.session.type || d.session.type === 'claude')) {
+    const session = d?.session ? appState.activeProject?.sessions.find(s => s.id === d.session!.id) : undefined;
+    if (session && canInspectSession(session)) {
+      reopenOnNextSession = false;
       requestAnimationFrame(() => openInspector(d.session!.id));
     }
   });

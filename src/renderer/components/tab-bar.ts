@@ -11,7 +11,7 @@ import { showJoinDialog } from './join-dialog.js';
 import { isSharing } from '../sharing/peer-host.js';
 import { endShare, onShareChange } from '../sharing/share-manager.js';
 import { openInspector, isInspectorOpen, getInspectedSessionId, closeInspector } from './session-inspector.js';
-import { loadProviderAvailability, hasMultipleAvailableProviders, getProviderAvailabilitySnapshot } from '../provider-availability.js';
+import { loadProviderAvailability, hasMultipleAvailableProviders, getProviderAvailabilitySnapshot, getProviderCapabilities } from '../provider-availability.js';
 
 const tabListEl = document.getElementById('tab-list')!;
 const gitStatusEl = document.getElementById('git-status')!;
@@ -225,6 +225,8 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
   // Share menu items — only for CLI sessions (not special types)
   const isCliSession = !session.type || session.type === 'claude';
   const isRemote = session.type === 'remote-terminal';
+  const providerCapabilities = getProviderCapabilities(session.providerId || 'claude');
+  const canInspect = isCliSession && providerCapabilities?.hookStatus !== false;
   const currentlySharing = isSharing(session.id);
 
   const shareSeparator = document.createElement('div');
@@ -291,9 +293,9 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
   // Inspect item — only for CLI sessions
   const inspectItem = document.createElement('div');
   const isCurrentlyInspecting = isInspectorOpen() && getInspectedSessionId() === session.id;
-  inspectItem.className = 'tab-context-menu-item' + (!isCliSession ? ' disabled' : '');
+  inspectItem.className = 'tab-context-menu-item' + (!canInspect ? ' disabled' : '');
   inspectItem.textContent = isCurrentlyInspecting ? 'Close Inspector' : 'Inspect';
-  if (isCliSession) {
+  if (canInspect) {
     inspectItem.addEventListener('click', (e) => {
       e.stopPropagation();
       hideTabContextMenu();
@@ -313,7 +315,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
     if (!currentlySharing) menu.appendChild(shareItem);
     if (currentlySharing) menu.appendChild(stopShareItem);
   }
-  if (isCliSession) {
+  if (canInspect) {
     const inspectSeparator = document.createElement('div');
     inspectSeparator.className = 'tab-context-menu-separator';
     menu.appendChild(inspectSeparator);
