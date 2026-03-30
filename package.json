@@ -36,7 +36,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.main.json && tsc -p tsconfig.preload.json && npm run build:renderer && npm run copy-assets",
     "build:renderer": "esbuild src/renderer/index.ts --bundle --outfile=dist/renderer/index.js --platform=browser --format=iife --target=es2022 --sourcemap --loader:.ts=ts",
-    "copy-assets": "cp src/renderer/index.html dist/renderer/ && cp src/renderer/styles.css dist/renderer/ && rm -rf dist/renderer/styles && cp -r src/renderer/styles dist/renderer/styles && cp node_modules/@xterm/xterm/css/xterm.css dist/renderer/xterm.css && cp build/icon.png dist/renderer/icon.png && cp CHANGELOG.md dist/renderer/",
+    "copy-assets": "cp src/renderer/index.html dist/renderer/ && cp src/renderer/styles.css dist/renderer/ && rm -rf dist/renderer/styles && cp -r src/renderer/styles dist/renderer/styles && cp node_modules/@xterm/xterm/css/xterm.css dist/renderer/xterm.css && cp build/icon.png dist/renderer/icon.png && cp CHANGELOG.md dist/renderer/ && mkdir -p dist/renderer/assets/providers && cp -r src/renderer/assets/providers dist/renderer/assets/",
     "start": "npm run build && electron .",
     "dev": "npm run build && electron .",
     "postinstall": "test -f node_modules/electron-builder/package.json && electron-builder install-app-deps || true",

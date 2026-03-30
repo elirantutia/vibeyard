@@ -306,12 +306,13 @@
   box-shadow: inset -3px 0 0 var(--accent);
 }
 
-/* Codex tab badge */
-.tab-codex-badge {
-  font-size: 9px;
-  font-weight: 700;
-  padding: 1px 4px;
+/* Provider icon in tab */
+.tab-provider-icon {
+  width: 14px;
+  height: 14px;
+  vertical-align: middle;
   border-radius: 3px;
-  background: rgba(16, 163, 127, 0.2);
-  color: #10a37f;
+  margin-right: 2px;
+  position: relative;
+  top: -1px;
 }
