@@ -197,6 +197,7 @@ export interface ReadinessCheck {
   score: number;
   maxScore: number;
   fixPrompt?: string;
+  providerIds?: ProviderId[];
 }
 
 export interface ReadinessCategory {

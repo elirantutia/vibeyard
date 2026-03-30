@@ -2,7 +2,14 @@ import { appState } from '../state.js';
 import { closeModal } from './modal.js';
 import { esc, scoreColor } from '../dom-utils.js';
 import { setPendingPrompt } from './terminal-pane.js';
-import type { ReadinessResult, ReadinessCategory, ReadinessCheck, ReadinessCheckStatus } from '../../shared/types.js';
+import type { ReadinessResult, ReadinessCategory, ReadinessCheck, ReadinessCheckStatus, ProviderId } from '../../shared/types.js';
+
+const PROVIDER_LABELS: Record<ProviderId, string> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  copilot: 'Copilot',
+  gemini: 'Gemini',
+};
 
 const overlay = document.getElementById('modal-overlay')!;
 const modal = document.getElementById('modal')!;
@@ -69,7 +76,15 @@ function renderCategory(category: ReadinessCategory): HTMLElement {
 
     const name = document.createElement('div');
     name.className = 'readiness-check-name';
-    name.textContent = check.name;
+    name.appendChild(document.createTextNode(check.name));
+    if (check.providerIds && check.providerIds.length > 0) {
+      for (const pid of check.providerIds) {
+        const tag = document.createElement('span');
+        tag.className = 'readiness-provider-tag';
+        tag.textContent = PROVIDER_LABELS[pid] ?? pid;
+        name.appendChild(tag);
+      }
+    }
 
     const desc = document.createElement('div');
     desc.className = 'readiness-check-desc';

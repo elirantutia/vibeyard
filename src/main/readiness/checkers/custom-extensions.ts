@@ -1,7 +1,7 @@
 import * as path from 'path';
-import type { ReadinessCategory, ReadinessCheck } from '../../../shared/types';
-import type { ReadinessChecker } from '../types';
-import { dirExists, readDirSafe, buildCategory } from '../utils';
+import type { ReadinessCheck } from '../../../shared/types';
+import type { ReadinessCheckProducer, TaggedCheck, AnalysisContext } from '../types';
+import { dirExists, readDirSafe } from '../utils';
 
 function checkCustomCommands(projectPath: string): ReadinessCheck {
   const commandsDir = path.join(projectPath, '.claude', 'commands');
@@ -51,18 +51,14 @@ function checkCustomAgents(projectPath: string): ReadinessCheck {
   };
 }
 
-export const customExtensionsChecker: ReadinessChecker = {
-  id: 'custom-extensions',
-  name: 'Custom Extensions',
-  weight: 0.3,
+export const customExtensionsProducer: ReadinessCheckProducer = {
+  providerId: 'claude',
 
-  async analyze(projectPath: string): Promise<ReadinessCategory> {
-    const checks = [
+  produce(projectPath: string, _ctx: AnalysisContext): TaggedCheck[] {
+    return [
       checkCustomCommands(projectPath),
       checkCustomSkills(projectPath),
       checkCustomAgents(projectPath),
-    ];
-
-    return buildCategory(this.id, this.name, this.weight, checks);
+    ].map(check => ({ category: 'optimizations', check }));
   },
 };

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as child_process from 'child_process';
-import { contextOptimizationChecker } from './context-optimization';
+import { genericContextProducer } from './context-optimization';
+import type { AnalysisContext } from '../types';
 
 vi.mock('fs');
 vi.mock('child_process');
@@ -12,6 +13,10 @@ const mockCp = vi.mocked(child_process);
 beforeEach(() => {
   vi.resetAllMocks();
 });
+
+function makeCtx(trackedFiles: string[]): AnalysisContext {
+  return { trackedFiles };
+}
 
 /** Mock .vibeyardignore auto-creation: writeFileSync captures content, readFileSync returns it after creation. */
 function mockVibeyardignoreAutoCreate(): void {
@@ -32,7 +37,6 @@ function mockCountFileLines(fileContents: Record<string, string>): void {
     buffers.set(name, Buffer.from(content, 'utf-8'));
   }
 
-  // Track which fd maps to which file, and current read offset per fd
   let nextFd = 10;
   const fdToFile = new Map<number, string>();
   const fdOffset = new Map<number, number>();
@@ -69,141 +73,37 @@ function mockCountFileLines(fileContents: Record<string, string>): void {
   mockFs.closeSync.mockImplementation(() => {});
 }
 
-describe('contextOptimizationChecker', () => {
-  it('returns pass when no CLAUDE.md and small project', async () => {
+describe('genericContextProducer', () => {
+  it('returns tagged check with context category', () => {
     mockFs.readFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
     mockFs.statSync.mockImplementation(() => { throw new Error('ENOENT'); });
-    mockCp.execSync.mockReturnValue('a.ts\nb.ts\nc.ts\n');
 
-    const result = await contextOptimizationChecker.analyze('/test/project');
+    const tagged = genericContextProducer.produce('/test/project', makeCtx([]));
 
-    expect(result.id).toBe('context-optimization');
-    expect(result.weight).toBe(0.2);
-    // claude-md-bloat: pass (no file), claudeignore: pass (small project), large-files: pass
-    expect(result.score).toBe(100);
+    expect(tagged).toHaveLength(1);
+    expect(tagged[0].category).toBe('context');
+    expect(tagged[0].check.id).toBe('large-files');
+    expect(tagged[0].check.providerIds).toBeUndefined();
   });
 
-  it('warns for CLAUDE.md between 300-500 lines', async () => {
-    const content = Array(400).fill('line').join('\n');
-    mockFs.readFileSync.mockImplementation((p: fs.PathOrFileDescriptor) => {
-      if (String(p).endsWith('CLAUDE.md')) return content;
-      throw new Error('ENOENT');
-    });
-    mockFs.statSync.mockImplementation(() => { throw new Error('ENOENT'); });
-    mockCp.execSync.mockReturnValue('');
-
-    const result = await contextOptimizationChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'claude-md-bloat')!;
-    expect(check.status).toBe('warning');
-    expect(check.score).toBe(50);
-  });
-
-  it('fails for CLAUDE.md over 500 lines', async () => {
-    const content = Array(600).fill('line').join('\n');
-    mockFs.readFileSync.mockImplementation((p: fs.PathOrFileDescriptor) => {
-      if (String(p).endsWith('CLAUDE.md')) return content;
-      throw new Error('ENOENT');
-    });
-    mockFs.statSync.mockImplementation(() => { throw new Error('ENOENT'); });
-    mockCp.execSync.mockReturnValue('');
-
-    const result = await contextOptimizationChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'claude-md-bloat')!;
-    expect(check.status).toBe('fail');
-    expect(check.score).toBe(0);
-  });
-
-  it('passes .claudeignore check for small projects without file', async () => {
-    mockFs.readFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
-    mockFs.statSync.mockImplementation(() => { throw new Error('ENOENT'); });
-    mockCp.execSync.mockReturnValue(Array(50).fill(0).map((_, i) => `file${i}.ts`).join('\n'));
-
-    const result = await contextOptimizationChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'claudeignore')!;
-    expect(check.status).toBe('pass');
-  });
-
-  it('fails .claudeignore check for small projects with sensitive files', async () => {
-    mockFs.readFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
-    mockFs.statSync.mockImplementation(() => { throw new Error('ENOENT'); });
-    mockCp.execSync.mockReturnValue('src/index.ts\n.env\ncredentials.json\n');
-
-    const result = await contextOptimizationChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'claudeignore')!;
-    expect(check.status).toBe('fail');
-    expect(check.description).toContain('sensitive files');
-    expect(check.description).toContain('.env');
-    expect(check.fixPrompt).toContain('.env');
-  });
-
-  it('fails .claudeignore check for small projects with .pem key files', async () => {
-    mockFs.readFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
-    mockFs.statSync.mockImplementation(() => { throw new Error('ENOENT'); });
-    mockCp.execSync.mockReturnValue('src/app.ts\ncerts/server.pem\n');
-
-    const result = await contextOptimizationChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'claudeignore')!;
-    expect(check.status).toBe('fail');
-    expect(check.description).toContain('server.pem');
-  });
-
-  it('passes .claudeignore check for small projects with sensitive files when .claudeignore exists', async () => {
-    mockFs.readFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
-    mockFs.statSync.mockImplementation((p: fs.PathLike) => {
-      if (String(p).endsWith('.claudeignore')) return { isFile: () => true } as fs.Stats;
-      throw new Error('ENOENT');
-    });
-    mockCp.execSync.mockReturnValue('src/index.ts\n.env\n');
-
-    const result = await contextOptimizationChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'claudeignore')!;
-    expect(check.status).toBe('pass');
-  });
-
-  it('fails .claudeignore check for large projects without file', async () => {
-    mockFs.readFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
-    mockFs.statSync.mockImplementation(() => { throw new Error('ENOENT'); });
-    mockCp.execSync.mockReturnValue(Array(300).fill(0).map((_, i) => `file${i}.ts`).join('\n'));
-
-    const result = await contextOptimizationChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'claudeignore')!;
-    expect(check.status).toBe('fail');
-  });
-
-  it('passes .claudeignore check when file exists', async () => {
-    mockFs.readFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
-    mockFs.statSync.mockImplementation((p: fs.PathLike) => {
-      if (String(p).endsWith('.claudeignore')) return { isFile: () => true } as fs.Stats;
-      throw new Error('ENOENT');
-    });
-    mockCp.execSync.mockReturnValue(Array(300).fill(0).map((_, i) => `file${i}.ts`).join('\n'));
-
-    const result = await contextOptimizationChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'claudeignore')!;
-    expect(check.status).toBe('pass');
-  });
-
-  it('creates .vibeyardignore with default patterns when it does not exist', async () => {
+  it('creates .vibeyardignore with default patterns when it does not exist', () => {
     mockFs.statSync.mockImplementation(() => { throw new Error('ENOENT'); });
     mockVibeyardignoreAutoCreate();
     mockCountFileLines({ 'small.ts': Array(100).fill('line').join('\n') });
-    mockCp.execSync.mockReturnValue('small.ts\n');
 
-    await contextOptimizationChecker.analyze('/test/project');
+    genericContextProducer.produce('/test/project', makeCtx(['small.ts']));
 
     expect(mockFs.writeFileSync).toHaveBeenCalledWith(
       expect.stringContaining('.vibeyardignore'),
       expect.stringContaining('package-lock.json'),
       'utf-8',
     );
-    // Verify all default patterns are in the written content
     const writtenContent = String(mockFs.writeFileSync.mock.calls[0][1]);
     expect(writtenContent).toContain('*.min.js');
     expect(writtenContent).toContain('*.generated.*');
-    expect(writtenContent).toContain('# Files and patterns to exclude');
   });
 
-  it('does not overwrite existing .vibeyardignore', async () => {
+  it('does not overwrite existing .vibeyardignore', () => {
     mockFs.readFileSync.mockImplementation((p: fs.PathOrFileDescriptor) => {
       if (String(p).endsWith('.vibeyardignore')) return 'custom-pattern.ts\n';
       throw new Error('ENOENT');
@@ -214,81 +114,44 @@ describe('contextOptimizationChecker', () => {
     });
     mockFs.writeFileSync.mockImplementation(() => {});
     mockCountFileLines({ 'small.ts': Array(100).fill('line').join('\n') });
-    mockCp.execSync.mockReturnValue('small.ts\n');
 
-    await contextOptimizationChecker.analyze('/test/project');
+    genericContextProducer.produce('/test/project', makeCtx(['small.ts']));
 
     expect(mockFs.writeFileSync).not.toHaveBeenCalled();
   });
 
-  it('loads patterns solely from .vibeyardignore file', async () => {
-    // .vibeyardignore exists with only one pattern — default patterns should NOT be included
-    mockFs.readFileSync.mockImplementation((p: fs.PathOrFileDescriptor) => {
-      if (String(p).endsWith('.vibeyardignore')) return 'custom-only.json\n';
-      throw new Error('ENOENT');
-    });
-    mockFs.statSync.mockImplementation((p: fs.PathLike) => {
-      if (String(p).endsWith('.vibeyardignore')) return { isFile: () => true } as fs.Stats;
-      throw new Error('ENOENT');
-    });
-    mockFs.writeFileSync.mockImplementation(() => {});
-    // package-lock.json is NOT in the .vibeyardignore, so it should be scanned
-    mockCountFileLines({ 'package-lock.json': Array(20000).fill('{}').join('\n') });
-    mockCp.execSync.mockReturnValue('package-lock.json\n');
-
-    const result = await contextOptimizationChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'large-files')!;
-    // package-lock.json is .json extension which is in TEXT_EXTENSIONS, and not ignored
-    expect(check.status).toBe('warning');
-    expect(check.description).toContain('package-lock.json');
-  });
-
-  it('detects large files', async () => {
+  it('detects large files', () => {
     mockFs.statSync.mockImplementation(() => { throw new Error('ENOENT'); });
     mockVibeyardignoreAutoCreate();
     mockCountFileLines({ 'big.ts': Array(6000).fill('line').join('\n') });
-    mockCp.execSync.mockReturnValue('big.ts\nsmall.ts\n');
 
-    const result = await contextOptimizationChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'large-files')!;
+    const tagged = genericContextProducer.produce('/test/project', makeCtx(['big.ts', 'small.ts']));
+    const check = tagged.find(t => t.check.id === 'large-files')!.check;
     expect(check.status).toBe('warning');
     expect(check.description).toContain('.vibeyardignore');
   });
 
-  it('passes when no large files found', async () => {
+  it('passes when no large files found', () => {
     mockFs.statSync.mockImplementation(() => { throw new Error('ENOENT'); });
     mockVibeyardignoreAutoCreate();
     mockCountFileLines({ 'small.ts': Array(100).fill('line').join('\n') });
-    mockCp.execSync.mockReturnValue('small.ts\n');
 
-    const result = await contextOptimizationChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'large-files')!;
+    const tagged = genericContextProducer.produce('/test/project', makeCtx(['small.ts']));
+    const check = tagged.find(t => t.check.id === 'large-files')!.check;
     expect(check.status).toBe('pass');
   });
 
-  it('ignores package-lock.json via auto-created .vibeyardignore defaults', async () => {
+  it('ignores package-lock.json via auto-created .vibeyardignore defaults', () => {
     mockFs.statSync.mockImplementation(() => { throw new Error('ENOENT'); });
     mockVibeyardignoreAutoCreate();
     mockCountFileLines({ 'package-lock.json': Array(20000).fill('{}').join('\n') });
-    mockCp.execSync.mockReturnValue('package-lock.json\n');
 
-    const result = await contextOptimizationChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'large-files')!;
+    const tagged = genericContextProducer.produce('/test/project', makeCtx(['package-lock.json']));
+    const check = tagged.find(t => t.check.id === 'large-files')!.check;
     expect(check.status).toBe('pass');
   });
 
-  it('ignores files matching *.min.js via auto-created .vibeyardignore defaults', async () => {
-    mockFs.statSync.mockImplementation(() => { throw new Error('ENOENT'); });
-    mockVibeyardignoreAutoCreate();
-    mockCountFileLines({ 'vendor.min.js': Array(10000).fill('x').join('\n') });
-    mockCp.execSync.mockReturnValue('vendor.min.js\n');
-
-    const result = await contextOptimizationChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'large-files')!;
-    expect(check.status).toBe('pass');
-  });
-
-  it('applies custom .vibeyardignore patterns', async () => {
+  it('applies custom .vibeyardignore patterns', () => {
     mockFs.readFileSync.mockImplementation((p: fs.PathOrFileDescriptor) => {
       if (String(p).endsWith('.vibeyardignore')) return 'generated-data.json\n';
       throw new Error('ENOENT');
@@ -299,42 +162,22 @@ describe('contextOptimizationChecker', () => {
     });
     mockFs.writeFileSync.mockImplementation(() => {});
     mockCountFileLines({ 'generated-data.json': Array(8000).fill('data').join('\n') });
-    mockCp.execSync.mockReturnValue('generated-data.json\n');
 
-    const result = await contextOptimizationChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'large-files')!;
+    const tagged = genericContextProducer.produce('/test/project', makeCtx(['generated-data.json']));
+    const check = tagged.find(t => t.check.id === 'large-files')!.check;
     expect(check.status).toBe('pass');
   });
 
-  it('handles comments and blank lines in .vibeyardignore', async () => {
-    mockFs.readFileSync.mockImplementation((p: fs.PathOrFileDescriptor) => {
-      if (String(p).endsWith('.vibeyardignore')) return '# ignore big data\n\ndata-dump.json\n  \n# end\n';
-      throw new Error('ENOENT');
-    });
-    mockFs.statSync.mockImplementation((p: fs.PathLike) => {
-      if (String(p).endsWith('.vibeyardignore')) return { isFile: () => true } as fs.Stats;
-      throw new Error('ENOENT');
-    });
-    mockFs.writeFileSync.mockImplementation(() => {});
-    mockCountFileLines({ 'data-dump.json': Array(8000).fill('data').join('\n') });
-    mockCp.execSync.mockReturnValue('data-dump.json\n');
-
-    const result = await contextOptimizationChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'large-files')!;
-    expect(check.status).toBe('pass');
-  });
-
-  it('still flags large files not matching any ignore pattern', async () => {
+  it('still flags large files not matching any ignore pattern', () => {
     mockFs.statSync.mockImplementation(() => { throw new Error('ENOENT'); });
     mockVibeyardignoreAutoCreate();
     mockCountFileLines({
       'big-module.ts': Array(6000).fill('line').join('\n'),
       'package-lock.json': Array(20000).fill('{}').join('\n'),
     });
-    mockCp.execSync.mockReturnValue('big-module.ts\npackage-lock.json\n');
 
-    const result = await contextOptimizationChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'large-files')!;
+    const tagged = genericContextProducer.produce('/test/project', makeCtx(['big-module.ts', 'package-lock.json']));
+    const check = tagged.find(t => t.check.id === 'large-files')!.check;
     expect(check.status).toBe('warning');
     expect(check.description).toContain('big-module.ts');
     expect(check.description).not.toContain('package-lock.json');

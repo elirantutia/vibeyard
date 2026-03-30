@@ -1,8 +1,17 @@
-import type { ReadinessCategory } from '../../shared/types';
+import type { ReadinessCheck, ProviderId } from '../../shared/types';
 
-export interface ReadinessChecker {
-  id: string;
-  name: string;
-  weight: number;
-  analyze(projectPath: string): Promise<ReadinessCategory>;
+export type TopCategory = 'instructions' | 'context' | 'optimizations';
+
+export interface TaggedCheck {
+  category: TopCategory;
+  check: ReadinessCheck;
+}
+
+export interface AnalysisContext {
+  trackedFiles: string[];
+}
+
+export interface ReadinessCheckProducer {
+  providerId?: ProviderId;
+  produce(projectPath: string, ctx: AnalysisContext): TaggedCheck[];
 }

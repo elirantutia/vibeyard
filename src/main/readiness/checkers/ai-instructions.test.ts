@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fs from 'fs';
-import { aiInstructionsChecker } from './ai-instructions';
+import { aiInstructionsProducer } from './ai-instructions';
+import type { AnalysisContext } from '../types';
 
 vi.mock('fs');
 
 const mockFs = vi.mocked(fs);
+const ctx: AnalysisContext = { trackedFiles: [] };
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -29,100 +31,89 @@ function mockFileExists(files: Record<string, string>): void {
   });
 }
 
-describe('aiInstructionsChecker', () => {
-  it('returns all fail when no files exist', async () => {
+describe('aiInstructionsProducer', () => {
+  it('returns all fail when no files exist', () => {
     mockFs.statSync.mockImplementation(() => { throw new Error('ENOENT'); });
     mockFs.readFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
 
-    const result = await aiInstructionsChecker.analyze('/test/project');
+    const tagged = aiInstructionsProducer.produce('/test/project', ctx);
 
-    expect(result.id).toBe('ai-instructions');
-    expect(result.weight).toBe(0.5);
-    expect(result.score).toBe(0);
-    expect(result.checks).toHaveLength(5);
-    expect(result.checks.every(c => c.status === 'fail')).toBe(true);
+    expect(tagged).toHaveLength(5);
+    expect(tagged.every(t => t.category === 'instructions')).toBe(true);
+    expect(tagged.every(t => t.check.status === 'fail')).toBe(true);
   });
 
-  it('passes CLAUDE.md exists check', async () => {
+  it('passes CLAUDE.md exists check', () => {
     const content = Array(100).fill('# Line').join('\n') + '\n## Build\nnpm run build\n## Testing\nnpm test\n## Architecture\nSome overview';
     mockFileExists({ 'CLAUDE.md': content });
 
-    const result = await aiInstructionsChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'claude-md-exists')!;
+    const tagged = aiInstructionsProducer.produce('/test/project', ctx);
+    const check = tagged.find(t => t.check.id === 'claude-md-exists')!.check;
     expect(check.status).toBe('pass');
     expect(check.score).toBe(100);
   });
 
-  it('detects build commands in CLAUDE.md', async () => {
+  it('detects build commands in CLAUDE.md', () => {
     mockFileExists({ 'CLAUDE.md': '## Build\nnpm run build\n' });
 
-    const result = await aiInstructionsChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'claude-md-build')!;
+    const tagged = aiInstructionsProducer.produce('/test/project', ctx);
+    const check = tagged.find(t => t.check.id === 'claude-md-build')!.check;
     expect(check.status).toBe('pass');
   });
 
-  it('detects test commands in CLAUDE.md', async () => {
+  it('detects test commands in CLAUDE.md', () => {
     mockFileExists({ 'CLAUDE.md': '## Testing\nnpm test\n' });
 
-    const result = await aiInstructionsChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'claude-md-test')!;
+    const tagged = aiInstructionsProducer.produce('/test/project', ctx);
+    const check = tagged.find(t => t.check.id === 'claude-md-test')!.check;
     expect(check.status).toBe('pass');
   });
 
-  it('detects architecture section in CLAUDE.md', async () => {
+  it('detects architecture section in CLAUDE.md', () => {
     mockFileExists({ 'CLAUDE.md': '## Architecture\nThree-process Electron architecture\n' });
 
-    const result = await aiInstructionsChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'claude-md-architecture')!;
+    const tagged = aiInstructionsProducer.produce('/test/project', ctx);
+    const check = tagged.find(t => t.check.id === 'claude-md-architecture')!.check;
     expect(check.status).toBe('pass');
   });
 
-  it('warns for small CLAUDE.md', async () => {
+  it('warns for small CLAUDE.md', () => {
     const content = Array(30).fill('line').join('\n');
     mockFileExists({ 'CLAUDE.md': content });
 
-    const result = await aiInstructionsChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'claude-md-size')!;
+    const tagged = aiInstructionsProducer.produce('/test/project', ctx);
+    const check = tagged.find(t => t.check.id === 'claude-md-size')!.check;
     expect(check.status).toBe('warning');
     expect(check.score).toBe(50);
   });
 
-  it('passes for good size CLAUDE.md', async () => {
+  it('passes for good size CLAUDE.md', () => {
     const content = Array(100).fill('line').join('\n');
     mockFileExists({ 'CLAUDE.md': content });
 
-    const result = await aiInstructionsChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'claude-md-size')!;
+    const tagged = aiInstructionsProducer.produce('/test/project', ctx);
+    const check = tagged.find(t => t.check.id === 'claude-md-size')!.check;
     expect(check.status).toBe('pass');
     expect(check.score).toBe(100);
   });
 
-  it('fails for very large CLAUDE.md', async () => {
+  it('fails for very large CLAUDE.md', () => {
     const content = Array(600).fill('line').join('\n');
     mockFileExists({ 'CLAUDE.md': content });
 
-    const result = await aiInstructionsChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'claude-md-size')!;
+    const tagged = aiInstructionsProducer.produce('/test/project', ctx);
+    const check = tagged.find(t => t.check.id === 'claude-md-size')!.check;
     expect(check.status).toBe('fail');
     expect(check.score).toBe(0);
   });
 
-  it('provides fix prompt for claude-md-exists check', async () => {
+  it('provides fix prompt for claude-md-exists check', () => {
     mockFs.statSync.mockImplementation(() => { throw new Error('ENOENT'); });
     mockFs.readFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
 
-    const result = await aiInstructionsChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'claude-md-exists')!;
+    const tagged = aiInstructionsProducer.produce('/test/project', ctx);
+    const check = tagged.find(t => t.check.id === 'claude-md-exists')!.check;
     expect(check.status).toBe('fail');
     expect(check.fixPrompt).toBeTruthy();
-  });
-
-  it('calculates weighted score correctly', async () => {
-    const content = Array(100).fill('line').join('\n') + '\nbuild\ntest\narchitecture\n';
-    mockFileExists({ 'CLAUDE.md': content });
-
-    const result = await aiInstructionsChecker.analyze('/test/project');
-    // All 5 checks pass: exists(100), build(100), test(100), architecture(100), size(100)
-    expect(result.score).toBe(100);
   });
 });

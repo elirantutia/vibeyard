@@ -1,7 +1,17 @@
 import * as fs from 'fs';
-import type { ReadinessCheck, ReadinessCategory } from '../../shared/types';
+import { execSync } from 'child_process';
+import type { ReadinessCheck } from '../../shared/types';
 
 export { readFileSafe, fileExists, dirExists, readDirSafe } from '../fs-utils';
+
+export function getTrackedFiles(projectPath: string): string[] {
+  try {
+    const output = execSync('git ls-files', { cwd: projectPath, encoding: 'utf-8', timeout: 5000 });
+    return output.split('\n').filter(Boolean);
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Counts lines in a file without reading the entire content into a single string.
@@ -33,17 +43,3 @@ export function computeCategoryScore(checks: ReadinessCheck[]): number {
   return totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : 0;
 }
 
-export function buildCategory(
-  id: string,
-  name: string,
-  weight: number,
-  checks: ReadinessCheck[],
-): ReadinessCategory {
-  return {
-    id,
-    name,
-    weight,
-    score: computeCategoryScore(checks),
-    checks,
-  };
-}

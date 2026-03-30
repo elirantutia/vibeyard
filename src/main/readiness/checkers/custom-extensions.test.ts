@@ -1,30 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fs from 'fs';
-import { customExtensionsChecker } from './custom-extensions';
+import { customExtensionsProducer } from './custom-extensions';
+import type { AnalysisContext } from '../types';
 
 vi.mock('fs');
 
 const mockFs = vi.mocked(fs);
+const ctx: AnalysisContext = { trackedFiles: [] };
 
 beforeEach(() => {
   vi.resetAllMocks();
 });
 
-describe('customExtensionsChecker', () => {
-  it('returns all fail when no directories exist', async () => {
+describe('customExtensionsProducer', () => {
+  it('returns all fail when no directories exist', () => {
     mockFs.readdirSync.mockImplementation(() => { throw new Error('ENOENT'); });
     mockFs.statSync.mockImplementation(() => { throw new Error('ENOENT'); });
 
-    const result = await customExtensionsChecker.analyze('/test/project');
+    const tagged = customExtensionsProducer.produce('/test/project', ctx);
 
-    expect(result.id).toBe('custom-extensions');
-    expect(result.weight).toBe(0.3);
-    expect(result.score).toBe(0);
-    expect(result.checks).toHaveLength(3);
-    expect(result.checks.every(c => c.status === 'fail')).toBe(true);
+    expect(tagged).toHaveLength(3);
+    expect(tagged.every(t => t.category === 'optimizations')).toBe(true);
+    expect(tagged.every(t => t.check.status === 'fail')).toBe(true);
   });
 
-  it('detects custom commands', async () => {
+  it('detects custom commands', () => {
     mockFs.readdirSync.mockImplementation((p: fs.PathLike) => {
       const dirPath = String(p);
       if (dirPath.endsWith('commands')) return ['review.md', 'deploy.md'] as unknown as fs.Dirent[];
@@ -32,17 +32,18 @@ describe('customExtensionsChecker', () => {
     });
     mockFs.statSync.mockImplementation(() => { throw new Error('ENOENT'); });
 
-    const result = await customExtensionsChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'custom-commands')!;
+    const tagged = customExtensionsProducer.produce('/test/project', ctx);
+    const check = tagged.find(t => t.check.id === 'custom-commands')!.check;
     expect(check.status).toBe('pass');
     expect(check.description).toContain('2 custom command');
   });
 
-  it('detects custom skills (subdirectories)', async () => {
+  it('detects custom skills (subdirectories)', () => {
     mockFs.statSync.mockImplementation((p: fs.PathLike) => {
       const filePath = String(p);
-      if (filePath.endsWith('skills')) return { isFile: () => false, isDirectory: () => true } as fs.Stats;
-      if (filePath.endsWith('my-skill')) return { isFile: () => false, isDirectory: () => true } as fs.Stats;
+      if (filePath.endsWith('skills') || filePath.endsWith('my-skill')) {
+        return { isFile: () => false, isDirectory: () => true } as fs.Stats;
+      }
       throw new Error('ENOENT');
     });
     mockFs.readdirSync.mockImplementation((p: fs.PathLike) => {
@@ -51,12 +52,12 @@ describe('customExtensionsChecker', () => {
       throw new Error('ENOENT');
     });
 
-    const result = await customExtensionsChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'custom-skills')!;
+    const tagged = customExtensionsProducer.produce('/test/project', ctx);
+    const check = tagged.find(t => t.check.id === 'custom-skills')!.check;
     expect(check.status).toBe('pass');
   });
 
-  it('detects custom agents', async () => {
+  it('detects custom agents', () => {
     mockFs.readdirSync.mockImplementation((p: fs.PathLike) => {
       const dirPath = String(p);
       if (dirPath.endsWith('agents')) return ['reviewer.md'] as unknown as fs.Dirent[];
@@ -64,22 +65,22 @@ describe('customExtensionsChecker', () => {
     });
     mockFs.statSync.mockImplementation(() => { throw new Error('ENOENT'); });
 
-    const result = await customExtensionsChecker.analyze('/test/project');
-    const check = result.checks.find(c => c.id === 'custom-agents')!;
+    const tagged = customExtensionsProducer.produce('/test/project', ctx);
+    const check = tagged.find(t => t.check.id === 'custom-agents')!.check;
     expect(check.status).toBe('pass');
   });
 
-  it('provides fix prompts for failing checks', async () => {
+  it('provides fix prompts for failing checks', () => {
     mockFs.readdirSync.mockImplementation(() => { throw new Error('ENOENT'); });
     mockFs.statSync.mockImplementation(() => { throw new Error('ENOENT'); });
 
-    const result = await customExtensionsChecker.analyze('/test/project');
-    for (const check of result.checks) {
-      expect(check.fixPrompt).toBeTruthy();
+    const tagged = customExtensionsProducer.produce('/test/project', ctx);
+    for (const t of tagged) {
+      expect(t.check.fixPrompt).toBeTruthy();
     }
   });
 
-  it('calculates score as 100 when all pass', async () => {
+  it('all checks pass when all directories have content', () => {
     mockFs.statSync.mockImplementation((p: fs.PathLike) => {
       const filePath = String(p);
       if (filePath.endsWith('skills') || filePath.endsWith('my-skill')) {
@@ -95,7 +96,8 @@ describe('customExtensionsChecker', () => {
       throw new Error('ENOENT');
     });
 
-    const result = await customExtensionsChecker.analyze('/test/project');
-    expect(result.score).toBe(100);
+    const tagged = customExtensionsProducer.produce('/test/project', ctx);
+    expect(tagged.every(t => t.check.status === 'pass')).toBe(true);
+    expect(tagged.every(t => t.check.score === 100)).toBe(true);
   });
 });

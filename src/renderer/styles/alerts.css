@@ -274,6 +274,21 @@
 .readiness-check-name {
   color: var(--text-primary);
   font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.readiness-provider-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: var(--bg-tertiary, #333);
+  color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .readiness-check-desc {

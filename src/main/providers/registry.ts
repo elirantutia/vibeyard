@@ -33,3 +33,9 @@ export function getProviderMeta(id: ProviderId): CliProviderMeta {
 export function getAllProviderMetas(): CliProviderMeta[] {
   return getAllProviders().map(p => p.meta);
 }
+
+export function getAvailableProviderIds(): ProviderId[] {
+  return getAllProviders()
+    .filter(p => p.validatePrerequisites().ok)
+    .map(p => p.meta.id);
+}
