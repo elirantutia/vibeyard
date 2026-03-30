@@ -450,11 +450,25 @@ function renderCosts(container: HTMLElement): void {
     const ev = events[i];
     if (!ev.cost_snapshot && !deltaMap.has(i)) continue;
 
+    // For synthetic status_update events, attribute the cost to the most recent
+    // real event (e.g. the tool call that actually incurred the cost)
+    let displayType = ev.type;
+    let displayTool = ev.tool_name;
+    if (ev.type === 'status_update') {
+      for (let j = i - 1; j >= 0; j--) {
+        if (events[j].type !== 'status_update') {
+          displayType = events[j].type;
+          displayTool = events[j].tool_name;
+          break;
+        }
+      }
+    }
+
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${i + 1}</td>
-      <td>${badgeLabel(ev.type)}</td>
-      <td>${ev.tool_name ? escapeHtml(ev.tool_name) : '-'}</td>
+      <td>${badgeLabel(displayType)}</td>
+      <td>${displayTool ? escapeHtml(displayTool) : '-'}</td>
       <td>${deltaMap.has(i) ? `+$${deltaMap.get(i)!.toFixed(4)}` : '-'}</td>
       <td>${ev.cost_snapshot ? `$${ev.cost_snapshot.total_cost_usd.toFixed(4)}` : '-'}</td>
     `;
