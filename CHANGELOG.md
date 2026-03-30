@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.20] - 2026-03-30
+
+### Features
+
+- Session inspector panel (#23)
+- Go-to-line bar for file reader and fix stale CSS in build
+- Search/filter input to branch switcher dropdown
+- File watcher for live reload and fix quick-open to show all files including untracked and gitignored
+
+### Fixes
+
+- Session inspector opening unexpectedly on new session start
+- Session inspector panel layout in swarm mode
+- Non-CLI panels closing when focusing a session in swarm mode
+- Git panel and diff viewer flickering on updates
+- Yellow focus outline on file reader pane during go-to-line
+- Quick-open file search to respect gitignore and rank results by relevance
+- Terminal toggle button tooltip to show real shortcut
+
 ## [0.2.19] - 2026-03-29
 
 ### Features
