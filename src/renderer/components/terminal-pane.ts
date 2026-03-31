@@ -21,6 +21,7 @@ interface TerminalInstance {
   providerId: ProviderId;
   args: string;
   isResume: boolean;
+  wasResumed: boolean;
   spawned: boolean;
   exited: boolean;
   pendingPrompt: string | null;
@@ -128,6 +129,7 @@ export function createTerminalPane(
     providerId,
     args,
     isResume,
+    wasResumed: isResume,
     spawned: false,
     exited: false,
     pendingPrompt: null,
