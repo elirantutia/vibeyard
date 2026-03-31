@@ -38,3 +38,8 @@ export function getProviderCapabilities(providerId: ProviderId): CliProviderCapa
   if (!cachedProviders) return null;
   return cachedProviders.find(provider => provider.id === providerId)?.capabilities ?? null;
 }
+
+export function getProviderDisplayName(providerId: ProviderId): string {
+  if (!cachedProviders) return providerId;
+  return cachedProviders.find(provider => provider.id === providerId)?.displayName ?? providerId;
+}

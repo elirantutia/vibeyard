@@ -7,7 +7,8 @@ import {
   onChange as onInspectorChange,
   clearSession,
 } from '../session-inspector-state.js';
-import { getProviderCapabilities } from '../provider-availability.js';
+import { getProviderCapabilities, getProviderDisplayName } from '../provider-availability.js';
+import type { ProviderId, CliProviderCapabilities } from '../../shared/types.js';
 import { fitAllVisible, getTerminalInstance } from './terminal-pane.js';
 
 let inspectorPanel: HTMLElement | null = null;
@@ -37,6 +38,27 @@ function resetUIState(): void {
 function canInspectSession(session: Pick<SessionRecord, 'type' | 'providerId'>): boolean {
   if (session.type && session.type !== 'claude') return false;
   return getProviderCapabilities(session.providerId || 'claude')?.hookStatus !== false;
+}
+
+function getInspectedProviderId(): ProviderId {
+  const session = appState.activeProject?.sessions.find(s => s.id === inspectedSessionId);
+  return session?.providerId || 'claude';
+}
+
+/** Show an "unsupported" message and return true if the capability is explicitly false. */
+function renderUnsupportedGuard(
+  container: HTMLElement,
+  capability: keyof CliProviderCapabilities,
+  label: string,
+): boolean {
+  const providerId = getInspectedProviderId();
+  const caps = getProviderCapabilities(providerId);
+  if (caps?.[capability] === false) {
+    const name = getProviderDisplayName(providerId);
+    container.innerHTML = `<div class="inspector-empty">${label} is not supported for ${name} sessions</div>`;
+    return true;
+  }
+  return false;
 }
 
 export function openInspector(sessionId: string): void {
@@ -438,6 +460,8 @@ function renderTimeline(container: HTMLElement): void {
 // --- Costs View ---
 
 function renderCosts(container: HTMLElement): void {
+  if (renderUnsupportedGuard(container, 'costTracking', 'Cost tracking')) return;
+
   const events = getEvents(inspectedSessionId!);
   const costDeltas = getCostDeltas(inspectedSessionId!);
 
@@ -520,9 +544,12 @@ function renderTools(container: HTMLElement): void {
     return;
   }
 
+  const caps = getProviderCapabilities(getInspectedProviderId());
+  const showCost = caps?.costTracking !== false;
+
   const table = document.createElement('table');
   table.className = 'inspector-table';
-  table.innerHTML = '<thead><tr><th>Tool</th><th>Calls</th><th>Failures</th><th>Rate</th><th>Cost</th></tr></thead>';
+  table.innerHTML = `<thead><tr><th>Tool</th><th>Calls</th><th>Failures</th><th>Rate</th>${showCost ? '<th>Cost</th>' : ''}</tr></thead>`;
   const tbody = document.createElement('tbody');
 
   for (const s of stats) {
@@ -533,7 +560,7 @@ function renderTools(container: HTMLElement): void {
       <td>${s.calls}</td>
       <td>${s.failures}</td>
       <td>${rate}%</td>
-      <td>$${s.totalCost.toFixed(4)}</td>
+      ${showCost ? `<td>$${s.totalCost.toFixed(4)}</td>` : ''}
     `;
     tbody.appendChild(tr);
   }
@@ -566,6 +593,8 @@ function renderTools(container: HTMLElement): void {
 // --- Context View ---
 
 function renderContext(container: HTMLElement): void {
+  if (renderUnsupportedGuard(container, 'contextWindow', 'Context window tracking')) return;
+
   const history = getContextHistory(inspectedSessionId!);
 
   if (history.length === 0) {
