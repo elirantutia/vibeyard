@@ -223,7 +223,7 @@ class AppState {
     const session: SessionRecord = {
       id: crypto.randomUUID(),
       name,
-      ...(providerId ? { providerId } : {}),
+      providerId: providerId ?? this.state.preferences.defaultProvider ?? 'claude',
       ...(effectiveArgs ? { args: effectiveArgs } : {}),
       cliSessionId: null,
       createdAt: new Date().toISOString(),

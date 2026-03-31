@@ -1,7 +1,9 @@
 import { appState } from '../state.js';
 import { closeModal } from './modal.js';
+import { createCustomSelect, type CustomSelectInstance } from './custom-select.js';
 import { shortcutManager, displayKeys, eventToAccelerator } from '../shortcuts.js';
-import type { CliProviderMeta, SettingsValidationResult } from '../../shared/types.js';
+import { loadProviderAvailability, getProviderAvailabilitySnapshot } from '../provider-availability.js';
+import type { CliProviderMeta, ProviderId, SettingsValidationResult } from '../../shared/types.js';
 
 
 const overlay = document.getElementById('modal-overlay')!;
@@ -59,6 +61,7 @@ export function showPreferencesModal(): void {
   let historyCheckbox: HTMLInputElement | null = null;
   let insightsCheckbox: HTMLInputElement | null = null;
   let autoTitleCheckbox: HTMLInputElement | null = null;
+  let defaultProviderSelect: CustomSelectInstance | null = null;
   let debugModeCheckbox: HTMLInputElement | null = null;
   let sidebarCheckboxes: { configSections: HTMLInputElement; gitPanel: HTMLInputElement; sessionHistory: HTMLInputElement; costFooter: HTMLInputElement; readinessSection: HTMLInputElement } | null = null;
   let activeRecorder: { cleanup: () => void } | null = null;
@@ -81,6 +84,39 @@ export function showPreferencesModal(): void {
     }
 
     if (section === 'general') {
+      // Default provider dropdown
+      const providerRow = document.createElement('div');
+      providerRow.className = 'modal-toggle-field';
+
+      const providerLabel = document.createElement('label');
+      providerLabel.textContent = 'Default coding tool';
+
+      const currentDefault = appState.preferences.defaultProvider ?? 'claude';
+
+      const buildProviderOptions = (providers: CliProviderMeta[]) =>
+        providers.map(p => ({ value: p.id, label: p.displayName }));
+
+      let snapshot = getProviderAvailabilitySnapshot();
+      if (snapshot) {
+        defaultProviderSelect = createCustomSelect('pref-default-provider', buildProviderOptions(snapshot.providers), currentDefault);
+      } else {
+        defaultProviderSelect = createCustomSelect('pref-default-provider', [{ value: currentDefault, label: 'Loading…' }], currentDefault);
+        loadProviderAvailability().then(() => {
+          if (currentSection !== 'general') return;
+          snapshot = getProviderAvailabilitySnapshot();
+          if (snapshot) {
+            if (defaultProviderSelect) defaultProviderSelect.destroy();
+            defaultProviderSelect = createCustomSelect('pref-default-provider', buildProviderOptions(snapshot.providers), currentDefault);
+            providerRow.querySelector('.custom-select')?.remove();
+            providerRow.appendChild(defaultProviderSelect.element);
+          }
+        });
+      }
+
+      providerRow.appendChild(providerLabel);
+      providerRow.appendChild(defaultProviderSelect.element);
+      content.appendChild(providerRow);
+
       const row = document.createElement('div');
       row.className = 'modal-toggle-field';
 
@@ -644,6 +680,9 @@ export function showPreferencesModal(): void {
     if (autoTitleCheckbox) {
       appState.setPreference('autoTitleEnabled', autoTitleCheckbox.checked);
     }
+    if (defaultProviderSelect) {
+      appState.setPreference('defaultProvider', defaultProviderSelect.getValue() as ProviderId);
+    }
     if (debugModeCheckbox && debugModeCheckbox.checked !== appState.preferences.debugMode) {
       appState.setPreference('debugMode', debugModeCheckbox.checked);
       window.vibeyard.menu.rebuild(debugModeCheckbox.checked);
@@ -692,6 +731,7 @@ export function showPreferencesModal(): void {
 
   (overlay as any)._cleanup = () => {
     cleanupRecorder();
+    if (defaultProviderSelect) defaultProviderSelect.destroy();
     btnConfirm.removeEventListener('click', handleConfirm);
     btnCancel.removeEventListener('click', handleCancel);
     document.removeEventListener('keydown', handleKeydown);

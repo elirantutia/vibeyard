@@ -793,7 +793,8 @@ export async function promptNewSession(): Promise<void> {
   ];
 
   if (providers.length > 1) {
-    const firstAvailable = providers.find(p => availabilityMap.get(p.id))?.id ?? 'claude';
+    const preferred = appState.preferences.defaultProvider ?? 'claude';
+    const firstAvailable = (availabilityMap.get(preferred) ? preferred : providers.find(p => availabilityMap.get(p.id))?.id) ?? 'claude';
     fields.unshift({
       label: 'Provider',
       id: 'provider',
