@@ -558,6 +558,8 @@ export function showPreferencesModal(): void {
         helpText: binary.ok ? undefined : binary.message,
       });
 
+      if (!binary.ok) continue;
+
       const { capabilities } = meta;
 
       if (capabilities.costTracking || capabilities.contextWindow) {

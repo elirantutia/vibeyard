@@ -78,10 +78,12 @@ app.whenReady().then(async () => {
   createAppMenu(state.preferences?.debugMode ?? false);
   createWindow();
 
-  // Install hooks and status scripts for all providers (after window creation so dialogs can attach)
+  // Install hooks and status scripts for available providers (after window creation so dialogs can attach)
   for (const provider of getAllProviders()) {
-    await provider.installHooks(mainWindow);
-    provider.installStatusScripts();
+    if (provider.validatePrerequisites().ok) {
+      await provider.installHooks(mainWindow);
+      provider.installStatusScripts();
+    }
   }
 
   initAutoUpdater();

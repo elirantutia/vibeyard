@@ -93,6 +93,16 @@ function setupCodexWatchers(projectPath: string): void {
   for (const d of dirs) watchDir(d);
 }
 
+function setupGeminiWatchers(projectPath: string): void {
+  const home = os.homedir();
+
+  const files = [
+    path.join(home, '.gemini', 'settings.json'),
+    path.join(projectPath, '.gemini', 'settings.json'),
+  ];
+  for (const f of files) watchFile(f);
+}
+
 export function startConfigWatcher(win: BrowserWindow, projectPath: string, providerId: ProviderId = 'claude'): void {
   if (projectPath === currentProjectPath && providerId === currentProviderId) return;
   stopAll();
@@ -101,6 +111,8 @@ export function startConfigWatcher(win: BrowserWindow, projectPath: string, prov
   currentProviderId = providerId;
   if (providerId === 'codex') {
     setupCodexWatchers(projectPath);
+  } else if (providerId === 'gemini') {
+    setupGeminiWatchers(projectPath);
   } else {
     setupClaudeWatchers(projectPath);
   }

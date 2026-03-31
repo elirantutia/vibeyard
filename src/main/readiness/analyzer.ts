@@ -4,17 +4,21 @@ import { getAvailableProviderIds } from '../providers/registry';
 import { computeCategoryScore, getTrackedFiles } from './utils';
 import { aiInstructionsProducer } from './checkers/ai-instructions';
 import { codexInstructionsProducer } from './checkers/codex-instructions';
+import { geminiInstructionsProducer } from './checkers/gemini-instructions';
 import { customExtensionsProducer } from './checkers/custom-extensions';
 import { claudeContextProducer } from './checkers/claude-context';
 import { codexContextProducer } from './checkers/codex-context';
+import { geminiContextProducer } from './checkers/gemini-context';
 import { genericContextProducer } from './checkers/context-optimization';
 
 const allProducers: ReadinessCheckProducer[] = [
   aiInstructionsProducer,
   codexInstructionsProducer,
+  geminiInstructionsProducer,
   customExtensionsProducer,
   claudeContextProducer,
   codexContextProducer,
+  geminiContextProducer,
   genericContextProducer,
 ];
 
