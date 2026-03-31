@@ -156,6 +156,25 @@ describe('installGeminiHooks', () => {
     expect(getStatusCmd('AfterAgent')).toContain('AfterAgent:completed');
     expect(getStatusCmd('SessionEnd')).toContain('SessionEnd:completed');
   });
+
+  it('includes session ID capture on SessionStart and BeforeAgent only', () => {
+    mockFiles({});
+    installGeminiHooks();
+
+    const call = mockWriteFileSync.mock.calls.find(c => String(c[0]) === SETTINGS_PATH);
+    const hooks = JSON.parse(String(call![1])).hooks;
+
+    const hasSessionIdCapture = (event: string) =>
+      hooks[event]?.some((m: any) =>
+        m.hooks.some((h: any) => h.name === 'vibeyard-sessionid')
+      );
+
+    expect(hasSessionIdCapture('SessionStart')).toBe(true);
+    expect(hasSessionIdCapture('BeforeAgent')).toBe(true);
+    expect(hasSessionIdCapture('AfterTool')).toBe(false);
+    expect(hasSessionIdCapture('AfterAgent')).toBe(false);
+    expect(hasSessionIdCapture('SessionEnd')).toBe(false);
+  });
 });
 
 describe('validateGeminiHooks', () => {

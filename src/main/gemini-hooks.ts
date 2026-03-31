@@ -85,6 +85,9 @@ with open(f\\"${STATUS_DIR}/\\"+sid+\\".events\\",\\"a\\") as f:
  f.write(json.dumps(e)+\\"\\\\n\\")
 " 2>/dev/null ${GEMINI_HOOK_MARKER}'`;
 
+  const captureSessionIdCmd =
+    `sh -c 'input=$(cat); sid=$(echo "$input" | /usr/bin/python3 -c "import sys,json; print(json.load(sys.stdin).get(\\"session_id\\",\\"\\"))" 2>/dev/null); if [ -n "$sid" ]; then mkdir -p ${STATUS_DIR} && echo "$sid" > ${STATUS_DIR}/$${SESSION_ID_VAR}.sessionid; fi ${GEMINI_HOOK_MARKER}'`;
+
   // Status-changing events
   const ideEvents: Record<string, string> = {
     SessionStart: 'waiting',
@@ -106,8 +109,11 @@ with open(f\\"${STATUS_DIR}/\\"+sid+\\".events\\",\\"a\\") as f:
     const existing = cleaned[event] ?? [];
     const hooks: HookHandler[] = [
       { type: 'command', command: statusCmd(event, status), name: 'vibeyard-status' },
-      { type: 'command', command: captureEventCmd(event, eventTypeMap[event]), name: 'vibeyard-events' },
     ];
+    if (event === 'SessionStart' || event === 'BeforeAgent') {
+      hooks.push({ type: 'command', command: captureSessionIdCmd, name: 'vibeyard-sessionid' });
+    }
+    hooks.push({ type: 'command', command: captureEventCmd(event, eventTypeMap[event]), name: 'vibeyard-events' });
     existing.push({ matcher: '', hooks });
     cleaned[event] = existing;
   }
