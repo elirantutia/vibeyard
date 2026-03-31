@@ -648,7 +648,9 @@ function renderContext(container: HTMLElement): void {
 function emptyMessage(fallback: string): string {
   if (!inspectedSessionId) return fallback;
   const instance = getTerminalInstance(inspectedSessionId);
-  return instance?.wasResumed ? 'Session resumed — history not available' : fallback;
+  if (!instance?.wasResumed) return fallback;
+  const label = fallback.toLowerCase().includes('tool') ? 'tools' : fallback.toLowerCase().includes('context') ? 'context' : 'history';
+  return `Session resumed — ${label} not available`;
 }
 
 function createToolInputEl(toolInput: unknown): HTMLPreElement {
