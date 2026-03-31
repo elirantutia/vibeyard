@@ -8,6 +8,7 @@ import { markFreshSession } from '../session-insights.js';
 import { removeSession as removeCostSession, type CostInfo } from '../session-cost.js';
 import { removeSession as removeContextSession, type ContextWindowInfo } from '../session-context.js';
 import type { ProviderId } from '../types.js';
+import { getProviderCapabilities } from '../provider-availability.js';
 import { FilePathLinkProvider, GithubLinkProvider } from './terminal-link-provider.js';
 
 interface TerminalInstance {
@@ -57,7 +58,13 @@ export function createTerminalPane(
   contextIndicator.className = 'context-indicator';
   const costDisplay = document.createElement('div');
   costDisplay.className = 'cost-display';
-  costDisplay.textContent = '$0.0000';
+  const caps = getProviderCapabilities(providerId);
+  if (caps?.costTracking !== false) {
+    costDisplay.textContent = '$0.0000';
+  } else {
+    costDisplay.classList.add('hidden');
+  }
+  contextIndicator.classList.toggle('hidden', caps?.contextWindow === false);
   statusBar.appendChild(contextIndicator);
   statusBar.appendChild(costDisplay);
   element.appendChild(statusBar);
@@ -343,6 +350,7 @@ function showStatusBar(instance: TerminalInstance): void {
 export function updateCostDisplay(sessionId: string, cost: CostInfo): void {
   const instance = instances.get(sessionId);
   if (!instance) return;
+  if (getProviderCapabilities(instance.providerId)?.costTracking === false) return;
   const el = instance.element.querySelector('.cost-display');
   if (!el) return;
 
@@ -363,6 +371,7 @@ export function updateCostDisplay(sessionId: string, cost: CostInfo): void {
 export function updateContextDisplay(sessionId: string, info: ContextWindowInfo): void {
   const instance = instances.get(sessionId);
   if (!instance) return;
+  if (getProviderCapabilities(instance.providerId)?.contextWindow === false) return;
   const el = instance.element.querySelector('.context-indicator') as HTMLElement | null;
   if (!el) return;
 

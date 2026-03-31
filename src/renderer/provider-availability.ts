@@ -3,10 +3,14 @@ import type { ProviderId, CliProviderMeta, CliProviderCapabilities } from '../sh
 let cachedProviders: CliProviderMeta[] | null = null;
 let cachedAvailability: Map<ProviderId, boolean> | null = null;
 
-export async function loadProviderAvailability(): Promise<void> {
+export async function loadProviderMetas(): Promise<void> {
   if (!cachedProviders) {
     cachedProviders = await window.vibeyard.provider.listProviders();
   }
+}
+
+export async function loadProviderAvailability(): Promise<void> {
+  await loadProviderMetas();
   const checks = await Promise.all(
     cachedProviders.map(async p => ({ id: p.id, ok: (await window.vibeyard.provider.checkBinary(p.id)).ok }))
   );

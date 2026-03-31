@@ -36,6 +36,7 @@ import { addEvents as addInspectorEvents } from './session-inspector-state.js';
 import type { InspectorEvent } from '../shared/types.js';
 import { getContext } from './session-context.js';
 import { initSessionInspector } from './components/session-inspector.js';
+import { loadProviderMetas } from './provider-availability.js';
 
 let isQuitting = false;
 window.vibeyard.app.onQuitting(() => {
@@ -141,6 +142,9 @@ async function main(): Promise<void> {
       }
     }
   });
+
+  // Load provider metadata before components so capabilities are available synchronously
+  await loadProviderMetas();
 
   // Initialize components
   initSessionUnread();

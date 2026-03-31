@@ -153,6 +153,14 @@
   white-space: nowrap;
 }
 
+.cost-display.hidden {
+  display: none;
+}
+
+.context-indicator.hidden {
+  display: none;
+}
+
 .terminal-exit-overlay {
   position: absolute;
   top: 0;
