@@ -12,7 +12,7 @@ const SETTINGS_PATH = path.join(GEMINI_DIR, 'settings.json');
 
 export const SESSION_ID_VAR = 'VIBEYARD_SESSION_ID';
 
-const EXPECTED_HOOK_EVENTS = ['SessionStart', 'BeforeAgent', 'AfterTool', 'SessionEnd'];
+const EXPECTED_HOOK_EVENTS = ['SessionStart', 'BeforeAgent', 'AfterTool', 'AfterAgent', 'SessionEnd'];
 
 interface HookHandler {
   type: string;
@@ -90,6 +90,7 @@ with open(f\\"${STATUS_DIR}/\\"+sid+\\".events\\",\\"a\\") as f:
     SessionStart: 'waiting',
     BeforeAgent: 'working',
     AfterTool: 'working',
+    AfterAgent: 'completed',
     SessionEnd: 'completed',
   };
 
@@ -97,6 +98,7 @@ with open(f\\"${STATUS_DIR}/\\"+sid+\\".events\\",\\"a\\") as f:
     SessionStart: 'session_start',
     BeforeAgent: 'user_prompt',
     AfterTool: 'tool_use',
+    AfterAgent: 'stop',
     SessionEnd: 'stop',
   };
 

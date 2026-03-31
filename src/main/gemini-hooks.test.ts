@@ -45,6 +45,7 @@ describe('installGeminiHooks', () => {
     expect(hooks.SessionStart).toBeDefined();
     expect(hooks.BeforeAgent).toBeDefined();
     expect(hooks.AfterTool).toBeDefined();
+    expect(hooks.AfterAgent).toBeDefined();
     expect(hooks.SessionEnd).toBeDefined();
   });
 
@@ -133,7 +134,7 @@ describe('installGeminiHooks', () => {
     const secondOutput = JSON.parse(String(secondCall![1]));
     const firstParsed = JSON.parse(firstOutput);
 
-    for (const event of ['SessionStart', 'BeforeAgent', 'AfterTool', 'SessionEnd']) {
+    for (const event of ['SessionStart', 'BeforeAgent', 'AfterTool', 'AfterAgent', 'SessionEnd']) {
       expect(secondOutput.hooks[event]?.length).toBe(firstParsed.hooks[event]?.length);
     }
   });
@@ -152,6 +153,7 @@ describe('installGeminiHooks', () => {
     expect(getStatusCmd('SessionStart')).toContain('SessionStart:waiting');
     expect(getStatusCmd('BeforeAgent')).toContain('BeforeAgent:working');
     expect(getStatusCmd('AfterTool')).toContain('AfterTool:working');
+    expect(getStatusCmd('AfterAgent')).toContain('AfterAgent:completed');
     expect(getStatusCmd('SessionEnd')).toContain('SessionEnd:completed');
   });
 });
@@ -171,6 +173,7 @@ describe('validateGeminiHooks', () => {
     expect(result.hookDetails.SessionStart).toBe(true);
     expect(result.hookDetails.BeforeAgent).toBe(true);
     expect(result.hookDetails.AfterTool).toBe(true);
+    expect(result.hookDetails.AfterAgent).toBe(true);
     expect(result.hookDetails.SessionEnd).toBe(true);
   });
 
