@@ -3,6 +3,7 @@ import type { CliProviderMeta, ProviderConfig, SettingsValidationResult } from '
 import { getFullPath } from '../pty-manager';
 import { resolveBinary, validateBinaryExists } from './resolve-binary';
 import { getCodexConfig } from '../codex-config';
+import { installCodexHooks, validateCodexHooks, cleanupCodexHooks, SESSION_ID_VAR } from '../codex-hooks';
 import { startConfigWatcher as startConfigWatch, stopConfigWatcher as stopConfigWatch } from '../config-watcher';
 import type { BrowserWindow } from 'electron';
 
@@ -17,7 +18,7 @@ export class CodexProvider implements CliProvider {
       sessionResume: true,
       costTracking: false,
       contextWindow: false,
-      hookStatus: false,
+      hookStatus: true,
       configReading: true,
       shiftEnterNewline: false,
     },
@@ -32,8 +33,9 @@ export class CodexProvider implements CliProvider {
     return validateBinaryExists('codex', 'Codex CLI', 'npm install -g @openai/codex');
   }
 
-  buildEnv(_sessionId: string, baseEnv: Record<string, string>): Record<string, string> {
+  buildEnv(sessionId: string, baseEnv: Record<string, string>): Record<string, string> {
     const env = { ...baseEnv };
+    env[SESSION_ID_VAR] = sessionId;
     env.PATH = getFullPath();
     return env;
   }
@@ -49,12 +51,15 @@ export class CodexProvider implements CliProvider {
     return args;
   }
 
-  async installHooks(): Promise<void> {}
+  async installHooks(): Promise<void> {
+    installCodexHooks();
+  }
 
   installStatusScripts(): void {}
 
   cleanup(): void {
     stopConfigWatch();
+    cleanupCodexHooks();
   }
 
   startConfigWatcher(win: BrowserWindow, projectPath: string): void {
@@ -74,10 +79,12 @@ export class CodexProvider implements CliProvider {
   }
 
   validateSettings(): SettingsValidationResult {
-    return { statusLine: 'vibeyard', hooks: 'complete', hookDetails: {} };
+    return validateCodexHooks();
   }
 
-  reinstallSettings(): void {}
+  reinstallSettings(): void {
+    installCodexHooks();
+  }
 }
 
 /** @internal Test-only: reset cached binary path */

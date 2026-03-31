@@ -25,17 +25,28 @@ vi.mock('../config-watcher', () => ({
   stopConfigWatcher: vi.fn(),
 }));
 
+vi.mock('../codex-hooks', () => ({
+  installCodexHooks: vi.fn(),
+  validateCodexHooks: vi.fn(() => ({ statusLine: 'vibeyard', hooks: 'complete', hookDetails: {} })),
+  cleanupCodexHooks: vi.fn(),
+  SESSION_ID_VAR: 'VIBEYARD_SESSION_ID',
+}));
+
 import * as fs from 'fs';
 import { execSync } from 'child_process';
 import { CodexProvider, _resetCachedPath } from './codex-provider';
 import { getCodexConfig } from '../codex-config';
 import { startConfigWatcher, stopConfigWatcher } from '../config-watcher';
+import { installCodexHooks, validateCodexHooks, cleanupCodexHooks } from '../codex-hooks';
 
 const mockExistsSync = vi.mocked(fs.existsSync);
 const mockExecSync = vi.mocked(execSync);
 const mockGetCodexConfig = vi.mocked(getCodexConfig);
 const mockStartConfigWatcher = vi.mocked(startConfigWatcher);
 const mockStopConfigWatcher = vi.mocked(stopConfigWatcher);
+const mockInstallCodexHooks = vi.mocked(installCodexHooks);
+const mockValidateCodexHooks = vi.mocked(validateCodexHooks);
+const mockCleanupCodexHooks = vi.mocked(cleanupCodexHooks);
 
 let provider: CodexProvider;
 
@@ -52,12 +63,12 @@ describe('meta', () => {
     expect(provider.meta.binaryName).toBe('codex');
   });
 
-  it('has only sessionResume capability enabled', () => {
+  it('has sessionResume and hookStatus capabilities enabled', () => {
     const caps = provider.meta.capabilities;
     expect(caps.sessionResume).toBe(true);
     expect(caps.costTracking).toBe(false);
     expect(caps.contextWindow).toBe(false);
-    expect(caps.hookStatus).toBe(false);
+    expect(caps.hookStatus).toBe(true);
     expect(caps.configReading).toBe(true);
     expect(caps.shiftEnterNewline).toBe(false);
   });
@@ -121,6 +132,11 @@ describe('buildEnv', () => {
     expect(env.PATH).toBe('/usr/local/bin:/usr/bin');
   });
 
+  it('sets VIBEYARD_SESSION_ID to the session ID', () => {
+    const env = provider.buildEnv('sess-123', {});
+    expect(env.VIBEYARD_SESSION_ID).toBe('sess-123');
+  });
+
   it('preserves existing env vars', () => {
     const env = provider.buildEnv('sess-123', { CODEX_HOME: '/custom', OTHER: 'val' });
     expect(env.CODEX_HOME).toBe('/custom');
@@ -161,33 +177,36 @@ describe('getShiftEnterSequence', () => {
   });
 });
 
-describe('stubs', () => {
+describe('hooks integration', () => {
+  it('installHooks delegates to installCodexHooks', async () => {
+    await provider.installHooks();
+    expect(mockInstallCodexHooks).toHaveBeenCalled();
+  });
+
+  it('validateSettings delegates to validateCodexHooks', () => {
+    const result = provider.validateSettings();
+    expect(mockValidateCodexHooks).toHaveBeenCalled();
+    expect(result).toEqual({ statusLine: 'vibeyard', hooks: 'complete', hookDetails: {} });
+  });
+
+  it('cleanup calls cleanupCodexHooks and stopConfigWatcher', () => {
+    provider.cleanup();
+    expect(mockStopConfigWatcher).toHaveBeenCalled();
+    expect(mockCleanupCodexHooks).toHaveBeenCalled();
+  });
+
+  it('reinstallSettings delegates to installCodexHooks', () => {
+    provider.reinstallSettings();
+    expect(mockInstallCodexHooks).toHaveBeenCalled();
+  });
+});
+
+describe('other methods', () => {
   it('getConfig delegates to codex config reader', async () => {
     const config = { mcpServers: [{ name: 'a', url: 'b', status: 'configured', scope: 'user', filePath: '/x' }], agents: [], skills: [], commands: [] };
     mockGetCodexConfig.mockResolvedValueOnce(config);
     await expect(provider.getConfig('/some/path')).resolves.toEqual(config);
     expect(mockGetCodexConfig).toHaveBeenCalledWith('/some/path');
-  });
-
-  it('validateSettings returns all-ok', () => {
-    expect(provider.validateSettings()).toEqual({
-      statusLine: 'vibeyard',
-      hooks: 'complete',
-      hookDetails: {},
-    });
-  });
-
-  it('installHooks resolves without error', async () => {
-    await expect(provider.installHooks()).resolves.toBeUndefined();
-  });
-
-  it('cleanup does not throw', () => {
-    expect(() => provider.cleanup()).not.toThrow();
-    expect(mockStopConfigWatcher).toHaveBeenCalled();
-  });
-
-  it('reinstallSettings does not throw', () => {
-    expect(() => provider.reinstallSettings()).not.toThrow();
   });
 
   it('installStatusScripts does not throw', () => {
