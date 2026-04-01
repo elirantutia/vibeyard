@@ -216,6 +216,13 @@ class AppState {
     this.emit('project-changed');
   }
 
+  addPlanSession(projectId: string, name: string): SessionRecord | undefined {
+    const project = this.state.projects.find((p) => p.id === projectId);
+    if (!project) return undefined;
+    const base = project.defaultArgs ?? '';
+    return this.addSession(projectId, name, `${base} --permission-mode plan`.trim());
+  }
+
   addSession(projectId: string, name: string, args?: string, providerId?: ProviderId): SessionRecord | undefined {
     const project = this.state.projects.find((p) => p.id === projectId);
     if (!project) return undefined;

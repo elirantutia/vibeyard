@@ -22,7 +22,7 @@ function handleSplitAction(alert: LargeFileAlert): void {
   const filename = getFilename(alert.filePath);
   const prompt = `The file ${alert.filePath} is too large and exceeds the AI context read limit. Please analyze it and split it into smaller, focused modules. Preserve all existing functionality.`;
 
-  const session = appState.addSession(project.id, `Split ${filename}`);
+  const session = appState.addPlanSession(project.id, `Split ${filename}`);
   if (!session) return;
 
   removeAlertBanner();

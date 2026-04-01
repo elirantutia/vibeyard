@@ -44,7 +44,7 @@ function handleFixAction(alert: ToolAlert): void {
   const config = bannerConfig[alert.reason as AlertableReason];
   const prompt = config.prompt(alert.tool.name, alert.tool.command, alert.tool.description);
 
-  const session = appState.addSession(project.id, `Fix ${alert.tool.name}`);
+  const session = appState.addPlanSession(project.id, `Fix ${alert.tool.name}`);
   if (!session) return;
 
   removeAlertBanner();

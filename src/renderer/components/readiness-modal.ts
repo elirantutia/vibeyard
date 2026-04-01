@@ -34,7 +34,7 @@ function handleFix(check: ReadinessCheck): void {
   const project = appState.activeProject;
   if (!project) return;
 
-  const session = appState.addSession(project.id, `Fix: ${check.name}`);
+  const session = appState.addPlanSession(project.id, `Fix: ${check.name}`);
   if (!session) return;
 
   closeReadinessModal();
