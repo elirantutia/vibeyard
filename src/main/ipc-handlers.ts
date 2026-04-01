@@ -165,13 +165,15 @@ export function registerIpcHandlers(): void {
     return expandUserPath(filePath);
   });
 
-  ipcMain.handle('fs:listDirs', (_event, dirPath: string) => {
+  ipcMain.handle('fs:listDirs', (_event, dirPath: string, prefix?: string) => {
     try {
       const expanded = expandUserPath(dirPath);
       const entries = fs.readdirSync(expanded, { withFileTypes: true });
+      const lowerPrefix = prefix?.toLowerCase();
       return entries
-        .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+        .filter(e => e.isDirectory() && !e.name.startsWith('.') && (!lowerPrefix || e.name.toLowerCase().startsWith(lowerPrefix)))
         .map(e => path.join(expanded, e.name))
+        .sort((a, b) => a.localeCompare(b))
         .slice(0, 20);
     } catch {
       return [];

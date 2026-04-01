@@ -183,12 +183,8 @@ export function promptNewProject(): void {
       const dirPart = value.substring(0, lastSlash + 1);
       const namePart = value.substring(lastSlash + 1).toLowerCase();
 
-      const dirs = await window.vibeyard.fs.listDirs(dirPart);
-      const filtered = namePart
-        ? dirs.filter(d => (d.split('/').pop() ?? '').toLowerCase().startsWith(namePart))
-        : dirs;
-
-      showSuggestions(filtered, dirPart);
+      const dirs = await window.vibeyard.fs.listDirs(dirPart, namePart || undefined);
+      showSuggestions(dirs, dirPart);
     });
 
     pathInput.addEventListener('keydown', (e) => {

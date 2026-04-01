@@ -26,7 +26,7 @@ export interface VibeyardApi {
   fs: {
     isDirectory(path: string): Promise<boolean>;
     expandPath(path: string): Promise<string>;
-    listDirs(dirPath: string): Promise<string[]>;
+    listDirs(dirPath: string, prefix?: string): Promise<string[]>;
     browseDirectory(): Promise<string | null>;
     listFiles(cwd: string, query: string): Promise<string[]>;
     readFile(filePath: string): Promise<string>;
@@ -167,7 +167,7 @@ const api: VibeyardApi = {
   fs: {
     isDirectory: (path) => ipcRenderer.invoke('fs:isDirectory', path),
     expandPath: (path: string) => ipcRenderer.invoke('fs:expandPath', path),
-    listDirs: (dirPath: string) => ipcRenderer.invoke('fs:listDirs', dirPath),
+    listDirs: (dirPath: string, prefix?: string) => ipcRenderer.invoke('fs:listDirs', dirPath, prefix),
     browseDirectory: () => ipcRenderer.invoke('fs:browseDirectory'),
     listFiles: (cwd: string, query: string) => ipcRenderer.invoke('fs:listFiles', cwd, query),
     readFile: (filePath: string) => ipcRenderer.invoke('fs:readFile', filePath),
