@@ -66,6 +66,7 @@ async function main(): Promise<void> {
   });
 
   window.vibeyard.session.onCostData((sessionId, costData) => {
+    if (!appState.hasSession(sessionId)) return;
     logDebugEvent('costData', sessionId, costData);
     setCostData(sessionId, costData);
     const contextBefore = getContext(sessionId);
@@ -105,11 +106,13 @@ async function main(): Promise<void> {
   });
 
   window.vibeyard.session.onHookStatus((sessionId, status, hookName) => {
+    if (!appState.hasSession(sessionId)) return;
     logDebugEvent('hookStatus', sessionId, hookName ? `${hookName}: ${status}` : status);
     setHookStatus(sessionId, status, hookName);
   });
 
   window.vibeyard.session.onInspectorEvents((sessionId, events) => {
+    if (!appState.hasSession(sessionId)) return;
     logDebugEvent('inspectorEvents', sessionId, { count: events.length });
     addInspectorEvents(sessionId, events);
   });

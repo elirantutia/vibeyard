@@ -27,6 +27,7 @@ import {
   restartAndResync,
   cleanupSessionStatus,
   cleanupAll,
+  registerSession,
 } from './hook-status';
 
 let watchCallback: ((eventType: string, filename: string | null) => void) | null = null;
@@ -100,9 +101,20 @@ describe('hook-status', () => {
   });
 
   describe('file change handling', () => {
+    it('ignores file changes for unregistered sessions', () => {
+      const win = createMockWin();
+      startWatching(win);
+
+      vi.mocked(fs.readFileSync).mockReturnValue('working');
+      watchCallback!('change', 'unknown-session.status');
+
+      expect(mockSend).not.toHaveBeenCalled();
+    });
+
     it('.status with valid content sends session:hookStatus (legacy format)', () => {
       const win = createMockWin();
       startWatching(win);
+      registerSession('abc123');
 
       vi.mocked(fs.readFileSync).mockReturnValue('working');
       watchCallback!('change', 'abc123.status');
@@ -113,6 +125,7 @@ describe('hook-status', () => {
     it('.status with hook name sends session:hookStatus with hook name', () => {
       const win = createMockWin();
       startWatching(win);
+      registerSession('abc123');
 
       vi.mocked(fs.readFileSync).mockReturnValue('PostToolUse:working');
       watchCallback!('change', 'abc123.status');
@@ -123,6 +136,7 @@ describe('hook-status', () => {
     it('.status with invalid content does not send', () => {
       const win = createMockWin();
       startWatching(win);
+      registerSession('abc123');
 
       vi.mocked(fs.readFileSync).mockReturnValue('invalid-status');
       watchCallback!('change', 'abc123.status');
@@ -133,6 +147,7 @@ describe('hook-status', () => {
     it('.sessionid sends session:cliSessionId and session:claudeSessionId', () => {
       const win = createMockWin();
       startWatching(win);
+      registerSession('abc123');
 
       vi.mocked(fs.readFileSync).mockReturnValue('claude-session-xyz');
       watchCallback!('change', 'abc123.sessionid');
@@ -144,6 +159,7 @@ describe('hook-status', () => {
     it('.cost parses JSON and sends session:costData', () => {
       const win = createMockWin();
       startWatching(win);
+      registerSession('abc123');
 
       const costData = { cost: { total: 1.5 }, context_window: { used: 100 } };
       vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(costData));
@@ -155,6 +171,7 @@ describe('hook-status', () => {
     it('.toolfailure parses JSON, sends session:toolFailure, and deletes file', () => {
       const win = createMockWin();
       startWatching(win);
+      registerSession('abc123');
 
       const failureData = { tool_name: 'Bash', tool_input: { command: 'gh pr list' }, error: 'exit 127' };
       vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(failureData));
@@ -167,6 +184,7 @@ describe('hook-status', () => {
     it('.toolfailure extracts session ID from filename with random suffix', () => {
       const win = createMockWin();
       startWatching(win);
+      registerSession('my-session-id');
 
       const failureData = { tool_name: 'Bash', tool_input: { command: 'jq .' }, error: 'exit 127' };
       vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(failureData));
@@ -178,6 +196,7 @@ describe('hook-status', () => {
     it('.toolfailure cleans up file even when JSON parsing fails', () => {
       const win = createMockWin();
       startWatching(win);
+      registerSession('abc123');
 
       vi.mocked(fs.readFileSync).mockReturnValue('invalid json');
       watchCallback!('change', 'abc123-xyzabc.toolfailure');
@@ -189,6 +208,7 @@ describe('hook-status', () => {
     it('handles read errors gracefully', () => {
       const win = createMockWin();
       startWatching(win);
+      registerSession('abc123');
 
       vi.mocked(fs.readFileSync).mockImplementation(() => {
         throw new Error('ENOENT');
@@ -208,6 +228,7 @@ describe('hook-status', () => {
       // Re-start watching with the destroyable win
       startWatching(destroyableWin);
 
+      registerSession('abc123');
       destroyableWin.isDestroyed.mockReturnValue(true);
       vi.mocked(fs.readFileSync).mockReturnValue('working');
       watchCallback!('change', 'abc123.status');
@@ -218,6 +239,7 @@ describe('hook-status', () => {
     it('resyncs all sessions on null filename', () => {
       const win = createMockWin();
       startWatching(win);
+      registerSession('abc123');
 
       vi.mocked(fs.readdirSync).mockReturnValue(['abc123.cost'] as any);
       const costData = { cost: { total: 1.0 }, context_window: {} };
@@ -233,6 +255,9 @@ describe('hook-status', () => {
   describe('resyncAllSessions', () => {
     it('processes all matching files in dir', () => {
       const win = createMockWin();
+      registerSession('s1');
+      registerSession('s2');
+      registerSession('s3');
       vi.mocked(fs.readdirSync).mockReturnValue([
         's1.status',
         's2.sessionid',
@@ -308,6 +333,7 @@ describe('hook-status', () => {
   describe('polling fallback', () => {
     it('detects changed files on poll interval', () => {
       const win = createMockWin();
+      registerSession('s1');
 
       // First poll seeds mtimes
       vi.mocked(fs.readdirSync).mockReturnValue(['s1.cost'] as any);

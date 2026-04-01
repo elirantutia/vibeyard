@@ -519,6 +519,10 @@ class AppState {
     this.updateSessionCliId(projectId, sessionId, claudeSessionId);
   }
 
+  hasSession(sessionId: string): boolean {
+    return this.findSessionById(sessionId) !== undefined;
+  }
+
   private findSessionById(sessionId: string): SessionRecord | undefined {
     for (const project of this.state.projects) {
       const session = project.sessions.find((s) => s.id === sessionId);

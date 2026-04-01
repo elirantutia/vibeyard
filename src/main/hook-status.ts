@@ -12,6 +12,15 @@ let watcher: fs.FSWatcher | null = null;
 let pollInterval: ReturnType<typeof setInterval> | null = null;
 const lastMtimes = new Map<string, number>();
 const eventFileOffsets = new Map<string, number>();
+const knownSessionIds = new Set<string>();
+
+export function registerSession(sessionId: string): void {
+  knownSessionIds.add(sessionId);
+}
+
+export function unregisterSession(sessionId: string): void {
+  knownSessionIds.delete(sessionId);
+}
 
 function isKnownExtension(filename: string): boolean {
   return KNOWN_EXTENSIONS.some(ext => filename.endsWith(ext));
@@ -55,7 +64,22 @@ if claude_sid:
   fs.writeFileSync(STATUSLINE_SCRIPT, script, { mode: 0o755 });
 }
 
+function extractSessionId(filename: string): string {
+  if (filename.endsWith('.toolfailure')) {
+    const base = filename.replace('.toolfailure', '');
+    const lastDash = base.lastIndexOf('-');
+    return lastDash !== -1 ? base.slice(0, lastDash) : base;
+  }
+  for (const ext of KNOWN_EXTENSIONS) {
+    if (filename.endsWith(ext)) return filename.slice(0, -ext.length);
+  }
+  return '';
+}
+
 function handleFileChange(win: BrowserWindow, filename: string): void {
+  const extractedId = extractSessionId(filename);
+  if (extractedId && !knownSessionIds.has(extractedId)) return;
+
   if (filename.endsWith('.status')) {
     const sessionId = filename.replace('.status', '');
     const filePath = path.join(STATUS_DIR, filename);
@@ -102,10 +126,7 @@ function handleFileChange(win: BrowserWindow, filename: string): void {
       // File may have been deleted or contain invalid JSON
     }
   } else if (filename.endsWith('.toolfailure')) {
-    // Filename format: {sessionId}-{randomSuffix}.toolfailure
-    const base = filename.replace('.toolfailure', '');
-    const lastDash = base.lastIndexOf('-');
-    const sessionId = lastDash !== -1 ? base.slice(0, lastDash) : base;
+    const sessionId = extractedId;
     const filePath = path.join(STATUS_DIR, filename);
 
     try {
@@ -244,10 +265,12 @@ export function cleanupSessionStatus(sessionId: string): void {
     }
   }
   eventFileOffsets.delete(sessionId);
+  unregisterSession(sessionId);
 }
 
 export function cleanupAll(): void {
   stopPolling();
+  knownSessionIds.clear();
   if (watcher) {
     watcher.close();
     watcher = null;

@@ -34,9 +34,9 @@ describe('setHookStatus', () => {
     expect(getStatus('s1')).toBe('working');
   });
 
-  it('auto-inits session if not present', () => {
+  it('ignores hook events for unknown sessions', () => {
     setHookStatus('s1', 'working');
-    expect(getStatus('s1')).toBe('working');
+    expect(getStatus('s1')).toBe('idle');
   });
 
   it('sets completed status', () => {
