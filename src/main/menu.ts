@@ -66,6 +66,11 @@ export function createAppMenu(debugMode = false): void {
           accelerator: 'CmdOrCtrl+Shift+U',
           click: () => sendToRenderer('menu:usage-stats'),
         },
+        {
+          label: 'Toggle Session Inspector',
+          accelerator: 'CmdOrCtrl+Shift+I',
+          click: () => sendToRenderer('menu:toggle-inspector'),
+        },
         ...(debugMode ? [
           {
             label: 'Toggle Debug Panel',

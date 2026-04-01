@@ -195,13 +195,6 @@ export function initSessionInspector(): void {
     }, 200);
   });
 
-  // Keyboard shortcut: Cmd+Shift+I
-  document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'I') {
-      e.preventDefault();
-      toggleInspector();
-    }
-  });
 }
 
 function createPanel(): HTMLElement {

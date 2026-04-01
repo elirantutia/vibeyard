@@ -13,6 +13,7 @@ import { shortcutManager } from './shortcuts.js';
 import { getFileReaderInstance, showGoToLineBar } from './components/file-reader.js';
 import { getFileViewerInstance } from './components/file-viewer.js';
 import { DomSearchBackend } from './components/dom-search-backend.js';
+import { toggleInspector } from './components/session-inspector.js';
 
 export function initKeybindings(): void {
   // Menu-based shortcuts (registered via Electron menu accelerators)
@@ -24,6 +25,7 @@ export function initKeybindings(): void {
   window.vibeyard.menu.onPrevSession(() => appState.cycleSession(-1));
   window.vibeyard.menu.onGotoSession((index) => appState.gotoSession(index));
   window.vibeyard.menu.onToggleDebug(() => toggleDebugPanel());
+  window.vibeyard.menu.onToggleInspector(() => toggleInspector());
   window.vibeyard.menu.onCloseSession(() => {
     const project = appState.activeProject;
     const session = appState.activeSession;
