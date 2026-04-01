@@ -33,6 +33,7 @@ Running AI coding agents in a bare terminal gets messy fast. Vibeyard gives you 
 - **Multi-session management** — run multiple agent sessions per project, each in its own PTY
 - **Swarm mode** — grid view of all sessions at once, spin up new ones with `Cmd+\`
 - **Cost & context tracking** — real-time spend, token usage, and context window monitoring per session
+- **Session inspector** — real-time session telemetry with timeline, cost breakdown, tool usage stats, and context window monitoring (`Cmd+Shift+I`)
 - **AI Readiness Score** — see how well-prepared your project is for AI-assisted coding, with one-click fixes
 - **Session resume** — pick up where you left off, even after restarting the app
 - **Smart alerts** — detects missing tools, context bloat, and session health issues
