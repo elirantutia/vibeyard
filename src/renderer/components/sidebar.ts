@@ -107,10 +107,7 @@ export function promptNewProject(): void {
         const dir = await window.vibeyard.fs.browseDirectory();
         if (!dir) return;
         input.value = dir;
-        const nameInput = document.getElementById('modal-project-name') as HTMLInputElement | null;
-        if (nameInput && !nameInput.value.trim()) {
-          nameInput.value = dir.split('/').pop() || '';
-        }
+        autoFillName(dir);
       },
     },
   ], async (values) => {
@@ -128,6 +125,16 @@ export function promptNewProject(): void {
     closeModal();
     appState.addProject(name, projectPath);
   });
+
+  const nameInput = document.getElementById('modal-project-name') as HTMLInputElement | null;
+  let nameManuallyEdited = false;
+  nameInput?.addEventListener('input', () => { nameManuallyEdited = true; });
+
+  const autoFillName = (path: string) => {
+    if (nameInput && !nameManuallyEdited) {
+      nameInput.value = path.split('/').pop() || '';
+    }
+  };
 
   // Attach path autocomplete to the rendered input
   const pathInput = document.getElementById('modal-project-path') as HTMLInputElement | null;
@@ -160,6 +167,7 @@ export function promptNewProject(): void {
           e.preventDefault();
           pathInput.value = item.textContent!;
           hideDropdown();
+          autoFillName(pathInput.value);
         });
         dropdown.appendChild(item);
       }
@@ -168,6 +176,7 @@ export function promptNewProject(): void {
 
     pathInput.addEventListener('input', async () => {
       const value = pathInput.value;
+      autoFillName(value);
       const lastSlash = value.lastIndexOf('/');
       if (lastSlash === -1) { hideDropdown(); return; }
 
@@ -203,6 +212,7 @@ export function promptNewProject(): void {
         e.stopPropagation();
         pathInput.value = items[activeIndex].textContent!;
         hideDropdown();
+        autoFillName(pathInput.value);
       } else if (e.key === 'Escape') {
         hideDropdown();
       }
@@ -210,6 +220,7 @@ export function promptNewProject(): void {
 
     pathInput.addEventListener('blur', () => {
       setTimeout(hideDropdown, 100);
+      autoFillName(pathInput.value);
     });
   }
 }
