@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.21] - 2026-04-01
+
+### Features
+
+- Gemini CLI provider support (#28)
+- Codex CLI provider support (#27)
+- Min-release-age=30 to project npmrc for supply chain security
+
+### Fixes
+
+- Allow text selection and copy in expanded inspector timeline items
+- Skip large file alert for non-project files like .claude tool results
+- Expand ~ in new project path field and add directory autocomplete (#24)
+
+### Changes
+
+- New-session shortcut default from Cmd+S to Cmd+T
+
 ## [0.2.20] - 2026-03-30
 
 ### Features
