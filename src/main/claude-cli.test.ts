@@ -462,11 +462,14 @@ describe('installHooks', () => {
       h.command.includes('.toolfailure') && h.command.includes('d.get(\\"error\\"')
     )).toBe(true);
 
-    // PostToolUse event cmd should write .toolfailure for error results (is_error: true)
+    // PostToolUse event cmd should write .toolfailure for any non-empty result (no is_error dependency)
     const toolUseHooks = written.hooks.PostToolUse
       .flatMap((m: { hooks: Array<{ command: string }> }) => m.hooks);
     expect(toolUseHooks.some((h: { command: string }) =>
-      h.command.includes('.toolfailure') && h.command.includes('is_error')
+      h.command.includes('.toolfailure') &&
+      !h.command.includes('is_error') &&
+      h.command.includes('tool_result') &&
+      h.command.includes('tool_response')
     )).toBe(true);
 
     // Inspector-only hooks should have only event logger (no status writer)

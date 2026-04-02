@@ -367,4 +367,22 @@ describe('handleToolFailure', () => {
     expect(mockReadFile).toHaveBeenCalledTimes(1);
     expect(alerts).toHaveLength(2);
   });
+
+  it('emits alert for token-limit error arriving via PostToolUse (no is_error flag)', async () => {
+    const projectId = setupProject();
+    const session = appState.addSession(projectId, 'Session 1')!;
+    const alerts: LargeFileAlert[] = [];
+    onLargeFileAlert((alert) => alerts.push(alert));
+
+    // Simulates a payload written by the fixed PostToolUse hook path
+    // (no is_error flag, just the raw error string in the error field)
+    await handleToolFailure(session.id, {
+      tool_name: 'Read',
+      tool_input: { file_path: '/tmp/test/large.ts' },
+      error: 'File content (10339 tokens) exceeds maximum allowed tokens (10000). Use offset and limit parameters to read specific portions of the file, or search for specific content instead of reading the whole file.',
+    });
+
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].filePath).toBe('/tmp/test/large.ts');
+  });
 });

@@ -268,12 +268,13 @@ if cw:
   \\"context_window_size\\":cw.get(\\"context_window_size\\",200000),
   \\"used_percentage\\":cw.get(\\"used_percentage\\",0)
  }
-if tn and d.get(\\"is_error\\",False) and \\"${hookEvent}\\"==\\"PostToolUse\\":
+if tn and \\"${hookEvent}\\"==\\"PostToolUse\\":
  import random,string as st
- tr=d.get(\\"tool_result\\",\\"\\")
+ tr=d.get(\\"tool_result\\",\\"\\") or d.get(\\"tool_response\\",\\"\\")
  fe=tr if isinstance(tr,str) else json.dumps(tr) if tr else \\"\\"
- sfx=\\"\\".join(random.choices(st.ascii_lowercase,k=6))
- json.dump({\\"tool_name\\":tn,\\"tool_input\\":d.get(\\"tool_input\\",{}),\\"error\\":fe},open(f\\"${STATUS_DIR}/\\"+sid+\\"-\\"+sfx+\\".toolfailure\\",\\"w\\"))
+ if fe:
+  sfx=\\"\\".join(random.choices(st.ascii_lowercase,k=6))
+  json.dump({\\"tool_name\\":tn,\\"tool_input\\":d.get(\\"tool_input\\",{}),\\"error\\":fe},open(f\\"${STATUS_DIR}/\\"+sid+\\"-\\"+sfx+\\".toolfailure\\",\\"w\\"))
 with open(f\\"${STATUS_DIR}/\\"+sid+\\".events\\",\\"a\\") as f:
  f.write(json.dumps(e)+\\"\\\\n\\")
 " 2>/dev/null ${HOOK_MARKER}'`;
