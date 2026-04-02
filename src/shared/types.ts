@@ -275,6 +275,9 @@ export interface InspectorEvent {
   cost_snapshot?: { total_cost_usd: number; total_duration_ms: number };
   context_snapshot?: { total_tokens: number; context_window_size: number; used_percentage: number };
   agent_id?: string;
+  agent_type?: string;
+  last_assistant_message?: string;
+  agent_transcript_path?: string;
   message?: string;
   task_id?: string;
   worktree_path?: string;

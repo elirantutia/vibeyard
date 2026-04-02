@@ -234,6 +234,41 @@
   cursor: text;
 }
 
+.inspector-agent-detail {
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 8px;
+  background: var(--bg-primary);
+  border-radius: 3px;
+  border-left: 2px solid #4dd0e1;
+  font-size: 10px;
+  font-family: monospace;
+  max-height: 300px;
+  overflow-y: auto;
+  user-select: text;
+  cursor: text;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.inspector-agent-detail-row {
+  display: flex;
+  gap: 8px;
+}
+
+.inspector-agent-detail-label {
+  color: var(--text-muted);
+  min-width: 65px;
+  flex-shrink: 0;
+}
+
+.inspector-agent-detail-value {
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
 .inspector-error-text {
   width: 100%;
   margin-top: 2px;

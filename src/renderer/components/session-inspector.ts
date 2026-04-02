@@ -8,7 +8,7 @@ import {
   clearSession,
 } from '../session-inspector-state.js';
 import { getProviderCapabilities, getProviderDisplayName } from '../provider-availability.js';
-import type { ProviderId, CliProviderCapabilities } from '../../shared/types.js';
+import type { ProviderId, CliProviderCapabilities, InspectorEvent } from '../../shared/types.js';
 import { fitAllVisible, getTerminalInstance } from './terminal-pane.js';
 
 let inspectorPanel: HTMLElement | null = null;
@@ -359,9 +359,12 @@ function renderTimeline(container: HTMLElement): void {
     } else if (ev.type === 'permission_request') {
       desc.textContent = 'Waiting for permission';
     } else if (ev.type === 'subagent_start') {
-      desc.textContent = ev.agent_id ? `Subagent started: ${ev.agent_id}` : 'Subagent started';
+      desc.textContent = `Agent started: ${agentLabel(ev)}`;
     } else if (ev.type === 'subagent_stop') {
-      desc.textContent = ev.agent_id ? `Subagent stopped: ${ev.agent_id}` : 'Subagent stopped';
+      const duration = findAgentDuration(events, i);
+      desc.textContent = duration
+        ? `Agent stopped: ${agentLabel(ev)} (${formatDuration(duration)})`
+        : `Agent stopped: ${agentLabel(ev)}`;
     } else if (ev.type === 'notification') {
       desc.textContent = ev.message || 'Notification';
     } else if (ev.type === 'pre_compact') {
@@ -389,7 +392,7 @@ function renderTimeline(container: HTMLElement): void {
     } else if (ev.type === 'instructions_loaded') {
       desc.textContent = 'Instructions loaded';
     } else if (ev.type === 'teammate_idle') {
-      desc.textContent = ev.agent_id ? `Teammate idle: ${ev.agent_id}` : 'Teammate idle';
+      desc.textContent = `Teammate idle: ${agentLabel(ev)}`;
     }
 
     // Duration to next event
@@ -416,23 +419,15 @@ function renderTimeline(container: HTMLElement): void {
 
     // Expandable tool input
     if (ev.tool_input) {
-      row.classList.add('inspector-expandable');
-      const key = `${ev.timestamp}:${ev.type}:${ev.tool_name || ''}`;
+      makeExpandable(row, `${ev.timestamp}:${ev.type}:${ev.tool_name || ''}`, '.inspector-tool-input',
+        () => createToolInputEl(ev.tool_input!));
+    }
 
-      if (expandedRows.has(key)) {
-        row.appendChild(createToolInputEl(ev.tool_input));
-      }
-
-      row.addEventListener('click', () => {
-        const existing = row.querySelector('.inspector-tool-input');
-        if (existing) {
-          existing.remove();
-          expandedRows.delete(key);
-          return;
-        }
-        expandedRows.add(key);
-        row.appendChild(createToolInputEl(ev.tool_input));
-      });
+    // Expandable agent detail
+    if (isAgentEvent(ev)) {
+      const duration = ev.type === 'subagent_stop' ? findAgentDuration(events, i) : null;
+      makeExpandable(row, `${ev.timestamp}:${ev.type}:${ev.agent_id || ''}`, '.inspector-agent-detail',
+        () => createAgentDetailEl(ev, duration));
     }
 
     if (ev.error) {
@@ -687,6 +682,84 @@ function createToolInputEl(toolInput: unknown): HTMLPreElement {
   el.addEventListener('click', (e) => e.stopPropagation());
   const text = JSON.stringify(toolInput, null, 2);
   el.textContent = text.length > 2000 ? text.slice(0, 2000) + '\n...' : text;
+  return el;
+}
+
+function makeExpandable(row: HTMLElement, key: string, selector: string, create: () => HTMLElement): void {
+  row.classList.add('inspector-expandable');
+  if (expandedRows.has(key)) {
+    row.appendChild(create());
+  }
+  row.addEventListener('click', () => {
+    const existing = row.querySelector(selector);
+    if (existing) {
+      existing.remove();
+      expandedRows.delete(key);
+      return;
+    }
+    expandedRows.add(key);
+    row.appendChild(create());
+  });
+}
+
+function agentLabel(ev: InspectorEvent): string {
+  return ev.agent_type || ev.agent_id || 'Subagent';
+}
+
+function isAgentEvent(ev: InspectorEvent): boolean {
+  return ev.type === 'subagent_start' || ev.type === 'subagent_stop' || ev.type === 'teammate_idle';
+}
+
+function findAgentDuration(events: InspectorEvent[], stopIndex: number): number | null {
+  const stopEv = events[stopIndex];
+  if (stopEv.type !== 'subagent_stop' || !stopEv.agent_id) return null;
+  for (let j = stopIndex - 1; j >= 0; j--) {
+    if (events[j].type === 'subagent_start' && events[j].agent_id === stopEv.agent_id) {
+      return stopEv.timestamp - events[j].timestamp;
+    }
+  }
+  return null;
+}
+
+function createAgentDetailEl(ev: InspectorEvent, duration: number | null): HTMLDivElement {
+  const el = document.createElement('div');
+  el.className = 'inspector-agent-detail';
+  el.addEventListener('click', (e) => e.stopPropagation());
+
+  const entries: [string, string][] = [];
+  if (ev.agent_type) entries.push(['Type', ev.agent_type]);
+  if (ev.agent_id) entries.push(['ID', ev.agent_id]);
+
+  if (ev.type === 'subagent_stop') {
+    if (duration !== null) entries.push(['Duration', formatDuration(duration)]);
+    if (ev.agent_transcript_path) entries.push(['Transcript', ev.agent_transcript_path]);
+    if (ev.last_assistant_message) {
+      const msg = ev.last_assistant_message.length > 500
+        ? ev.last_assistant_message.slice(0, 500) + '...'
+        : ev.last_assistant_message;
+      entries.push(['Result', msg]);
+    }
+  }
+
+  if (entries.length === 0) {
+    el.textContent = 'No additional details';
+    return el;
+  }
+
+  for (const [label, value] of entries) {
+    const row = document.createElement('div');
+    row.className = 'inspector-agent-detail-row';
+    const labelEl = document.createElement('span');
+    labelEl.className = 'inspector-agent-detail-label';
+    labelEl.textContent = label;
+    const valueEl = document.createElement('span');
+    valueEl.className = 'inspector-agent-detail-value';
+    valueEl.textContent = value;
+    row.appendChild(labelEl);
+    row.appendChild(valueEl);
+    el.appendChild(row);
+  }
+
   return el;
 }
 

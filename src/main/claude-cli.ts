@@ -255,7 +255,7 @@ if ti:
 er=d.get(\\"error\\",\\"\\")
 if er:
  e[\\"error\\"]=er
-for fld in (\\"agent_id\\",\\"message\\",\\"task_id\\",\\"worktree_path\\",\\"cwd\\",\\"file_path\\",\\"config_key\\",\\"question\\",\\"answer\\"):
+for fld in (\\"agent_id\\",\\"agent_type\\",\\"last_assistant_message\\",\\"agent_transcript_path\\",\\"message\\",\\"task_id\\",\\"worktree_path\\",\\"cwd\\",\\"file_path\\",\\"config_key\\",\\"question\\",\\"answer\\"):
  v=d.get(fld,\\"\\")
  if v:
   e[fld]=v
