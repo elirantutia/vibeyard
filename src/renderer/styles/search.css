@@ -40,6 +40,19 @@
   width: 200px;
 }
 
+.search-result-count {
+  min-width: 72px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.search-result-count.empty {
+  color: var(--text-secondary);
+}
+
 .search-toggle-btn,
 .search-nav-btn {
   background: none;

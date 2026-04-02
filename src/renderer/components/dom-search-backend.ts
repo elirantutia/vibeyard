@@ -1,4 +1,4 @@
-import type { SearchBackend } from './search-bar.js';
+import type { SearchBackend, SearchResultState } from './search-bar.js';
 
 interface MatchInfo {
   element: HTMLElement;
@@ -21,6 +21,7 @@ export class DomSearchBackend implements SearchBackend {
   private lastOptions = { caseSensitive: false, regex: false };
   private originals = new Map<HTMLElement, string>();
   private highlighted = false;
+  private listeners = new Set<(state: SearchResultState) => void>();
 
   constructor(
     private body: HTMLElement,
@@ -29,24 +30,32 @@ export class DomSearchBackend implements SearchBackend {
 
   findNext(query: string, options: { caseSensitive: boolean; regex: boolean }): void {
     const changed = this.search(query, options);
-    if (this.matches.length === 0) return;
+    if (this.matches.length === 0) {
+      this.emitResultState();
+      return;
+    }
     this.currentIndex = (this.currentIndex + 1) % this.matches.length;
     if (changed) {
       this.renderHighlights();
     } else {
       this.moveCurrent();
     }
+    this.emitResultState();
   }
 
   findPrevious(query: string, options: { caseSensitive: boolean; regex: boolean }): void {
     const changed = this.search(query, options);
-    if (this.matches.length === 0) return;
+    if (this.matches.length === 0) {
+      this.emitResultState();
+      return;
+    }
     this.currentIndex = (this.currentIndex - 1 + this.matches.length) % this.matches.length;
     if (changed) {
       this.renderHighlights();
     } else {
       this.moveCurrent();
     }
+    this.emitResultState();
   }
 
   clearDecorations(): void {
@@ -55,6 +64,7 @@ export class DomSearchBackend implements SearchBackend {
     this.currentIndex = -1;
     this.lastQuery = '';
     this.highlighted = false;
+    this.emitResultState();
   }
 
   getContainer(): HTMLElement {
@@ -63,6 +73,19 @@ export class DomSearchBackend implements SearchBackend {
 
   focus(): void {
     // No specific element to refocus for file panes
+  }
+
+  getResultState(): SearchResultState {
+    return {
+      currentIndex: this.currentIndex,
+      totalCount: this.matches.length,
+    };
+  }
+
+  subscribe(listener: (state: SearchResultState) => void): () => void {
+    this.listeners.add(listener);
+    listener(this.getResultState());
+    return () => this.listeners.delete(listener);
   }
 
   private restoreOriginals(): void {
@@ -174,6 +197,13 @@ export class DomSearchBackend implements SearchBackend {
     const current = this.body.querySelector('.search-match-current') as HTMLElement | null;
     if (current) {
       current.scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  private emitResultState(): void {
+    const state = this.getResultState();
+    for (const listener of this.listeners) {
+      listener(state);
     }
   }
 }
