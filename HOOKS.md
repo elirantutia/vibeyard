@@ -1,6 +1,6 @@
 # Hooks & Session State Map
 
-## 25 Hook Events (7 core + 18 inspector-only)
+## 26 Hook Events (7 core + 19 inspector-only)
 
 ### Core Hook Events → Session Status
 
@@ -54,13 +54,14 @@ waiting
 | `.cost` | `statusline.sh` (Python script via statusLine setting) | Cost, tokens, context window |
 | `.toolfailure` | `PostToolUseFailure` + `PostToolUse` (error results) | tool_name, tool_input, error |
 
-## Inspector-Only Hook Events (18 additional)
+## Inspector-Only Hook Events (19 additional)
 
 These hooks write only to the `.events` inspector log — they do NOT change session status.
 
 | Hook Event | Inspector Event Type | Description |
 |---|---|---|
 | `PreToolUse` | `pre_tool_use` | Before a tool executes |
+| `PermissionDenied` | `permission_denied` | Tool call denied by Claude auto permissions |
 | `SubagentStart` | `subagent_start` | Subagent spawned |
 | `SubagentStop` | `subagent_stop` | Subagent finished |
 | `Notification` | `notification` | Claude sent a notification |

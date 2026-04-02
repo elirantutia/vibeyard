@@ -323,6 +323,7 @@ with open(f\\"${STATUS_DIR}/\\"+sid+\\".events\\",\\"a\\") as f:
   // Inspector-only hooks: log to .events file without changing session status
   const inspectorOnlyEvents: Record<string, InspectorEventType> = {
     PreToolUse: 'pre_tool_use',
+    PermissionDenied: 'permission_denied',
     SubagentStart: 'subagent_start',
     SubagentStop: 'subagent_stop',
     Notification: 'notification',

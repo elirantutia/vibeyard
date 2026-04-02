@@ -194,6 +194,7 @@
 .inspector-badge-task { background: rgba(38,198,166,0.2); color: #26c6a6; }
 .inspector-badge-system { background: rgba(120,144,176,0.18); color: #90a4ae; }
 .inspector-badge-notify { background: rgba(255,152,0,0.2); color: #ffb74d; }
+.inspector-badge-mcp { background: rgba(255,255,255,0.08); color: #7dd3fc; border: 1px solid rgba(125,211,252,0.35); }
 .inspector-badge-default { background: var(--bg-tertiary); color: var(--text-muted); }
 
 /* --- Agent group nesting --- */
@@ -252,11 +253,44 @@
   font-family: monospace;
 }
 
-.inspector-tool-input {
+.inspector-tool-detail {
   width: 100%;
   margin-top: 4px;
   padding: 6px 8px;
   background: var(--bg-primary);
+  border-radius: 3px;
+  border-left: 2px solid #7dd3fc;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  user-select: text;
+  cursor: text;
+}
+
+.inspector-tool-detail-row {
+  display: flex;
+  gap: 8px;
+  font-size: 10px;
+  font-family: monospace;
+}
+
+.inspector-tool-detail-label {
+  color: var(--text-muted);
+  min-width: 65px;
+  flex-shrink: 0;
+}
+
+.inspector-tool-detail-value {
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.inspector-tool-input {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  background: transparent;
   border-radius: 3px;
   color: var(--text-secondary);
   font-size: 10px;

@@ -52,6 +52,65 @@ export function createToolInputEl(toolInput: unknown): HTMLPreElement {
   return el;
 }
 
+export interface McpToolInfo {
+  rawToolName: string;
+  server: string;
+  tool: string;
+  displayLabel: string;
+}
+
+export function parseMcpToolName(toolName?: string): McpToolInfo | null {
+  if (!toolName?.startsWith('mcp__')) return null;
+  const parts = toolName.split('__');
+  if (parts.length < 3) return null;
+
+  const server = parts[1]?.trim();
+  const tool = parts.slice(2).join('__').trim();
+  if (!server || !tool) return null;
+
+  return {
+    rawToolName: toolName,
+    server,
+    tool,
+    displayLabel: `${server} / ${tool}`,
+  };
+}
+
+export function isMcpToolEvent(ev: Pick<InspectorEvent, 'type' | 'tool_name'>): boolean {
+  if (!parseMcpToolName(ev.tool_name)) return false;
+  return ev.type === 'pre_tool_use'
+    || ev.type === 'tool_use'
+    || ev.type === 'tool_failure'
+    || ev.type === 'permission_request'
+    || ev.type === 'permission_denied';
+}
+
+export function createToolDetailEl(toolInput: unknown, rawToolName?: string): HTMLDivElement {
+  const el = document.createElement('div');
+  el.className = 'inspector-tool-detail';
+  el.addEventListener('click', (e) => e.stopPropagation());
+
+  if (rawToolName) {
+    const row = document.createElement('div');
+    row.className = 'inspector-tool-detail-row';
+
+    const labelEl = document.createElement('span');
+    labelEl.className = 'inspector-tool-detail-label';
+    labelEl.textContent = 'Raw Tool';
+
+    const valueEl = document.createElement('span');
+    valueEl.className = 'inspector-tool-detail-value';
+    valueEl.textContent = rawToolName;
+
+    row.appendChild(labelEl);
+    row.appendChild(valueEl);
+    el.appendChild(row);
+  }
+
+  el.appendChild(createToolInputEl(toolInput));
+  return el;
+}
+
 export function makeExpandable(row: HTMLElement, key: string, selector: string, create: () => HTMLElement): void {
   row.classList.add('inspector-expandable');
   if (inspectorState.expandedRows.has(key)) {
@@ -160,7 +219,7 @@ export function badgeClass(type: string): string {
     case 'tool_failure': case 'stop_failure': return 'failure';
     case 'stop': return 'stop';
     case 'session_start': return 'start';
-    case 'permission_request': case 'elicitation': case 'elicitation_result': return 'input';
+    case 'permission_request': case 'permission_denied': case 'elicitation': case 'elicitation_result': return 'input';
     case 'subagent_start': case 'subagent_stop': case 'teammate_idle': return 'agent';
     case 'session_end': case 'pre_compact': case 'post_compact': case 'instructions_loaded': return 'lifecycle';
     case 'task_created': case 'task_completed': return 'task';
@@ -181,6 +240,7 @@ export function badgeLabel(type: string): string {
     case 'session_start': return 'Start';
     case 'session_end': return 'End';
     case 'permission_request': return 'Input';
+    case 'permission_denied': return 'Denied';
     case 'subagent_start': return 'Agent';
     case 'subagent_stop': return 'Agent';
     case 'notification': return 'Notify';

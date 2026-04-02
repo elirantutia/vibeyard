@@ -252,6 +252,7 @@ export type InspectorEventType =
   | 'session_start' | 'user_prompt' | 'tool_use' | 'tool_failure'
   | 'stop' | 'stop_failure' | 'permission_request'
   // Inspector-only events
+  | 'permission_denied'
   | 'pre_tool_use'
   | 'subagent_start' | 'subagent_stop'
   | 'notification'

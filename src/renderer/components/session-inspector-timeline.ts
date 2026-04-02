@@ -11,8 +11,10 @@ import {
   isAgentEvent,
   findAgentDuration,
   makeExpandable,
-  createToolInputEl,
+  createToolDetailEl,
   createAgentDetailEl,
+  parseMcpToolName,
+  isMcpToolEvent,
   escapeHtml,
 } from './session-inspector-utils.js';
 
@@ -192,11 +194,19 @@ export function renderTimeline(container: HTMLElement): void {
     badge.className = `inspector-badge inspector-badge-${badgeClass(ev.type)}`;
     badge.textContent = badgeLabel(ev.type);
 
+    const mcpTool = parseMcpToolName(ev.tool_name);
+    const showMcpBadge = mcpTool && isMcpToolEvent(ev);
+    const mcpBadge = showMcpBadge ? document.createElement('span') : null;
+    if (mcpBadge) {
+      mcpBadge.className = 'inspector-badge inspector-badge-mcp';
+      mcpBadge.textContent = 'MCP';
+    }
+
     // Description
     const desc = document.createElement('span');
     desc.className = 'inspector-desc';
     if (ev.tool_name) {
-      desc.textContent = ev.tool_name;
+      desc.textContent = mcpTool?.displayLabel ?? ev.tool_name;
     } else if (ev.type === 'user_prompt') {
       desc.textContent = 'User prompt submitted';
     } else if (ev.type === 'stop') {
@@ -265,14 +275,15 @@ export function renderTimeline(container: HTMLElement): void {
 
     row.appendChild(timeEl);
     row.appendChild(badge);
+    if (mcpBadge) row.appendChild(mcpBadge);
     row.appendChild(desc);
     row.appendChild(durationEl);
     row.appendChild(costEl);
 
     // Expandable tool input
     if (ev.tool_input) {
-      makeExpandable(row, `${ev.timestamp}:${ev.type}:${ev.tool_name || ''}`, '.inspector-tool-input',
-        () => createToolInputEl(ev.tool_input!));
+      makeExpandable(row, `${ev.timestamp}:${ev.type}:${ev.tool_name || ''}`, '.inspector-tool-detail',
+        () => createToolDetailEl(ev.tool_input!, mcpTool?.rawToolName));
     }
 
     // Expandable agent detail (for unmatched agent events only)

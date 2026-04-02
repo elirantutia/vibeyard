@@ -419,7 +419,7 @@ describe('installHooks', () => {
     expect(vibeyardHookCount).toBe(2);
   });
 
-  it('installs all 25 hook events (7 core + 18 inspector-only)', () => {
+  it('installs all 26 hook events (7 core + 19 inspector-only)', () => {
     mockReadFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
 
     installHooks();
@@ -435,7 +435,7 @@ describe('installHooks', () => {
 
     // Inspector-only 18 hooks
     const inspectorEvents = [
-      'PreToolUse', 'SubagentStart', 'SubagentStop', 'Notification',
+      'PreToolUse', 'PermissionDenied', 'SubagentStart', 'SubagentStop', 'Notification',
       'PreCompact', 'PostCompact', 'SessionEnd', 'TaskCreated', 'TaskCompleted',
       'WorktreeCreate', 'WorktreeRemove', 'CwdChanged', 'FileChanged',
       'ConfigChange', 'Elicitation', 'ElicitationResult', 'InstructionsLoaded',
@@ -445,7 +445,7 @@ describe('installHooks', () => {
       expect(hookEvents).toContain(event);
     }
 
-    expect(hookEvents).toHaveLength(25);
+    expect(hookEvents).toHaveLength(26);
 
     // Core hooks should have status writer + event logger (at least 2 hooks)
     for (const event of coreEvents) {
