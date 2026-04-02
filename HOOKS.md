@@ -52,7 +52,7 @@ waiting
 | `.status` | Hook commands | Session status string |
 | `.sessionid` | `SessionStart` + `UserPromptSubmit` hooks | CLI session ID for resume |
 | `.cost` | `statusline.sh` (Python script via statusLine setting) | Cost, tokens, context window |
-| `.toolfailure` | `PostToolUseFailure` hook | tool_name, tool_input, error |
+| `.toolfailure` | `PostToolUseFailure` + `PostToolUse` (error results) | tool_name, tool_input, error |
 
 ## Inspector-Only Hook Events (18 additional)
 

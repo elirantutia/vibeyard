@@ -4,22 +4,7 @@ import picomatch from 'picomatch';
 import type { ReadinessCheck } from '../../../shared/types';
 import type { ReadinessCheckProducer, TaggedCheck, AnalysisContext } from '../types';
 import { fileExists, readFileSafe, countFileLines } from '../utils';
-
-const DEFAULT_SCAN_IGNORE = [
-  'package-lock.json',
-  'yarn.lock',
-  'pnpm-lock.yaml',
-  'Gemfile.lock',
-  'Cargo.lock',
-  'composer.lock',
-  'poetry.lock',
-  'go.sum',
-  'Pipfile.lock',
-  '*.min.js',
-  '*.min.css',
-  '*.bundle.js',
-  '*.generated.*',
-];
+import { DEFAULT_SCAN_IGNORE } from '../../../shared/constants';
 
 const VIBEYARDIGNORE_HEADER = `# Files and patterns to exclude from AI readiness large-file scanning.
 # One pattern per line. Supports glob syntax (e.g. *.min.js, src/**/*.generated.ts).
