@@ -154,6 +154,11 @@ export function renderLayout(): void {
 
   if (!project || project.sessions.length === 0) {
     hideAllPanes();
+    hideAllInspectorPanes();
+    hideAllFileViewerPanes();
+    hideAllFileReaderPanes();
+    hideAllRemotePanes();
+    hideAllBrowserTabPanes();
     setContainerClass('');
     showEmptyState(project);
     return;

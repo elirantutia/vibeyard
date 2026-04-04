@@ -313,6 +313,18 @@ describe('removeProject()', () => {
     expect(removedCb).toHaveBeenCalledWith(p.id);
     expect(changedCb).toHaveBeenCalled();
   });
+
+  it('emits session-removed for each session before removing project', () => {
+    const sessionRemovedCb = vi.fn();
+    const p = addProject();
+    const s1 = appState.addSession(p.id, 'S1')!;
+    const s2 = appState.addSession(p.id, 'S2')!;
+    appState.on('session-removed', sessionRemovedCb);
+    appState.removeProject(p.id);
+    expect(sessionRemovedCb).toHaveBeenCalledTimes(2);
+    expect(sessionRemovedCb).toHaveBeenCalledWith({ projectId: p.id, sessionId: s1.id });
+    expect(sessionRemovedCb).toHaveBeenCalledWith({ projectId: p.id, sessionId: s2.id });
+  });
 });
 
 describe('addSession()', () => {

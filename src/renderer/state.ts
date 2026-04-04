@@ -208,11 +208,17 @@ class AppState {
   }
 
   removeProject(id: string): void {
+    const project = this.state.projects.find((p) => p.id === id);
+    const sessions = project?.sessions ?? [];
+
     this.state.projects = this.state.projects.filter((p) => p.id !== id);
     if (this.state.activeProjectId === id) {
       this.state.activeProjectId = this.state.projects[0]?.id ?? null;
     }
     this.persist();
+    for (const session of sessions) {
+      this.emit('session-removed', { projectId: id, sessionId: session.id });
+    }
     this.emit('project-removed', id);
     this.emit('project-changed');
   }
