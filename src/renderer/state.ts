@@ -2,6 +2,7 @@ import type { VibeyardApi } from './types.js';
 import type { SessionRecord, ProjectRecord, Preferences, PersistedState, ArchivedSession, ProviderId, CostInfo, ContextWindowInfo, InitialContextSnapshot, ReadinessResult } from '../shared/types.js';
 import { getCost, restoreCost } from './session-cost.js';
 import { restoreContext } from './session-context.js';
+import { getProviderCapabilities } from './provider-availability.js';
 
 export type { SessionRecord, ProjectRecord, Preferences, PersistedState, ArchivedSession } from '../shared/types.js';
 
@@ -219,8 +220,13 @@ class AppState {
   addPlanSession(projectId: string, name: string): SessionRecord | undefined {
     const project = this.state.projects.find((p) => p.id === projectId);
     if (!project) return undefined;
+    const activeSession = project.sessions.find((s) => s.id === project.activeSessionId);
+    const providerId = activeSession?.providerId ?? this.state.preferences.defaultProvider ?? 'claude';
+    const caps = getProviderCapabilities(providerId);
+    const planArg = caps?.planModeArg ?? '';
     const base = project.defaultArgs ?? '';
-    return this.addSession(projectId, name, `${base} --permission-mode plan`.trim());
+    const args = [base, planArg].filter(Boolean).join(' ').trim() || undefined;
+    return this.addSession(projectId, name, args, providerId);
   }
 
   addSession(projectId: string, name: string, args?: string, providerId?: ProviderId): SessionRecord | undefined {

@@ -14,6 +14,7 @@ const fakeMeta: CliProviderMeta = {
     hookStatus: false,
     configReading: false,
     shiftEnterNewline: false,
+    pendingPromptTrigger: 'session-start',
   },
   defaultContextWindowSize: 128_000,
 };

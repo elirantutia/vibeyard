@@ -65,7 +65,7 @@ export function resetHookWatcher(): void {
 }
 
 export function registerIpcHandlers(): void {
-  ipcMain.handle('pty:create', (_event, sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs: string, providerId: ProviderId = 'claude') => {
+  ipcMain.handle('pty:create', (_event, sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs: string, providerId: ProviderId = 'claude', initialPrompt?: string) => {
     const win = BrowserWindow.getAllWindows()[0];
     if (!win) return;
 
@@ -101,6 +101,7 @@ export function registerIpcHandlers(): void {
       isResume,
       extraArgs,
       providerId,
+      initialPrompt,
       (data) => {
         const w = BrowserWindow.getAllWindows()[0];
         if (w && !w.isDestroyed()) {

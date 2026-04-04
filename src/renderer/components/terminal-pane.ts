@@ -11,6 +11,7 @@ import type { ProviderId } from '../types.js';
 import { getProviderCapabilities } from '../provider-availability.js';
 import { FilePathLinkProvider, GithubLinkProvider } from './terminal-link-provider.js';
 
+
 interface TerminalInstance {
   terminal: Terminal;
   fitAddon: FitAddon;
@@ -26,6 +27,7 @@ interface TerminalInstance {
   spawned: boolean;
   exited: boolean;
   pendingPrompt: string | null;
+  pendingPromptTimer: ReturnType<typeof setTimeout> | null;
 }
 
 const instances = new Map<string, TerminalInstance>();
@@ -140,6 +142,7 @@ export function createTerminalPane(
     spawned: false,
     exited: false,
     pendingPrompt: null,
+    pendingPromptTimer: null,
   };
 
   instances.set(sessionId, instance);
@@ -189,16 +192,13 @@ export function setPendingPrompt(sessionId: string, prompt: string): void {
   }
 }
 
-export function initPendingPromptListener(): void {
-  window.vibeyard.session.onHookStatus((sessionId, _status, hookName) => {
-    if (hookName !== 'SessionStart') return;
-    const instance = instances.get(sessionId);
-    if (!instance?.pendingPrompt) return;
-    const prompt = instance.pendingPrompt;
-    instance.pendingPrompt = null;
-    window.vibeyard.pty.write(sessionId, prompt + '\r');
-  });
+function clearPendingPromptTimer(instance: TerminalInstance): void {
+  if (instance.pendingPromptTimer) {
+    clearTimeout(instance.pendingPromptTimer);
+    instance.pendingPromptTimer = null;
+  }
 }
+
 
 export async function spawnTerminal(sessionId: string): Promise<void> {
   const instance = instances.get(sessionId);
@@ -215,7 +215,12 @@ export async function spawnTerminal(sessionId: string): Promise<void> {
     markFreshSession(sessionId);
   }
   initSession(sessionId);
-  await window.vibeyard.pty.create(sessionId, instance.projectPath, instance.cliSessionId, instance.isResume, instance.args, instance.providerId);
+  let initialPrompt: string | undefined;
+  if (instance.pendingPrompt && getProviderCapabilities(instance.providerId)?.pendingPromptTrigger === 'startup-arg') {
+    initialPrompt = instance.pendingPrompt;
+    instance.pendingPrompt = null;
+  }
+  await window.vibeyard.pty.create(sessionId, instance.projectPath, instance.cliSessionId, instance.isResume, instance.args, instance.providerId, initialPrompt);
   instance.isResume = true; // subsequent spawns (e.g. Restart Session) should resume
 }
 
@@ -328,6 +333,7 @@ export function destroyTerminal(sessionId: string): void {
   const instance = instances.get(sessionId);
   if (!instance) return;
 
+  clearPendingPromptTimer(instance);
   window.vibeyard.pty.kill(sessionId);
   instance.terminal.dispose();
   instance.element.remove();

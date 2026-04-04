@@ -57,6 +57,8 @@ describe('meta', () => {
     expect(caps.hookStatus).toBe(true);
     expect(caps.configReading).toBe(true);
     expect(caps.shiftEnterNewline).toBe(true);
+    expect(caps.pendingPromptTrigger).toBe('startup-arg');
+    expect(caps.planModeArg).toBe('--permission-mode plan');
   });
 
   it('has defaultContextWindowSize of 200,000', () => {
@@ -154,6 +156,16 @@ describe('buildArgs', () => {
   it('combines session args and extra args', () => {
     const args = provider.buildArgs({ cliSessionId: 'sid-1', isResume: true, extraArgs: '--verbose' });
     expect(args).toEqual(['-r', 'sid-1', '--verbose']);
+  });
+
+  it('passes initialPrompt as positional arg', () => {
+    const args = provider.buildArgs({ cliSessionId: null, isResume: false, extraArgs: '', initialPrompt: 'fix the linter' });
+    expect(args).toEqual(['fix the linter']);
+  });
+
+  it('passes initialPrompt after session-id args', () => {
+    const args = provider.buildArgs({ cliSessionId: 'sid-1', isResume: false, extraArgs: '', initialPrompt: 'fix the linter' });
+    expect(args).toEqual(['--session-id', 'sid-1', 'fix the linter']);
   });
 });
 

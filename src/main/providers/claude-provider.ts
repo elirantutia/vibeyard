@@ -22,6 +22,8 @@ export class ClaudeProvider implements CliProvider {
       hookStatus: true,
       configReading: true,
       shiftEnterNewline: true,
+      pendingPromptTrigger: 'startup-arg',
+      planModeArg: '--permission-mode plan',
     },
     defaultContextWindowSize: 200_000,
   };
@@ -42,7 +44,7 @@ export class ClaudeProvider implements CliProvider {
     return env;
   }
 
-  buildArgs(opts: { cliSessionId: string | null; isResume: boolean; extraArgs: string }): string[] {
+  buildArgs(opts: { cliSessionId: string | null; isResume: boolean; extraArgs: string; initialPrompt?: string }): string[] {
     const args: string[] = [];
     if (opts.cliSessionId) {
       if (opts.isResume) {
@@ -50,6 +52,9 @@ export class ClaudeProvider implements CliProvider {
       } else {
         args.push('--session-id', opts.cliSessionId);
       }
+    }
+    if (opts.initialPrompt) {
+      args.push(opts.initialPrompt);
     }
     if (opts.extraArgs) {
       args.push(...opts.extraArgs.split(/\s+/).filter(Boolean));

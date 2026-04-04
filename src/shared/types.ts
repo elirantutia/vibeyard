@@ -3,6 +3,7 @@
 // --- Provider ---
 
 export type ProviderId = 'claude' | 'codex' | 'copilot' | 'gemini';
+export type PendingPromptTrigger = 'session-start' | 'first-output' | 'startup-arg';
 
 export interface CliProviderCapabilities {
   sessionResume: boolean;
@@ -11,6 +12,8 @@ export interface CliProviderCapabilities {
   hookStatus: boolean;
   configReading: boolean;
   shiftEnterNewline: boolean;
+  pendingPromptTrigger: PendingPromptTrigger;
+  planModeArg?: string;
 }
 
 export interface CliProviderMeta {

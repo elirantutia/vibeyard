@@ -71,6 +71,7 @@ describe('meta', () => {
     expect(caps.hookStatus).toBe(true);
     expect(caps.configReading).toBe(true);
     expect(caps.shiftEnterNewline).toBe(false);
+    expect(caps.pendingPromptTrigger).toBe('startup-arg');
   });
 
   it('has defaultContextWindowSize of 200,000', () => {
@@ -158,6 +159,16 @@ describe('buildArgs', () => {
   it('returns [] when cliSessionId is null', () => {
     const args = provider.buildArgs({ cliSessionId: null, isResume: false, extraArgs: '' });
     expect(args).toEqual([]);
+  });
+
+  it('passes initialPrompt as positional arg when not resuming', () => {
+    const args = provider.buildArgs({ cliSessionId: null, isResume: false, extraArgs: '', initialPrompt: 'fix the bug' });
+    expect(args).toEqual(['fix the bug']);
+  });
+
+  it('does not pass initialPrompt when resuming', () => {
+    const args = provider.buildArgs({ cliSessionId: 'sid-1', isResume: true, extraArgs: '', initialPrompt: 'fix the bug' });
+    expect(args).toEqual(['resume', 'sid-1']);
   });
 
   it('splits extraArgs on whitespace and appends', () => {

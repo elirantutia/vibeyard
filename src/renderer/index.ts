@@ -3,7 +3,7 @@ import { initSidebar, promptNewProject } from './components/sidebar.js';
 import { initTabBar } from './components/tab-bar.js';
 import { initSplitLayout } from './components/split-layout.js';
 import { initKeybindings } from './keybindings.js';
-import { handlePtyData, destroyTerminal, updateCostDisplay, updateContextDisplay, initPendingPromptListener } from './components/terminal-pane.js';
+import { handlePtyData, destroyTerminal, updateCostDisplay, updateContextDisplay } from './components/terminal-pane.js';
 import { setIdle, setHookStatus, notifyInterrupt } from './session-activity.js';
 import { parseCost, setCostData, onChange as onCostChange } from './session-cost.js';
 import { parseTitle, clearSession as clearTitleSession } from './session-title.js';
@@ -45,8 +45,6 @@ window.vibeyard.app.onQuitting(() => {
 });
 
 async function main(): Promise<void> {
-  initPendingPromptListener();
-
   // Wire PTY data/exit events from main process
   window.vibeyard.pty.onData((sessionId, data) => {
     if (isShellSessionId(sessionId)) {

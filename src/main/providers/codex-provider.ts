@@ -21,6 +21,7 @@ export class CodexProvider implements CliProvider {
       hookStatus: true,
       configReading: true,
       shiftEnterNewline: false,
+      pendingPromptTrigger: 'startup-arg',
     },
     defaultContextWindowSize: 200_000,
   };
@@ -40,10 +41,12 @@ export class CodexProvider implements CliProvider {
     return env;
   }
 
-  buildArgs(opts: { cliSessionId: string | null; isResume: boolean; extraArgs: string }): string[] {
+  buildArgs(opts: { cliSessionId: string | null; isResume: boolean; extraArgs: string; initialPrompt?: string }): string[] {
     const args: string[] = [];
     if (opts.isResume && opts.cliSessionId) {
       args.push('resume', opts.cliSessionId);
+    } else if (opts.initialPrompt) {
+      args.push(opts.initialPrompt);
     }
     if (opts.extraArgs) {
       args.push(...opts.extraArgs.split(/\s+/).filter(Boolean));

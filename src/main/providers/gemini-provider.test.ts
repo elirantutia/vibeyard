@@ -71,6 +71,8 @@ describe('meta', () => {
     expect(caps.hookStatus).toBe(true);
     expect(caps.configReading).toBe(true);
     expect(caps.shiftEnterNewline).toBe(false);
+    expect(caps.pendingPromptTrigger).toBe('startup-arg');
+    expect(caps.planModeArg).toBe('--approval-mode=plan');
   });
 
   it('has defaultContextWindowSize of 1,000,000', () => {
@@ -168,6 +170,16 @@ describe('buildArgs', () => {
   it('combines resume args and extra args', () => {
     const args = provider.buildArgs({ cliSessionId: 'sid-1', isResume: true, extraArgs: '--model gemini-2.5-flash' });
     expect(args).toEqual(['-r', 'sid-1', '--model', 'gemini-2.5-flash']);
+  });
+
+  it('appends -i flag when initialPrompt is provided', () => {
+    const args = provider.buildArgs({ cliSessionId: null, isResume: false, extraArgs: '', initialPrompt: 'Fix the hooks config' });
+    expect(args).toEqual(['-i', 'Fix the hooks config']);
+  });
+
+  it('does not append -i flag when initialPrompt is absent', () => {
+    const args = provider.buildArgs({ cliSessionId: null, isResume: false, extraArgs: '' });
+    expect(args).toEqual([]);
   });
 });
 

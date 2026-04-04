@@ -2,6 +2,7 @@ import { appState } from '../state.js';
 import { closeModal } from './modal.js';
 import { esc, scoreColor } from '../dom-utils.js';
 import { setPendingPrompt } from './terminal-pane.js';
+import { promptNewSession } from './tab-bar.js';
 import { loadProviderMetas, getCachedProviderMetas, getProviderDisplayName } from '../provider-availability.js';
 import type { ReadinessResult, ReadinessCategory, ReadinessCheck, ReadinessCheckStatus } from '../../shared/types.js';
 
@@ -35,6 +36,15 @@ function handleFix(check: ReadinessCheck): void {
   closeReadinessModal();
 
   setPendingPrompt(session.id, check.fixPrompt!);
+}
+
+function handleFixCustomSession(check: ReadinessCheck): void {
+  if (!check.fixPrompt) return;
+
+  promptNewSession((session) => {
+    closeReadinessModal();
+    setPendingPrompt(session.id, check.fixPrompt!);
+  });
 }
 
 function renderCategory(category: ReadinessCategory): HTMLElement {
@@ -91,6 +101,9 @@ function renderCategory(category: ReadinessCategory): HTMLElement {
     row.appendChild(info);
 
     if (check.fixPrompt && check.status !== 'pass') {
+      const fixGroup = document.createElement('div');
+      fixGroup.className = 'readiness-fix-group';
+
       const fixBtn = document.createElement('button');
       fixBtn.className = 'readiness-fix-btn';
       fixBtn.textContent = 'Fix';
@@ -98,7 +111,19 @@ function renderCategory(category: ReadinessCategory): HTMLElement {
         e.stopPropagation();
         handleFix(check);
       });
-      row.appendChild(fixBtn);
+
+      const customBtn = document.createElement('button');
+      customBtn.className = 'readiness-fix-dropdown-btn';
+      customBtn.textContent = '\u25BC';
+      customBtn.title = 'Fix in custom session';
+      customBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleFixCustomSession(check);
+      });
+
+      fixGroup.appendChild(fixBtn);
+      fixGroup.appendChild(customBtn);
+      row.appendChild(fixGroup);
     }
 
     body.appendChild(row);
@@ -235,4 +260,3 @@ function closeReadinessModal(): void {
   modal.classList.remove('modal-wide');
   btnConfirm.textContent = 'Create';
 }
-
