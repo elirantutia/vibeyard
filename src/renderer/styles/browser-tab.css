@@ -1,0 +1,221 @@
+/* Browser Tab */
+.browser-tab-pane {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: 2px solid var(--pane-unfocus);
+  border-radius: 2px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+}
+
+.browser-tab-pane.split {
+  position: relative;
+}
+
+.browser-tab-pane.hidden {
+  display: none;
+}
+
+/* Toolbar */
+.browser-tab-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.browser-nav-btn {
+  padding: 4px 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.browser-nav-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.browser-url-input {
+  flex: 1;
+  padding: 6px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+}
+
+.browser-url-input:focus {
+  border-color: var(--accent);
+}
+
+.browser-go-btn {
+  padding: 6px 12px;
+  background: var(--accent);
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.browser-go-btn:hover {
+  opacity: 0.9;
+}
+
+.browser-inspect-btn {
+  padding: 6px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.browser-inspect-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.browser-inspect-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* Webview */
+.browser-webview {
+  flex: 1;
+  border: none;
+  background: #fff;
+}
+
+/* Inspect Panel */
+.browser-inspect-panel {
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.inspect-element-info {
+  font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.inspect-tag-line {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.inspect-text-line {
+  color: var(--text-secondary);
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.inspect-selector-line {
+  color: var(--text-muted, var(--text-secondary));
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.inspect-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.inspect-instruction-input {
+  flex: 1;
+  padding: 8px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+}
+
+.inspect-instruction-input:focus {
+  border-color: var(--accent);
+}
+
+/* Split button: Send to AI + dropdown arrow */
+.inspect-submit-group {
+  display: flex;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.inspect-submit-btn {
+  padding: 8px 16px;
+  background: var(--accent);
+  border: none;
+  border-radius: 4px 0 0 4px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.inspect-submit-btn:hover {
+  opacity: 0.9;
+}
+
+.inspect-dropdown-btn {
+  padding: 8px 8px;
+  background: var(--accent);
+  border: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 0 4px 4px 0;
+  color: #fff;
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.inspect-dropdown-btn:hover {
+  opacity: 0.9;
+}
+
+/* Tab badge */
+.tab-browser-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(46, 160, 67, 0.2);
+  color: #2ea043;
+  vertical-align: middle;
+  margin-right: 4px;
+}

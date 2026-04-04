@@ -357,15 +357,16 @@ function render(): void {
     const isDiff = session.type === 'diff-viewer';
     const isFileReader = session.type === 'file-reader';
     const isRemoteTab = session.type === 'remote-terminal';
-    const isSpecial = isMcp || isDiff || isFileReader || isRemoteTab;
+    const isBrowserTab = session.type === 'browser-tab';
+    const isSpecial = isMcp || isDiff || isFileReader || isRemoteTab || isBrowserTab;
     const sharing = isSharing(session.id);
     tab.className = 'tab-item' + (isActive ? ' active' : '') + (unread ? ' unread' : '') + (sharing ? ' tab-sharing' : '') + (isRemoteTab ? ' tab-remote' : '');
     tab.dataset.sessionId = session.id;
     tab.draggable = true;
-    tab.title = isDiff ? `Diff: ${session.diffFilePath || session.name}` : isMcp ? `MCP Inspector` : isFileReader ? `File: ${session.fileReaderPath || session.name}` : isRemoteTab ? `Remote: ${session.remoteHostName || session.name}` : buildTooltip(getStatus(session.id), session.cliSessionId);
+    tab.title = isDiff ? `Diff: ${session.diffFilePath || session.name}` : isMcp ? `MCP Inspector` : isFileReader ? `File: ${session.fileReaderPath || session.name}` : isRemoteTab ? `Remote: ${session.remoteHostName || session.name}` : isBrowserTab ? `Browser: ${session.browserTabUrl || 'New Tab'}` : buildTooltip(getStatus(session.id), session.cliSessionId);
     const providerId = session.providerId || 'claude';
     const providerIcon = hasMultipleAvailableProviders() ? `<img class="tab-provider-icon" src="assets/providers/${providerId}.png" alt="${providerId}" onerror="this.style.display='none'"> ` : '';
-    const namePrefix = isDiff ? '<span class="tab-diff-badge">DIFF</span> ' : isMcp ? '<span class="tab-mcp-badge">MCP</span> ' : isFileReader ? '<span class="tab-file-badge">FILE</span> ' : isRemoteTab ? '<span class="tab-remote-badge">P2P</span> ' : !isSpecial ? providerIcon : '';
+    const namePrefix = isDiff ? '<span class="tab-diff-badge">DIFF</span> ' : isMcp ? '<span class="tab-mcp-badge">MCP</span> ' : isFileReader ? '<span class="tab-file-badge">FILE</span> ' : isRemoteTab ? '<span class="tab-remote-badge">P2P</span> ' : isBrowserTab ? '<span class="tab-browser-badge">WEB</span> ' : !isSpecial ? providerIcon : '';
     const shareIndicator = sharing ? '<span class="tab-share-indicator" title="Sharing"></span>' : '';
     const statusDot = isSpecial ? '' : `<span class="tab-status ${getStatus(session.id)}"></span>`;
     tab.innerHTML = `
@@ -755,8 +756,19 @@ function showAddSessionContextMenu(x: number, y: number): void {
     showJoinDialog();
   });
 
+  const browserItem = document.createElement('div');
+  browserItem.className = 'tab-context-menu-item';
+  browserItem.textContent = 'New Browser Tab';
+  browserItem.addEventListener('click', (e) => {
+    e.stopPropagation();
+    hideTabContextMenu();
+    const project = appState.activeProject;
+    if (project) appState.addBrowserTabSession(project.id);
+  });
+
   menu.appendChild(quickItem);
   menu.appendChild(customItem);
+  menu.appendChild(browserItem);
   menu.appendChild(joinSeparator);
   menu.appendChild(joinItem);
   document.body.appendChild(menu);
@@ -767,7 +779,7 @@ function showAddSessionContextMenu(x: number, y: number): void {
   if (rect.bottom > window.innerHeight) menu.style.top = `${window.innerHeight - rect.height - 4}px`;
 }
 
-export async function promptNewSession(): Promise<void> {
+export async function promptNewSession(onCreated?: (session: SessionRecord) => void): Promise<void> {
   const project = appState.activeProject;
   if (!project) return;
 
@@ -815,7 +827,8 @@ export async function promptNewSession(): Promise<void> {
       const keepArgs = values['keep-args'] === 'true';
       project.defaultArgs = keepArgs ? (args || undefined) : undefined;
       const providerId = (values['provider'] || 'claude') as ProviderId;
-      appState.addSession(project.id, name, args, providerId);
+      const session = appState.addSession(project.id, name, args, providerId);
+      if (session && onCreated) onCreated(session);
     }
   });
 }

@@ -78,6 +78,7 @@ export interface VibeyardApi {
     focus(): void;
     getVersion(): Promise<string>;
     openExternal(url: string): Promise<void>;
+    getBrowserPreloadPath(): Promise<string>;
     onQuitting(callback: () => void): () => void;
   };
   mcp: {
@@ -220,6 +221,7 @@ const api: VibeyardApi = {
     focus: () => { ipcRenderer.send('app:focus'); },
     getVersion: () => ipcRenderer.invoke('app:getVersion'),
     openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', url),
+    getBrowserPreloadPath: () => ipcRenderer.invoke('app:getBrowserPreloadPath'),
     onQuitting: (cb: () => void) => onChannel('app:quitting', cb),
   },
   mcp: {

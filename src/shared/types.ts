@@ -72,7 +72,7 @@ export interface ContextWindowInfo {
 export interface SessionRecord {
   id: string;
   name: string;
-  type?: 'claude' | 'mcp-inspector' | 'diff-viewer' | 'file-reader' | 'remote-terminal';
+  type?: 'claude' | 'mcp-inspector' | 'diff-viewer' | 'file-reader' | 'remote-terminal' | 'browser-tab';
   providerId?: ProviderId;
   args?: string;
   cliSessionId: string | null;
@@ -90,6 +90,7 @@ export interface SessionRecord {
   contextWindow?: ContextWindowInfo;
   remoteHostName?: string;
   shareMode?: 'readonly' | 'readwrite';
+  browserTabUrl?: string;
 }
 
 export interface ArchivedSession {

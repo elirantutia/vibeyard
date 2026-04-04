@@ -309,6 +309,43 @@ class AppState {
     return session;
   }
 
+  addBrowserTabSession(projectId: string, url?: string): SessionRecord | undefined {
+    const project = this.state.projects.find((p) => p.id === projectId);
+    if (!project) return undefined;
+
+    // If a browser-tab with the same URL already exists, switch to it
+    if (url) {
+      const existing = project.sessions.find(
+        (s) => s.type === 'browser-tab' && s.browserTabUrl === url
+      );
+      if (existing) {
+        project.activeSessionId = existing.id;
+        this.persist();
+        this.emit('session-changed');
+        return existing;
+      }
+    }
+
+    let name = 'Browser';
+    if (url) {
+      try { name = new URL(url).hostname || url; } catch { name = url; }
+    }
+    const session: SessionRecord = {
+      id: crypto.randomUUID(),
+      name,
+      type: 'browser-tab',
+      browserTabUrl: url,
+      cliSessionId: null,
+      createdAt: new Date().toISOString(),
+    };
+    project.sessions.push(session);
+    project.activeSessionId = session.id;
+    this.persist();
+    this.emit('session-added', { projectId, session });
+    this.emit('session-changed');
+    return session;
+  }
+
   addFileReaderSession(projectId: string, filePath: string, lineNumber?: number): SessionRecord | undefined {
     const project = this.state.projects.find((p) => p.id === projectId);
     if (!project) return undefined;

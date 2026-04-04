@@ -242,6 +242,9 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('app:getVersion', () => app.getVersion());
+  ipcMain.handle('app:getBrowserPreloadPath', () =>
+    path.join(__dirname, '..', '..', 'preload', 'preload', 'browser-tab-preload.js')
+  );
   ipcMain.handle('app:openExternal', (_event, url: string) => {
     const parsed = new URL(url);
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {

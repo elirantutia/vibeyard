@@ -45,6 +45,14 @@ import {
   showRemotePane,
   hideAllRemotePanes,
 } from './remote-terminal-pane.js';
+import {
+  createBrowserTabPane,
+  destroyBrowserTabPane,
+  showBrowserTabPane,
+  hideAllBrowserTabPanes,
+  attachBrowserTabToContainer,
+  getBrowserTabInstance,
+} from './browser-tab-pane.js';
 import { quickNewSession } from './tab-bar.js';
 
 const container = document.getElementById('terminal-container')!;
@@ -90,7 +98,7 @@ export function initSplitLayout(): void {
 }
 
 function onSessionAdded(data: unknown): void {
-  const { session } = data as { projectId: string; session: { id: string; type?: string; cliSessionId: string | null; providerId?: string; args?: string; diffFilePath?: string; diffArea?: string; worktreePath?: string; fileReaderPath?: string; fileReaderLine?: number } };
+  const { session } = data as { projectId: string; session: { id: string; type?: string; cliSessionId: string | null; providerId?: string; args?: string; diffFilePath?: string; diffArea?: string; worktreePath?: string; fileReaderPath?: string; fileReaderLine?: number; browserTabUrl?: string } };
   const project = appState.activeProject;
   if (!project) return;
 
@@ -105,6 +113,9 @@ function onSessionAdded(data: unknown): void {
     renderLayout();
   } else if (session.type === 'remote-terminal') {
     // Remote terminal pane is created by share-manager before session-added fires
+    renderLayout();
+  } else if (session.type === 'browser-tab') {
+    createBrowserTabPane(session.id, session.browserTabUrl);
     renderLayout();
   } else {
     // Create and spawn immediately
@@ -130,6 +141,8 @@ function onSessionRemoved(data: unknown): void {
     destroyInspectorPane(sessionId);
   } else if (getRemoteTerminalInstance(sessionId)) {
     destroyRemoteTerminal(sessionId);
+  } else if (getBrowserTabInstance(sessionId)) {
+    destroyBrowserTabPane(sessionId);
   } else {
     destroyTerminal(sessionId);
   }
@@ -166,6 +179,10 @@ export function renderLayout(): void {
       }
     } else if (session.type === 'remote-terminal') {
       // Remote terminal instances are created by share-manager, skip here
+    } else if (session.type === 'browser-tab') {
+      if (!getBrowserTabInstance(session.id)) {
+        createBrowserTabPane(session.id, session.browserTabUrl);
+      }
     } else {
       if (!getTerminalInstance(session.id)) {
         createTerminalPane(session.id, project.path, session.cliSessionId, !!session.cliSessionId, session.args || '', session.providerId || 'claude', project.id);
@@ -178,6 +195,7 @@ export function renderLayout(): void {
   hideAllFileViewerPanes();
   hideAllFileReaderPanes();
   hideAllRemotePanes();
+  hideAllBrowserTabPanes();
 
   if (project.layout.mode === 'swarm' && project.layout.splitPanes.length >= 1) {
     renderSwarmMode(project);
@@ -190,7 +208,7 @@ export function renderLayout(): void {
   requestAnimationFrame(fitAllVisible);
 }
 
-/** Attach and show a non-CLI session pane (file-reader, diff-viewer, mcp-inspector). */
+/** Attach and show a non-CLI session pane. */
 function attachNonCliPane(session: { id: string; type?: string; fileReaderLine?: number }, target: HTMLElement, inSplit: boolean): void {
   if (session.type === 'file-reader') {
     attachFileReaderToContainer(session.id, target);
@@ -207,6 +225,9 @@ function attachNonCliPane(session: { id: string; type?: string; fileReaderLine?:
   } else if (session.type === 'remote-terminal') {
     attachRemoteToContainer(session.id, target);
     showRemotePane(session.id, inSplit);
+  } else if (session.type === 'browser-tab') {
+    attachBrowserTabToContainer(session.id, target);
+    showBrowserTabPane(session.id, inSplit);
   }
 }
 
