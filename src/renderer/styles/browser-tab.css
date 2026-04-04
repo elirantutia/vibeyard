@@ -101,11 +101,89 @@
   color: #fff;
 }
 
+/* Viewport container */
+.browser-viewport-container {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  background: var(--bg-primary);
+}
+
+.browser-viewport-container.responsive {
+  align-items: stretch;
+}
+
 /* Webview */
 .browser-webview {
-  flex: 1;
   border: none;
   background: #fff;
+  flex-shrink: 0;
+}
+
+.browser-viewport-container.responsive .browser-webview {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+}
+
+/* Viewport picker */
+.browser-viewport-wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.browser-viewport-btn {
+  padding: 6px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.browser-viewport-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.browser-viewport-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.browser-viewport-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  min-width: 180px;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.browser-viewport-dropdown.visible {
+  display: block;
+}
+
+.browser-viewport-item {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.browser-viewport-item:hover {
+  background: var(--bg-hover);
 }
 
 /* Inspect Panel */

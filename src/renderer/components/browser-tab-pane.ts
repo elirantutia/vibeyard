@@ -11,6 +11,21 @@ interface ElementInfo {
   pageUrl: string;
 }
 
+interface ViewportPreset {
+  label: string;
+  width: number | null;
+  height: number | null;
+}
+
+const VIEWPORT_PRESETS: ViewportPreset[] = [
+  { label: 'Responsive', width: null, height: null },
+  { label: 'iPhone SE',  width: 375,  height: 667  },
+  { label: 'iPhone 14',  width: 393,  height: 852  },
+  { label: 'Pixel 7',    width: 412,  height: 915  },
+  { label: 'iPad Air',   width: 820,  height: 1180 },
+  { label: 'iPad Pro',   width: 1024, height: 1366 },
+];
+
 interface WebviewElement extends HTMLElement {
   src: string;
   goBack(): void;
@@ -23,13 +38,18 @@ interface WebviewElement extends HTMLElement {
 interface BrowserTabInstance {
   element: HTMLDivElement;
   webview: WebviewElement;
+  viewportContainer: HTMLDivElement;
   urlInput: HTMLInputElement;
   inspectBtn: HTMLButtonElement;
+  viewportBtn: HTMLButtonElement;
+  viewportDropdown: HTMLDivElement;
   inspectPanel: HTMLDivElement;
   instructionInput: HTMLInputElement;
   elementInfoEl: HTMLDivElement;
   inspectMode: boolean;
   selectedElement: ElementInfo | null;
+  currentViewport: ViewportPreset;
+  viewportOutsideClickHandler: (e: MouseEvent) => void;
 }
 
 const instances = new Map<string, BrowserTabInstance>();
@@ -62,6 +82,35 @@ function toggleInspectMode(instance: BrowserTabInstance): void {
     instance.selectedElement = null;
     instance.inspectPanel.style.display = 'none';
   }
+}
+
+function applyViewport(instance: BrowserTabInstance, preset: ViewportPreset): void {
+  instance.currentViewport = preset;
+
+  const label = preset.width !== null ? `${preset.width}×${preset.height}` : 'Responsive';
+  instance.viewportBtn.textContent = label;
+  instance.viewportBtn.classList.toggle('active', preset.width !== null);
+
+  const webviewEl = instance.webview as unknown as HTMLElement;
+  if (preset.width !== null) {
+    instance.viewportContainer.classList.remove('responsive');
+    webviewEl.style.width = `${preset.width}px`;
+    webviewEl.style.height = `${preset.height}px`;
+    webviewEl.style.flex = 'none';
+  } else {
+    instance.viewportContainer.classList.add('responsive');
+    webviewEl.style.width = '';
+    webviewEl.style.height = '';
+    webviewEl.style.flex = '';
+  }
+}
+
+function openViewportDropdown(instance: BrowserTabInstance): void {
+  instance.viewportDropdown.classList.add('visible');
+}
+
+function closeViewportDropdown(instance: BrowserTabInstance): void {
+  instance.viewportDropdown.classList.remove('visible');
 }
 
 function showElementInfo(instance: BrowserTabInstance, info: ElementInfo): void {
@@ -98,8 +147,12 @@ function buildPrompt(instance: BrowserTabInstance): string | null {
   if (!info) return null;
   const instruction = instance.instructionInput.value.trim();
   if (!instruction) return null;
+
+  const vp = instance.currentViewport;
+  const vpCtx = vp.width !== null ? ` [viewport: ${vp.width}×${vp.height} – ${vp.label}]` : '';
+
   return (
-    `Regarding the <${info.tagName}> element at ${info.pageUrl} ` +
+    `Regarding the <${info.tagName}> element at ${info.pageUrl}${vpCtx} ` +
     `(selector: '${info.selector}'` +
     (info.textContent ? `, text: '${info.textContent}'` : '') +
     `): ${instruction}`
@@ -174,6 +227,34 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   goBtn.className = 'browser-go-btn';
   goBtn.textContent = 'Go';
 
+  // Viewport picker button + dropdown
+  const viewportWrapper = document.createElement('div');
+  viewportWrapper.className = 'browser-viewport-wrapper';
+
+  const viewportBtn = document.createElement('button');
+  viewportBtn.className = 'browser-viewport-btn';
+  viewportBtn.textContent = 'Responsive';
+  viewportBtn.title = 'Change viewport size';
+
+  const viewportDropdown = document.createElement('div');
+  viewportDropdown.className = 'browser-viewport-dropdown';
+
+  for (const preset of VIEWPORT_PRESETS) {
+    const item = document.createElement('div');
+    item.className = 'browser-viewport-item';
+    item.textContent = preset.width !== null
+      ? `${preset.label} — ${preset.width}×${preset.height}`
+      : preset.label;
+    item.addEventListener('click', () => {
+      applyViewport(instance, preset);
+      closeViewportDropdown(instance);
+    });
+    viewportDropdown.appendChild(item);
+  }
+
+  viewportWrapper.appendChild(viewportBtn);
+  viewportWrapper.appendChild(viewportDropdown);
+
   const inspectBtn = document.createElement('button');
   inspectBtn.className = 'browser-inspect-btn';
   inspectBtn.textContent = 'Inspect Element';
@@ -183,13 +264,18 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   toolbar.appendChild(reloadBtn);
   toolbar.appendChild(urlInput);
   toolbar.appendChild(goBtn);
+  toolbar.appendChild(viewportWrapper);
   toolbar.appendChild(inspectBtn);
   el.appendChild(toolbar);
+
+  const viewportContainer = document.createElement('div');
+  viewportContainer.className = 'browser-viewport-container responsive';
 
   const webview = document.createElement('webview') as unknown as WebviewElement;
   webview.className = 'browser-webview';
   webview.setAttribute('allowpopups', '');
-  el.appendChild(webview);
+  viewportContainer.appendChild(webview);
+  el.appendChild(viewportContainer);
 
   const inspectPanel = document.createElement('div');
   inspectPanel.className = 'browser-inspect-panel';
@@ -230,13 +316,18 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   const instance: BrowserTabInstance = {
     element: el,
     webview,
+    viewportContainer,
     urlInput,
     inspectBtn,
+    viewportBtn,
+    viewportDropdown,
     inspectPanel,
     instructionInput,
     elementInfoEl,
     inspectMode: false,
     selectedElement: null,
+    currentViewport: VIEWPORT_PRESETS[0],
+    viewportOutsideClickHandler: () => {},
   };
   instances.set(sessionId, instance);
 
@@ -254,6 +345,22 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   urlInput.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key === 'Enter') navigateTo(instance, urlInput.value);
   });
+
+  viewportBtn.addEventListener('click', (e: MouseEvent) => {
+    e.stopPropagation();
+    if (viewportDropdown.classList.contains('visible')) {
+      closeViewportDropdown(instance);
+    } else {
+      openViewportDropdown(instance);
+    }
+  });
+
+  instance.viewportOutsideClickHandler = (e: MouseEvent) => {
+    if (!viewportWrapper.contains(e.target as Node)) {
+      closeViewportDropdown(instance);
+    }
+  };
+  document.addEventListener('mousedown', instance.viewportOutsideClickHandler);
 
   inspectBtn.addEventListener('click', () => toggleInspectMode(instance));
 
@@ -301,6 +408,7 @@ export function hideAllBrowserTabPanes(): void {
 export function destroyBrowserTabPane(sessionId: string): void {
   const instance = instances.get(sessionId);
   if (!instance) return;
+  document.removeEventListener('mousedown', instance.viewportOutsideClickHandler);
   if (instance.inspectMode) {
     instance.webview.send('exit-inspect-mode');
   }
