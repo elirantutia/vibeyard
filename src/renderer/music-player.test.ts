@@ -1,9 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Use vi.hoisted so these variables are available when vi.mock factory is hoisted
-const { mockListeners, mockPreferences, mockAudioInstance } = vi.hoisted(() => {
+const { mockListeners, mockPreferences, mockAudioInstance, audioListeners } = vi.hoisted(() => {
   const mockListeners = new Map<string, Set<() => void>>();
   const mockPreferences = { musicEnabled: false, musicVolume: 60 };
+
+  // Persistent audio listener map — survives vi.clearAllMocks() because it is
+  // updated from the addEventListener implementation closure, not from mock call records.
+  const audioListeners = new Map<string, () => void>();
+
   const mockAudioInstance = {
     src: '',
     volume: 1,
@@ -11,9 +16,11 @@ const { mockListeners, mockPreferences, mockAudioInstance } = vi.hoisted(() => {
     paused: true,
     play: vi.fn().mockResolvedValue(undefined),
     pause: vi.fn(),
-    addEventListener: vi.fn(),
+    addEventListener: vi.fn((event: string, handler: () => void) => {
+      audioListeners.set(event, handler);
+    }),
   };
-  return { mockListeners, mockPreferences, mockAudioInstance };
+  return { mockListeners, mockPreferences, mockAudioInstance, audioListeners };
 });
 
 vi.mock('./state.js', () => ({
@@ -44,6 +51,14 @@ beforeEach(() => {
   mockAudioInstance.src = '';
   mockAudioInstance.volume = 1;
   mockListeners.clear();
+
+  // Restore the addEventListener implementation after vi.clearAllMocks() resets it,
+  // so audioListeners continues to be populated for any new Audio() calls.
+  mockAudioInstance.addEventListener.mockImplementation(
+    (event: string, handler: () => void) => {
+      audioListeners.set(event, handler);
+    }
+  );
 });
 
 describe('initMusicPlayer', () => {
@@ -93,5 +108,55 @@ describe('volume change while playing', () => {
     mockListeners.get('preferences-changed')?.forEach(cb => cb());
     expect(mockAudioInstance.volume).toBe(0.4);
     expect(mockAudioInstance.play).not.toHaveBeenCalled();
+  });
+});
+
+describe('retry logic', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+
+    // Warm up the module's lazy audio instance so audioListeners is populated,
+    // then clear play/setPreference call history so counts start clean.
+    initMusicPlayer();
+    mockPreferences.musicEnabled = true;
+    mockAudioInstance.paused = true;
+    mockListeners.get('preferences-changed')?.forEach(cb => cb());
+    mockAudioInstance.play.mockClear();
+    vi.mocked(appState.setPreference).mockClear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function triggerAudioError(): void {
+    const handler = audioListeners.get('error');
+    if (!handler) throw new Error('error listener not registered on audio element');
+    handler();
+  }
+
+  it('schedules a retry after a single stream error', () => {
+    triggerAudioError();
+
+    // play should NOT be called synchronously
+    expect(mockAudioInstance.play).not.toHaveBeenCalled();
+
+    // advance past the 2000ms RETRY_DELAY_MS — retry fires
+    vi.runAllTimers();
+    expect(mockAudioInstance.play).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables music after MAX_RETRIES (3) exhausted errors', () => {
+    // Fire 3 errors — each one retries (retryCount goes 1, 2, 3)
+    for (let i = 0; i < 3; i++) {
+      triggerAudioError();
+      vi.runAllTimers();
+      mockAudioInstance.play.mockClear();
+    }
+
+    // 4th error exhausts retries: retryCount === MAX_RETRIES, so disable music
+    triggerAudioError();
+
+    expect(appState.setPreference).toHaveBeenCalledWith('musicEnabled', false);
   });
 });
