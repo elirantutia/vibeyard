@@ -33,14 +33,15 @@
 }
 
 .browser-nav-btn {
-  padding: 4px 8px;
+  height: 26px;
+  padding: 0 8px;
   background: var(--bg-primary);
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text-secondary);
   cursor: pointer;
   font-size: 12px;
-  line-height: 1;
+  line-height: 26px;
 }
 
 .browser-nav-btn:hover {
@@ -48,16 +49,24 @@
   color: var(--text-primary);
 }
 
+.browser-reload-btn {
+  font-size: 18px;
+  line-height: 26px;
+}
+
 .browser-url-input {
   flex: 1;
-  padding: 6px 10px;
+  height: 26px;
+  padding: 0 10px;
   background: var(--bg-primary);
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 12px;
   font-family: inherit;
   outline: none;
+  line-height: 26px;
+  -webkit-appearance: none;
 }
 
 .browser-url-input:focus {
@@ -65,7 +74,8 @@
 }
 
 .browser-go-btn {
-  padding: 6px 12px;
+  height: 26px;
+  padding: 0 12px;
   background: var(--accent);
   border: none;
   border-radius: 4px;
@@ -80,7 +90,8 @@
 }
 
 .browser-inspect-btn {
-  padding: 6px 12px;
+  height: 26px;
+  padding: 0 12px;
   background: var(--bg-primary);
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -152,7 +163,8 @@ body.sidebar-resizing .browser-webview {
 }
 
 .browser-viewport-btn {
-  padding: 6px 12px;
+  height: 26px;
+  padding: 0 12px;
   background: var(--bg-primary);
   border: 1px solid var(--border);
   border-radius: 4px;

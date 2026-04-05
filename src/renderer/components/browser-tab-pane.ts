@@ -213,7 +213,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   fwdBtn.title = 'Forward';
 
   const reloadBtn = document.createElement('button');
-  reloadBtn.className = 'browser-nav-btn';
+  reloadBtn.className = 'browser-nav-btn browser-reload-btn';
   reloadBtn.textContent = '\u21BB';
   reloadBtn.title = 'Reload';
 
