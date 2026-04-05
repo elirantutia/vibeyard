@@ -378,13 +378,13 @@ function showVolumePopover(): void {
 
   const label = document.createElement('div');
   label.className = 'music-volume-label';
-  label.textContent = `Volume: ${appState.preferences.musicVolume ?? 60}%`;
+  label.textContent = `Volume: ${appState.preferences.musicVolume}%`;
 
   const slider = document.createElement('input');
   slider.type = 'range';
   slider.min = '0';
   slider.max = '100';
-  slider.value = String(appState.preferences.musicVolume ?? 60);
+  slider.value = String(appState.preferences.musicVolume);
   slider.addEventListener('input', () => {
     const vol = Number(slider.value);
     label.textContent = `Volume: ${vol}%`;
@@ -403,7 +403,7 @@ function showVolumePopover(): void {
 }
 
 function updateMusicButton(): void {
-  btnMusic.classList.toggle('active', appState.preferences.musicEnabled ?? false);
+  btnMusic.classList.toggle('active', appState.preferences.musicEnabled);
 }
 
 function render(): void {
