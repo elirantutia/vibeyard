@@ -375,6 +375,7 @@ function showVolumePopover(): void {
 
   const popover = document.createElement('div');
   popover.className = 'music-volume-popover';
+  popover.addEventListener('click', (e) => e.stopPropagation());
 
   const label = document.createElement('div');
   label.className = 'music-volume-label';

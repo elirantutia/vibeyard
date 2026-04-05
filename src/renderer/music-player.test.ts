@@ -136,6 +136,12 @@ describe('retry logic', () => {
     handler();
   }
 
+  function triggerAudioStalled(): void {
+    const stalledHandler = audioListeners.get('stalled');
+    if (!stalledHandler) throw new Error('stalled listener not registered');
+    stalledHandler();
+  }
+
   it('schedules a retry after a single stream error', () => {
     triggerAudioError();
 
@@ -145,6 +151,20 @@ describe('retry logic', () => {
     // advance past the 2000ms RETRY_DELAY_MS — retry fires
     vi.runAllTimers();
     expect(mockAudioInstance.play).toHaveBeenCalledTimes(1);
+  });
+
+  it('schedules a retry after a stalled event', () => {
+    vi.useFakeTimers();
+    initMusicPlayer();
+    mockPreferences.musicEnabled = true;
+    mockListeners.get('state-loaded')?.forEach(cb => cb());
+    vi.clearAllMocks();
+
+    triggerAudioStalled();
+    expect(mockAudioInstance.play).not.toHaveBeenCalled();
+    vi.runAllTimers();
+    expect(mockAudioInstance.play).toHaveBeenCalledOnce();
+    vi.useRealTimers();
   });
 
   it('disables music after MAX_RETRIES (3) exhausted errors', () => {
