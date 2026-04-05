@@ -30,7 +30,7 @@ function handleStreamError(): void {
 function attemptPlay(): void {
   const el = getAudio();
   el.src = STREAM_URL;
-  el.volume = (appState.preferences.musicVolume ?? 60) / 100;
+  el.volume = appState.preferences.musicVolume / 100;
   el.play().catch(() => handleStreamError());
 }
 
@@ -39,7 +39,7 @@ function syncToPreferences(): void {
   const { musicEnabled, musicVolume } = appState.preferences;
 
   if (musicEnabled) {
-    el.volume = (musicVolume ?? 60) / 100;
+    el.volume = musicVolume / 100;
     if (el.paused) {
       if (retryTimeout) {
         clearTimeout(retryTimeout);
@@ -62,4 +62,13 @@ function syncToPreferences(): void {
 export function initMusicPlayer(): void {
   appState.on('preferences-changed', syncToPreferences);
   appState.on('state-loaded', syncToPreferences);
+}
+
+export function _resetForTesting(): void {
+  audio = null;
+  retryCount = 0;
+  if (retryTimeout) {
+    clearTimeout(retryTimeout);
+    retryTimeout = null;
+  }
 }

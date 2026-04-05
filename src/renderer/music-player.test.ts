@@ -40,11 +40,12 @@ vi.mock('./state.js', () => ({
 
 vi.stubGlobal('Audio', vi.fn().mockImplementation(function () { return mockAudioInstance; }));
 
-import { initMusicPlayer } from './music-player.js';
+import { initMusicPlayer, _resetForTesting } from './music-player.js';
 import { appState } from './state.js';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  _resetForTesting();
   mockPreferences.musicEnabled = false;
   mockPreferences.musicVolume = 60;
   mockAudioInstance.paused = true;
