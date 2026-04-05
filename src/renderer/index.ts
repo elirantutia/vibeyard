@@ -11,6 +11,7 @@ import { setContextData, onChange as onContextChange } from './session-context.j
 import { initConfigSections } from './components/config-sections.js';
 import { initNotificationSound } from './notification-sound.js';
 import { initNotificationDesktop } from './notification-desktop.js';
+import { initMusicPlayer } from './music-player.js';
 import { init as initSessionUnread } from './session-unread.js';
 import { initProjectTerminal, handleShellPtyData, handleShellPtyExit, isShellSessionId } from './components/project-terminal.js';
 import { startPolling as startGitPolling } from './git-status.js';
@@ -151,6 +152,7 @@ async function main(): Promise<void> {
   initConfigSections();
   initNotificationSound();
   initNotificationDesktop();
+  initMusicPlayer();
   initProjectTerminal();
   initDebugPanel();
   initGitPanel();
