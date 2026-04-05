@@ -17,6 +17,8 @@ const btnAddSession = document.getElementById('btn-add-session')!;
 const btnAddMcpInspector = document.getElementById('btn-add-mcp-inspector')!;
 const btnToggleSwarm = document.getElementById('btn-toggle-swarm')!;
 const btnHelp = document.getElementById('btn-help')!;
+const btnMusic = document.getElementById('btn-music')!;
+let volumePopover: HTMLElement | null = null;
 
 let activeContextMenu: HTMLElement | null = null;
 const prevStatus = new Map<string, SessionStatus>();
@@ -35,6 +37,20 @@ export function initTabBar(): void {
   btnAddMcpInspector.addEventListener('click', promptNewMcpInspector);
   btnToggleSwarm.addEventListener('click', () => appState.toggleSwarm());
   btnHelp.addEventListener('click', () => showHelpDialog());
+
+  btnMusic.addEventListener('click', () => {
+    hideVolumePopover();
+    appState.setPreference('musicEnabled', !appState.preferences.musicEnabled);
+  });
+
+  btnMusic.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    showVolumePopover();
+  });
+
+  appState.on('preferences-changed', updateMusicButton);
+  appState.on('state-loaded', updateMusicButton);
+
   gitStatusEl.addEventListener('click', (e) => showBranchContextMenu(e));
 
   appState.on('state-loaded', render);
@@ -74,8 +90,18 @@ export function initTabBar(): void {
   });
   appState.on('project-changed', renderGitStatus);
 
-  document.addEventListener('click', hideTabContextMenu);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideTabContextMenu(); });
+  document.addEventListener('click', (e) => {
+    hideTabContextMenu();
+    if (volumePopover && !volumePopover.contains(e.target as Node) && e.target !== btnMusic) {
+      hideVolumePopover();
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      hideTabContextMenu();
+      hideVolumePopover();
+    }
+  });
 
   render();
 }
@@ -332,6 +358,52 @@ function hideTabContextMenu(): void {
     activeContextMenu.remove();
     activeContextMenu = null;
   }
+}
+
+function hideVolumePopover(): void {
+  if (volumePopover) {
+    volumePopover.remove();
+    volumePopover = null;
+  }
+}
+
+function showVolumePopover(): void {
+  if (volumePopover) {
+    hideVolumePopover();
+    return;
+  }
+
+  const popover = document.createElement('div');
+  popover.className = 'music-volume-popover';
+
+  const label = document.createElement('div');
+  label.className = 'music-volume-label';
+  label.textContent = `Volume: ${appState.preferences.musicVolume ?? 60}%`;
+
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = '0';
+  slider.max = '100';
+  slider.value = String(appState.preferences.musicVolume ?? 60);
+  slider.addEventListener('input', () => {
+    const vol = Number(slider.value);
+    label.textContent = `Volume: ${vol}%`;
+    appState.setPreference('musicVolume', vol);
+  });
+
+  popover.appendChild(label);
+  popover.appendChild(slider);
+
+  const rect = btnMusic.getBoundingClientRect();
+  popover.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+  popover.style.right = `${window.innerWidth - rect.right}px`;
+
+  document.body.appendChild(popover);
+  volumePopover = popover;
+}
+
+function updateMusicButton(): void {
+  btnMusic.classList.toggle('active', appState.preferences.musicEnabled ?? false);
 }
 
 function render(): void {
