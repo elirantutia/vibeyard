@@ -9,20 +9,30 @@ const providerCaps = new Map([
 const mockPtyWrite = vi.fn();
 const mockPtyKill = vi.fn();
 
-vi.mock('@xterm/xterm', () => ({
-  Terminal: class FakeTerminal {
-    cols = 120;
-    rows = 30;
-    loadAddon(): void {}
-    attachCustomKeyEventHandler(): void {}
-    registerLinkProvider(): void {}
-    onData(): void {}
-    open(): void {}
-    write(): void {}
-    focus(): void {}
-    dispose(): void {}
-  },
-}));
+class FakeTerminal {
+  cols = 120;
+  rows = 30;
+  private keyHandler: ((e: KeyboardEvent) => boolean) | null = null;
+  private _selection = '';
+
+  loadAddon(): void {}
+  attachCustomKeyEventHandler(handler: (e: KeyboardEvent) => boolean): void {
+    this.keyHandler = handler;
+  }
+  simulateKey(event: Partial<KeyboardEvent>): boolean {
+    return this.keyHandler ? this.keyHandler(event as KeyboardEvent) : true;
+  }
+  getSelection(): string { return this._selection; }
+  setSelection(s: string): void { this._selection = s; }
+  registerLinkProvider(): void {}
+  onData(): void {}
+  open(): void {}
+  write(): void {}
+  focus(): void {}
+  dispose(): void {}
+}
+
+vi.mock('@xterm/xterm', () => ({ Terminal: FakeTerminal }));
 
 vi.mock('@xterm/addon-fit', () => ({
   FitAddon: class FakeFitAddon {
@@ -144,6 +154,23 @@ class FakeDocument {
   }
 }
 
+const mockClipboardWrite = vi.fn();
+
+function makeWindowStub() {
+  return {
+    vibeyard: {
+      pty: {
+        write: mockPtyWrite,
+        kill: mockPtyKill,
+        resize: vi.fn(),
+        create: vi.fn(),
+      },
+      git: { getRemoteUrl: vi.fn(async () => null) },
+      app: { openExternal: vi.fn() },
+    },
+  };
+}
+
 describe('terminal pending prompt injection', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -151,22 +178,8 @@ describe('terminal pending prompt injection', () => {
     vi.useFakeTimers();
 
     vi.stubGlobal('document', new FakeDocument());
-    vi.stubGlobal('window', {
-      vibeyard: {
-        pty: {
-          write: mockPtyWrite,
-          kill: mockPtyKill,
-          resize: vi.fn(),
-          create: vi.fn(),
-        },
-        git: {
-          getRemoteUrl: vi.fn(async () => null),
-        },
-        app: {
-          openExternal: vi.fn(),
-        },
-      },
-    });
+    vi.stubGlobal('window', makeWindowStub());
+    vi.stubGlobal('navigator', { clipboard: { writeText: mockClipboardWrite } });
   });
 
   it('passes pending prompt as initialPrompt to pty.create for claude', async () => {
@@ -213,5 +226,60 @@ describe('terminal pending prompt injection', () => {
     handlePtyData('codex-2', 'some output');
     await vi.runAllTimersAsync();
     expect(mockPtyWrite).not.toHaveBeenCalled();
+  });
+});
+
+describe('terminal Ctrl+Shift+C clipboard copy', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+
+    vi.stubGlobal('document', new FakeDocument());
+    vi.stubGlobal('window', makeWindowStub());
+    vi.stubGlobal('navigator', { clipboard: { writeText: mockClipboardWrite } });
+  });
+
+  it('copies selected text to clipboard on Ctrl+Shift+C keydown', async () => {
+    const { createTerminalPane } = await import('./terminal-pane.js');
+    const instance = createTerminalPane('s1', '/project', null);
+    const term = instance.terminal as unknown as FakeTerminal;
+
+    term.setSelection('hello world');
+    term.simulateKey({ ctrlKey: true, shiftKey: true, key: 'C', type: 'keydown' });
+
+    expect(mockClipboardWrite).toHaveBeenCalledWith('hello world');
+  });
+
+  it('does not copy on keyup', async () => {
+    const { createTerminalPane } = await import('./terminal-pane.js');
+    const instance = createTerminalPane('s2', '/project', null);
+    const term = instance.terminal as unknown as FakeTerminal;
+
+    term.setSelection('hello world');
+    term.simulateKey({ ctrlKey: true, shiftKey: true, key: 'C', type: 'keyup' });
+
+    expect(mockClipboardWrite).not.toHaveBeenCalled();
+  });
+
+  it('does not copy when nothing is selected', async () => {
+    const { createTerminalPane } = await import('./terminal-pane.js');
+    const instance = createTerminalPane('s3', '/project', null);
+    const term = instance.terminal as unknown as FakeTerminal;
+
+    term.setSelection('');
+    term.simulateKey({ ctrlKey: true, shiftKey: true, key: 'C', type: 'keydown' });
+
+    expect(mockClipboardWrite).not.toHaveBeenCalled();
+  });
+
+  it('returns false to prevent default on Ctrl+Shift+C', async () => {
+    const { createTerminalPane } = await import('./terminal-pane.js');
+    const instance = createTerminalPane('s4', '/project', null);
+    const term = instance.terminal as unknown as FakeTerminal;
+
+    const result = term.simulateKey({ ctrlKey: true, shiftKey: true, key: 'C', type: 'keydown' });
+
+    expect(result).toBe(false);
   });
 });
