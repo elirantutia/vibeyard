@@ -143,6 +143,8 @@ export interface Preferences {
   sessionHistoryEnabled: boolean;
   insightsEnabled: boolean;
   autoTitleEnabled: boolean;
+  musicEnabled: boolean;
+  musicVolume: number;
   statusLineConsent?: 'granted' | 'declined' | null;
   keybindings?: Record<string, string>;
   sidebarViews?: {
