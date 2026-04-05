@@ -18,6 +18,7 @@ function getAudio(): HTMLAudioElement {
 }
 
 function handleStreamError(): void {
+  if (!appState.preferences.musicEnabled) return;
   if (retryCount < MAX_RETRIES) {
     retryCount++;
     retryTimeout = setTimeout(attemptPlay, RETRY_DELAY_MS);

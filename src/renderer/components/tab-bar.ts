@@ -396,7 +396,7 @@ function showVolumePopover(): void {
   popover.appendChild(slider);
 
   const rect = btnMusic.getBoundingClientRect();
-  popover.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+  popover.style.top = `${rect.bottom + 4}px`;
   popover.style.right = `${window.innerWidth - rect.right}px`;
 
   document.body.appendChild(popover);
