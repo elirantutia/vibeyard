@@ -25,7 +25,8 @@ interface FlowStep {
   type: 'click' | 'navigate';
   tagName?: string;
   textContent?: string;
-  selector?: string;
+  selectors?: SelectorOption[];
+  activeSelector?: SelectorOption;
   pageUrl?: string;
   url?: string;
 }
@@ -141,6 +142,43 @@ function closeViewportDropdown(instance: BrowserTabInstance): void {
   instance.viewportDropdown.classList.remove('visible');
 }
 
+function buildSelectorOptions(
+  selectors: SelectorOption[],
+  activeSelector: SelectorOption | undefined,
+  onActivate: (sel: SelectorOption) => void
+): HTMLElement {
+  const container = document.createElement('div');
+  const optionEls: HTMLElement[] = [];
+
+  for (let i = 0; i < selectors.length; i++) {
+    const sel = selectors[i];
+    const row = document.createElement('div');
+    row.className = 'inspect-selector-option';
+    if (sel === activeSelector) row.classList.add('active');
+
+    const badge = document.createElement('span');
+    badge.className = `selector-badge selector-badge-${sel.type}`;
+    badge.textContent = sel.type;
+
+    const valueSpan = document.createElement('span');
+    valueSpan.className = 'selector-value';
+    valueSpan.textContent = sel.value;
+
+    row.appendChild(badge);
+    row.appendChild(valueSpan);
+    optionEls.push(row);
+    container.appendChild(row);
+
+    row.addEventListener('click', () => {
+      optionEls.forEach((el) => el.classList.remove('active'));
+      optionEls[i].classList.add('active');
+      onActivate(sel);
+    });
+  }
+
+  return container;
+}
+
 function showElementInfo(instance: BrowserTabInstance, info: ElementInfo): void {
   instance.selectedElement = info;
   instance.inspectPanel.style.display = 'flex';
@@ -166,39 +204,12 @@ function showElementInfo(instance: BrowserTabInstance, info: ElementInfo): void 
   selectorLabel.textContent = 'Selector';
   instance.elementInfoEl.appendChild(selectorLabel);
 
-  const selectorOptions = document.createElement('div');
+  const selectorOptions = buildSelectorOptions(
+    info.selectors,
+    info.activeSelector,
+    (sel) => { instance.selectedElement!.activeSelector = sel; }
+  );
   selectorOptions.className = 'inspect-selector-options';
-
-  const allOptionEls: HTMLElement[] = [];
-
-  function activateOption(chosen: SelectorOption): void {
-    instance.selectedElement!.activeSelector = chosen;
-    allOptionEls.forEach((el) => el.classList.remove('active'));
-    const idx = info.selectors.indexOf(chosen);
-    if (idx >= 0) allOptionEls[idx].classList.add('active');
-  }
-
-  for (const sel of info.selectors) {
-    const row = document.createElement('div');
-    row.className = 'inspect-selector-option';
-    if (sel === info.activeSelector) row.classList.add('active');
-
-    const badge = document.createElement('span');
-    badge.className = `selector-badge selector-badge-${sel.type}`;
-    badge.textContent = sel.type;
-
-    const valueSpan = document.createElement('span');
-    valueSpan.className = 'selector-value';
-    valueSpan.textContent = sel.value;
-
-    row.appendChild(badge);
-    row.appendChild(valueSpan);
-    allOptionEls.push(row);
-    selectorOptions.appendChild(row);
-
-    row.addEventListener('click', () => activateOption(sel));
-  }
-
   instance.elementInfoEl.appendChild(selectorOptions);
 
   instance.instructionInput.value = '';
@@ -243,17 +254,30 @@ function renderFlowSteps(instance: BrowserTabInstance): void {
     num.className = 'flow-step-number';
     num.textContent = `${i + 1}.`;
 
-    const content = document.createElement('span');
+    const content = document.createElement('div');
     content.className = 'flow-step-content';
 
     if (step.type === 'click') {
+      const header = document.createElement('div');
+      header.className = 'flow-step-header';
       const tag = document.createElement('span');
       tag.className = 'flow-step-tag';
       tag.textContent = `<${step.tagName}>`;
       const desc = document.createElement('span');
       desc.textContent = step.textContent ? ` "${step.textContent}"` : '';
-      content.appendChild(tag);
-      content.appendChild(desc);
+      header.appendChild(tag);
+      header.appendChild(desc);
+      content.appendChild(header);
+
+      if (step.selectors?.length) {
+        const selectorOptions = buildSelectorOptions(
+          step.selectors,
+          step.activeSelector,
+          (sel) => { step.activeSelector = sel; }
+        );
+        selectorOptions.className = 'flow-step-selectors';
+        content.appendChild(selectorOptions);
+      }
     } else {
       const urlSpan = document.createElement('span');
       urlSpan.className = 'flow-step-url';
@@ -327,7 +351,7 @@ function buildFlowPrompt(instance: BrowserTabInstance): string | null {
       const tag = `<${step.tagName}>`;
       const text = step.textContent ? ` "${step.textContent}"` : '';
       const at = step.pageUrl ? ` at ${step.pageUrl}` : '';
-      const sel = `\n   selector: '${step.selector}'`;
+      const sel = step.activeSelector ? `\n   selector: '${step.activeSelector.value}'` : '';
       return `${n}. Click: ${tag}${text}${at}${sel}`;
     } else {
       return `${n}. Navigate to: ${step.url}`;
@@ -733,7 +757,8 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
         type: 'click',
         tagName: metadata.tagName,
         textContent: metadata.textContent,
-        selector: metadata.selectors[0].value,
+        selectors: metadata.selectors,
+        activeSelector: metadata.selectors[0],
         pageUrl: metadata.pageUrl,
       });
     }

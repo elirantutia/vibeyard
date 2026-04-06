@@ -561,6 +561,21 @@ body.sidebar-resizing .browser-webview {
   flex: 1;
   color: var(--text-secondary);
   word-break: break-all;
+  min-width: 0;
+}
+
+.flow-step-header {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+
+.flow-step-selectors {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 3px;
 }
 
 .flow-step-tag {
