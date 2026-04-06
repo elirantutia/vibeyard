@@ -26,3 +26,4 @@ jobs:
         with:
           prompt: /review
           anthropic_api_key: ${{ secrets.CLAUDE_KEY }}
+          show_full_output: true
