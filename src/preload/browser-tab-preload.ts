@@ -5,6 +5,14 @@
  */
 import { ipcRenderer } from 'electron';
 
+interface SelectorOption {
+  type: 'qa' | 'attr' | 'id' | 'css';
+  label: string;
+  value: string;
+}
+
+const QA_ATTRS = ['data-testid', 'data-qa', 'data-cy', 'data-test', 'data-automation', 'qaTag'];
+
 let inspectMode = false;
 let flowMode = false;
 let highlightOverlay: HTMLDivElement | null = null;
@@ -35,7 +43,7 @@ function hideOverlay(): void {
   if (highlightOverlay) highlightOverlay.style.display = 'none';
 }
 
-function buildSelector(el: Element): string {
+function buildCssPath(el: Element): string {
   const parts: string[] = [];
   let current: Element | null = el;
   while (current && current !== document.body && current !== document.documentElement) {
@@ -61,6 +69,29 @@ function buildSelector(el: Element): string {
   return parts.join(' > ');
 }
 
+function buildAllSelectors(el: Element): SelectorOption[] {
+  const options: SelectorOption[] = [];
+
+  const qaSet = new Set(QA_ATTRS);
+  for (const attr of QA_ATTRS) {
+    const val = el.getAttribute(attr);
+    if (val) options.push({ type: 'qa', label: attr, value: `[${attr}="${val}"]` });
+  }
+
+  for (const attr of el.getAttributeNames()) {
+    if (attr.startsWith('data-') && !qaSet.has(attr)) {
+      const val = el.getAttribute(attr);
+      if (val) options.push({ type: 'attr', label: attr, value: `[${attr}="${val}"]` });
+    }
+  }
+
+  if (el.id) options.push({ type: 'id', label: 'id', value: `#${el.id}` });
+
+  options.push({ type: 'css', label: 'css', value: buildCssPath(el) });
+
+  return options;
+}
+
 function getElementMetadata(el: Element) {
   const text = (el.textContent || '').trim();
   return {
@@ -68,7 +99,7 @@ function getElementMetadata(el: Element) {
     id: el.id || '',
     classes: Array.from(el.classList),
     textContent: text.length > 150 ? text.slice(0, 150) + '\u2026' : text,
-    selector: buildSelector(el),
+    selectors: buildAllSelectors(el),
     pageUrl: window.location.href,
   };
 }

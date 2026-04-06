@@ -309,10 +309,93 @@ body.sidebar-resizing .browser-webview {
   max-width: 100%;
 }
 
-.inspect-selector-line {
-  color: var(--text-muted, var(--text-secondary));
+.inspect-selector-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-top: 4px;
+  margin-bottom: 1px;
+  padding-left: 2px;
+}
+
+.inspect-selector-options {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.inspect-selector-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 5px 3px 6px;
+  border-left: 2px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
   font-size: 11px;
-  opacity: 0.7;
+  color: var(--text-secondary);
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.inspect-selector-option::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-muted);
+  background: transparent;
+  flex-shrink: 0;
+  transition: border-color 0.1s, background 0.1s;
+}
+
+.inspect-selector-option:hover {
+  background: var(--bg-hover);
+}
+
+.inspect-selector-option:hover::before {
+  border-color: var(--text-secondary);
+}
+
+.inspect-selector-option.active {
+  background: rgba(233, 69, 96, 0.07);
+  border-left-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.inspect-selector-option.active::before {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.selector-badge {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.inspect-selector-option.active .selector-badge {
+  background: var(--accent);
+  color: #fff;
+}
+
+.selector-badge-qa { color: #4caf50; }
+.inspect-selector-option.active .selector-badge-qa { color: #fff; }
+
+.selector-badge-attr { color: #6aa0d8; }
+.inspect-selector-option.active .selector-badge-attr { color: #fff; }
+
+.selector-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .inspect-input-row {

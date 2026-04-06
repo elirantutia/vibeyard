@@ -2,12 +2,21 @@ import { appState } from '../state.js';
 import { promptNewSession } from './tab-bar.js';
 import { setPendingPrompt } from './terminal-pane.js';
 
+interface SelectorOption {
+  type: 'qa' | 'attr' | 'id' | 'css';
+  label: string;
+  value: string;
+}
+
+type ActiveSelector = SelectorOption;
+
 interface ElementInfo {
   tagName: string;
   id: string;
   classes: string[];
   textContent: string;
-  selector: string;
+  selectors: SelectorOption[];
+  activeSelector: ActiveSelector;
   pageUrl: string;
 }
 
@@ -150,10 +159,45 @@ function showElementInfo(instance: BrowserTabInstance, info: ElementInfo): void 
     instance.elementInfoEl.appendChild(textLine);
   }
 
-  const selectorLine = document.createElement('div');
-  selectorLine.className = 'inspect-selector-line';
-  selectorLine.textContent = info.selector;
-  instance.elementInfoEl.appendChild(selectorLine);
+  const selectorLabel = document.createElement('div');
+  selectorLabel.className = 'inspect-selector-label';
+  selectorLabel.textContent = 'Selector';
+  instance.elementInfoEl.appendChild(selectorLabel);
+
+  const selectorOptions = document.createElement('div');
+  selectorOptions.className = 'inspect-selector-options';
+
+  const allOptionEls: HTMLElement[] = [];
+
+  function activateOption(chosen: SelectorOption): void {
+    instance.selectedElement!.activeSelector = chosen;
+    allOptionEls.forEach((el) => el.classList.remove('active'));
+    const idx = info.selectors.indexOf(chosen);
+    if (idx >= 0) allOptionEls[idx].classList.add('active');
+  }
+
+  for (const sel of info.selectors) {
+    const row = document.createElement('div');
+    row.className = 'inspect-selector-option';
+    if (sel === info.activeSelector) row.classList.add('active');
+
+    const badge = document.createElement('span');
+    badge.className = `selector-badge selector-badge-${sel.type}`;
+    badge.textContent = sel.type;
+
+    const valueSpan = document.createElement('span');
+    valueSpan.className = 'selector-value';
+    valueSpan.textContent = sel.value;
+
+    row.appendChild(badge);
+    row.appendChild(valueSpan);
+    allOptionEls.push(row);
+    selectorOptions.appendChild(row);
+
+    row.addEventListener('click', () => activateOption(sel));
+  }
+
+  instance.elementInfoEl.appendChild(selectorOptions);
 
   instance.instructionInput.value = '';
   instance.instructionInput.focus();
@@ -170,7 +214,7 @@ function buildPrompt(instance: BrowserTabInstance): string | null {
 
   return (
     `Regarding the <${info.tagName}> element at ${info.pageUrl}${vpCtx} ` +
-    `(selector: '${info.selector}'` +
+    `(selector: '${info.activeSelector.value}'` +
     (info.textContent ? `, text: '${info.textContent}'` : '') +
     `): ${instruction}`
   );
@@ -663,9 +707,18 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
 
   webview.addEventListener('ipc-message', ((e: CustomEvent) => {
     if (e.channel === 'element-selected') {
-      showElementInfo(instance, e.args[0] as ElementInfo);
+      const metadata = e.args[0] as Omit<ElementInfo, 'activeSelector'>;
+      const info: ElementInfo = { ...metadata, activeSelector: metadata.selectors[0] };
+      showElementInfo(instance, info);
     } else if (e.channel === 'flow-click') {
-      addFlowStep(instance, { type: 'click', ...(e.args[0] as Omit<FlowStep, 'type'>) });
+      const metadata = e.args[0] as { tagName: string; textContent: string; selectors: SelectorOption[]; pageUrl: string };
+      addFlowStep(instance, {
+        type: 'click',
+        tagName: metadata.tagName,
+        textContent: metadata.textContent,
+        selector: metadata.selectors[0].value,
+        pageUrl: metadata.pageUrl,
+      });
     }
   }) as EventListener);
 }
