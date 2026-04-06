@@ -1,6 +1,7 @@
 import { appState } from '../state.js';
 import { promptNewSession } from './tab-bar.js';
 import { setPendingPrompt } from './terminal-pane.js';
+import { shortcutManager } from '../shortcuts.js';
 
 interface SelectorOption {
   type: 'qa' | 'attr' | 'id' | 'css';
@@ -630,6 +631,19 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
     flowSteps: [],
   };
   instances.set(sessionId, instance);
+
+  webview.addEventListener('before-input-event', ((e: CustomEvent & { preventDefault(): void; input: { type: string; key: string; shift: boolean; control: boolean; alt: boolean; meta: boolean } }) => {
+    if (e.input.type !== 'keyDown') return;
+    const synthetic = {
+      key: e.input.key,
+      ctrlKey: e.input.control,
+      metaKey: e.input.meta,
+      shiftKey: e.input.shift,
+      altKey: e.input.alt,
+      preventDefault: () => e.preventDefault(),
+    } as KeyboardEvent;
+    shortcutManager.matchEvent(synthetic);
+  }) as EventListener);
 
   // Preload must be set before src to ensure the inspect script is injected
   getPreloadPath().then((p) => {
