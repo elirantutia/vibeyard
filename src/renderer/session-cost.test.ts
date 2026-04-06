@@ -234,3 +234,30 @@ describe('removeSession', () => {
     expect(getCost('s1')).toBeNull();
   });
 });
+
+describe('onChange unsubscribe', () => {
+  it('stops receiving callbacks after unsubscribe', () => {
+    const cb = vi.fn();
+    const unsub = onChange(cb);
+
+    setCostData('s1', { cost: { total_cost_usd: 1.0 }, context_window: {} });
+    expect(cb).toHaveBeenCalledTimes(1);
+
+    unsub();
+    setCostData('s1', { cost: { total_cost_usd: 2.0 }, context_window: {} });
+    expect(cb).toHaveBeenCalledTimes(1); // no new calls after unsub
+  });
+
+  it('only removes the specific subscriber', () => {
+    const cb1 = vi.fn();
+    const cb2 = vi.fn();
+    const unsub1 = onChange(cb1);
+    onChange(cb2);
+
+    unsub1();
+    setCostData('s1', { cost: { total_cost_usd: 1.0 }, context_window: {} });
+
+    expect(cb1).not.toHaveBeenCalled();
+    expect(cb2).toHaveBeenCalledTimes(1);
+  });
+});

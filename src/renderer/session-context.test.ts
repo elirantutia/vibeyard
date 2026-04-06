@@ -125,3 +125,30 @@ describe('removeSession', () => {
     expect(getContext('s1')).toBeNull();
   });
 });
+
+describe('onChange unsubscribe', () => {
+  it('stops receiving callbacks after unsubscribe', () => {
+    const cb = vi.fn();
+    const unsub = onChange(cb);
+
+    setContextData('s1', { total_input_tokens: 100 });
+    expect(cb).toHaveBeenCalledTimes(1);
+
+    unsub();
+    setContextData('s1', { total_input_tokens: 200 });
+    expect(cb).toHaveBeenCalledTimes(1); // no new calls after unsub
+  });
+
+  it('only removes the specific subscriber', () => {
+    const cb1 = vi.fn();
+    const cb2 = vi.fn();
+    const unsub1 = onChange(cb1);
+    onChange(cb2);
+
+    unsub1();
+    setContextData('s1', { total_input_tokens: 100 });
+
+    expect(cb1).not.toHaveBeenCalled();
+    expect(cb2).toHaveBeenCalledTimes(1);
+  });
+});

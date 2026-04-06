@@ -166,3 +166,32 @@ describe('removeSession', () => {
     removeSession('unknown'); // should not throw
   });
 });
+
+describe('onChange unsubscribe', () => {
+  it('stops receiving callbacks after unsubscribe', () => {
+    initSession('s1');
+    const cb = vi.fn();
+    const unsub = onChange(cb);
+
+    setHookStatus('s1', 'working');
+    expect(cb).toHaveBeenCalledTimes(1);
+
+    unsub();
+    setHookStatus('s1', 'waiting');
+    expect(cb).toHaveBeenCalledTimes(1); // no new calls after unsub
+  });
+
+  it('only removes the specific subscriber', () => {
+    initSession('s1');
+    const cb1 = vi.fn();
+    const cb2 = vi.fn();
+    const unsub1 = onChange(cb1);
+    onChange(cb2);
+
+    unsub1();
+    setHookStatus('s1', 'working');
+
+    expect(cb1).not.toHaveBeenCalled();
+    expect(cb2).toHaveBeenCalledTimes(1);
+  });
+});

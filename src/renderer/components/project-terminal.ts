@@ -278,7 +278,6 @@ export function initProjectTerminal(): void {
     };
 
     const onMouseUp = () => {
-      if (!dragging) return;
       dragging = false;
       resizeHandleEl.classList.remove('active');
       document.body.style.cursor = '';

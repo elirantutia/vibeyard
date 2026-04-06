@@ -153,4 +153,40 @@ describe('session-unread', () => {
 
     expect(cb).toHaveBeenCalled();
   });
+
+  it('stops receiving callbacks after unsubscribe', () => {
+    setupProjects();
+    mockAppState.activeProjectId = 'p2';
+    init();
+
+    const cb = vi.fn();
+    const unsub = onChange(cb);
+
+    simulateStatusChange('s1', 'working');
+    simulateStatusChange('s1', 'waiting');
+    expect(cb).toHaveBeenCalledTimes(1);
+
+    unsub();
+    simulateStatusChange('s1', 'working');
+    simulateStatusChange('s1', 'waiting');
+    expect(cb).toHaveBeenCalledTimes(1); // no new calls after unsub
+  });
+
+  it('only removes the specific subscriber', () => {
+    setupProjects();
+    mockAppState.activeProjectId = 'p2';
+    init();
+
+    const cb1 = vi.fn();
+    const cb2 = vi.fn();
+    const unsub1 = onChange(cb1);
+    onChange(cb2);
+
+    unsub1();
+    simulateStatusChange('s1', 'working');
+    simulateStatusChange('s1', 'waiting');
+
+    expect(cb1).not.toHaveBeenCalled();
+    expect(cb2).toHaveBeenCalled();
+  });
 });
