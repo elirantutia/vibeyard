@@ -112,6 +112,12 @@
   color: #fff;
 }
 
+.browser-inspect-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 /* Viewport container */
 .browser-viewport-container {
   position: relative;
@@ -481,6 +487,12 @@ body.sidebar-resizing .browser-webview {
   background: #e5534b;
   border-color: #e5534b;
   color: #fff;
+}
+
+.browser-record-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 /* Flow Panel */

@@ -101,6 +101,7 @@ function navigateTo(instance: BrowserTabInstance, url: string): void {
 function toggleInspectMode(instance: BrowserTabInstance): void {
   instance.inspectMode = !instance.inspectMode;
   instance.inspectBtn.classList.toggle('active', instance.inspectMode);
+  instance.recordBtn.disabled = instance.inspectMode;
   if (instance.inspectMode) {
     instance.webview.send('enter-inspect-mode');
   } else {
@@ -291,9 +292,11 @@ function toggleFlowMode(instance: BrowserTabInstance): void {
   instance.recordBtn.textContent = instance.flowMode ? '\u25A0 Stop' : '\u25CF Record';
 
   if (instance.flowMode) {
+    instance.inspectBtn.disabled = true;
     instance.webview.send('enter-flow-mode');
     instance.flowPanel.style.display = 'flex';
   } else {
+    instance.inspectBtn.disabled = false;
     instance.webview.send('exit-flow-mode');
     if (instance.flowSteps.length === 0) {
       instance.flowPanel.style.display = 'none';
