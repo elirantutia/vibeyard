@@ -68,6 +68,7 @@ interface BrowserTabInstance {
   element: HTMLDivElement;
   webview: WebviewElement;
   viewportContainer: HTMLDivElement;
+  newTabPage: HTMLDivElement;
   urlInput: HTMLInputElement;
   inspectBtn: HTMLButtonElement;
   viewportBtn: HTMLButtonElement;
@@ -110,6 +111,7 @@ function navigateTo(instance: BrowserTabInstance, url: string): void {
   if (!normalizedUrl) return;
   instance.urlInput.value = normalizedUrl;
   instance.webview.src = normalizedUrl;
+  instance.newTabPage.style.display = 'none';
 }
 
 function toggleInspectMode(instance: BrowserTabInstance): void {
@@ -581,6 +583,33 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   dragOverlay.className = 'browser-drag-overlay';
   viewportContainer.appendChild(dragOverlay);
 
+  const newTabPage = document.createElement('div');
+  newTabPage.className = 'browser-new-tab-page';
+  newTabPage.style.display = url ? 'none' : 'flex';
+
+  const ntpLogo = document.createElement('div');
+  ntpLogo.className = 'browser-ntp-logo';
+  ntpLogo.textContent = 'Vibeyard';
+  newTabPage.appendChild(ntpLogo);
+
+  const ntpSubtitle = document.createElement('div');
+  ntpSubtitle.className = 'browser-ntp-subtitle';
+  ntpSubtitle.textContent = 'Enter a URL above to start browsing';
+  newTabPage.appendChild(ntpSubtitle);
+
+  const ntpLinks = document.createElement('div');
+  ntpLinks.className = 'browser-ntp-links';
+  for (const port of ['localhost:3000', 'localhost:5173', 'localhost:8080', 'localhost:4200']) {
+    const btn = document.createElement('button');
+    btn.className = 'browser-ntp-link';
+    btn.textContent = port;
+    btn.addEventListener('click', () => navigateTo(instance, port));
+    ntpLinks.appendChild(btn);
+  }
+  newTabPage.appendChild(ntpLinks);
+
+  viewportContainer.appendChild(newTabPage);
+
   const webview = document.createElement('webview') as unknown as WebviewElement;
   webview.className = 'browser-webview';
   webview.setAttribute('allowpopups', '');
@@ -709,6 +738,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
     element: el,
     webview,
     viewportContainer,
+    newTabPage,
     urlInput,
     inspectBtn,
     viewportBtn,
@@ -842,10 +872,13 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
 
   webview.addEventListener('did-navigate', ((e: CustomEvent) => {
     urlInput.value = e.url;
+    newTabPage.style.display = 'none';
+    appState.updateSessionBrowserTabUrl(sessionId, e.url);
     if (instance.flowMode) recordNavigationStep(e.url);
   }) as EventListener);
   webview.addEventListener('did-navigate-in-page', ((e: CustomEvent) => {
     urlInput.value = e.url;
+    appState.updateSessionBrowserTabUrl(sessionId, e.url);
     if (instance.flowMode) recordNavigationStep(e.url);
   }) as EventListener);
 

@@ -10,7 +10,7 @@ import { removeSession as removeContextSession, type ContextWindowInfo } from '.
 import type { ProviderId } from '../types.js';
 import { getProviderCapabilities } from '../provider-availability.js';
 import { FilePathLinkProvider, GithubLinkProvider } from './terminal-link-provider.js';
-
+import { attachClipboardCopyHandler } from './terminal-utils.js';
 
 interface TerminalInstance {
   terminal: Terminal;
@@ -111,20 +111,13 @@ export function createTerminalPane(
     }
   }));
 
-  // Let Cmd+F bubble up to the document listener instead of being consumed by xterm
-  terminal.attachCustomKeyEventHandler((e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
-      return false;
-    }
-    // Send CSI u encoding for Shift+Enter so Claude CLI treats it as newline
+  // Send CSI u encoding for Shift+Enter so Claude CLI treats it as newline
+  attachClipboardCopyHandler(terminal, (e) => {
     if (e.shiftKey && e.key === 'Enter') {
-      if (e.type === 'keydown') {
-        window.vibeyard.pty.write(sessionId, '\x1b[13;2u');
-      }
+      if (e.type === 'keydown') window.vibeyard.pty.write(sessionId, '\x1b[13;2u');
       e.preventDefault();
       return false;
     }
-    return true;
   });
 
   const instance: TerminalInstance = {

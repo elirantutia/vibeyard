@@ -77,6 +77,10 @@ describe('classifyError', () => {
     expect(classifyError('Not Found (HTTP 404)', baseTool)).toBe('other');
   });
 
+  it('does not classify "gh: Not Found (HTTP 404)" as not-found', () => {
+    expect(classifyError('Exit code 1 gh: Not Found (HTTP 404) base64: stdin: (null): error decoding base64 input stream', baseTool)).toBe('other');
+  });
+
   it('classifies generic errors as other', () => {
     expect(classifyError("error: pathspec 'foo' did not match any file(s)", baseTool)).toBe('other');
   });

@@ -602,6 +602,13 @@ class AppState {
     this.persist();
   }
 
+  updateSessionBrowserTabUrl(sessionId: string, url: string): void {
+    const session = this.findSessionById(sessionId);
+    if (!session || session.browserTabUrl === url) return;
+    session.browserTabUrl = url;
+    this.persist();
+  }
+
   renameSession(projectId: string, sessionId: string, name: string, userRenamed?: boolean): void {
     const project = this.state.projects.find((p) => p.id === projectId);
     if (!project) return;

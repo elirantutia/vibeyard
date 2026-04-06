@@ -149,6 +149,55 @@ body.sidebar-resizing .browser-webview {
   align-items: stretch;
 }
 
+/* New Tab Page */
+.browser-new-tab-page {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: var(--bg-primary);
+}
+
+.browser-ntp-logo {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: -0.5px;
+}
+
+.browser-ntp-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.browser-ntp-links {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.browser-ntp-link {
+  height: 32px;
+  padding: 0 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.browser-ntp-link:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
 /* Webview */
 .browser-webview {
   border: none;
