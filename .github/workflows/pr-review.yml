@@ -27,3 +27,4 @@ jobs:
           prompt: /review
           anthropic_api_key: ${{ secrets.CLAUDE_KEY }}
           show_full_output: true
+          claude_args: '--allowed-tools "Bash(gh:*)"'
