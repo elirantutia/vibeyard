@@ -24,7 +24,7 @@ jobs:
       - name: Run Claude Code PR review
         uses: anthropics/claude-code-action@v1
         with:
-          prompt: /review
+          prompt: /review #${{ github.event.pull_request.number }}
           anthropic_api_key: ${{ secrets.CLAUDE_KEY }}
           show_full_output: true
           claude_args: '--allowed-tools "Bash(gh:*)"'
