@@ -15,6 +15,7 @@ const QA_ATTRS = ['data-testid', 'data-qa', 'data-cy', 'data-test', 'data-automa
 
 let inspectMode = false;
 let flowMode = false;
+let suppressNextFlowClick = false;
 let highlightOverlay: HTMLDivElement | null = null;
 
 function ensureOverlay(): HTMLDivElement {
@@ -129,9 +130,20 @@ function onClick(e: MouseEvent): void {
 
 function onFlowClick(e: MouseEvent): void {
   if (!flowMode) return;
+  if (suppressNextFlowClick) {
+    suppressNextFlowClick = false;
+    return;
+  }
   const target = e.target as Element;
   if (target === highlightOverlay) return;
-  ipcRenderer.sendToHost('flow-click', getElementMetadata(target));
+  e.preventDefault();
+  e.stopPropagation();
+  e.stopImmediatePropagation();
+  ipcRenderer.sendToHost('flow-element-picked', {
+    metadata: getElementMetadata(target),
+    x: e.clientX,
+    y: e.clientY,
+  });
 }
 
 function enterFlowMode(): void {
@@ -172,3 +184,10 @@ ipcRenderer.on('enter-inspect-mode', () => enterInspectMode());
 ipcRenderer.on('exit-inspect-mode', () => exitInspectMode());
 ipcRenderer.on('enter-flow-mode', () => enterFlowMode());
 ipcRenderer.on('exit-flow-mode', () => exitFlowMode());
+ipcRenderer.on('flow-do-click', (_event, selector: string) => {
+  const el = document.querySelector(selector);
+  if (el instanceof HTMLElement) {
+    suppressNextFlowClick = true;
+    el.click();
+  }
+});
