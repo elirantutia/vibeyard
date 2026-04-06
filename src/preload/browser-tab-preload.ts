@@ -6,6 +6,7 @@
 import { ipcRenderer } from 'electron';
 
 let inspectMode = false;
+let flowMode = false;
 let highlightOverlay: HTMLDivElement | null = null;
 
 function ensureOverlay(): HTMLDivElement {
@@ -73,14 +74,14 @@ function getElementMetadata(el: Element) {
 }
 
 function onMouseOver(e: MouseEvent): void {
-  if (!inspectMode) return;
+  if (!inspectMode && !flowMode) return;
   const target = e.target as Element;
   if (target === highlightOverlay) return;
   positionOverlay(target);
 }
 
 function onMouseOut(_e: MouseEvent): void {
-  if (!inspectMode) return;
+  if (!inspectMode && !flowMode) return;
   hideOverlay();
 }
 
@@ -93,6 +94,30 @@ function onClick(e: MouseEvent): void {
   if (target === highlightOverlay) return;
   const metadata = getElementMetadata(target);
   ipcRenderer.sendToHost('element-selected', metadata);
+}
+
+function onFlowClick(e: MouseEvent): void {
+  if (!flowMode) return;
+  const target = e.target as Element;
+  if (target === highlightOverlay) return;
+  ipcRenderer.sendToHost('flow-click', getElementMetadata(target));
+}
+
+function enterFlowMode(): void {
+  flowMode = true;
+  document.addEventListener('mouseover', onMouseOver, true);
+  document.addEventListener('mouseout', onMouseOut, true);
+  document.addEventListener('click', onFlowClick, true);
+  document.body.style.cursor = 'crosshair';
+}
+
+function exitFlowMode(): void {
+  flowMode = false;
+  document.removeEventListener('mouseover', onMouseOver, true);
+  document.removeEventListener('mouseout', onMouseOut, true);
+  document.removeEventListener('click', onFlowClick, true);
+  hideOverlay();
+  document.body.style.cursor = '';
 }
 
 function enterInspectMode(): void {
@@ -114,3 +139,5 @@ function exitInspectMode(): void {
 
 ipcRenderer.on('enter-inspect-mode', () => enterInspectMode());
 ipcRenderer.on('exit-inspect-mode', () => exitInspectMode());
+ipcRenderer.on('enter-flow-mode', () => enterFlowMode());
+ipcRenderer.on('exit-flow-mode', () => exitFlowMode());

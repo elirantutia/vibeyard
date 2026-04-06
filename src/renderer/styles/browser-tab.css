@@ -376,6 +376,151 @@ body.sidebar-resizing .browser-webview {
   opacity: 0.9;
 }
 
+/* Record Flow Button */
+.browser-record-btn {
+  height: 26px;
+  padding: 0 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.browser-record-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.browser-record-btn.active {
+  background: #e5534b;
+  border-color: #e5534b;
+  color: #fff;
+}
+
+/* Flow Panel */
+.browser-flow-panel {
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.flow-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.flow-panel-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.flow-panel-clear-btn {
+  height: 20px;
+  padding: 0 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.flow-panel-clear-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Flow Steps List */
+.flow-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  max-height: 150px;
+}
+
+.flow-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+  font-size: 11px;
+}
+
+.flow-step-number {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  opacity: 0.6;
+  min-width: 18px;
+}
+
+.flow-step-content {
+  flex: 1;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
+.flow-step-tag {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.flow-step-url {
+  color: var(--text-secondary);
+  opacity: 0.7;
+  font-style: italic;
+}
+
+.flow-step-remove {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 2px;
+  opacity: 0.4;
+}
+
+.flow-step-remove:hover {
+  color: #e5534b;
+  opacity: 1;
+}
+
+/* Flow Input Row */
+.flow-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.flow-instruction-input {
+  flex: 1;
+  padding: 8px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  resize: none;
+  line-height: 1.4;
+}
+
+.flow-instruction-input:focus {
+  border-color: var(--accent);
+}
+
 /* Tab badge */
 .tab-browser-badge {
   font-size: 9px;
