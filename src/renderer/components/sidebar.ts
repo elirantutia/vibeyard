@@ -235,6 +235,17 @@ function initResizeHandle(): void {
 
   document.addEventListener('mousemove', (e) => {
     if (!dragging) return;
+    // If mouse button was released outside the browser window, mouseup never fired.
+    // Detect this via e.buttons and clean up the dragging state.
+    if (!e.buttons) {
+      dragging = false;
+      resizeHandle.classList.remove('active');
+      document.body.classList.remove('sidebar-resizing');
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      appState.setSidebarWidth(parseInt(sidebarEl.style.width, 10));
+      return;
+    }
     const width = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, e.clientX));
     sidebarEl.style.width = width + 'px';
   });

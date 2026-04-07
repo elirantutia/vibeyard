@@ -97,6 +97,9 @@ export function showModal(
     bodyEl.appendChild(div);
   }
 
+  // Clean up previous listeners before showing the modal
+  cleanup();
+
   overlay.classList.remove('hidden');
 
   // Focus first text input
@@ -107,9 +110,6 @@ export function showModal(
       firstInput.select();
     });
   }
-
-  // Clean up previous listeners
-  cleanup();
 
   const handleConfirm = async () => {
     const values: Record<string, string> = {};
