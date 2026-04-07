@@ -1,7 +1,7 @@
 name: PR Security Review Collect
 
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, reopened]
 
 permissions:
@@ -12,27 +12,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  collect:
+  prepare:
     runs-on: ubuntu-latest
     steps:
-      - name: Write PR metadata
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          EVENT_ACTION: ${{ github.event.action }}
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Save PR metadata
         run: |
-          mkdir -p pr-meta
-          jq -n \
-            --arg pr "$PR_NUMBER" \
-            --arg head "$HEAD_SHA" \
-            --arg base "$BASE_SHA" \
-            --arg action "$EVENT_ACTION" \
-            '{pr_number: ($pr|tonumber), head_sha: $head, base_sha: $base, action: $action}' \
-            > pr-meta/pr.json
+          mkdir -p ./pr-context
+          echo "${{ github.event.pull_request.number }}" > ./pr-context/pr-number
+          echo "${{ github.event.pull_request.head.sha }}" > ./pr-context/head-sha
+          echo "${{ github.event.pull_request.base.sha }}" > ./pr-context/base-sha
+          git diff ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} > ./pr-context/diff.patch
 
       - uses: actions/upload-artifact@v4
         with:
-          name: pr-meta
-          path: pr-meta/
+          name: pr-context
+          path: ./pr-context/
           retention-days: 1
