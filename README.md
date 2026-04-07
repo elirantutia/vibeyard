@@ -109,5 +109,5 @@ PRs welcome! See the [Contributing Guide](CONTRIBUTING.md) and [Code of Conduct]
   <sub>Vibeyard is an independent project and is not affiliated with or endorsed by Anthropic.</sub>
 </p>
 
-<!-- workflow test: verify PR review + security review reviewers post comments (rerun) -->
+<!-- workflow test marker -->
 
