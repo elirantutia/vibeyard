@@ -25,10 +25,27 @@ let cachedFullPath: string | null = null;
 export function getFullPath(): string {
   if (cachedFullPath) return cachedFullPath;
 
-  const shell = process.env.SHELL || '/bin/zsh';
   const currentPath = process.env.PATH || '';
 
-  // Try to get the real PATH from a login shell
+  if (process.platform === 'win32') {
+    // On Windows: PATH uses ';' separator. Augment with common install locations.
+    const home = os.homedir();
+    const extraDirs = [
+      path.join(home, 'AppData', 'Roaming', 'npm'),
+      path.join(home, 'AppData', 'Local', 'Programs', 'claude-code'),
+      path.join(home, 'AppData', 'Local', 'AnthropicClaude'),
+      path.join(home, '.local', 'bin'),
+      'C:\\Program Files\\nodejs',
+    ];
+    const pathSet = new Set(currentPath.split(';'));
+    for (const dir of extraDirs) pathSet.add(dir);
+    cachedFullPath = Array.from(pathSet).join(';');
+    return cachedFullPath;
+  }
+
+  const shell = process.env.SHELL || '/bin/zsh';
+
+  // Try to get the real PATH from a login shell (macOS/Linux)
   try {
     const shellPath = execSync(`${shell} -ilc 'echo __PATH__=$PATH'`, {
       encoding: 'utf-8',
@@ -54,9 +71,7 @@ export function getFullPath(): string {
   ];
 
   const pathSet = new Set(currentPath.split(':'));
-  for (const dir of extraDirs) {
-    pathSet.add(dir);
-  }
+  for (const dir of extraDirs) pathSet.add(dir);
   cachedFullPath = Array.from(pathSet).join(':');
   return cachedFullPath;
 }
