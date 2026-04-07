@@ -1,4 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import * as path from 'path';
+
+const isWin = process.platform === 'win32';
+const STATUS_DIR = path.join('/tmp', 'vibeyard');
+const STATUSLINE_SCRIPT = path.join(STATUS_DIR, isWin ? 'statusline.cmd' : 'statusline.sh');
 
 vi.mock('fs', () => ({
   mkdirSync: vi.fn(),
@@ -8,6 +13,7 @@ vi.mock('fs', () => ({
   statSync: vi.fn(),
   unlinkSync: vi.fn(),
   rmdirSync: vi.fn(),
+  rmSync: vi.fn(),
   watch: vi.fn(),
 }));
 
@@ -81,10 +87,10 @@ describe('hook-status', () => {
     it('creates dir and writes script with mode 0o755', () => {
       installStatusLineScript();
 
-      expect(fs.mkdirSync).toHaveBeenCalledWith('/tmp/vibeyard', { recursive: true, mode: 0o700 });
+      expect(fs.mkdirSync).toHaveBeenCalledWith(STATUS_DIR, { recursive: true, mode: 0o700 });
       expect(fs.writeFileSync).toHaveBeenCalledWith(
-        '/tmp/vibeyard/statusline.sh',
-        expect.stringContaining('#!/bin/sh'),
+        STATUSLINE_SCRIPT,
+        isWin ? expect.stringContaining('@echo off') : expect.stringContaining('#!/bin/sh'),
         { mode: 0o755 },
       );
     });
@@ -95,8 +101,8 @@ describe('hook-status', () => {
       const win = createMockWin();
       startWatching(win);
 
-      expect(fs.mkdirSync).toHaveBeenCalledWith('/tmp/vibeyard', { recursive: true, mode: 0o700 });
-      expect(fs.watch).toHaveBeenCalledWith('/tmp/vibeyard', expect.any(Function));
+      expect(fs.mkdirSync).toHaveBeenCalledWith(STATUS_DIR, { recursive: true, mode: 0o700 });
+      expect(fs.watch).toHaveBeenCalledWith(STATUS_DIR, expect.any(Function));
     });
   });
 
@@ -178,7 +184,7 @@ describe('hook-status', () => {
       watchCallback!('change', 'abc123-xyzabc.toolfailure');
 
       expect(mockSend).toHaveBeenCalledWith('session:toolFailure', 'abc123', failureData);
-      expect(fs.unlinkSync).toHaveBeenCalledWith('/tmp/vibeyard/abc123-xyzabc.toolfailure');
+      expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'abc123-xyzabc.toolfailure'));
     });
 
     it('.toolfailure extracts session ID from filename with random suffix', () => {
@@ -202,7 +208,7 @@ describe('hook-status', () => {
       watchCallback!('change', 'abc123-xyzabc.toolfailure');
 
       expect(mockSend).not.toHaveBeenCalled();
-      expect(fs.unlinkSync).toHaveBeenCalledWith('/tmp/vibeyard/abc123-xyzabc.toolfailure');
+      expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'abc123-xyzabc.toolfailure'));
     });
 
     it('handles read errors gracefully', () => {
@@ -247,7 +253,7 @@ describe('hook-status', () => {
 
       watchCallback!('change', null);
 
-      expect(fs.readdirSync).toHaveBeenCalledWith('/tmp/vibeyard');
+      expect(fs.readdirSync).toHaveBeenCalledWith(STATUS_DIR);
       expect(mockSend).toHaveBeenCalledWith('session:costData', 'abc123', costData);
     });
   });
@@ -304,8 +310,8 @@ describe('hook-status', () => {
 
       restartAndResync(win);
 
-      expect(fs.watch).toHaveBeenCalledWith('/tmp/vibeyard', expect.any(Function));
-      expect(fs.readdirSync).toHaveBeenCalledWith('/tmp/vibeyard');
+      expect(fs.watch).toHaveBeenCalledWith(STATUS_DIR, expect.any(Function));
+      expect(fs.readdirSync).toHaveBeenCalledWith(STATUS_DIR);
     });
   });
 
@@ -313,11 +319,11 @@ describe('hook-status', () => {
     it('unlinks all 5 file types', () => {
       cleanupSessionStatus('sess-1');
 
-      expect(fs.unlinkSync).toHaveBeenCalledWith('/tmp/vibeyard/sess-1.status');
-      expect(fs.unlinkSync).toHaveBeenCalledWith('/tmp/vibeyard/sess-1.sessionid');
-      expect(fs.unlinkSync).toHaveBeenCalledWith('/tmp/vibeyard/sess-1.cost');
-      expect(fs.unlinkSync).toHaveBeenCalledWith('/tmp/vibeyard/sess-1.toolfailure');
-      expect(fs.unlinkSync).toHaveBeenCalledWith('/tmp/vibeyard/sess-1.events');
+      expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'sess-1.status'));
+      expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'sess-1.sessionid'));
+      expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'sess-1.cost'));
+      expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'sess-1.toolfailure'));
+      expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'sess-1.events'));
       expect(fs.unlinkSync).toHaveBeenCalledTimes(5);
     });
 
@@ -399,12 +405,12 @@ describe('hook-status', () => {
       cleanupAll();
 
       expect(mockClose).toHaveBeenCalled();
-      expect(fs.unlinkSync).toHaveBeenCalledWith('/tmp/vibeyard/a.status');
-      expect(fs.unlinkSync).toHaveBeenCalledWith('/tmp/vibeyard/b.sessionid');
-      expect(fs.unlinkSync).toHaveBeenCalledWith('/tmp/vibeyard/c.cost');
-      // statusline.sh removal
-      expect(fs.unlinkSync).toHaveBeenCalledWith('/tmp/vibeyard/statusline.sh');
-      expect(fs.rmdirSync).toHaveBeenCalledWith('/tmp/vibeyard');
+      expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'a.status'));
+      expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'b.sessionid'));
+      expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'c.cost'));
+      // statusline script removal
+      expect(fs.unlinkSync).toHaveBeenCalledWith(STATUSLINE_SCRIPT);
+      expect(fs.rmSync).toHaveBeenCalledWith(STATUS_DIR, { recursive: true });
       // 'other.log' should not be unlinked (3 matching + 1 script = 4)
       expect(fs.unlinkSync).toHaveBeenCalledTimes(4);
     });

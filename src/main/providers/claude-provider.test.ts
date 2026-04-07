@@ -1,4 +1,7 @@
 import { vi } from 'vitest';
+import * as path from 'path';
+
+const isWin = process.platform === 'win32';
 
 vi.mock('fs', () => ({
   existsSync: vi.fn(),
@@ -13,7 +16,7 @@ vi.mock('child_process', () => ({
 }));
 
 vi.mock('../pty-manager', () => ({
-  getFullPath: vi.fn(() => '/usr/local/bin:/usr/bin'),
+  getFullPath: vi.fn(() => isWin ? '/usr/local/bin;/usr/bin' : '/usr/local/bin:/usr/bin'),
 }));
 
 vi.mock('../hook-status', () => ({
@@ -67,12 +70,16 @@ describe('meta', () => {
 });
 
 describe('resolveBinaryPath', () => {
+  const firstCandidate = isWin
+    ? path.join('/mock/home', 'AppData', 'Roaming', 'npm', 'claude.cmd')
+    : '/usr/local/bin/claude';
+
   it('returns candidate path when existsSync returns true', () => {
-    mockExistsSync.mockImplementation((p) => p === '/usr/local/bin/claude');
-    expect(provider.resolveBinaryPath()).toBe('/usr/local/bin/claude');
+    mockExistsSync.mockImplementation((p) => p === firstCandidate);
+    expect(provider.resolveBinaryPath()).toBe(firstCandidate);
   });
 
-  it('falls back to which claude when no candidate exists', () => {
+  it(`falls back to ${isWin ? 'where' : 'which'} claude when no candidate exists`, () => {
     mockExistsSync.mockReturnValue(false);
     mockExecSync.mockReturnValue('/some/other/path/claude\n' as any);
     expect(provider.resolveBinaryPath()).toBe('/some/other/path/claude');
@@ -85,17 +92,21 @@ describe('resolveBinaryPath', () => {
   });
 
   it('caches result on subsequent calls', () => {
-    mockExistsSync.mockImplementation((p) => p === '/usr/local/bin/claude');
+    mockExistsSync.mockImplementation((p) => p === firstCandidate);
     provider.resolveBinaryPath();
     mockExistsSync.mockReturnValue(false); // change behavior
     // Should still return cached value
-    expect(provider.resolveBinaryPath()).toBe('/usr/local/bin/claude');
+    expect(provider.resolveBinaryPath()).toBe(firstCandidate);
   });
 });
 
 describe('validatePrerequisites', () => {
+  const validateCandidate = isWin
+    ? path.join('/mock/home', 'AppData', 'Roaming', 'npm', 'claude.cmd')
+    : '/opt/homebrew/bin/claude';
+
   it('returns ok when binary found via existsSync', () => {
-    mockExistsSync.mockImplementation((p) => p === '/opt/homebrew/bin/claude');
+    mockExistsSync.mockImplementation((p) => p === validateCandidate);
     expect(provider.validatePrerequisites()).toEqual({ ok: true, message: '' });
   });
 
@@ -122,7 +133,7 @@ describe('buildEnv', () => {
 
   it('sets PATH to the augmented PATH', () => {
     const env = provider.buildEnv('sess-123', {});
-    expect(env.PATH).toBe('/usr/local/bin:/usr/bin');
+    expect(env.PATH).toBe(isWin ? '/usr/local/bin;/usr/bin' : '/usr/local/bin:/usr/bin');
   });
 
   it('deletes CLAUDE_CODE from env if present', () => {

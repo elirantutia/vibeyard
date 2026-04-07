@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import * as child_process from 'child_process';
 
 vi.mock('fs');
@@ -7,14 +9,20 @@ vi.mock('child_process');
 
 import { validatePrerequisites } from './prerequisites';
 
+const isWin = process.platform === 'win32';
+
 describe('validatePrerequisites', () => {
   beforeEach(() => {
     vi.resetAllMocks();
   });
 
   it('returns ok when a candidate path exists', () => {
+    const candidatePath = isWin
+      ? path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'claude.cmd')
+      : '/usr/local/bin/claude';
+
     vi.mocked(fs.existsSync).mockImplementation((p) => {
-      return p === '/usr/local/bin/claude';
+      return p === candidatePath;
     });
 
     const result = validatePrerequisites();

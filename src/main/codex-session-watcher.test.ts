@@ -19,9 +19,16 @@ vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [] },
 }));
 
+const { STATUS_DIR: MOCK_STATUS_DIR } = vi.hoisted(() => {
+  const path = require('path');
+  return { STATUS_DIR: path.join('/tmp', 'vibeyard') };
+});
+
 vi.mock('./hook-status', () => ({
-  STATUS_DIR: '/tmp/vibeyard',
+  STATUS_DIR: MOCK_STATUS_DIR,
 }));
+
+import * as path from 'path';
 
 import * as fs from 'fs';
 import {
@@ -89,8 +96,9 @@ describe('startCodexSessionWatcher', () => {
     const win = createMockWin();
     startCodexSessionWatcher(win);
 
+    const { join } = require('path');
     expect(mockWatch).toHaveBeenCalledWith(
-      '/mock/home/.codex',
+      join('/mock/home', '.codex'),
       expect.any(Function)
     );
   });
@@ -133,9 +141,9 @@ describe('session ID assignment via polling', () => {
     vi.advanceTimersByTime(2000);
 
     // Should have written the .sessionid file
-    expect(mockMkdirSync).toHaveBeenCalledWith('/tmp/vibeyard', { recursive: true, mode: 0o700 });
+    expect(mockMkdirSync).toHaveBeenCalledWith(MOCK_STATUS_DIR, { recursive: true, mode: 0o700 });
     expect(mockWriteFileSync).toHaveBeenCalledWith(
-      '/tmp/vibeyard/ui-session-1.sessionid',
+      path.join(MOCK_STATUS_DIR, 'ui-session-1.sessionid'),
       'codex-abc-123'
     );
     expect(mockCloseSync).toHaveBeenCalledWith(42);
@@ -168,7 +176,7 @@ describe('session ID assignment via polling', () => {
 
     // Should assign to the older session
     expect(mockWriteFileSync).toHaveBeenCalledWith(
-      '/tmp/vibeyard/ui-older.sessionid',
+      path.join(MOCK_STATUS_DIR, 'ui-older.sessionid'),
       'codex-first'
     );
   });

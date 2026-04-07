@@ -1,4 +1,7 @@
 import { vi } from 'vitest';
+import * as path from 'path';
+
+const isWin = process.platform === 'win32';
 
 const { mockSpawn, mockWrite, mockResize, mockKill, mockExecFile } = vi.hoisted(() => ({
   mockSpawn: vi.fn(),
@@ -141,7 +144,10 @@ describe('spawnPty', () => {
   it('uses resolved claude path when found', async () => {
     // Must reset modules to clear cachedClaudePath from prior tests
     vi.resetModules();
-    mockExistsSync.mockImplementation((p) => String(p) === '/usr/local/bin/claude');
+    const expectedPath = isWin
+      ? path.join('/mock/home', 'AppData', 'Roaming', 'npm', 'claude.cmd')
+      : '/usr/local/bin/claude';
+    mockExistsSync.mockImplementation((p) => String(p) === expectedPath);
     const proc = createMockPtyProcess();
     mockSpawn.mockReturnValue(proc);
 
@@ -151,7 +157,7 @@ describe('spawnPty', () => {
     freshSpawnPty('s1', '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
 
     expect(mockSpawn).toHaveBeenCalledWith(
-      '/usr/local/bin/claude',
+      expectedPath,
       [],
       expect.any(Object),
     );
@@ -175,9 +181,13 @@ describe('spawnPty', () => {
     spawnPty('s1', '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
 
     const envPath = mockSpawn.mock.calls[0][2].env.PATH;
-    expect(envPath).toContain('/usr/local/bin');
-    expect(envPath).toContain('/opt/homebrew/bin');
-    expect(envPath).toContain('/mock/home/.local/bin');
+    if (isWin) {
+      expect(envPath).toContain(path.join('/mock/home', 'AppData', 'Roaming', 'npm'));
+    } else {
+      expect(envPath).toContain('/usr/local/bin');
+      expect(envPath).toContain('/opt/homebrew/bin');
+      expect(envPath).toContain('/mock/home/.local/bin');
+    }
   });
 });
 
@@ -235,6 +245,13 @@ describe('getPtyCwd', () => {
     (proc as unknown as { pid: number }).pid = 1000;
     mockSpawn.mockReturnValue(proc);
     spawnPty('s1', '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
+
+    if (isWin) {
+      // On Windows, getPtyCwd always returns null (not supported)
+      const result = await getPtyCwd('s1');
+      expect(result).toBeNull();
+      return;
+    }
 
     // pgrep for pid 1000 returns child 2000
     mockExecFile.mockImplementationOnce((_cmd: string, args: string[], _opts: unknown, callback: (err: Error | null, stdout: string) => void) => {

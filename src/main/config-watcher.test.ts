@@ -15,7 +15,10 @@ vi.mock('electron', () => ({
 }));
 
 import * as fs from 'fs';
+import * as path from 'path';
 import { startConfigWatcher, stopConfigWatcher } from './config-watcher';
+
+const n = (p: string) => p.replace(/\\/g, '/');
 
 const mockSend = vi.fn();
 function createMockWin(destroyed = false) {
@@ -35,12 +38,12 @@ beforeEach(() => {
   mockSend.mockClear();
 
   vi.mocked(fs.watchFile).mockImplementation((filePath: any, _opts: any, cb: any) => {
-    watchFileCallbacks.set(filePath, cb);
+    watchFileCallbacks.set(n(String(filePath)), cb);
     return {} as any;
   });
   vi.mocked(fs.unwatchFile).mockImplementation(vi.fn() as any);
   vi.mocked(fs.watch).mockImplementation((dirPath: any, _opts: any, cb: any) => {
-    watchDirCallbacks.set(dirPath, cb);
+    watchDirCallbacks.set(n(String(dirPath)), cb);
     return { close: mockClose, on: vi.fn().mockReturnThis() } as any;
   });
 

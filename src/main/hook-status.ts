@@ -4,7 +4,7 @@ import * as os from 'os';
 import { BrowserWindow } from 'electron';
 
 export const STATUS_DIR = path.join(os.tmpdir(), 'vibeyard');
-const STATUSLINE_SCRIPT = path.join(STATUS_DIR, 'statusline.sh');
+const STATUSLINE_SCRIPT = path.join(STATUS_DIR, process.platform === 'win32' ? 'statusline.cmd' : 'statusline.sh');
 
 const KNOWN_EXTENSIONS = ['.status', '.sessionid', '.cost', '.toolfailure', '.events'];
 
@@ -35,7 +35,39 @@ export function installStatusLineScript(): void {
 
   // Script that extracts cost, context_window, and session_id from hook JSON stdin.
   // Used by hook commands to write .cost and .sessionid files to STATUS_DIR.
-  const script = `#!/bin/sh
+  const statusDir = STATUS_DIR.replace(/\\/g, '/');
+
+  let script: string;
+  if (process.platform === 'win32') {
+    // On Windows, write a Python helper script and a .cmd wrapper
+    const pyScript = `import sys,json,os
+try:
+    d=json.load(sys.stdin)
+except:
+    sys.exit(0)
+sid=os.environ.get('CLAUDE_IDE_SESSION_ID','')
+if not sid:
+    sys.exit(0)
+status_dir=r'${STATUS_DIR}'
+cost=d.get('cost',{})
+ctx=d.get('context_window',{})
+model=d.get('model',{}).get('display_name','')
+if cost or ctx or model:
+    payload={'cost':cost,'context_window':ctx}
+    if model:
+        payload['model']=model
+    with open(os.path.join(status_dir,sid+'.cost'),'w') as f:
+        json.dump(payload,f)
+claude_sid=d.get('session_id','')
+if claude_sid:
+    with open(os.path.join(status_dir,sid+'.sessionid'),'w') as f:
+        f.write(claude_sid)
+`;
+    const pyPath = path.join(STATUS_DIR, 'statusline.py');
+    fs.writeFileSync(pyPath, pyScript, { mode: 0o755 });
+    script = `@echo off\r\npython "${pyPath}" 2>>"${statusDir}/statusline.log"\r\n`;
+  } else {
+    script = `#!/bin/sh
 /usr/bin/python3 -c "
 import sys,json,os
 try:
@@ -60,6 +92,7 @@ if claude_sid:
         f.write(claude_sid)
 " 2>>${STATUS_DIR}/statusline.log
 `;
+  }
 
   fs.writeFileSync(STATUSLINE_SCRIPT, script, { mode: 0o755 });
 }
@@ -278,13 +311,13 @@ export function cleanupAll(): void {
   try {
     const files = fs.readdirSync(STATUS_DIR);
     for (const file of files) {
-      if (isKnownExtension(file)) {
-        fs.unlinkSync(path.join(STATUS_DIR, file));
+      if (isKnownExtension(file) || file.endsWith('.py') || file.endsWith('.cmd') || file.endsWith('.sh')) {
+        try { fs.unlinkSync(path.join(STATUS_DIR, file)); } catch { /* already gone */ }
       }
     }
     // Remove the statusline script
     try { fs.unlinkSync(STATUSLINE_SCRIPT); } catch { /* already gone */ }
-    fs.rmdirSync(STATUS_DIR);
+    try { fs.rmSync(STATUS_DIR, { recursive: true }); } catch { /* may not be empty */ }
   } catch {
     // Directory may not exist
   }

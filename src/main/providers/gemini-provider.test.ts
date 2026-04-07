@@ -1,4 +1,7 @@
 import { vi } from 'vitest';
+import * as path from 'path';
+
+const isWin = process.platform === 'win32';
 
 vi.mock('fs', () => ({
   existsSync: vi.fn(),
@@ -13,7 +16,7 @@ vi.mock('child_process', () => ({
 }));
 
 vi.mock('../pty-manager', () => ({
-  getFullPath: vi.fn(() => '/usr/local/bin:/usr/bin'),
+  getFullPath: vi.fn(() => isWin ? '/usr/local/bin;/usr/bin' : '/usr/local/bin:/usr/bin'),
 }));
 
 vi.mock('../gemini-config', () => ({
@@ -81,12 +84,16 @@ describe('meta', () => {
 });
 
 describe('resolveBinaryPath', () => {
+  const firstCandidate = isWin
+    ? path.join('/mock/home', 'AppData', 'Roaming', 'npm', 'gemini.cmd')
+    : '/usr/local/bin/gemini';
+
   it('returns candidate path when existsSync returns true', () => {
-    mockExistsSync.mockImplementation((p) => p === '/usr/local/bin/gemini');
-    expect(provider.resolveBinaryPath()).toBe('/usr/local/bin/gemini');
+    mockExistsSync.mockImplementation((p) => p === firstCandidate);
+    expect(provider.resolveBinaryPath()).toBe(firstCandidate);
   });
 
-  it('falls back to which gemini when no candidate exists', () => {
+  it(`falls back to ${isWin ? 'where' : 'which'} gemini when no candidate exists`, () => {
     mockExistsSync.mockReturnValue(false);
     mockExecSync.mockReturnValue('/some/other/path/gemini\n' as any);
     expect(provider.resolveBinaryPath()).toBe('/some/other/path/gemini');
@@ -99,16 +106,20 @@ describe('resolveBinaryPath', () => {
   });
 
   it('caches result on subsequent calls', () => {
-    mockExistsSync.mockImplementation((p) => p === '/usr/local/bin/gemini');
+    mockExistsSync.mockImplementation((p) => p === firstCandidate);
     provider.resolveBinaryPath();
     mockExistsSync.mockReturnValue(false);
-    expect(provider.resolveBinaryPath()).toBe('/usr/local/bin/gemini');
+    expect(provider.resolveBinaryPath()).toBe(firstCandidate);
   });
 });
 
 describe('validatePrerequisites', () => {
+  const validateCandidate = isWin
+    ? path.join('/mock/home', 'AppData', 'Roaming', 'npm', 'gemini.cmd')
+    : '/opt/homebrew/bin/gemini';
+
   it('returns ok when binary found via existsSync', () => {
-    mockExistsSync.mockImplementation((p) => p === '/opt/homebrew/bin/gemini');
+    mockExistsSync.mockImplementation((p) => p === validateCandidate);
     expect(provider.validatePrerequisites()).toEqual({ ok: true, message: '' });
   });
 
@@ -131,7 +142,7 @@ describe('validatePrerequisites', () => {
 describe('buildEnv', () => {
   it('sets PATH to the augmented PATH', () => {
     const env = provider.buildEnv('sess-123', {});
-    expect(env.PATH).toBe('/usr/local/bin:/usr/bin');
+    expect(env.PATH).toBe(isWin ? '/usr/local/bin;/usr/bin' : '/usr/local/bin:/usr/bin');
   });
 
   it('sets VIBEYARD_SESSION_ID to the session ID', () => {

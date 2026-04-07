@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { homedir } from 'os';
 import { STATUS_DIR, getStatusLineScriptPath } from './hook-status';
+import { statusCmd as mkStatusCmd, captureSessionIdCmd as mkCaptureSessionIdCmd, captureToolFailureCmd as mkCaptureToolFailureCmd, wrapPythonHookCmd, installHookScripts } from './hook-commands';
 import { readJsonSafe, readDirSafe } from './fs-utils';
 import type { McpServer, Agent, Skill, Command, ClaudeConfig, InspectorEventType } from '../shared/types';
 
@@ -220,64 +221,67 @@ function writeSettings(settings: Record<string, unknown>): void {
 export function installHooksOnly(): void {
   const { settings, cleaned } = prepareSettings();
 
+  installHookScripts();
+
   const statusCmd = (event: string, status: string) =>
-    `sh -c 'mkdir -p ${STATUS_DIR} && echo ${event}:${status} > ${STATUS_DIR}/$CLAUDE_IDE_SESSION_ID.status ${HOOK_MARKER}'`;
+    mkStatusCmd(event, status, 'CLAUDE_IDE_SESSION_ID', HOOK_MARKER);
 
   // Hook to capture Claude's session ID from the hook input JSON (stdin)
-  const captureSessionIdCmd =
-    `sh -c 'input=$(cat); sid=$(echo "$input" | /usr/bin/python3 -c "import sys,json; print(json.load(sys.stdin).get(\\"session_id\\",\\"\\"))" 2>/dev/null); if [ -n "$sid" ]; then mkdir -p ${STATUS_DIR} && echo "$sid" > ${STATUS_DIR}/$CLAUDE_IDE_SESSION_ID.sessionid; fi ${HOOK_MARKER}'`;
+  const captureSessionIdCmd = mkCaptureSessionIdCmd('CLAUDE_IDE_SESSION_ID', HOOK_MARKER);
 
   // Hook to capture tool failure details (tool_name, tool_input, error) for missing-tool detection.
   // Uses a random suffix to avoid filename collisions when multiple tools fail rapidly.
-  const captureToolFailureCmd =
-    `sh -c 'cat | /usr/bin/python3 -c "import sys,json,os,random,string; d=json.load(sys.stdin); sid=os.environ.get(\\"CLAUDE_IDE_SESSION_ID\\",\\"\\"); tn=d.get(\\"tool_name\\",\\"\\"); ti=d.get(\\"tool_input\\",{}); err=d.get(\\"error\\",\\"\\"); sfx=\\"\\".join(random.choices(string.ascii_lowercase,k=6)); json.dump({\\"tool_name\\":tn,\\"tool_input\\":ti,\\"error\\":err},open(f\\"${STATUS_DIR}/\\"+sid+\\"-\\"+sfx+\\".toolfailure\\",\\"w\\")) if sid and tn else None" 2>/dev/null ${HOOK_MARKER}'`;
+  const captureToolFailureCmd = mkCaptureToolFailureCmd('CLAUDE_IDE_SESSION_ID', HOOK_MARKER);
 
   // Hook to capture inspector events (tool names, cost snapshots, timestamps) into a JSONL log.
-  // Each hook event appends one JSON line to /tmp/vibeyard/{sessionId}.events
-  const captureEventCmd = (hookEvent: string, eventType: string) =>
-    `sh -c 'cat | /usr/bin/python3 -c "import sys,json,os,time
+  // Each hook event appends one JSON line to STATUS_DIR/{sessionId}.events
+  const captureEventCmd = (hookEvent: string, eventType: string) => {
+    const pyCode = `import sys,json,os,time
 try:
  d=json.load(sys.stdin)
 except:
  sys.exit(0)
-sid=os.environ.get(\\"CLAUDE_IDE_SESSION_ID\\",\\"\\")
+sid=os.environ.get("CLAUDE_IDE_SESSION_ID","")
 if not sid:
  sys.exit(0)
-cs=d.get(\\"cost\\",{})
-cw=d.get(\\"context_window\\",{})
-e={\\"type\\":\\"${eventType}\\",\\"timestamp\\":int(time.time()*1000),\\"hookEvent\\":\\"${hookEvent}\\"}
-tn=d.get(\\"tool_name\\",\\"\\")
+cs=d.get("cost",{})
+cw=d.get("context_window",{})
+e={"type":"${eventType}","timestamp":int(time.time()*1000),"hookEvent":"${hookEvent}"}
+tn=d.get("tool_name","")
 if tn:
- e[\\"tool_name\\"]=tn
-ti=d.get(\\"tool_input\\")
+ e["tool_name"]=tn
+ti=d.get("tool_input")
 if ti:
- e[\\"tool_input\\"]=ti
-er=d.get(\\"error\\",\\"\\")
+ e["tool_input"]=ti
+er=d.get("error","")
 if er:
- e[\\"error\\"]=er
-for fld in (\\"agent_id\\",\\"agent_type\\",\\"last_assistant_message\\",\\"agent_transcript_path\\",\\"message\\",\\"task_id\\",\\"worktree_path\\",\\"cwd\\",\\"file_path\\",\\"config_key\\",\\"question\\",\\"answer\\"):
- v=d.get(fld,\\"\\")
+ e["error"]=er
+for fld in ("agent_id","agent_type","last_assistant_message","agent_transcript_path","message","task_id","worktree_path","cwd","file_path","config_key","question","answer"):
+ v=d.get(fld,"")
  if v:
   e[fld]=v
 if cs:
- e[\\"cost_snapshot\\"]={k:cs[k] for k in (\\"total_cost_usd\\",\\"total_duration_ms\\") if k in cs}
+ e["cost_snapshot"]={k:cs[k] for k in ("total_cost_usd","total_duration_ms") if k in cs}
 if cw:
- tt=cw.get(\\"total_input_tokens\\",0)+cw.get(\\"total_output_tokens\\",0)
- e[\\"context_snapshot\\"]={
-  \\"total_tokens\\":tt,
-  \\"context_window_size\\":cw.get(\\"context_window_size\\",200000),
-  \\"used_percentage\\":cw.get(\\"used_percentage\\",0)
+ tt=cw.get("total_input_tokens",0)+cw.get("total_output_tokens",0)
+ e["context_snapshot"]={
+  "total_tokens":tt,
+  "context_window_size":cw.get("context_window_size",200000),
+  "used_percentage":cw.get("used_percentage",0)
  }
-if tn and \\"${hookEvent}\\"==\\"PostToolUse\\":
+status_dir=r'${STATUS_DIR}'
+if tn and "${hookEvent}"=="PostToolUse":
  import random,string as st
- tr=d.get(\\"tool_result\\",\\"\\") or d.get(\\"tool_response\\",\\"\\")
- fe=tr if isinstance(tr,str) else json.dumps(tr) if tr else \\"\\"
+ tr=d.get("tool_result","") or d.get("tool_response","")
+ fe=tr if isinstance(tr,str) else json.dumps(tr) if tr else ""
  if fe:
-  sfx=\\"\\".join(random.choices(st.ascii_lowercase,k=6))
-  json.dump({\\"tool_name\\":tn,\\"tool_input\\":d.get(\\"tool_input\\",{}),\\"error\\":fe},open(f\\"${STATUS_DIR}/\\"+sid+\\"-\\"+sfx+\\".toolfailure\\",\\"w\\"))
-with open(f\\"${STATUS_DIR}/\\"+sid+\\".events\\",\\"a\\") as f:
- f.write(json.dumps(e)+\\"\\\\n\\")
-" 2>/dev/null ${HOOK_MARKER}'`;
+  sfx="".join(random.choices(st.ascii_lowercase,k=6))
+  json.dump({"tool_name":tn,"tool_input":d.get("tool_input",{}),"error":fe},open(os.path.join(status_dir,sid+"-"+sfx+".toolfailure"),"w"))
+with open(os.path.join(status_dir,sid+".events"),"a") as f:
+ f.write(json.dumps(e)+"\\n")
+`;
+    return wrapPythonHookCmd(`claude_event_${hookEvent}.py`, pyCode, HOOK_MARKER);
+  };
 
   // Add our hooks for each event type
   const ideEvents: Record<string, string> = {

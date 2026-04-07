@@ -12,19 +12,34 @@ vi.mock('os', () => ({
   tmpdir: () => '/tmp',
 }));
 
+vi.mock('./hook-commands', () => ({
+  installHookScripts: vi.fn(),
+  statusCmd: vi.fn((e: string, s: string, _v: string, marker: string) => `echo ${e}:${s} > $VIBEYARD_SESSION_ID.status ${marker}`),
+  captureSessionIdCmd: vi.fn((_v: string, marker: string) => `capture .sessionid $VIBEYARD_SESSION_ID ${marker}`),
+  captureToolFailureCmd: vi.fn((_v: string, marker: string) => `capture-toolfailure ${marker}`),
+  wrapPythonHookCmd: vi.fn((_name: string, _code: string, marker: string) => `capture-event $VIBEYARD_SESSION_ID .events ${marker}`),
+  cleanupHookScripts: vi.fn(),
+}));
+
 import * as fs from 'fs';
+import * as path from 'path';
 import { installCodexHooks, validateCodexHooks, cleanupCodexHooks, CODEX_HOOK_MARKER } from './codex-hooks';
 
 const mockReadFileSync = vi.mocked(fs.readFileSync);
 const mockWriteFileSync = vi.mocked(fs.writeFileSync);
 const mockMkdirSync = vi.mocked(fs.mkdirSync);
 
-const HOOKS_JSON = '/mock/home/.codex/hooks.json';
-const CONFIG_TOML = '/mock/home/.codex/config.toml';
+const n = (p: string) => p.replace(/\\/g, '/');
 
-function mockFiles(files: Record<string, string>): void {
+const HOOKS_JSON = path.join('/mock/home', '.codex', 'hooks.json');
+const CONFIG_TOML = path.join('/mock/home', '.codex', 'config.toml');
+
+function mockFiles(rawFiles: Record<string, string>): void {
+  // Normalize all keys to forward slashes for cross-platform matching
+  const files: Record<string, string> = {};
+  for (const [k, v] of Object.entries(rawFiles)) files[n(k)] = v;
   mockReadFileSync.mockImplementation((p: any) => {
-    const content = files[String(p)];
+    const content = files[n(String(p))];
     if (content !== undefined) return content;
     throw new Error('ENOENT');
   });

@@ -5,12 +5,21 @@ import { execSync } from 'child_process';
 
 export function validatePrerequisites(): { ok: boolean; message: string } {
   const home = os.homedir();
-  const candidates = [
-    '/usr/local/bin/claude',
-    '/opt/homebrew/bin/claude',
-    path.join(home, '.local', 'bin', 'claude'),
-    path.join(home, '.npm-global', 'bin', 'claude'),
-  ];
+  const isWin = process.platform === 'win32';
+  const pathSep = isWin ? ';' : ':';
+
+  const candidates = isWin
+    ? [
+        path.join(home, 'AppData', 'Roaming', 'npm', 'claude.cmd'),
+        path.join(home, 'AppData', 'Roaming', 'npm', 'claude.exe'),
+        path.join(home, '.local', 'bin', 'claude'),
+      ]
+    : [
+        '/usr/local/bin/claude',
+        '/opt/homebrew/bin/claude',
+        path.join(home, '.local', 'bin', 'claude'),
+        path.join(home, '.npm-global', 'bin', 'claude'),
+      ];
 
   for (const candidate of candidates) {
     try {
@@ -18,24 +27,30 @@ export function validatePrerequisites(): { ok: boolean; message: string } {
     } catch {}
   }
 
-  // Try `which claude` with augmented PATH
+  // Try `which`/`where` claude with augmented PATH
   try {
     const currentPath = process.env.PATH || '';
-    const extraDirs = [
-      '/usr/local/bin',
-      '/opt/homebrew/bin',
-      path.join(home, '.local', 'bin'),
-      path.join(home, '.npm-global', 'bin'),
-      '/usr/local/sbin',
-      '/opt/homebrew/sbin',
-    ];
-    const pathSet = new Set(currentPath.split(':'));
+    const extraDirs = isWin
+      ? [
+          path.join(home, 'AppData', 'Roaming', 'npm'),
+          path.join(home, '.local', 'bin'),
+        ]
+      : [
+          '/usr/local/bin',
+          '/opt/homebrew/bin',
+          path.join(home, '.local', 'bin'),
+          path.join(home, '.npm-global', 'bin'),
+          '/usr/local/sbin',
+          '/opt/homebrew/sbin',
+        ];
+    const pathSet = new Set(currentPath.split(pathSep));
     for (const dir of extraDirs) {
       pathSet.add(dir);
     }
-    const augmentedPath = Array.from(pathSet).join(':');
+    const augmentedPath = Array.from(pathSet).join(pathSep);
 
-    const resolved = execSync('which claude', {
+    const cmd = isWin ? 'where claude' : 'which claude';
+    const resolved = execSync(cmd, {
       env: { ...process.env, PATH: augmentedPath },
       encoding: 'utf-8',
       timeout: 3000,

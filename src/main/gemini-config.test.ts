@@ -13,10 +13,13 @@ import * as fs from 'fs';
 import { getGeminiConfig } from './gemini-config';
 
 const mockReadFileSync = vi.mocked(fs.readFileSync);
+const n = (p: string) => p.replace(/\\/g, '/');
 
-function mockFiles(files: Record<string, string>): void {
+function mockFiles(rawFiles: Record<string, string>): void {
+  const files: Record<string, string> = {};
+  for (const [k, v] of Object.entries(rawFiles)) files[n(k)] = v;
   mockReadFileSync.mockImplementation((p: any) => {
-    const content = files[String(p)];
+    const content = files[n(String(p))];
     if (content !== undefined) return content;
     throw new Error('ENOENT');
   });

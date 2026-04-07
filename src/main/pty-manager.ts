@@ -25,8 +25,26 @@ let cachedFullPath: string | null = null;
 export function getFullPath(): string {
   if (cachedFullPath) return cachedFullPath;
 
-  const shell = process.env.SHELL || '/bin/zsh';
+  const isWin = process.platform === 'win32';
+  const pathSep = isWin ? ';' : ':';
   const currentPath = process.env.PATH || '';
+
+  if (isWin) {
+    // On Windows, PATH is generally correct — just ensure npm/appdata dirs are present
+    const home = os.homedir();
+    const extraDirs = [
+      path.join(home, 'AppData', 'Roaming', 'npm'),
+      path.join(home, '.local', 'bin'),
+    ];
+    const pathSet = new Set(currentPath.split(pathSep));
+    for (const dir of extraDirs) {
+      pathSet.add(dir);
+    }
+    cachedFullPath = Array.from(pathSet).join(pathSep);
+    return cachedFullPath;
+  }
+
+  const shell = process.env.SHELL || '/bin/zsh';
 
   // Try to get the real PATH from a login shell
   try {
@@ -53,11 +71,11 @@ export function getFullPath(): string {
     '/opt/homebrew/sbin',
   ];
 
-  const pathSet = new Set(currentPath.split(':'));
+  const pathSet = new Set(currentPath.split(pathSep));
   for (const dir of extraDirs) {
     pathSet.add(dir);
   }
-  cachedFullPath = Array.from(pathSet).join(':');
+  cachedFullPath = Array.from(pathSet).join(pathSep);
   return cachedFullPath;
 }
 
@@ -138,7 +156,9 @@ export function spawnShellPty(
     killPty(sessionId);
   }
 
-  const shell = process.env.SHELL || '/bin/zsh';
+  const shell = process.platform === 'win32'
+    ? (process.env.COMSPEC || 'cmd.exe')
+    : (process.env.SHELL || '/bin/zsh');
   const shellEnv = { ...process.env, PATH: getFullPath() };
   const ptyProcess = pty.spawn(shell, [], {
     name: 'xterm-256color',
@@ -169,13 +189,17 @@ export function killAllPtys(): void {
 
 /**
  * Get the current working directory of a PTY's deepest child process.
- * Uses pgrep to find the deepest child, then lsof to read its cwd.
+ * Uses pgrep/lsof on Unix, wmic on Windows.
  */
 export function getPtyCwd(sessionId: string): Promise<string | null> {
   const instance = ptys.get(sessionId);
   if (!instance) return Promise.resolve(null);
 
   const pid = instance.process.pid;
+
+  if (process.platform === 'win32') {
+    return getPtyCwdWindows(pid);
+  }
 
   return new Promise((resolve) => {
     // Find deepest child process recursively
@@ -202,6 +226,12 @@ export function getPtyCwd(sessionId: string): Promise<string | null> {
       );
     });
   });
+}
+
+function getPtyCwdWindows(_pid: number): Promise<string | null> {
+  // Windows does not expose process cwd reliably via standard APIs.
+  // This is a best-effort no-op — cwd tracking is not supported on Windows.
+  return Promise.resolve(null);
 }
 
 function findDeepestChild(pid: number, callback: (deepestPid: number) => void): void {

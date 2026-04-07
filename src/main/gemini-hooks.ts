@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { homedir } from 'os';
 import { STATUS_DIR } from './hook-status';
+import { statusCmd as mkStatusCmd, captureSessionIdCmd as mkCaptureSessionIdCmd, wrapPythonHookCmd, installHookScripts } from './hook-commands';
 import { readJsonSafe } from './fs-utils';
 import type { InspectorEventType, SettingsValidationResult } from '../shared/types';
 
@@ -58,35 +59,39 @@ export function installGeminiHooks(): void {
   const existingHooks: HooksConfig = (settings.hooks ?? {}) as HooksConfig;
   const cleaned = cleanHooks(existingHooks);
 
-  const statusCmd = (event: string, status: string) =>
-    `sh -c 'mkdir -p ${STATUS_DIR} && echo ${event}:${status} > ${STATUS_DIR}/$${SESSION_ID_VAR}.status ${GEMINI_HOOK_MARKER}'`;
+  installHookScripts();
 
-  const captureEventCmd = (hookEvent: string, eventType: string) =>
-    `sh -c 'cat | /usr/bin/python3 -c "import sys,json,os,time
+  const statusCmd = (event: string, status: string) =>
+    mkStatusCmd(event, status, SESSION_ID_VAR, GEMINI_HOOK_MARKER);
+
+  const captureEventCmd = (hookEvent: string, eventType: string) => {
+    const pyCode = `import sys,json,os,time
 try:
  d=json.load(sys.stdin)
 except:
  sys.exit(0)
-sid=os.environ.get(\\"${SESSION_ID_VAR}\\",\\"\\")
+sid=os.environ.get("${SESSION_ID_VAR}","")
 if not sid:
  sys.exit(0)
-e={\\"type\\":\\"${eventType}\\",\\"timestamp\\":int(time.time()*1000),\\"hookEvent\\":\\"${hookEvent}\\"}
-tn=d.get(\\"tool_name\\",\\"\\")
+e={"type":"${eventType}","timestamp":int(time.time()*1000),"hookEvent":"${hookEvent}"}
+tn=d.get("tool_name","")
 if tn:
- e[\\"tool_name\\"]=tn
-ti=d.get(\\"tool_input\\")
+ e["tool_name"]=tn
+ti=d.get("tool_input")
 if ti:
- e[\\"tool_input\\"]=ti
-for fld in (\\"session_id\\",\\"cwd\\"):
- v=d.get(fld,\\"\\")
+ e["tool_input"]=ti
+for fld in ("session_id","cwd"):
+ v=d.get(fld,"")
  if v:
   e[fld]=v
-with open(f\\"${STATUS_DIR}/\\"+sid+\\".events\\",\\"a\\") as f:
- f.write(json.dumps(e)+\\"\\\\n\\")
-" 2>/dev/null ${GEMINI_HOOK_MARKER}'`;
+status_dir=r'${STATUS_DIR}'
+with open(os.path.join(status_dir,sid+".events"),"a") as f:
+ f.write(json.dumps(e)+"\\n")
+`;
+    return wrapPythonHookCmd(`gemini_event_${hookEvent}.py`, pyCode, GEMINI_HOOK_MARKER);
+  };
 
-  const captureSessionIdCmd =
-    `sh -c 'input=$(cat); sid=$(echo "$input" | /usr/bin/python3 -c "import sys,json; print(json.load(sys.stdin).get(\\"session_id\\",\\"\\"))" 2>/dev/null); if [ -n "$sid" ]; then mkdir -p ${STATUS_DIR} && echo "$sid" > ${STATUS_DIR}/$${SESSION_ID_VAR}.sessionid; fi ${GEMINI_HOOK_MARKER}'`;
+  const captureSessionIdCmd = mkCaptureSessionIdCmd(SESSION_ID_VAR, GEMINI_HOOK_MARKER);
 
   // Status-changing events
   const ideEvents: Record<string, string> = {

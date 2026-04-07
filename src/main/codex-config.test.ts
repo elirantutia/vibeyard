@@ -11,7 +11,10 @@ vi.mock('os', () => ({
 }));
 
 import * as fs from 'fs';
+import * as path from 'path';
 import { getCodexConfig } from './codex-config';
+
+const n = (p: string) => p.replace(/\\/g, '/');
 
 const mockReadFileSync = vi.mocked(fs.readFileSync);
 const mockReaddirSync = vi.mocked(fs.readdirSync);
@@ -36,7 +39,7 @@ describe('getCodexConfig', () => {
 
   it('reads MCP servers from user and project config.toml with project override', async () => {
     mockReadFileSync.mockImplementation((inputPath) => {
-      const filePath = String(inputPath);
+      const filePath = n(String(inputPath));
       if (filePath === '/mock/home/.codex/config.toml') {
         return `
 [mcp_servers.shared]
@@ -57,20 +60,20 @@ url = "http://project"
 
     const config = await getCodexConfig('/project');
     expect(config.mcpServers).toEqual([
-      { name: 'shared', url: 'http://project', status: 'configured', scope: 'project', filePath: '/project/.codex/config.toml' },
-      { name: 'userOnly', url: 'http://user', status: 'configured', scope: 'user', filePath: '/mock/home/.codex/config.toml' },
+      { name: 'shared', url: 'http://project', status: 'configured', scope: 'project', filePath: path.join('/project', '.codex', 'config.toml') },
+      { name: 'userOnly', url: 'http://user', status: 'configured', scope: 'user', filePath: path.join('/mock/home', '.codex', 'config.toml') },
     ]);
   });
 
   it('reads agents from user and project .codex directories', async () => {
     mockReaddirSync.mockImplementation((dirPath) => {
-      const input = String(dirPath);
+      const input = n(String(dirPath));
       if (input === '/mock/home/.codex/agents') return ['user-agent.md'] as any;
       if (input === '/project/.codex/agents') return ['project-agent.md'] as any;
       throw new Error('ENOENT');
     });
     mockReadFileSync.mockImplementation((inputPath) => {
-      const filePath = String(inputPath);
+      const filePath = n(String(inputPath));
       if (filePath === '/mock/home/.codex/agents/user-agent.md') {
         return '---\nname: UserAgent\nmodel: gpt-5.4\n---\n' as any;
       }
@@ -82,20 +85,20 @@ url = "http://project"
 
     const config = await getCodexConfig('/project');
     expect(config.agents).toEqual([
-      { name: 'UserAgent', model: 'gpt-5.4', category: 'plugin', scope: 'user', filePath: '/mock/home/.codex/agents/user-agent.md' },
-      { name: 'ProjectAgent', model: 'gpt-5.4-mini', category: 'plugin', scope: 'project', filePath: '/project/.codex/agents/project-agent.md' },
+      { name: 'UserAgent', model: 'gpt-5.4', category: 'plugin', scope: 'user', filePath: path.join('/mock/home', '.codex', 'agents', 'user-agent.md') },
+      { name: 'ProjectAgent', model: 'gpt-5.4-mini', category: 'plugin', scope: 'project', filePath: path.join('/project', '.codex', 'agents', 'project-agent.md') },
     ]);
   });
 
   it('deduplicates agent and skill names by first scope found', async () => {
     mockReaddirSync.mockImplementation((dirPath) => {
-      const input = String(dirPath);
+      const input = n(String(dirPath));
       if (input === '/mock/home/.codex/agents' || input === '/project/.codex/agents') return ['shared.md'] as any;
       if (input === '/mock/home/.codex/skills' || input === '/project/.codex/skills') return ['shared-skill'] as any;
       throw new Error('ENOENT');
     });
     mockReadFileSync.mockImplementation((inputPath) => {
-      const filePath = String(inputPath);
+      const filePath = n(String(inputPath));
       if (filePath.endsWith('/agents/shared.md')) {
         return '---\nname: SharedAgent\nmodel: gpt-5.4\n---\n' as any;
       }
@@ -105,7 +108,7 @@ url = "http://project"
       throw new Error('ENOENT');
     });
     mockStatSync.mockImplementation((inputPath) => {
-      const filePath = String(inputPath);
+      const filePath = n(String(inputPath));
       if (filePath.endsWith('/skills/shared-skill/SKILL.md')) {
         return { isFile: () => true } as any;
       }
@@ -121,18 +124,18 @@ url = "http://project"
 
   it('reads skills and ignores hidden or invalid entries', async () => {
     mockReaddirSync.mockImplementation((dirPath) => {
-      const input = String(dirPath);
+      const input = n(String(dirPath));
       if (input === '/mock/home/.codex/skills') return ['valid-skill', '.system', 'missing-skill'] as any;
       throw new Error('ENOENT');
     });
     mockReadFileSync.mockImplementation((inputPath) => {
-      if (String(inputPath) === '/mock/home/.codex/skills/valid-skill/SKILL.md') {
+      if (n(String(inputPath)) === '/mock/home/.codex/skills/valid-skill/SKILL.md') {
         return '---\nname: ValidSkill\ndescription: Useful\n---\n' as any;
       }
       throw new Error('ENOENT');
     });
     mockStatSync.mockImplementation((inputPath) => {
-      if (String(inputPath) === '/mock/home/.codex/skills/valid-skill/SKILL.md') {
+      if (n(String(inputPath)) === '/mock/home/.codex/skills/valid-skill/SKILL.md') {
         return { isFile: () => true } as any;
       }
       throw new Error('ENOENT');
@@ -140,7 +143,7 @@ url = "http://project"
 
     const config = await getCodexConfig('/project');
     expect(config.skills).toEqual([
-      { name: 'ValidSkill', description: 'Useful', scope: 'user', filePath: '/mock/home/.codex/skills/valid-skill/SKILL.md' },
+      { name: 'ValidSkill', description: 'Useful', scope: 'user', filePath: path.join('/mock/home', '.codex', 'skills', 'valid-skill', 'SKILL.md') },
     ]);
   });
 });

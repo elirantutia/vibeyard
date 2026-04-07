@@ -4,40 +4,70 @@ import * as os from 'os';
 import { execSync } from 'child_process';
 import { getFullPath } from '../pty-manager';
 
-const COMMON_BIN_DIRS = [
-  '/usr/local/bin',
-  '/opt/homebrew/bin',
-  path.join(os.homedir(), '.local', 'bin'),
-  path.join(os.homedir(), '.npm-global', 'bin'),
-];
+const isWin = process.platform === 'win32';
+
+const COMMON_BIN_DIRS = isWin
+  ? [
+      path.join(os.homedir(), 'AppData', 'Roaming', 'npm'),
+      path.join(os.homedir(), 'AppData', 'Local', 'Programs'),
+      path.join(os.homedir(), '.local', 'bin'),
+    ]
+  : [
+      '/usr/local/bin',
+      '/opt/homebrew/bin',
+      path.join(os.homedir(), '.local', 'bin'),
+      path.join(os.homedir(), '.npm-global', 'bin'),
+    ];
+
+// On Windows, CLI tools installed via npm are .cmd shims
+const WIN_EXTENSIONS = ['.cmd', '.exe', '.ps1', ''];
+
+function findBinaryInDir(dir: string, binaryName: string): string | null {
+  if (isWin) {
+    for (const ext of WIN_EXTENSIONS) {
+      const candidate = path.join(dir, binaryName + ext);
+      try { if (fs.existsSync(candidate)) return candidate; } catch {}
+    }
+    return null;
+  }
+  const candidate = path.join(dir, binaryName);
+  try { if (fs.existsSync(candidate)) return candidate; } catch {}
+  return null;
+}
+
+function whichBinary(binaryName: string, envPath: string): string | null {
+  const cmd = isWin ? 'where' : 'which';
+  try {
+    const resolved = execSync(`${cmd} ${binaryName}`, {
+      env: { ...process.env, PATH: envPath },
+      encoding: 'utf-8',
+      timeout: 3000,
+    }).trim();
+    // 'where' on Windows may return multiple lines — take the first
+    const firstLine = resolved.split(/\r?\n/)[0];
+    return firstLine || null;
+  } catch {
+    return null;
+  }
+}
 
 export function resolveBinary(binaryName: string, cache: { path: string | null }): string {
   if (cache.path) return cache.path;
 
   const fullPath = getFullPath();
-  const candidates = COMMON_BIN_DIRS.map(dir => path.join(dir, binaryName));
 
-  for (const candidate of candidates) {
-    try {
-      if (fs.existsSync(candidate)) {
-        cache.path = candidate;
-        return candidate;
-      }
-    } catch {}
+  for (const dir of COMMON_BIN_DIRS) {
+    const found = findBinaryInDir(dir, binaryName);
+    if (found) {
+      cache.path = found;
+      return found;
+    }
   }
 
-  try {
-    const resolved = execSync(`which ${binaryName}`, {
-      env: { ...process.env, PATH: fullPath },
-      encoding: 'utf-8',
-      timeout: 3000,
-    }).trim();
-    if (resolved) {
-      cache.path = resolved;
-      return resolved;
-    }
-  } catch (err) {
-    console.warn(`Failed to resolve ${binaryName} path via which:`, err);
+  const resolved = whichBinary(binaryName, fullPath);
+  if (resolved) {
+    cache.path = resolved;
+    return resolved;
   }
 
   cache.path = binaryName;
@@ -49,22 +79,11 @@ export function validateBinaryExists(
   displayName: string,
   installCommand: string,
 ): { ok: boolean; message: string } {
-  const candidates = COMMON_BIN_DIRS.map(dir => path.join(dir, binaryName));
-
-  for (const candidate of candidates) {
-    try {
-      if (fs.existsSync(candidate)) return { ok: true, message: '' };
-    } catch {}
+  for (const dir of COMMON_BIN_DIRS) {
+    if (findBinaryInDir(dir, binaryName)) return { ok: true, message: '' };
   }
 
-  try {
-    const resolved = execSync(`which ${binaryName}`, {
-      env: { ...process.env, PATH: getFullPath() },
-      encoding: 'utf-8',
-      timeout: 3000,
-    }).trim();
-    if (resolved) return { ok: true, message: '' };
-  } catch {}
+  if (whichBinary(binaryName, getFullPath())) return { ok: true, message: '' };
 
   return {
     ok: false,

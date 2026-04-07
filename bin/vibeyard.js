@@ -9,14 +9,25 @@ const os = require('os');
 const { version } = require('../package.json');
 const APP_DIR = path.join(os.homedir(), '.vibeyard', 'app');
 const VERSION_FILE = path.join(APP_DIR, 'version.json');
-const APP_PATH = path.join(APP_DIR, 'Vibeyard.app');
+const isWin = process.platform === 'win32';
+const isMac = process.platform === 'darwin';
+const APP_PATH = isWin
+  ? path.join(APP_DIR, 'Vibeyard.exe')
+  : path.join(APP_DIR, 'Vibeyard.app');
 const REPO = 'elirantutia/vibeyard';
 const RELEASES_URL = `https://github.com/${REPO}/releases`;
 
 function getAssetName() {
-  return process.arch === 'arm64'
-    ? `Vibeyard-${version}-arm64-mac.zip`
-    : `Vibeyard-${version}-mac.zip`;
+  if (isWin) {
+    return `Vibeyard-${version}-win-${process.arch === 'arm64' ? 'arm64' : 'x64'}.zip`;
+  }
+  if (isMac) {
+    return process.arch === 'arm64'
+      ? `Vibeyard-${version}-arm64-mac.zip`
+      : `Vibeyard-${version}-mac.zip`;
+  }
+  // Linux
+  return `Vibeyard-${version}-linux-${process.arch}.AppImage`;
 }
 
 function getInstalledVersion() {
@@ -103,14 +114,22 @@ function extract(zipPath) {
   console.log('Extracting...');
 
   fs.rmSync(APP_PATH, { recursive: true, force: true });
-  execSync(`unzip -oq "${zipPath}" -d "${APP_DIR}"`);
+
+  if (isWin) {
+    // Use PowerShell to extract on Windows
+    execSync(`powershell -NoProfile -Command "Expand-Archive -Force -Path '${zipPath}' -DestinationPath '${APP_DIR}'"`, { stdio: 'ignore' });
+  } else {
+    execSync(`unzip -oq "${zipPath}" -d "${APP_DIR}"`);
+  }
   fs.unlinkSync(zipPath);
 
   // Clear macOS quarantine flag
-  try {
-    execSync(`xattr -rd com.apple.quarantine "${APP_PATH}"`, { stdio: 'ignore' });
-  } catch {
-    // xattr may fail if no quarantine attribute
+  if (isMac) {
+    try {
+      execSync(`xattr -rd com.apple.quarantine "${APP_PATH}"`, { stdio: 'ignore' });
+    } catch {
+      // xattr may fail if no quarantine attribute
+    }
   }
 
   fs.writeFileSync(VERSION_FILE, JSON.stringify({ version }));
@@ -118,10 +137,18 @@ function extract(zipPath) {
 }
 
 function launch(args) {
-  const child = spawn('open', [APP_PATH, '--args', ...args], {
-    detached: true,
-    stdio: 'ignore',
-  });
+  let child;
+  if (isWin) {
+    child = spawn(APP_PATH, args, {
+      detached: true,
+      stdio: 'ignore',
+    });
+  } else {
+    child = spawn('open', [APP_PATH, '--args', ...args], {
+      detached: true,
+      stdio: 'ignore',
+    });
+  }
   child.unref();
 }
 
@@ -148,9 +175,9 @@ Any other arguments are forwarded to the Vibeyard app.`);
     return;
   }
 
-  if (process.platform !== 'darwin') {
-    console.error('Vibeyard currently supports macOS only.');
-    console.error(`Download from: ${RELEASES_URL}`);
+  if (!isMac && !isWin) {
+    console.error('The npm launcher currently supports macOS and Windows.');
+    console.error(`For Linux, download from: ${RELEASES_URL}`);
     process.exit(1);
   }
 
