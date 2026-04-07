@@ -8,6 +8,7 @@ import { restartAndResync } from './hook-status';
 import { initProviders, getAllProviders } from './providers/registry';
 import { initAutoUpdater } from './auto-updater';
 import { stopGitWatcher } from './git-watcher';
+import { checkPythonAvailable } from './prerequisites';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -86,6 +87,17 @@ app.whenReady().then(async () => {
   const state = loadState();
   createAppMenu(state.preferences?.debugMode ?? false);
   createWindow();
+
+  // Warn if Python is missing on Windows (hooks depend on it)
+  const pythonWarning = checkPythonAvailable();
+  if (pythonWarning) {
+    console.warn(pythonWarning);
+    dialog.showMessageBox(mainWindow!, {
+      type: 'warning',
+      title: 'Vibeyard — Python Not Found',
+      message: pythonWarning,
+    });
+  }
 
   // Install hooks and status scripts for available providers (after window creation so dialogs can attach)
   for (const provider of getAllProviders()) {

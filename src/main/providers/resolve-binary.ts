@@ -38,7 +38,7 @@ function findBinaryInDir(dir: string, binaryName: string): string | null {
 function whichBinary(binaryName: string, envPath: string): string | null {
   const cmd = isWin ? 'where' : 'which';
   try {
-    const resolved = execSync(`${cmd} ${binaryName}`, {
+    const resolved = execSync(`${cmd} "${binaryName}"`, {
       env: { ...process.env, PATH: envPath },
       encoding: 'utf-8',
       timeout: 3000,

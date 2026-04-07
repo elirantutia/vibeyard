@@ -29,8 +29,6 @@ const root = path.resolve(__dirname, '..');
 const dist = path.join(root, 'dist', 'renderer');
 
 mkdirp(dist);
-mkdirp(path.join(dist, 'styles'));
-mkdirp(path.join(dist, 'assets', 'providers'));
 
 copyFile(path.join(root, 'src', 'renderer', 'index.html'), path.join(dist, 'index.html'));
 copyFile(path.join(root, 'src', 'renderer', 'styles.css'), path.join(dist, 'styles.css'));

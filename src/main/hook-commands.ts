@@ -2,7 +2,9 @@
  * Platform-aware hook command generators.
  *
  * On Unix, hooks are `sh -c '...'` commands with inline Python.
- * On Windows, hooks delegate to Python scripts in STATUS_DIR via `cmd /c`.
+ * On Windows, hooks delegate to Python scripts in STATUS_DIR.
+ * Commands are returned without a `cmd /c` wrapper — the hook executor
+ * (Claude CLI's child_process.exec) already invokes cmd.exe as the shell.
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -78,8 +80,9 @@ export function statusCmd(
   hookMarker: string,
 ): string {
   if (isWin) {
-    const py = path.join(STATUS_DIR, 'status_writer.py');
-    return `cmd /c "python "${py}" ${event} ${status} ${sessionIdVar} "${STATUS_DIR}" ${hookMarker}"`;
+    const py = path.join(STATUS_DIR, 'status_writer.py').replace(/\\/g, '/');
+    const dir = STATUS_DIR.replace(/\\/g, '/');
+    return `python "${py}" "${event}" "${status}" "${sessionIdVar}" "${dir}" "${hookMarker}"`;
   }
   return `sh -c 'mkdir -p ${STATUS_DIR} && echo ${event}:${status} > ${STATUS_DIR}/$${sessionIdVar}.status ${hookMarker}'`;
 }
@@ -92,8 +95,9 @@ export function captureSessionIdCmd(
   hookMarker: string,
 ): string {
   if (isWin) {
-    const py = path.join(STATUS_DIR, 'session_id_capture.py');
-    return `cmd /c "python "${py}" ${sessionIdVar} "${STATUS_DIR}" ${hookMarker}"`;
+    const py = path.join(STATUS_DIR, 'session_id_capture.py').replace(/\\/g, '/');
+    const dir = STATUS_DIR.replace(/\\/g, '/');
+    return `python "${py}" "${sessionIdVar}" "${dir}" "${hookMarker}"`;
   }
   return `sh -c 'input=$(cat); sid=$(echo "$input" | /usr/bin/python3 -c "import sys,json; print(json.load(sys.stdin).get(\\"session_id\\",\\"\\"))" 2>/dev/null); if [ -n "$sid" ]; then mkdir -p ${STATUS_DIR} && echo "$sid" > ${STATUS_DIR}/$${sessionIdVar}.sessionid; fi ${hookMarker}'`;
 }
@@ -106,16 +110,20 @@ export function captureToolFailureCmd(
   hookMarker: string,
 ): string {
   if (isWin) {
-    const py = path.join(STATUS_DIR, 'tool_failure_capture.py');
-    return `cmd /c "python "${py}" ${sessionIdVar} "${STATUS_DIR}" ${hookMarker}"`;
+    const py = path.join(STATUS_DIR, 'tool_failure_capture.py').replace(/\\/g, '/');
+    const dir = STATUS_DIR.replace(/\\/g, '/');
+    return `python "${py}" "${sessionIdVar}" "${dir}" "${hookMarker}"`;
   }
   return `sh -c 'cat | /usr/bin/python3 -c "import sys,json,os,random,string; d=json.load(sys.stdin); sid=os.environ.get(\\"${sessionIdVar}\\",\\"\\"); tn=d.get(\\"tool_name\\",\\"\\"); ti=d.get(\\"tool_input\\",{}); err=d.get(\\"error\\",\\"\\"); sfx=\\"\\".join(random.choices(string.ascii_lowercase,k=6)); json.dump({\\"tool_name\\":tn,\\"tool_input\\":ti,\\"error\\":err},open(f\\"${STATUS_DIR}/\\"+sid+\\"-\\"+sfx+\\".toolfailure\\",\\"w\\")) if sid and tn else None" 2>/dev/null ${hookMarker}'`;
 }
 
 /**
- * Wrap a Python script as a platform-appropriate hook command.
- * On Unix: `sh -c '... | /usr/bin/python3 -c "..." 2>/dev/null marker'`
- * On Windows: writes the Python to a .py file in STATUS_DIR and calls it via cmd.
+ * Write a Python script to STATUS_DIR and return a platform-appropriate hook command.
+ *
+ * On Unix: returns `sh -c '... | /usr/bin/python3 -c "..." 2>/dev/null marker'`
+ * On Windows: writes the Python to a .py file in STATUS_DIR and returns a command
+ *   that invokes it. The file write is a deliberate side effect — scripts are cleaned
+ *   up by `cleanupHookScripts` which scans STATUS_DIR for all .py files.
  *
  * @param scriptName Unique name for the .py file (Windows)
  * @param pythonCode Multi-line Python code
@@ -132,7 +140,8 @@ export function wrapPythonHookCmd(
     const pyPath = path.join(STATUS_DIR, scriptName);
     fs.mkdirSync(STATUS_DIR, { recursive: true });
     fs.writeFileSync(pyPath, pythonCode);
-    return `cmd /c "python "${pyPath}" ${hookMarker}"`;
+    const pyCmd = pyPath.replace(/\\/g, '/');
+    return `python "${pyCmd}" "${hookMarker}"`;
   }
   // Unix: inline the Python in sh -c, escaping double-quotes
   const escaped = pythonCode.replace(/"/g, '\\"');

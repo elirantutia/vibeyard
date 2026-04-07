@@ -189,7 +189,7 @@ export function killAllPtys(): void {
 
 /**
  * Get the current working directory of a PTY's deepest child process.
- * Uses pgrep/lsof on Unix, wmic on Windows.
+ * Uses pgrep/lsof on Unix. Not supported on Windows (returns null).
  */
 export function getPtyCwd(sessionId: string): Promise<string | null> {
   const instance = ptys.get(sessionId);

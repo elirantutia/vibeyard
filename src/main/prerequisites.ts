@@ -3,6 +3,26 @@ import * as os from 'os';
 import * as path from 'path';
 import { execSync } from 'child_process';
 
+/**
+ * Check whether Python is available on Windows (needed for hook scripts).
+ * Returns null if OK or not on Windows, or a warning message if missing.
+ */
+export function checkPythonAvailable(): string | null {
+  if (process.platform !== 'win32') return null;
+  try {
+    execSync('python --version', { encoding: 'utf-8', timeout: 3000, stdio: 'pipe' });
+    return null;
+  } catch {
+    return (
+      'Python not found.\n\n' +
+      'Vibeyard uses Python on Windows for session tracking (cost, status, events).\n' +
+      'These features will not work until Python is installed and available on PATH.\n\n' +
+      'Install Python from https://www.python.org/downloads/ or via:\n' +
+      '  winget install Python.Python.3\n'
+    );
+  }
+}
+
 export function validatePrerequisites(): { ok: boolean; message: string } {
   const home = os.homedir();
   const isWin = process.platform === 'win32';

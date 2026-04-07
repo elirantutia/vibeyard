@@ -117,7 +117,9 @@ function extract(zipPath) {
 
   if (isWin) {
     // Use PowerShell to extract on Windows
-    execSync(`powershell -NoProfile -Command "Expand-Archive -Force -Path '${zipPath}' -DestinationPath '${APP_DIR}'"`, { stdio: 'ignore' });
+    // Escape single quotes for PowerShell single-quoted strings (e.g. O'Brien in username)
+    const psEscape = (p) => p.replace(/'/g, "''");
+    execSync(`powershell -NoProfile -Command "Expand-Archive -Force -Path '${psEscape(zipPath)}' -DestinationPath '${psEscape(APP_DIR)}'"`, { stdio: 'ignore' });
   } else {
     execSync(`unzip -oq "${zipPath}" -d "${APP_DIR}"`);
   }

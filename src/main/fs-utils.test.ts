@@ -11,9 +11,7 @@ const home = '/mock/home';
 
 describe('expandUserPath', () => {
   it('expands ~ alone to homedir', () => {
-    const result = expandUserPath('~');
-    // On Windows, homedir may just be returned as-is or resolved
-    expect(result.replace(/\\/g, '/')).toContain('mock/home');
+    expect(expandUserPath('~')).toBe(path.join(home));
   });
 
   it('expands ~/subdir to homedir/subdir', () => {

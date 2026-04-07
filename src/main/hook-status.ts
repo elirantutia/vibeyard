@@ -35,6 +35,8 @@ export function installStatusLineScript(): void {
 
   // Script that extracts cost, context_window, and session_id from hook JSON stdin.
   // Used by hook commands to write .cost and .sessionid files to STATUS_DIR.
+  // Use forward slashes — backslashes inside double-quoted .cmd strings can
+  // interfere with cmd.exe's >> redirection parsing on some Windows versions.
   const statusDir = STATUS_DIR.replace(/\\/g, '/');
 
   let script: string;
