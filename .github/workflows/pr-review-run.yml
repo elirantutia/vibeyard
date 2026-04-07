@@ -61,3 +61,4 @@ jobs:
           anthropic_api_key: ${{ secrets.CLAUDE_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           claude_args: '--allowed-tools "Bash(gh:*)"'
+          show_full_output: true
