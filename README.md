@@ -55,7 +55,20 @@ Requires at least one supported CLI installed and authenticated: [Claude Code](h
 
 Download the latest `.dmg` from [GitHub Releases](https://github.com/elirantutia/vibeyard/releases), drag to Applications, and launch. Signed and notarized by Apple.
 
-### npm (macOS)
+### Linux
+
+Download the latest `.deb` (Debian/Ubuntu) or `.AppImage` (universal) from [GitHub Releases](https://github.com/elirantutia/vibeyard/releases).
+
+```bash
+# Debian/Ubuntu
+sudo dpkg -i vibeyard_*.deb
+
+# AppImage
+chmod +x Vibeyard-*.AppImage
+./Vibeyard-*.AppImage
+```
+
+### npm (macOS & Linux)
 
 ```bash
 npm i -g vibeyard
