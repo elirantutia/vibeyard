@@ -44,9 +44,78 @@ const defaultPreferences: Preferences = {
   sidebarViews: { configSections: true, gitPanel: true, sessionHistory: true, costFooter: true, readinessSection: true },
 };
 
+const NAV_HISTORY_MAX = 50;
+
 class AppState {
   private state: PersistedState = { version: 1, projects: [], activeProjectId: null, preferences: { ...defaultPreferences } };
   private listeners = new Map<EventType, Set<EventCallback>>();
+  private navHistory: string[] = [];
+  private navIndex = -1;
+  private navSuppressPush = false;
+
+  private pushNav(sessionId: string | null | undefined): void {
+    if (!sessionId || this.navSuppressPush) return;
+    if (this.navHistory[this.navIndex] === sessionId) return;
+    this.navHistory.length = this.navIndex + 1;
+    this.navHistory.push(sessionId);
+    if (this.navHistory.length > NAV_HISTORY_MAX) {
+      const drop = this.navHistory.length - NAV_HISTORY_MAX;
+      this.navHistory.splice(0, drop);
+    }
+    this.navIndex = this.navHistory.length - 1;
+  }
+
+  private pruneNav(sessionId: string): void {
+    let i = 0;
+    while (i < this.navHistory.length) {
+      if (this.navHistory[i] === sessionId) {
+        this.navHistory.splice(i, 1);
+        if (i <= this.navIndex) this.navIndex--;
+      } else {
+        i++;
+      }
+    }
+  }
+
+  private findProjectBySession(sessionId: string): ProjectRecord | undefined {
+    return this.state.projects.find((p) => p.sessions.some((s) => s.id === sessionId));
+  }
+
+  navigateBack(): void {
+    this.stepNav(-1);
+  }
+
+  navigateForward(): void {
+    this.stepNav(1);
+  }
+
+  private stepNav(direction: 1 | -1): void {
+    let i = this.navIndex + direction;
+    while (i >= 0 && i < this.navHistory.length) {
+      const id = this.navHistory[i];
+      const project = this.findProjectBySession(id);
+      if (project) {
+        this.navIndex = i;
+        this.navSuppressPush = true;
+        try {
+          const projectChanged = this.state.activeProjectId !== project.id;
+          this.state.activeProjectId = project.id;
+          project.activeSessionId = id;
+          this.persist();
+          if (projectChanged) this.emit('project-changed');
+          this.emit('session-changed');
+        } finally {
+          this.navSuppressPush = false;
+        }
+        return;
+      }
+      // Stale entry — drop and continue in same direction
+      this.navHistory.splice(i, 1);
+      if (direction === -1) i--;
+      // If we removed an entry before navIndex, shift it
+      if (i < this.navIndex) this.navIndex--;
+    }
+  }
 
   on(event: EventType, cb: EventCallback): () => void {
     if (!this.listeners.has(event)) {
@@ -186,6 +255,8 @@ class AppState {
 
   setActiveProject(id: string | null): void {
     this.state.activeProjectId = id;
+    const project = this.state.projects.find((p) => p.id === id);
+    if (project?.activeSessionId) this.pushNav(project.activeSessionId);
     this.persist();
     this.emit('project-changed');
   }
@@ -250,6 +321,7 @@ class AppState {
     };
     project.sessions.push(session);
     project.activeSessionId = session.id;
+    this.pushNav(session.id);
     // Auto-add to swarm if in swarm mode and under limit
     if (project.layout.mode === 'swarm') {
       project.layout.splitPanes.push(session.id);
@@ -270,6 +342,7 @@ class AppState {
     );
     if (existing) {
       project.activeSessionId = existing.id;
+      this.pushNav(existing.id);
       this.persist();
       this.emit('session-changed');
       return existing;
@@ -288,6 +361,7 @@ class AppState {
     };
     project.sessions.push(session);
     project.activeSessionId = session.id;
+    this.pushNav(session.id);
     this.persist();
     this.emit('session-added', { projectId, session });
     this.emit('session-changed');
@@ -309,6 +383,7 @@ class AppState {
     };
     project.sessions.push(session);
     project.activeSessionId = session.id;
+    this.pushNav(session.id);
     this.persist();
     this.emit('session-added', { projectId, session });
     this.emit('session-changed');
@@ -326,6 +401,7 @@ class AppState {
       );
       if (existing) {
         project.activeSessionId = existing.id;
+        this.pushNav(existing.id);
         this.persist();
         this.emit('session-changed');
         return existing;
@@ -346,6 +422,7 @@ class AppState {
     };
     project.sessions.push(session);
     project.activeSessionId = session.id;
+    this.pushNav(session.id);
     this.persist();
     this.emit('session-added', { projectId, session });
     this.emit('session-changed');
@@ -363,6 +440,7 @@ class AppState {
     if (existing) {
       existing.fileReaderLine = lineNumber;
       project.activeSessionId = existing.id;
+      this.pushNav(existing.id);
       this.persist();
       this.emit('session-changed');
       return existing;
@@ -380,6 +458,7 @@ class AppState {
     };
     project.sessions.push(session);
     project.activeSessionId = session.id;
+    this.pushNav(session.id);
     this.persist();
     this.emit('session-added', { projectId, session });
     this.emit('session-changed');
@@ -399,6 +478,7 @@ class AppState {
     };
     project.sessions.push(session);
     project.activeSessionId = session.id;
+    this.pushNav(session.id);
     this.persist();
     this.emit('session-added', { projectId, session });
     this.emit('session-changed');
@@ -420,9 +500,11 @@ class AppState {
 
     const closingIndex = project.sessions.findIndex((s) => s.id === sessionId);
     project.sessions = project.sessions.filter((s) => s.id !== sessionId);
+    this.pruneNav(sessionId);
     if (project.activeSessionId === sessionId) {
       const newIndex = closingIndex > 0 ? closingIndex - 1 : 0;
       project.activeSessionId = project.sessions[newIndex]?.id ?? null;
+      if (project.activeSessionId) this.pushNav(project.activeSessionId);
     }
     // Also remove from split/swarm panes
     project.layout.splitPanes = project.layout.splitPanes.filter((id) => id !== sessionId);
@@ -519,6 +601,7 @@ class AppState {
     const existing = project.sessions.find((s) => s.cliSessionId === archived.cliSessionId);
     if (existing) {
       project.activeSessionId = existing.id;
+      this.pushNav(existing.id);
       this.persist();
       this.emit('session-changed');
       return existing;
@@ -533,6 +616,7 @@ class AppState {
     };
     project.sessions.push(session);
     project.activeSessionId = session.id;
+    this.pushNav(session.id);
     // Auto-add to swarm if in swarm mode
     if (project.layout.mode === 'swarm') {
       project.layout.splitPanes.push(session.id);
@@ -547,6 +631,7 @@ class AppState {
     const project = this.state.projects.find((p) => p.id === projectId);
     if (!project) return;
     project.activeSessionId = sessionId;
+    this.pushNav(sessionId);
     this.persist();
     this.emit('session-changed');
   }
@@ -667,6 +752,7 @@ class AppState {
     const idx = project.sessions.findIndex((s) => s.id === project.activeSessionId);
     const next = (idx + direction + project.sessions.length) % project.sessions.length;
     project.activeSessionId = project.sessions[next].id;
+    this.pushNav(project.activeSessionId);
     this.persist();
     this.emit('session-changed');
   }
@@ -675,6 +761,7 @@ class AppState {
     const project = this.activeProject;
     if (!project || index >= project.sessions.length) return;
     project.activeSessionId = project.sessions[index].id;
+    this.pushNav(project.activeSessionId);
     this.persist();
     this.emit('session-changed');
   }
@@ -770,6 +857,9 @@ class AppState {
 export function _resetForTesting(): void {
   (appState as any)['state'] = { version: 1, projects: [], activeProjectId: null, preferences: { ...defaultPreferences } };
   (appState as any)['listeners'] = new Map();
+  (appState as any)['navHistory'] = [];
+  (appState as any)['navIndex'] = -1;
+  (appState as any)['navSuppressPush'] = false;
 }
 
 export const appState = new AppState();

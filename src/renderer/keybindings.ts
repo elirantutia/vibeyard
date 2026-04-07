@@ -41,6 +41,8 @@ export function initKeybindings(): void {
   }
   shortcutManager.registerHandler('next-session', () => appState.cycleSession(1));
   shortcutManager.registerHandler('prev-session', () => appState.cycleSession(-1));
+  shortcutManager.registerHandler('tab-back', () => appState.navigateBack());
+  shortcutManager.registerHandler('tab-forward', () => appState.navigateForward());
   shortcutManager.registerHandler('toggle-sidebar', () => toggleSidebar());
   shortcutManager.registerHandler('toggle-split', () => appState.toggleSwarm());
   shortcutManager.registerHandler('project-terminal', () => toggleProjectTerminal());

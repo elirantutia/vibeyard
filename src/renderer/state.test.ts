@@ -1616,3 +1616,75 @@ describe('isInsightDismissed()', () => {
     expect(appState.isInsightDismissed(project.id, 'anything')).toBe(false);
   });
 });
+
+describe('navigateBack()/navigateForward()', () => {
+  it('walks backward and forward through visited sessions', () => {
+    const { project, sessions } = addProjectWithSessions(3);
+    // addSession already pushes each into nav history (S1, S2, S3), active=S3
+    expect(project.activeSessionId).toBe(sessions[2].id);
+
+    appState.navigateBack();
+    expect(project.activeSessionId).toBe(sessions[1].id);
+    appState.navigateBack();
+    expect(project.activeSessionId).toBe(sessions[0].id);
+    appState.navigateBack();
+    expect(project.activeSessionId).toBe(sessions[0].id); // clamped
+
+    appState.navigateForward();
+    expect(project.activeSessionId).toBe(sessions[1].id);
+    appState.navigateForward();
+    expect(project.activeSessionId).toBe(sessions[2].id);
+    appState.navigateForward();
+    expect(project.activeSessionId).toBe(sessions[2].id); // clamped
+  });
+
+  it('truncates the forward stack on a new visit', () => {
+    const { project, sessions } = addProjectWithSessions(3);
+    appState.navigateBack();
+    appState.navigateBack();
+    expect(project.activeSessionId).toBe(sessions[0].id);
+
+    appState.setActiveSession(project.id, sessions[2].id);
+    // Forward stack should be cleared; navigateForward is now a no-op
+    appState.navigateForward();
+    expect(project.activeSessionId).toBe(sessions[2].id);
+
+    appState.navigateBack();
+    expect(project.activeSessionId).toBe(sessions[0].id);
+  });
+
+  it('skips sessions removed from history', () => {
+    const { project, sessions } = addProjectWithSessions(3);
+    // active=S3, history=[S1,S2,S3]
+    appState.removeSession(project.id, sessions[1].id);
+    // S2 pruned. History=[S1,S3], active=S3.
+    appState.navigateBack();
+    expect(project.activeSessionId).toBe(sessions[0].id);
+  });
+
+  it('navigates across projects', () => {
+    const projectA = addProject('A', '/a');
+    const sA = appState.addSession(projectA.id, 'A1')!;
+    const projectB = addProject('B', '/b');
+    const sB = appState.addSession(projectB.id, 'B1')!;
+
+    expect(appState.activeProjectId).toBe(projectB.id);
+    appState.navigateBack();
+    expect(appState.activeProjectId).toBe(projectA.id);
+    expect(projectA.activeSessionId).toBe(sA.id);
+
+    appState.navigateForward();
+    expect(appState.activeProjectId).toBe(projectB.id);
+    expect(projectB.activeSessionId).toBe(sB.id);
+  });
+
+  it('does not re-push during back/forward navigation', () => {
+    const { project, sessions } = addProjectWithSessions(3);
+    appState.navigateBack();
+    appState.navigateBack();
+    // Should still be able to walk all the way forward to the original tail
+    appState.navigateForward();
+    appState.navigateForward();
+    expect(project.activeSessionId).toBe(sessions[2].id);
+  });
+});
