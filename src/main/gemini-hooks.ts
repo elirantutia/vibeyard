@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { homedir } from 'os';
 import { STATUS_DIR } from './hook-status';
-import { statusCmd as mkStatusCmd, captureSessionIdCmd as mkCaptureSessionIdCmd, wrapPythonHookCmd, installHookScripts } from './hook-commands';
+import { statusCmd as mkStatusCmd, captureSessionIdCmd as mkCaptureSessionIdCmd, installEventScript, wrapPythonHookCmd, installHookScripts } from './hook-commands';
 import { readJsonSafe } from './fs-utils';
 import type { InspectorEventType, SettingsValidationResult } from '../shared/types';
 
@@ -88,7 +88,9 @@ status_dir=r'${STATUS_DIR}'
 with open(os.path.join(status_dir,sid+".events"),"a") as f:
  f.write(json.dumps(e)+"\\n")
 `;
-    return wrapPythonHookCmd(`gemini_event_${hookEvent}.py`, pyCode, GEMINI_HOOK_MARKER);
+    const scriptName = `gemini_event_${hookEvent}.py`;
+    installEventScript(scriptName, pyCode);
+    return wrapPythonHookCmd(scriptName, pyCode, GEMINI_HOOK_MARKER);
   };
 
   const captureSessionIdCmd = mkCaptureSessionIdCmd(SESSION_ID_VAR, GEMINI_HOOK_MARKER);

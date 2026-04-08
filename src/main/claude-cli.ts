@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { homedir } from 'os';
 import { STATUS_DIR, getStatusLineScriptPath } from './hook-status';
-import { statusCmd as mkStatusCmd, captureSessionIdCmd as mkCaptureSessionIdCmd, captureToolFailureCmd as mkCaptureToolFailureCmd, wrapPythonHookCmd, installHookScripts } from './hook-commands';
+import { statusCmd as mkStatusCmd, captureSessionIdCmd as mkCaptureSessionIdCmd, captureToolFailureCmd as mkCaptureToolFailureCmd, installEventScript, wrapPythonHookCmd, installHookScripts } from './hook-commands';
 import { readJsonSafe, readDirSafe } from './fs-utils';
 import type { McpServer, Agent, Skill, Command, ClaudeConfig, InspectorEventType } from '../shared/types';
 
@@ -280,7 +280,9 @@ if tn and "${hookEvent}"=="PostToolUse":
 with open(os.path.join(status_dir,sid+".events"),"a") as f:
  f.write(json.dumps(e)+"\\n")
 `;
-    return wrapPythonHookCmd(`claude_event_${hookEvent}.py`, pyCode, HOOK_MARKER);
+    const scriptName = `claude_event_${hookEvent}.py`;
+    installEventScript(scriptName, pyCode);
+    return wrapPythonHookCmd(scriptName, pyCode, HOOK_MARKER);
   };
 
   // Add our hooks for each event type

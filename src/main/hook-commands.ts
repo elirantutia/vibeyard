@@ -12,8 +12,9 @@ import { STATUS_DIR } from './hook-status';
 
 const isWin = process.platform === 'win32';
 
-// On Windows, we write Python helper scripts to STATUS_DIR and call them from .cmd wrappers.
-// The scripts are written once during installHooks and cleaned up on app exit.
+// On Windows, Python helper scripts are written to STATUS_DIR via installEventScript()
+// and cleaned up on app exit. Shared scripts are installed once via installHookScripts();
+// provider-specific event scripts are installed per session.
 
 let scriptsInstalled = false;
 
@@ -23,10 +24,9 @@ let scriptsInstalled = false;
  */
 export function installHookScripts(): void {
   if (!isWin || scriptsInstalled) return;
-  fs.mkdirSync(STATUS_DIR, { recursive: true });
 
   // status_writer.py — writes event:status to .status file
-  fs.writeFileSync(path.join(STATUS_DIR, 'status_writer.py'), `import sys,os
+  installEventScript('status_writer.py', `import sys,os
 event=sys.argv[1]
 status=sys.argv[2]
 sid=os.environ.get(sys.argv[3],'')
@@ -37,7 +37,7 @@ if sid:
 `);
 
   // session_id_capture.py — captures session_id from JSON stdin
-  fs.writeFileSync(path.join(STATUS_DIR, 'session_id_capture.py'), `import sys,json,os
+  installEventScript('session_id_capture.py', `import sys,json,os
 try:
     d=json.load(sys.stdin)
 except:
@@ -51,7 +51,7 @@ if sid_env and claude_sid:
 `);
 
   // tool_failure_capture.py — captures tool failure details
-  fs.writeFileSync(path.join(STATUS_DIR, 'tool_failure_capture.py'), `import sys,json,os,random,string
+  installEventScript('tool_failure_capture.py', `import sys,json,os,random,string
 try:
     d=json.load(sys.stdin)
 except:
@@ -118,15 +118,28 @@ export function captureToolFailureCmd(
 }
 
 /**
- * Write a Python script to STATUS_DIR and return a platform-appropriate hook command.
+ * Write a Python event script to STATUS_DIR (Windows only).
+ * Call this before `wrapPythonHookCmd` to ensure the script file exists.
+ * No-op on Unix where Python is inlined in the shell command.
+ *
+ * @param scriptName Unique name for the .py file
+ * @param pythonCode Multi-line Python code
+ */
+export function installEventScript(scriptName: string, pythonCode: string): void {
+  if (!isWin) return;
+  fs.mkdirSync(STATUS_DIR, { recursive: true });
+  fs.writeFileSync(path.join(STATUS_DIR, scriptName), pythonCode);
+}
+
+/**
+ * Return a platform-appropriate hook command that runs a Python script.
  *
  * On Unix: returns `sh -c '... | /usr/bin/python3 -c "..." 2>/dev/null marker'`
- * On Windows: writes the Python to a .py file in STATUS_DIR and returns a command
- *   that invokes it. The file write is a deliberate side effect — scripts are cleaned
- *   up by `cleanupHookScripts` which scans STATUS_DIR for all .py files.
+ * On Windows: returns a command that invokes the pre-installed .py file from STATUS_DIR.
+ *   The script must already exist — call `installEventScript` first.
  *
  * @param scriptName Unique name for the .py file (Windows)
- * @param pythonCode Multi-line Python code
+ * @param pythonCode Multi-line Python code (used inline on Unix, ignored on Windows)
  * @param hookMarker The marker string to identify IDE hooks
  * @param pipeStdin Whether to pipe stdin to the script (default true)
  */
@@ -137,10 +150,7 @@ export function wrapPythonHookCmd(
   pipeStdin = true,
 ): string {
   if (isWin) {
-    const pyPath = path.join(STATUS_DIR, scriptName);
-    fs.mkdirSync(STATUS_DIR, { recursive: true });
-    fs.writeFileSync(pyPath, pythonCode);
-    const pyCmd = pyPath.replace(/\\/g, '/');
+    const pyCmd = path.join(STATUS_DIR, scriptName).replace(/\\/g, '/');
     return `python "${pyCmd}" "${hookMarker}"`;
   }
   // Unix: inline the Python in sh -c, escaping double-quotes

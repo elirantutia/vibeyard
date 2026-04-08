@@ -15,6 +15,7 @@ vi.mock('os', () => ({
 
 vi.mock('./hook-commands', () => ({
   installHookScripts: vi.fn(),
+  installEventScript: vi.fn(),
   statusCmd: vi.fn((e: string, s: string, _v: string, marker: string) => `echo ${e}:${s} > .status ${marker}`),
   captureSessionIdCmd: vi.fn((_v: string, marker: string) => `capture-sessionid .sessionid ${marker}`),
   captureToolFailureCmd: vi.fn((_v: string, marker: string) => `capture-toolfailure .toolfailure ${marker}`),
