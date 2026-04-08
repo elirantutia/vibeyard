@@ -68,7 +68,11 @@ chmod +x Vibeyard-*.AppImage
 ./Vibeyard-*.AppImage
 ```
 
-### npm (macOS & Linux)
+### Windows
+
+Download the latest `.exe` installer from [GitHub Releases](https://github.com/elirantutia/vibeyard/releases) and run it. Signed and verified for Windows.
+
+### npm (macOS, Linux & Windows)
 
 ```bash
 npm i -g vibeyard
