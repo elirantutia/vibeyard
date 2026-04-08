@@ -551,6 +551,7 @@ body.sidebar-resizing .browser-webview {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+  justify-content: flex-end;
 }
 
 .inspect-clear-btn {

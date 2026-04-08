@@ -265,7 +265,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
 
   const drawSubmitBtn = document.createElement('button');
   drawSubmitBtn.className = 'inspect-submit-btn';
-  drawSubmitBtn.textContent = 'Capture & Send';
+  drawSubmitBtn.textContent = 'Send to AI';
 
   const drawCustomBtn = document.createElement('button');
   drawCustomBtn.className = 'inspect-dropdown-btn';
