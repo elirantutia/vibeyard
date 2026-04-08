@@ -247,7 +247,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   drawSubmitGroup.className = 'inspect-submit-group';
 
   const drawClearBtn = document.createElement('button');
-  drawClearBtn.className = 'inspect-dropdown-btn';
+  drawClearBtn.className = 'inspect-clear-btn';
   drawClearBtn.textContent = 'Clear';
   drawClearBtn.title = 'Clear drawing';
 
@@ -260,12 +260,16 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   drawCustomBtn.textContent = '\u25BC';
   drawCustomBtn.title = 'Send to custom session';
 
-  drawSubmitGroup.appendChild(drawClearBtn);
   drawSubmitGroup.appendChild(drawSubmitBtn);
   drawSubmitGroup.appendChild(drawCustomBtn);
 
+  const drawActions = document.createElement('div');
+  drawActions.className = 'inspect-draw-actions';
+  drawActions.appendChild(drawClearBtn);
+  drawActions.appendChild(drawSubmitGroup);
+
   drawControlsRow.appendChild(drawInstructionInput);
-  drawControlsRow.appendChild(drawSubmitGroup);
+  drawControlsRow.appendChild(drawActions);
   drawPanel.appendChild(drawControlsRow);
   el.appendChild(drawPanel);
 

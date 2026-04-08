@@ -531,6 +531,28 @@ body.sidebar-resizing .browser-webview {
   opacity: 0.9;
 }
 
+.inspect-draw-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.inspect-clear-btn {
+  padding: 8px 12px;
+  background: var(--accent);
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.inspect-clear-btn:hover {
+  opacity: 0.9;
+}
+
 /* Record Flow Button */
 .browser-record-btn {
   height: 26px;
