@@ -364,6 +364,22 @@ body.sidebar-resizing .browser-webview {
   font-weight: 600;
 }
 
+.inspect-attach-dims-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.inspect-attach-dims-row input[type='checkbox'] {
+  margin: 0;
+  cursor: pointer;
+}
+
 .inspect-text-line {
   color: var(--text-secondary);
   font-style: italic;

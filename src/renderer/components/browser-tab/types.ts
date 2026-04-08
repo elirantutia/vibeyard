@@ -75,6 +75,7 @@ export interface BrowserTabInstance {
   viewportDropdown: HTMLDivElement;
   inspectPanel: HTMLDivElement;
   instructionInput: HTMLTextAreaElement;
+  inspectAttachDimsCheckbox: HTMLInputElement;
   elementInfoEl: HTMLDivElement;
   inspectMode: boolean;
   selectedElement: ElementInfo | null;
@@ -94,5 +95,6 @@ export interface BrowserTabInstance {
   drawBtn: HTMLButtonElement;
   drawPanel: HTMLDivElement;
   drawInstructionInput: HTMLTextAreaElement;
+  drawAttachDimsCheckbox: HTMLInputElement;
   drawMode: boolean;
 }

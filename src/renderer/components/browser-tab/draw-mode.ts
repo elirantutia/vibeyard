@@ -49,7 +49,8 @@ function buildDrawPrompt(instance: BrowserTabInstance, imagePath: string): strin
   const instruction = instance.drawInstructionInput.value.trim();
   const pageUrl = instance.urlInput.value;
   const vp = instance.currentViewport;
-  const vpCtx = vp.width !== null ? ` [viewport: ${vp.width}×${vp.height} – ${vp.label}]` : '';
+  const includeVp = instance.drawAttachDimsCheckbox.checked;
+  const vpCtx = includeVp && vp.width !== null ? ` [viewport: ${vp.width}×${vp.height} – ${vp.label}]` : '';
   return (
     `Regarding the page at ${pageUrl}${vpCtx}:\n` +
     `See annotated screenshot: ${imagePath}\n` +

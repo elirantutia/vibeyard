@@ -222,8 +222,20 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   submitGroup.appendChild(customBtn);
 
   inputRow.appendChild(instructionInput);
-  inputRow.appendChild(submitGroup);
   inspectPanel.appendChild(inputRow);
+
+  const inspectAttachDimsRow = document.createElement('label');
+  inspectAttachDimsRow.className = 'inspect-attach-dims-row';
+  const inspectAttachDimsCheckbox = document.createElement('input');
+  inspectAttachDimsCheckbox.type = 'checkbox';
+  inspectAttachDimsCheckbox.checked = true;
+  const inspectAttachDimsText = document.createElement('span');
+  inspectAttachDimsText.textContent = 'Attach browser dimensions';
+  inspectAttachDimsRow.appendChild(inspectAttachDimsCheckbox);
+  inspectAttachDimsRow.appendChild(inspectAttachDimsText);
+  inspectPanel.appendChild(inspectAttachDimsRow);
+
+  inspectPanel.appendChild(submitGroup);
   el.appendChild(inspectPanel);
 
   const drawPanel = document.createElement('div');
@@ -269,8 +281,20 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   drawActions.appendChild(drawSubmitGroup);
 
   drawControlsRow.appendChild(drawInstructionInput);
-  drawControlsRow.appendChild(drawActions);
   drawPanel.appendChild(drawControlsRow);
+
+  const drawAttachDimsRow = document.createElement('label');
+  drawAttachDimsRow.className = 'inspect-attach-dims-row';
+  const drawAttachDimsCheckbox = document.createElement('input');
+  drawAttachDimsCheckbox.type = 'checkbox';
+  drawAttachDimsCheckbox.checked = true;
+  const drawAttachDimsText = document.createElement('span');
+  drawAttachDimsText.textContent = 'Attach browser dimensions';
+  drawAttachDimsRow.appendChild(drawAttachDimsCheckbox);
+  drawAttachDimsRow.appendChild(drawAttachDimsText);
+  drawPanel.appendChild(drawAttachDimsRow);
+
+  drawPanel.appendChild(drawActions);
   el.appendChild(drawPanel);
 
   // Flow Panel
@@ -367,6 +391,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
     viewportDropdown,
     inspectPanel,
     instructionInput,
+    inspectAttachDimsCheckbox,
     elementInfoEl,
     inspectMode: false,
     selectedElement: null,
@@ -386,6 +411,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
     drawBtn,
     drawPanel,
     drawInstructionInput,
+    drawAttachDimsCheckbox,
     drawMode: false,
   };
   instances.set(sessionId, instance);

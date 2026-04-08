@@ -61,7 +61,8 @@ export function buildPrompt(instance: BrowserTabInstance): string | null {
   if (!instruction) return null;
 
   const vp = instance.currentViewport;
-  const vpCtx = vp.width !== null ? ` [viewport: ${vp.width}×${vp.height} – ${vp.label}]` : '';
+  const includeVp = instance.inspectAttachDimsCheckbox.checked;
+  const vpCtx = includeVp && vp.width !== null ? ` [viewport: ${vp.width}×${vp.height} – ${vp.label}]` : '';
 
   return (
     `Regarding the <${info.tagName}> element at ${info.pageUrl}${vpCtx} ` +
