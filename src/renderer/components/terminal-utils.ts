@@ -34,8 +34,11 @@ export function attachClipboardCopyHandler(terminal: Terminal, extend?: ExtraKey
     }
 
     // Ctrl/Cmd+V: paste from clipboard
+    // preventDefault stops the browser's native paste event from also firing,
+    // which would cause xterm to receive the paste twice.
     if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'v') {
       if (e.type === 'keydown') {
+        e.preventDefault();
         navigator.clipboard.readText().then(text => {
           if (text) terminal.paste(text);
         });
