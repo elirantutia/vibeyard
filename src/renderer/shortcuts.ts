@@ -42,6 +42,9 @@ export const SHORTCUT_DEFAULTS: ShortcutDefault[] = [
   { id: 'find-in-terminal', label: 'Find', category: 'Search & Help', defaultKeys: 'CmdOrCtrl+F' },
   { id: 'goto-line', label: 'Go to Line', category: 'Search & Help', defaultKeys: 'CmdOrCtrl+L' },
   { id: 'help', label: 'Help', category: 'Search & Help', defaultKeys: 'F1' },
+  { id: 'terminal-copy', label: 'Copy', category: 'Terminal', defaultKeys: 'CmdOrCtrl+C' },
+  { id: 'terminal-copy-legacy', label: 'Copy (Legacy)', category: 'Terminal', defaultKeys: 'CmdOrCtrl+Shift+C' },
+  { id: 'terminal-paste', label: 'Paste', category: 'Terminal', defaultKeys: 'CmdOrCtrl+V' },
 ];
 
 const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
@@ -100,10 +103,10 @@ function parseAccelerator(accelerator: string): { ctrl: boolean; meta: boolean; 
 function matchesAccelerator(e: KeyboardEvent, accelerator: string): boolean {
   const parsed = parseAccelerator(accelerator);
 
-  const eventCtrl = e.ctrlKey;
-  const eventMeta = e.metaKey;
-  const eventShift = e.shiftKey;
-  const eventAlt = e.altKey;
+  const eventCtrl = !!e.ctrlKey;
+  const eventMeta = !!e.metaKey;
+  const eventShift = !!e.shiftKey;
+  const eventAlt = !!e.altKey;
 
   if (parsed.ctrl !== eventCtrl) return false;
   if (parsed.meta !== eventMeta) return false;
@@ -233,3 +236,10 @@ export class ShortcutManager {
 }
 
 export const shortcutManager = new ShortcutManager();
+
+/** Check if a keyboard event matches a named shortcut (respects user overrides) */
+export function shortcutMatchesEvent(id: string, e: KeyboardEvent): boolean {
+  const keys = shortcutManager.getKeys(id);
+  if (!keys) return false;
+  return matchesAccelerator(e, keys);
+}
