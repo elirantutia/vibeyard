@@ -1,6 +1,7 @@
 import type { BrowserTabInstance, ElementInfo } from './types.js';
 import { buildSelectorOptions } from './selector-ui.js';
 import { positionPopover } from './popover.js';
+import { getViewportContext } from './viewport.js';
 
 export function toggleInspectMode(instance: BrowserTabInstance): void {
   instance.inspectMode = !instance.inspectMode;
@@ -60,9 +61,7 @@ export function buildPrompt(instance: BrowserTabInstance): string | null {
   const instruction = instance.instructionInput.value.trim();
   if (!instruction) return null;
 
-  const vp = instance.currentViewport;
-  const includeVp = instance.inspectAttachDimsCheckbox.checked;
-  const vpCtx = includeVp && vp.width !== null ? ` [viewport: ${vp.width}×${vp.height} – ${vp.label}]` : '';
+  const vpCtx = getViewportContext(instance, instance.inspectAttachDimsCheckbox.checked);
 
   return (
     `Regarding the <${info.tagName}> element at ${info.pageUrl}${vpCtx} ` +

@@ -3,6 +3,7 @@ import { promptNewSession } from '../tab-bar.js';
 import { setPendingPrompt } from '../terminal-pane.js';
 import type { BrowserTabInstance } from './types.js';
 import { positionPopover } from './popover.js';
+import { getViewportContext } from './viewport.js';
 
 export function toggleDrawMode(instance: BrowserTabInstance): void {
   instance.drawMode = !instance.drawMode;
@@ -48,9 +49,7 @@ async function captureScreenshotPath(instance: BrowserTabInstance): Promise<stri
 function buildDrawPrompt(instance: BrowserTabInstance, imagePath: string): string {
   const instruction = instance.drawInstructionInput.value.trim();
   const pageUrl = instance.urlInput.value;
-  const vp = instance.currentViewport;
-  const includeVp = instance.drawAttachDimsCheckbox.checked;
-  const vpCtx = includeVp && vp.width !== null ? ` [viewport: ${vp.width}×${vp.height} – ${vp.label}]` : '';
+  const vpCtx = getViewportContext(instance, instance.drawAttachDimsCheckbox.checked);
   return (
     `Regarding the page at ${pageUrl}${vpCtx}:\n` +
     `See annotated screenshot: ${imagePath}\n` +
