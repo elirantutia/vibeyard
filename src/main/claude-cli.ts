@@ -286,6 +286,7 @@ with open(f\\"${STATUS_DIR}/\\"+sid+\\".events\\",\\"a\\") as f:
     PostToolUse: 'working',
     PostToolUseFailure: 'working',
     Stop: 'completed',
+    StopFailure: 'completed',
     PermissionRequest: 'input',
   };
 
@@ -295,6 +296,7 @@ with open(f\\"${STATUS_DIR}/\\"+sid+\\".events\\",\\"a\\") as f:
     PostToolUse: 'tool_use',
     PostToolUseFailure: 'tool_failure',
     Stop: 'stop',
+    StopFailure: 'stop_failure',
     PermissionRequest: 'permission_request',
   };
 
@@ -321,15 +323,19 @@ with open(f\\"${STATUS_DIR}/\\"+sid+\\".events\\",\\"a\\") as f:
   // Inspector-only hooks: log to .events file without changing session status
   const inspectorOnlyEvents: Record<string, InspectorEventType> = {
     PreToolUse: 'pre_tool_use',
+    PermissionDenied: 'permission_denied',
     SubagentStart: 'subagent_start',
     SubagentStop: 'subagent_stop',
     Notification: 'notification',
     PreCompact: 'pre_compact',
     PostCompact: 'post_compact',
     SessionEnd: 'session_end',
+    TaskCreated: 'task_created',
     TaskCompleted: 'task_completed',
     WorktreeCreate: 'worktree_create',
     WorktreeRemove: 'worktree_remove',
+    CwdChanged: 'cwd_changed',
+    FileChanged: 'file_changed',
     ConfigChange: 'config_change',
     Elicitation: 'elicitation',
     ElicitationResult: 'elicitation_result',

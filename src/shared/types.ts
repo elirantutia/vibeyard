@@ -252,17 +252,19 @@ export interface ToolFailureData {
 // --- Session Inspector ---
 
 export type InspectorEventType =
-  // Core 6 (status + inspector)
+  // Core 7 (status + inspector)
   | 'session_start' | 'user_prompt' | 'tool_use' | 'tool_failure'
-  | 'stop' | 'permission_request'
+  | 'stop' | 'stop_failure' | 'permission_request'
   // Inspector-only events
   | 'pre_tool_use'
+  | 'permission_denied'
   | 'subagent_start' | 'subagent_stop'
   | 'notification'
   | 'pre_compact' | 'post_compact'
   | 'session_end'
-  | 'task_completed'
+  | 'task_created' | 'task_completed'
   | 'worktree_create' | 'worktree_remove'
+  | 'cwd_changed' | 'file_changed'
   | 'config_change'
   | 'elicitation' | 'elicitation_result'
   | 'instructions_loaded'
