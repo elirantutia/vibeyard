@@ -22,6 +22,7 @@ let highlightOverlay: HTMLDivElement | null = null;
 let drawCanvas: HTMLCanvasElement | null = null;
 let drawCtx: CanvasRenderingContext2D | null = null;
 let drawing = false;
+let strokeCompleted = false;
 
 function applyDrawStyles(ctx: CanvasRenderingContext2D): void {
   ctx.lineWidth = 3;
@@ -57,6 +58,10 @@ function onDrawPointerDown(e: PointerEvent): void {
   if (!drawMode || !drawCtx) return;
   e.preventDefault();
   e.stopPropagation();
+  if (strokeCompleted && drawCanvas) {
+    drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+    strokeCompleted = false;
+  }
   drawing = true;
   drawCtx.beginPath();
   drawCtx.moveTo(e.clientX, e.clientY);
@@ -73,6 +78,7 @@ function onDrawPointerUp(e: PointerEvent): void {
   if (!drawMode) return;
   e.preventDefault();
   drawing = false;
+  strokeCompleted = true;
   ipcRenderer.sendToHost('draw-stroke-end', { x: e.clientX, y: e.clientY });
 }
 
@@ -91,6 +97,7 @@ function onDrawResize(): void {
 
 function enterDrawMode(): void {
   drawMode = true;
+  strokeCompleted = false;
   const canvas = ensureDrawCanvas();
   canvas.style.display = 'block';
   canvas.addEventListener('pointerdown', onDrawPointerDown, true);
@@ -103,6 +110,7 @@ function enterDrawMode(): void {
 function exitDrawMode(): void {
   drawMode = false;
   drawing = false;
+  strokeCompleted = false;
   if (drawCanvas) {
     drawCanvas.removeEventListener('pointerdown', onDrawPointerDown, true);
     drawCanvas.removeEventListener('pointermove', onDrawPointerMove, true);
@@ -120,6 +128,7 @@ function clearDrawing(): void {
   if (drawCtx && drawCanvas) {
     drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
   }
+  strokeCompleted = false;
 }
 
 function ensureOverlay(): HTMLDivElement {
