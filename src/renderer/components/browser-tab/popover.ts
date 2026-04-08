@@ -16,12 +16,20 @@ export function positionPopover(
   let left = webviewRect.left - paneRect.left + x;
   let top = webviewRect.top - paneRect.top + y;
 
+  const paneWidth = paneRect.width;
+  const paneHeight = paneRect.height;
+
+  // Constrain the popover's rendered size to the pane so it never exceeds
+  // the available space (which would otherwise be clipped by the pane's
+  // overflow: hidden). Override CSS min-width so it can shrink on narrow panes.
+  popover.style.minWidth = '0';
+  popover.style.maxWidth = `${Math.max(0, paneWidth - 16)}px`;
+  popover.style.maxHeight = `${Math.max(0, paneHeight - 16)}px`;
+
   popover.style.left = `${left}px`;
   popover.style.top = `${top}px`;
 
   const rect = popover.getBoundingClientRect();
-  const paneWidth = paneRect.width;
-  const paneHeight = paneRect.height;
   if (left + rect.width > paneWidth) left = paneWidth - rect.width - 8;
   if (top + rect.height > paneHeight) top = paneHeight - rect.height - 8;
   if (left < 8) left = 8;

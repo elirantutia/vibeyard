@@ -348,6 +348,7 @@ body.sidebar-resizing .browser-webview {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   min-width: 320px;
   max-width: 420px;
+  overflow: auto;
 }
 
 .inspect-element-info {
