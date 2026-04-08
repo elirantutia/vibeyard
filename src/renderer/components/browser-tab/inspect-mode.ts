@@ -6,6 +6,7 @@ export function toggleInspectMode(instance: BrowserTabInstance): void {
   instance.inspectMode = !instance.inspectMode;
   instance.inspectBtn.classList.toggle('active', instance.inspectMode);
   instance.recordBtn.disabled = instance.inspectMode;
+  instance.drawBtn.disabled = instance.inspectMode;
   if (instance.inspectMode) {
     instance.webview.send('enter-inspect-mode');
   } else {
