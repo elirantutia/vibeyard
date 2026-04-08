@@ -1,8 +1,10 @@
 import type { BrowserTabInstance } from './types.js';
 
+const KNOWN_SCHEMES = /^(https?|file|ftp|ftps|about|chrome|data|blob|view-source|javascript|mailto):/i;
+
 export function normalizeUrl(url: string): string {
   const trimmed = url.trim();
-  if (trimmed && !/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) {
+  if (trimmed && !KNOWN_SCHEMES.test(trimmed)) {
     return 'http://' + trimmed;
   }
   return trimmed;

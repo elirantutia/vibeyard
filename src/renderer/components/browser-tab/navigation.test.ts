@@ -29,4 +29,16 @@ describe('normalizeUrl', () => {
   it('returns empty string for empty input', () => {
     expect(normalizeUrl('   ')).toBe('');
   });
+
+  it('wraps host:port with http://', () => {
+    expect(normalizeUrl('localhost:3000')).toBe('http://localhost:3000');
+  });
+
+  it('wraps ip:port with http://', () => {
+    expect(normalizeUrl('127.0.0.1:8080')).toBe('http://127.0.0.1:8080');
+  });
+
+  it('preserves view-source: URLs', () => {
+    expect(normalizeUrl('view-source:https://example.com')).toBe('view-source:https://example.com');
+  });
 });
