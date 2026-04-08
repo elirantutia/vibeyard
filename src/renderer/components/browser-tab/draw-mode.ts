@@ -68,7 +68,7 @@ export async function sendDrawToNewSession(instance: BrowserTabInstance): Promis
   if (!imagePath) return;
 
   const prompt = buildDrawPrompt(instance, imagePath);
-  const newSession = appState.addSession(project.id, `Draw: ${instruction.slice(0, 30)}`);
+  const newSession = appState.addPlanSession(project.id, `Draw: ${instruction.slice(0, 30)}`);
   if (newSession) {
     setPendingPrompt(newSession.id, prompt);
   }
