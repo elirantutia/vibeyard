@@ -89,6 +89,7 @@
   opacity: 0.9;
 }
 
+.browser-draw-btn,
 .browser-inspect-btn {
   height: 26px;
   padding: 0 12px;
@@ -101,17 +102,20 @@
   white-space: nowrap;
 }
 
+.browser-draw-btn:hover,
 .browser-inspect-btn:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
 
+.browser-draw-btn.active,
 .browser-inspect-btn.active {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
 }
 
+.browser-draw-btn:disabled,
 .browser-inspect-btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;

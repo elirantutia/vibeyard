@@ -15,8 +15,104 @@ const QA_ATTRS = ['data-testid', 'data-qa', 'data-cy', 'data-test', 'data-automa
 
 let inspectMode = false;
 let flowMode = false;
+let drawMode = false;
 let suppressNextFlowClick = false;
 let highlightOverlay: HTMLDivElement | null = null;
+
+let drawCanvas: HTMLCanvasElement | null = null;
+let drawCtx: CanvasRenderingContext2D | null = null;
+let drawing = false;
+
+function applyDrawStyles(ctx: CanvasRenderingContext2D): void {
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#ff3b30';
+}
+
+function ensureDrawCanvas(): HTMLCanvasElement {
+  if (!drawCanvas) {
+    drawCanvas = document.createElement('canvas');
+    drawCanvas.style.cssText =
+      'position:fixed;top:0;left:0;width:100vw;height:100vh;' +
+      'z-index:2147483646;pointer-events:auto;cursor:crosshair;' +
+      'background:transparent;';
+    drawCanvas.width = window.innerWidth;
+    drawCanvas.height = window.innerHeight;
+    document.documentElement.appendChild(drawCanvas);
+    drawCtx = drawCanvas.getContext('2d');
+    if (drawCtx) applyDrawStyles(drawCtx);
+  }
+  return drawCanvas;
+}
+
+function onDrawPointerDown(e: PointerEvent): void {
+  if (!drawMode || !drawCtx) return;
+  e.preventDefault();
+  e.stopPropagation();
+  drawing = true;
+  drawCtx.beginPath();
+  drawCtx.moveTo(e.clientX, e.clientY);
+}
+
+function onDrawPointerMove(e: PointerEvent): void {
+  if (!drawMode || !drawing || !drawCtx) return;
+  e.preventDefault();
+  drawCtx.lineTo(e.clientX, e.clientY);
+  drawCtx.stroke();
+}
+
+function onDrawPointerUp(e: PointerEvent): void {
+  if (!drawMode) return;
+  e.preventDefault();
+  drawing = false;
+}
+
+function onDrawResize(): void {
+  if (!drawCanvas || !drawCtx) return;
+  // Resizing a canvas clears its bitmap, so snapshot first and blit back.
+  const tmp = document.createElement('canvas');
+  tmp.width = drawCanvas.width;
+  tmp.height = drawCanvas.height;
+  tmp.getContext('2d')?.drawImage(drawCanvas, 0, 0);
+  drawCanvas.width = window.innerWidth;
+  drawCanvas.height = window.innerHeight;
+  applyDrawStyles(drawCtx);
+  drawCtx.drawImage(tmp, 0, 0);
+}
+
+function enterDrawMode(): void {
+  drawMode = true;
+  const canvas = ensureDrawCanvas();
+  canvas.style.display = 'block';
+  canvas.addEventListener('pointerdown', onDrawPointerDown, true);
+  canvas.addEventListener('pointermove', onDrawPointerMove, true);
+  canvas.addEventListener('pointerup', onDrawPointerUp, true);
+  canvas.addEventListener('pointercancel', onDrawPointerUp, true);
+  window.addEventListener('resize', onDrawResize);
+}
+
+function exitDrawMode(): void {
+  drawMode = false;
+  drawing = false;
+  if (drawCanvas) {
+    drawCanvas.removeEventListener('pointerdown', onDrawPointerDown, true);
+    drawCanvas.removeEventListener('pointermove', onDrawPointerMove, true);
+    drawCanvas.removeEventListener('pointerup', onDrawPointerUp, true);
+    drawCanvas.removeEventListener('pointercancel', onDrawPointerUp, true);
+    if (drawCtx) drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+    drawCanvas.remove();
+    drawCanvas = null;
+    drawCtx = null;
+  }
+  window.removeEventListener('resize', onDrawResize);
+}
+
+function clearDrawing(): void {
+  if (drawCtx && drawCanvas) {
+    drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+  }
+}
 
 function ensureOverlay(): HTMLDivElement {
   if (!highlightOverlay) {
@@ -184,6 +280,9 @@ ipcRenderer.on('enter-inspect-mode', () => enterInspectMode());
 ipcRenderer.on('exit-inspect-mode', () => exitInspectMode());
 ipcRenderer.on('enter-flow-mode', () => enterFlowMode());
 ipcRenderer.on('exit-flow-mode', () => exitFlowMode());
+ipcRenderer.on('enter-draw-mode', () => enterDrawMode());
+ipcRenderer.on('exit-draw-mode', () => exitDrawMode());
+ipcRenderer.on('draw-clear', () => clearDrawing());
 ipcRenderer.on('flow-do-click', (_event, selector: string) => {
   const el = document.querySelector(selector);
   if (el instanceof HTMLElement) {

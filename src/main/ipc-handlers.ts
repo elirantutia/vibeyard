@@ -245,6 +245,19 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('app:getBrowserPreloadPath', () =>
     path.join(__dirname, '..', '..', 'preload', 'preload', 'browser-tab-preload.js')
   );
+
+  ipcMain.handle('browser:saveScreenshot', async (_event, sessionId: string, dataUrl: string) => {
+    if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/png;base64,')) {
+      throw new Error('Invalid screenshot data URL');
+    }
+    const buffer = Buffer.from(dataUrl.slice('data:image/png;base64,'.length), 'base64');
+    const dir = path.join(os.tmpdir(), 'vibeyard-screenshots');
+    await fs.promises.mkdir(dir, { recursive: true });
+    const safeId = sessionId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const filePath = path.join(dir, `draw-${safeId}-${Date.now()}.png`);
+    await fs.promises.writeFile(filePath, buffer);
+    return filePath;
+  });
   ipcMain.handle('app:openExternal', (_event, url: string) => {
     const parsed = new URL(url);
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {

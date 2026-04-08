@@ -12,6 +12,13 @@ import { instances, getPreloadPath } from './instance.js';
 import { navigateTo } from './navigation.js';
 import { applyViewport, openViewportDropdown, closeViewportDropdown } from './viewport.js';
 import { toggleInspectMode, showElementInfo } from './inspect-mode.js';
+import {
+  toggleDrawMode,
+  clearDrawing,
+  dismissDraw,
+  sendDrawToNewSession,
+  sendDrawToCustomSession,
+} from './draw-mode.js';
 import { addFlowStep, clearFlow, toggleFlowMode } from './flow-recording.js';
 import { showFlowPicker, dismissFlowPicker } from './flow-picker.js';
 import {
@@ -126,6 +133,11 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   recordBtn.textContent = '\u25CF Record';
   recordBtn.title = 'Record browser flow';
 
+  const drawBtn = document.createElement('button');
+  drawBtn.className = 'browser-draw-btn';
+  drawBtn.textContent = 'Draw';
+  drawBtn.title = 'Draw on page and send annotated screenshot to AI';
+
   toolbar.appendChild(backBtn);
   toolbar.appendChild(fwdBtn);
   toolbar.appendChild(reloadBtn);
@@ -134,6 +146,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   toolbar.appendChild(viewportWrapper);
   toolbar.appendChild(inspectBtn);
   toolbar.appendChild(recordBtn);
+  toolbar.appendChild(drawBtn);
   el.appendChild(toolbar);
 
   const viewportContainer = document.createElement('div');
@@ -211,6 +224,49 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   inputRow.appendChild(submitGroup);
   inspectPanel.appendChild(inputRow);
   el.appendChild(inspectPanel);
+
+  const drawPanel = document.createElement('div');
+  drawPanel.className = 'browser-inspect-panel browser-draw-panel';
+  drawPanel.style.display = 'none';
+
+  const drawHeader = document.createElement('div');
+  drawHeader.className = 'inspect-tag-line';
+  drawHeader.textContent = 'Draw on the page, then describe what you want.';
+  drawPanel.appendChild(drawHeader);
+
+  const drawControlsRow = document.createElement('div');
+  drawControlsRow.className = 'inspect-input-row';
+
+  const drawInstructionInput = document.createElement('input');
+  drawInstructionInput.className = 'inspect-instruction-input';
+  drawInstructionInput.type = 'text';
+  drawInstructionInput.placeholder = 'Describe what you want to do\u2026';
+
+  const drawSubmitGroup = document.createElement('div');
+  drawSubmitGroup.className = 'inspect-submit-group';
+
+  const drawClearBtn = document.createElement('button');
+  drawClearBtn.className = 'inspect-dropdown-btn';
+  drawClearBtn.textContent = 'Clear';
+  drawClearBtn.title = 'Clear drawing';
+
+  const drawSubmitBtn = document.createElement('button');
+  drawSubmitBtn.className = 'inspect-submit-btn';
+  drawSubmitBtn.textContent = 'Capture & Send';
+
+  const drawCustomBtn = document.createElement('button');
+  drawCustomBtn.className = 'inspect-dropdown-btn';
+  drawCustomBtn.textContent = '\u25BC';
+  drawCustomBtn.title = 'Send to custom session';
+
+  drawSubmitGroup.appendChild(drawClearBtn);
+  drawSubmitGroup.appendChild(drawSubmitBtn);
+  drawSubmitGroup.appendChild(drawCustomBtn);
+
+  drawControlsRow.appendChild(drawInstructionInput);
+  drawControlsRow.appendChild(drawSubmitGroup);
+  drawPanel.appendChild(drawControlsRow);
+  el.appendChild(drawPanel);
 
   // Flow Panel
   const flowPanel = document.createElement('div');
@@ -295,6 +351,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   el.appendChild(flowPickerOverlay);
 
   const instance: BrowserTabInstance = {
+    sessionId,
     element: el,
     webview,
     viewportContainer,
@@ -321,6 +378,10 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
     flowPickerOverlay,
     flowPickerMenu,
     flowPickerPending: null,
+    drawBtn,
+    drawPanel,
+    drawInstructionInput,
+    drawMode: false,
   };
   instances.set(sessionId, instance);
 
@@ -389,6 +450,14 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
 
   inspectBtn.addEventListener('click', () => toggleInspectMode(instance));
   recordBtn.addEventListener('click', () => toggleFlowMode(instance));
+  drawBtn.addEventListener('click', () => toggleDrawMode(instance));
+  drawClearBtn.addEventListener('click', () => clearDrawing(instance));
+  drawSubmitBtn.addEventListener('click', () => { void sendDrawToNewSession(instance); });
+  drawCustomBtn.addEventListener('click', () => { void sendDrawToCustomSession(instance); });
+  drawInstructionInput.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Enter') { void sendDrawToNewSession(instance); }
+    else if (e.key === 'Escape') { dismissDraw(instance); }
+  });
   flowClearBtn.addEventListener('click', () => clearFlow(instance));
   flowSubmitBtn.addEventListener('click', () => sendFlowToNewSession(instance));
   flowCustomBtn.addEventListener('click', () => sendFlowToCustomSession(instance));
@@ -487,6 +556,7 @@ export function destroyBrowserTabPane(sessionId: string): void {
   // one individually so a failure can't skip instance.element.remove() below.
   try { if (instance.inspectMode) instance.webview.send('exit-inspect-mode'); } catch {}
   try { if (instance.flowMode) instance.webview.send('exit-flow-mode'); } catch {}
+  try { if (instance.drawMode) instance.webview.send('exit-draw-mode'); } catch {}
   try { instance.webview.stop(); } catch {}
   try { instance.webview.src = 'about:blank'; } catch {}
 

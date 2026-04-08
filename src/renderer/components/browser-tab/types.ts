@@ -57,9 +57,14 @@ export interface WebviewElement extends HTMLElement {
   reload(): void;
   stop(): void;
   send(channel: string, ...args: unknown[]): void;
+  capturePage(rect?: { x: number; y: number; width: number; height: number }): Promise<{
+    toDataURL(): string;
+    toPNG(): Uint8Array;
+  }>;
 }
 
 export interface BrowserTabInstance {
+  sessionId: string;
   element: HTMLDivElement;
   webview: WebviewElement;
   viewportContainer: HTMLDivElement;
@@ -86,4 +91,8 @@ export interface BrowserTabInstance {
   flowPickerOverlay: HTMLDivElement;
   flowPickerMenu: HTMLDivElement;
   flowPickerPending: FlowPickerMetadata | null;
+  drawBtn: HTMLButtonElement;
+  drawPanel: HTMLDivElement;
+  drawInstructionInput: HTMLInputElement;
+  drawMode: boolean;
 }
