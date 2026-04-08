@@ -230,7 +230,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   inspectAttachDimsCheckbox.type = 'checkbox';
   inspectAttachDimsCheckbox.checked = true;
   const inspectAttachDimsText = document.createElement('span');
-  inspectAttachDimsText.textContent = 'Attach browser dimensions';
+  inspectAttachDimsText.textContent = 'Attach browser dimensions to the instructions';
   inspectAttachDimsRow.appendChild(inspectAttachDimsCheckbox);
   inspectAttachDimsRow.appendChild(inspectAttachDimsText);
   inspectPanel.appendChild(inspectAttachDimsRow);
@@ -289,7 +289,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   drawAttachDimsCheckbox.type = 'checkbox';
   drawAttachDimsCheckbox.checked = true;
   const drawAttachDimsText = document.createElement('span');
-  drawAttachDimsText.textContent = 'Attach browser dimensions';
+  drawAttachDimsText.textContent = 'Attach browser dimensions to the instructions';
   drawAttachDimsRow.appendChild(drawAttachDimsCheckbox);
   drawAttachDimsRow.appendChild(drawAttachDimsText);
   drawPanel.appendChild(drawAttachDimsRow);
