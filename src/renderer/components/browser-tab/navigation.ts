@@ -2,7 +2,7 @@ import type { BrowserTabInstance } from './types.js';
 
 export function normalizeUrl(url: string): string {
   const trimmed = url.trim();
-  if (trimmed && !/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) {
+  if (trimmed && !/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) {
     return 'http://' + trimmed;
   }
   return trimmed;

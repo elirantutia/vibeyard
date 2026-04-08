@@ -13,6 +13,18 @@ type ExtraKeyHandler = (e: KeyboardEvent) => boolean | undefined;
 export function attachClipboardCopyHandler(terminal: Terminal, extend?: ExtraKeyHandler): void {
   terminal.attachCustomKeyEventHandler((e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'f') return false;
+
+    // Ctrl/Cmd+C: copy selection if present, otherwise fall through to send interrupt
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'c') {
+      const selection = terminal.getSelection();
+      if (selection) {
+        if (e.type === 'keydown') navigator.clipboard.writeText(selection);
+        return false;
+      }
+      return true;
+    }
+
+    // Ctrl+Shift+C: copy (legacy shortcut, kept for compatibility)
     if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'C') {
       if (e.type === 'keydown') {
         const selection = terminal.getSelection();
@@ -20,6 +32,17 @@ export function attachClipboardCopyHandler(terminal: Terminal, extend?: ExtraKey
       }
       return false;
     }
+
+    // Ctrl/Cmd+V: paste from clipboard
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'v') {
+      if (e.type === 'keydown') {
+        navigator.clipboard.readText().then(text => {
+          if (text) terminal.paste(text);
+        });
+      }
+      return false;
+    }
+
     return extend?.(e) ?? true;
   });
 }
