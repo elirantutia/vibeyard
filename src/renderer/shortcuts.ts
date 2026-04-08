@@ -47,7 +47,7 @@ export const SHORTCUT_DEFAULTS: ShortcutDefault[] = [
   { id: 'terminal-paste', label: 'Paste', category: 'Terminal', defaultKeys: 'CmdOrCtrl+V' },
 ];
 
-const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+const isMac = typeof navigator !== 'undefined' && (navigator.platform ?? '').toUpperCase().indexOf('MAC') >= 0;
 
 /** Convert accelerator string to platform-specific display string */
 export function displayKeys(accelerator: string): string {
@@ -176,7 +176,7 @@ export class ShortcutManager {
 
   /** Get resolved keys (override or default) for a shortcut */
   getKeys(id: string): string {
-    const overrides = appState.preferences.keybindings ?? {};
+    const overrides = appState.preferences?.keybindings ?? {};
     const shortcut = this.shortcuts.find((s) => s.id === id);
     if (!shortcut) return '';
     return overrides[id] ?? shortcut.defaultKeys;

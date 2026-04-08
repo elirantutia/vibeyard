@@ -47,6 +47,13 @@ vi.mock('./search-bar.js', () => ({ destroySearchBar: vi.fn(), hideSearchBar: vi
 vi.mock('../shortcuts.js', () => ({
   shortcutManager: { getKeys: vi.fn(() => []) },
   displayKeys: vi.fn(() => ''),
+  shortcutMatchesEvent: vi.fn((id: string, e: KeyboardEvent) => {
+    const ctrl = e.ctrlKey || e.metaKey;
+    if (id === 'terminal-copy') return ctrl && !e.shiftKey && e.key.toLowerCase() === 'c';
+    if (id === 'terminal-copy-legacy') return ctrl && e.shiftKey && e.key === 'C';
+    if (id === 'terminal-paste') return ctrl && !e.shiftKey && e.key.toLowerCase() === 'v';
+    return false;
+  }),
 }));
 
 class FakeEl {
