@@ -1,5 +1,6 @@
 import type { BrowserTabInstance, ElementInfo } from './types.js';
 import { buildSelectorOptions } from './selector-ui.js';
+import { positionPopover } from './popover.js';
 
 export function toggleInspectMode(instance: BrowserTabInstance): void {
   instance.inspectMode = !instance.inspectMode;
@@ -14,9 +15,10 @@ export function toggleInspectMode(instance: BrowserTabInstance): void {
   }
 }
 
-export function showElementInfo(instance: BrowserTabInstance, info: ElementInfo): void {
+export function showElementInfo(instance: BrowserTabInstance, info: ElementInfo, x: number, y: number): void {
   instance.selectedElement = info;
   instance.inspectPanel.style.display = 'flex';
+  positionPopover(instance, instance.inspectPanel, x, y);
 
   const classStr = info.classes.length ? `.${info.classes.join('.')}` : '';
   const idStr = info.id ? `#${info.id}` : '';

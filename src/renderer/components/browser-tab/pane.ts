@@ -11,13 +11,14 @@ import {
 import { instances, getPreloadPath } from './instance.js';
 import { navigateTo } from './navigation.js';
 import { applyViewport, openViewportDropdown, closeViewportDropdown } from './viewport.js';
-import { toggleInspectMode, showElementInfo } from './inspect-mode.js';
+import { toggleInspectMode, showElementInfo, dismissInspect } from './inspect-mode.js';
 import {
   toggleDrawMode,
   clearDrawing,
   dismissDraw,
   sendDrawToNewSession,
   sendDrawToCustomSession,
+  positionDrawPopover,
 } from './draw-mode.js';
 import { addFlowStep, clearFlow, toggleFlowMode } from './flow-recording.js';
 import { showFlowPicker, dismissFlowPicker } from './flow-picker.js';
@@ -200,9 +201,9 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   const inputRow = document.createElement('div');
   inputRow.className = 'inspect-input-row';
 
-  const instructionInput = document.createElement('input');
+  const instructionInput = document.createElement('textarea');
   instructionInput.className = 'inspect-instruction-input';
-  instructionInput.type = 'text';
+  instructionInput.rows = 3;
   instructionInput.placeholder = 'Describe what you want to do\u2026';
 
   const submitGroup = document.createElement('div');
@@ -237,9 +238,9 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   const drawControlsRow = document.createElement('div');
   drawControlsRow.className = 'inspect-input-row';
 
-  const drawInstructionInput = document.createElement('input');
+  const drawInstructionInput = document.createElement('textarea');
   drawInstructionInput.className = 'inspect-instruction-input';
-  drawInstructionInput.type = 'text';
+  drawInstructionInput.rows = 3;
   drawInstructionInput.placeholder = 'Describe what you want to do\u2026';
 
   const drawSubmitGroup = document.createElement('div');
@@ -455,8 +456,10 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   drawSubmitBtn.addEventListener('click', () => { void sendDrawToNewSession(instance); });
   drawCustomBtn.addEventListener('click', () => { void sendDrawToCustomSession(instance); });
   drawInstructionInput.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Enter') { void sendDrawToNewSession(instance); }
-    else if (e.key === 'Escape') { dismissDraw(instance); }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      void sendDrawToNewSession(instance);
+    } else if (e.key === 'Escape') { dismissDraw(instance); }
   });
   flowClearBtn.addEventListener('click', () => clearFlow(instance));
   flowSubmitBtn.addEventListener('click', () => sendFlowToNewSession(instance));
@@ -490,7 +493,10 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   submitBtn.addEventListener('click', () => sendToNewSession(instance));
   customBtn.addEventListener('click', () => sendToCustomSession(instance));
   instructionInput.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Enter') sendToNewSession(instance);
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendToNewSession(instance);
+    } else if (e.key === 'Escape') dismissInspect(instance);
   });
 
   function recordNavigationStep(url: string): void {
@@ -513,12 +519,15 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
 
   webview.addEventListener('ipc-message', ((e: CustomEvent) => {
     if (e.channel === 'element-selected') {
-      const metadata = e.args[0] as Omit<ElementInfo, 'activeSelector'>;
+      const { metadata, x, y } = e.args[0] as { metadata: Omit<ElementInfo, 'activeSelector'>; x: number; y: number };
       const info: ElementInfo = { ...metadata, activeSelector: metadata.selectors[0] };
-      showElementInfo(instance, info);
+      showElementInfo(instance, info, x, y);
     } else if (e.channel === 'flow-element-picked') {
       const { metadata, x, y } = e.args[0] as { metadata: FlowPickerMetadata; x: number; y: number };
       showFlowPicker(instance, metadata, x, y);
+    } else if (e.channel === 'draw-stroke-end') {
+      const { x, y } = e.args[0] as { x: number; y: number };
+      positionDrawPopover(instance, x, y);
     }
   }) as EventListener);
 }

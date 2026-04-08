@@ -73,6 +73,7 @@ function onDrawPointerUp(e: PointerEvent): void {
   if (!drawMode) return;
   e.preventDefault();
   drawing = false;
+  ipcRenderer.sendToHost('draw-stroke-end', { x: e.clientX, y: e.clientY });
 }
 
 function onDrawResize(): void {
@@ -228,7 +229,7 @@ function onClick(e: MouseEvent): void {
   const target = e.target as Element;
   if (target === highlightOverlay) return;
   const metadata = getElementMetadata(target);
-  ipcRenderer.sendToHost('element-selected', metadata);
+  ipcRenderer.sendToHost('element-selected', { metadata, x: e.clientX, y: e.clientY });
 }
 
 function onFlowClick(e: MouseEvent): void {

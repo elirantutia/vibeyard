@@ -74,7 +74,7 @@ export interface BrowserTabInstance {
   viewportBtn: HTMLButtonElement;
   viewportDropdown: HTMLDivElement;
   inspectPanel: HTMLDivElement;
-  instructionInput: HTMLInputElement;
+  instructionInput: HTMLTextAreaElement;
   elementInfoEl: HTMLDivElement;
   inspectMode: boolean;
   selectedElement: ElementInfo | null;
@@ -93,6 +93,6 @@ export interface BrowserTabInstance {
   flowPickerPending: FlowPickerMetadata | null;
   drawBtn: HTMLButtonElement;
   drawPanel: HTMLDivElement;
-  drawInstructionInput: HTMLInputElement;
+  drawInstructionInput: HTMLTextAreaElement;
   drawMode: boolean;
 }

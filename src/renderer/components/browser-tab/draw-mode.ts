@@ -2,6 +2,7 @@ import { appState } from '../../state.js';
 import { promptNewSession } from '../tab-bar.js';
 import { setPendingPrompt } from '../terminal-pane.js';
 import type { BrowserTabInstance } from './types.js';
+import { positionPopover } from './popover.js';
 
 export function toggleDrawMode(instance: BrowserTabInstance): void {
   instance.drawMode = !instance.drawMode;
@@ -10,17 +11,23 @@ export function toggleDrawMode(instance: BrowserTabInstance): void {
   instance.recordBtn.disabled = instance.drawMode;
   if (instance.drawMode) {
     instance.webview.send('enter-draw-mode');
-    instance.drawPanel.style.display = 'flex';
     instance.drawInstructionInput.value = '';
-    instance.drawInstructionInput.focus();
   } else {
     instance.webview.send('exit-draw-mode');
     instance.drawPanel.style.display = 'none';
   }
 }
 
+export function positionDrawPopover(instance: BrowserTabInstance, x: number, y: number): void {
+  const wasHidden = instance.drawPanel.style.display === 'none';
+  instance.drawPanel.style.display = 'flex';
+  positionPopover(instance, instance.drawPanel, x, y);
+  if (wasHidden) instance.drawInstructionInput.focus();
+}
+
 export function clearDrawing(instance: BrowserTabInstance): void {
   instance.webview.send('draw-clear');
+  instance.drawPanel.style.display = 'none';
 }
 
 export function dismissDraw(instance: BrowserTabInstance): void {

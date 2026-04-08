@@ -335,14 +335,19 @@ body.sidebar-resizing .browser-webview {
   opacity: 0.9;
 }
 
-/* Inspect Panel */
+/* Inspect / Draw popover */
 .browser-inspect-panel {
+  position: absolute;
+  z-index: 101;
   flex-direction: column;
   gap: 8px;
   padding: 10px 12px;
   background: var(--bg-secondary);
-  border-top: 1px solid var(--border);
-  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  min-width: 320px;
+  max-width: 420px;
 }
 
 .inspect-element-info {
@@ -459,12 +464,20 @@ body.sidebar-resizing .browser-webview {
 
 .inspect-input-row {
   display: flex;
+  flex-direction: column;
   gap: 8px;
-  align-items: center;
+  align-items: stretch;
+}
+
+.inspect-submit-group {
+  align-self: flex-end;
 }
 
 .inspect-instruction-input {
   flex: 1;
+  resize: vertical;
+  min-height: 60px;
+  font-family: inherit;
   padding: 8px 10px;
   background: var(--bg-primary);
   border: 1px solid var(--border);
