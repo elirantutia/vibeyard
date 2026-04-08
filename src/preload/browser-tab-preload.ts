@@ -33,9 +33,16 @@ function applyDrawStyles(ctx: CanvasRenderingContext2D): void {
 function ensureDrawCanvas(): HTMLCanvasElement {
   if (!drawCanvas) {
     drawCanvas = document.createElement('canvas');
+    // edit_pen icon with thick white outline for visibility on any background
+    const penSvg =
+      "<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 -960 960 960'>" +
+      "<path fill='black' stroke='white' stroke-width='90' stroke-linejoin='round' paint-order='stroke' " +
+      "d='M180.18-144q-15.18 0-25.68-10.3-10.5-10.29-10.5-25.52v-86.85q0-14.33 5-27.33 5-13 16-24l477-477q11-11 23.84-16 12.83-5 27-5 14.16 0 27.16 5t24 16l51 51q11 11 16 24t5 26.54q0 14.45-5.02 27.54T795-642L318-165q-11 11-23.95 16t-27.24 5h-86.63ZM693-642l51-51-51-51-51 51 51 51Z'/>" +
+      "</svg>";
     drawCanvas.style.cssText =
       'position:fixed;top:0;left:0;width:100vw;height:100vh;' +
-      'z-index:2147483646;pointer-events:auto;cursor:crosshair;' +
+      'z-index:2147483646;pointer-events:auto;' +
+      `cursor:url("data:image/svg+xml;utf8,${penSvg}") 5 24, crosshair;` +
       'background:transparent;';
     drawCanvas.width = window.innerWidth;
     drawCanvas.height = window.innerHeight;
