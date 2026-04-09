@@ -79,12 +79,12 @@ export function toggleFlowMode(instance: BrowserTabInstance): void {
   instance.recordBtn.classList.toggle('active', instance.flowMode);
   instance.recordBtn.textContent = instance.flowMode ? '\u25A0 Stop' : '\u25CF Record';
 
+  instance.inspectBtn.disabled = instance.flowMode;
+  instance.drawBtn.disabled = instance.flowMode;
   if (instance.flowMode) {
-    instance.inspectBtn.disabled = true;
     instance.webview.send('enter-flow-mode');
     instance.flowPanel.style.display = 'flex';
   } else {
-    instance.inspectBtn.disabled = false;
     instance.webview.send('exit-flow-mode');
     if (instance.flowSteps.length === 0) {
       instance.flowPanel.style.display = 'none';

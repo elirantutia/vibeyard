@@ -17,6 +17,8 @@ No hot reload — changes require rebuild + app restart.
 
 Requires Node v24 (see `.nvmrc`). No lint tooling is configured.
 
+Cross-platform: builds and runs on macOS, Linux, and Windows. Release artifacts (via electron-builder) include `.dmg`/`.zip` (mac), `.deb`/`.AppImage` (linux), and NSIS installer + portable `.exe` (win). CI covers all three platforms.
+
 ## Testing
 
 ```bash

@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.25] - 2026-04-09
+
+### Features
+
+- Browser tab draw mode with annotated screenshots (#53)
+- Add Windows support (#45)
+- Cmd+[ and cmd+] shortcuts for tab back/forward history
+
+### Fixes
+
+- Browser tab not wrapping host:port urls with http://
+- Browser tab wrapping non-http urls with http://
+- Memory leaks from global drag listeners and unsubscribable onChange (#35)
+- Browser tab panel lingering after close
+- Codex and gemini cli detection in packaged builds
+
+### Changes
+
+- Split browser-tab-pane into focused modules
+
 ## [0.2.23] - 2026-04-07
 
 ### Features

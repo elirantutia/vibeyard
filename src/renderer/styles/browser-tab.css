@@ -89,6 +89,7 @@
   opacity: 0.9;
 }
 
+.browser-draw-btn,
 .browser-inspect-btn {
   height: 26px;
   padding: 0 12px;
@@ -101,17 +102,20 @@
   white-space: nowrap;
 }
 
+.browser-draw-btn:hover,
 .browser-inspect-btn:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
 
+.browser-draw-btn.active,
 .browser-inspect-btn.active {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
 }
 
+.browser-draw-btn:disabled,
 .browser-inspect-btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
@@ -331,14 +335,20 @@ body.sidebar-resizing .browser-webview {
   opacity: 0.9;
 }
 
-/* Inspect Panel */
+/* Inspect / Draw popover */
 .browser-inspect-panel {
+  position: absolute;
+  z-index: 101;
   flex-direction: column;
   gap: 8px;
   padding: 10px 12px;
   background: var(--bg-secondary);
-  border-top: 1px solid var(--border);
-  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  min-width: 320px;
+  max-width: 420px;
+  overflow: auto;
 }
 
 .inspect-element-info {
@@ -353,6 +363,22 @@ body.sidebar-resizing .browser-webview {
 .inspect-tag-line {
   color: var(--accent);
   font-weight: 600;
+}
+
+.inspect-attach-dims-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.inspect-attach-dims-row input[type='checkbox'] {
+  margin: 0;
+  cursor: pointer;
 }
 
 .inspect-text-line {
@@ -455,12 +481,20 @@ body.sidebar-resizing .browser-webview {
 
 .inspect-input-row {
   display: flex;
+  flex-direction: column;
   gap: 8px;
-  align-items: center;
+  align-items: stretch;
+}
+
+.inspect-submit-group {
+  align-self: flex-end;
 }
 
 .inspect-instruction-input {
   flex: 1;
+  resize: vertical;
+  min-height: 60px;
+  font-family: inherit;
   padding: 8px 10px;
   background: var(--bg-primary);
   border: 1px solid var(--border);
@@ -485,7 +519,7 @@ body.sidebar-resizing .browser-webview {
 .inspect-submit-btn {
   padding: 8px 16px;
   background: var(--accent);
-  border: none;
+  border: 1px solid var(--accent);
   border-radius: 4px 0 0 4px;
   color: #fff;
   cursor: pointer;
@@ -512,6 +546,36 @@ body.sidebar-resizing .browser-webview {
 
 .inspect-dropdown-btn:hover {
   opacity: 0.9;
+}
+
+.inspect-draw-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  justify-content: flex-end;
+}
+
+.inspect-clear-btn {
+  padding: 8px 12px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.inspect-clear-btn:hover {
+  background: var(--bg-tertiary);
+}
+
+.inspect-error-text {
+  display: none;
+  margin-top: 6px;
+  color: var(--accent);
+  font-size: 12px;
 }
 
 /* Record Flow Button */

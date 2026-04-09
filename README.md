@@ -68,7 +68,11 @@ chmod +x Vibeyard-*.AppImage
 ./Vibeyard-*.AppImage
 ```
 
-### npm (macOS & Linux)
+### Windows
+
+Download the latest Setup `.exe` (NSIS installer) or portable `.exe` from [GitHub Releases](https://github.com/elirantutia/vibeyard/releases). Run the installer and launch Vibeyard from the Start menu, or run the portable build directly.
+
+### npm (macOS, Linux & Windows)
 
 ```bash
 npm i -g vibeyard

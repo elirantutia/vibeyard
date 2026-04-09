@@ -1,10 +1,15 @@
 /**
  * Platform-aware hook command generators.
  *
- * On Unix, hooks are `sh -c '...'` commands with inline Python.
- * On Windows, hooks delegate to Python scripts in STATUS_DIR.
+ * Hook commands always invoke pre-installed Python scripts in STATUS_DIR
+ * rather than inlining Python source into `sh -c '...'`. Inlining was fragile
+ * because Python string literals containing single quotes (e.g. `r'${DIR}'`)
+ * terminated the outer shell single-quoted string, producing broken hooks
+ * that exited non-zero with no stderr.
+ *
  * Commands are returned without a `cmd /c` wrapper — the hook executor
- * (Claude CLI's child_process.exec) already invokes cmd.exe as the shell.
+ * (Claude CLI's child_process.exec) already invokes cmd.exe as the shell
+ * on Windows.
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -12,21 +17,20 @@ import { STATUS_DIR } from './hook-status';
 
 const isWin = process.platform === 'win32';
 
-/** Marker appended to every vibeyard-managed hook command for identification and cleanup. */
-export const VIBEYARD_HOOK_MARKER = '# vibeyard-hook';
+const PY = isWin ? 'python' : '/usr/bin/python3';
 
-// On Windows, Python helper scripts are written to STATUS_DIR via installEventScript()
-// and cleaned up on app exit. Shared scripts are installed once via installHookScripts();
-// provider-specific event scripts are installed per session.
+// Python helper scripts are written to STATUS_DIR via installEventScript()
+// and cleaned up on app exit. Shared scripts are installed once via
+// installHookScripts(); provider-specific event scripts are installed per
+// session.
 
 let scriptsInstalled = false;
 
 /**
- * Ensure the Python helper scripts exist in STATUS_DIR (Windows only).
- * No-op on Unix.
+ * Ensure the shared Python helper scripts exist in STATUS_DIR.
  */
 export function installHookScripts(): void {
-  if (!isWin || scriptsInstalled) return;
+  if (scriptsInstalled) return;
 
   // status_writer.py — writes event:status to .status file
   installEventScript('status_writer.py', `import sys,os
@@ -97,12 +101,9 @@ export function captureSessionIdCmd(
   sessionIdVar: string,
   hookMarker: string,
 ): string {
-  if (isWin) {
-    const py = path.join(STATUS_DIR, 'session_id_capture.py').replace(/\\/g, '/');
-    const dir = STATUS_DIR.replace(/\\/g, '/');
-    return `python "${py}" "${sessionIdVar}" "${dir}" "${hookMarker}"`;
-  }
-  return `sh -c 'input=$(cat); sid=$(echo "$input" | /usr/bin/python3 -c "import sys,json; print(json.load(sys.stdin).get(\\"session_id\\",\\"\\"))" 2>/dev/null); if [ -n "$sid" ]; then mkdir -p ${STATUS_DIR} && echo "$sid" > ${STATUS_DIR}/$${sessionIdVar}.sessionid; fi ${hookMarker}'`;
+  const py = path.join(STATUS_DIR, 'session_id_capture.py').replace(/\\/g, '/');
+  const dir = STATUS_DIR.replace(/\\/g, '/');
+  return `${PY} "${py}" "${sessionIdVar}" "${dir}" "${hookMarker}"`;
 }
 
 /**
@@ -112,61 +113,48 @@ export function captureToolFailureCmd(
   sessionIdVar: string,
   hookMarker: string,
 ): string {
-  if (isWin) {
-    const py = path.join(STATUS_DIR, 'tool_failure_capture.py').replace(/\\/g, '/');
-    const dir = STATUS_DIR.replace(/\\/g, '/');
-    return `python "${py}" "${sessionIdVar}" "${dir}" "${hookMarker}"`;
-  }
-  return `sh -c 'cat | /usr/bin/python3 -c "import sys,json,os,random,string; d=json.load(sys.stdin); sid=os.environ.get(\\"${sessionIdVar}\\",\\"\\"); tn=d.get(\\"tool_name\\",\\"\\"); ti=d.get(\\"tool_input\\",{}); err=d.get(\\"error\\",\\"\\"); sfx=\\"\\".join(random.choices(string.ascii_lowercase,k=6)); json.dump({\\"tool_name\\":tn,\\"tool_input\\":ti,\\"error\\":err},open(f\\"${STATUS_DIR}/\\"+sid+\\"-\\"+sfx+\\".toolfailure\\",\\"w\\")) if sid and tn else None" 2>/dev/null ${hookMarker}'`;
+  const py = path.join(STATUS_DIR, 'tool_failure_capture.py').replace(/\\/g, '/');
+  const dir = STATUS_DIR.replace(/\\/g, '/');
+  return `${PY} "${py}" "${sessionIdVar}" "${dir}" "${hookMarker}"`;
 }
 
 /**
- * Write a Python event script to STATUS_DIR (Windows only).
+ * Write a Python event script to STATUS_DIR.
  * Call this before `wrapPythonHookCmd` to ensure the script file exists.
- * No-op on Unix where Python is inlined in the shell command.
  *
  * @param scriptName Unique name for the .py file
  * @param pythonCode Multi-line Python code
  */
 export function installEventScript(scriptName: string, pythonCode: string): void {
-  if (!isWin) return;
   fs.mkdirSync(STATUS_DIR, { recursive: true });
   fs.writeFileSync(path.join(STATUS_DIR, scriptName), pythonCode);
 }
 
 /**
- * Return a platform-appropriate hook command that runs a Python script.
+ * Return a hook command that invokes a pre-installed Python event script.
+ * The script must already exist in STATUS_DIR — call `installEventScript`
+ * first.
  *
- * On Unix: returns `sh -c '... | /usr/bin/python3 -c "..." 2>/dev/null marker'`
- * On Windows: returns a command that invokes the pre-installed .py file from STATUS_DIR.
- *   The script must already exist — call `installEventScript` first.
- *
- * @param scriptName Unique name for the .py file (Windows)
- * @param pythonCode Multi-line Python code (used inline on Unix, ignored on Windows)
+ * @param scriptName Unique name for the .py file
+ * @param _pythonCode Unused; retained for call-site compatibility
  * @param hookMarker The marker string to identify IDE hooks
- * @param pipeStdin Whether to pipe stdin to the script (default true)
+ * @param _pipeStdin Unused; scripts always read from stdin when invoked by
+ *   Claude Code hooks
  */
 export function wrapPythonHookCmd(
   scriptName: string,
-  pythonCode: string,
+  _pythonCode: string,
   hookMarker: string,
-  pipeStdin = true,
+  _pipeStdin = true,
 ): string {
-  if (isWin) {
-    const pyCmd = path.join(STATUS_DIR, scriptName).replace(/\\/g, '/');
-    return `python "${pyCmd}" "${hookMarker}"`;
-  }
-  // Unix: inline the Python in sh -c, escaping double-quotes
-  const escaped = pythonCode.replace(/"/g, '\\"');
-  const cat = pipeStdin ? 'cat | ' : '';
-  return `sh -c '${cat}/usr/bin/python3 -c "${escaped}" 2>/dev/null ${hookMarker}'`;
+  const pyCmd = path.join(STATUS_DIR, scriptName).replace(/\\/g, '/');
+  return `${PY} "${pyCmd}" "${hookMarker}"`;
 }
 
 /**
- * Clean up Windows hook scripts from STATUS_DIR.
+ * Clean up hook scripts from STATUS_DIR.
  */
 export function cleanupHookScripts(): void {
-  if (!isWin) return;
   const scripts = ['status_writer.py', 'session_id_capture.py', 'tool_failure_capture.py'];
   for (const name of scripts) {
     try { fs.unlinkSync(path.join(STATUS_DIR, name)); } catch {}
