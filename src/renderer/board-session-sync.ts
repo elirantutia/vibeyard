@@ -1,5 +1,5 @@
 import { appState } from './state.js';
-import { onChange as onStatusChange, getStatus, hasSession } from './session-activity.js';
+import { onChange as onStatusChange } from './session-activity.js';
 import { getTaskBySessionId, moveTask, updateTask, getColumnByBehavior } from './board-state.js';
 import type { BoardTask } from '../shared/types.js';
 
@@ -8,41 +8,6 @@ function moveTaskToDone(task: BoardTask): void {
   if (doneCol && task.columnId !== doneCol.id) {
     moveTask(task.id, doneCol.id, 0);
   }
-}
-
-export function injectPrompt(sessionId: string, prompt: string): void {
-  if (!prompt.trim()) return;
-
-  const READY_TIMEOUT = 5000;
-  let resolved = false;
-
-  const readyStatuses = ['idle', 'waiting', 'prompt-waiting'];
-
-  // Check current status immediately — but only if the session is already tracked
-  // (a brand-new session won't have a PTY yet, so writing would silently fail)
-  if (hasSession(sessionId)) {
-    const currentStatus = getStatus(sessionId);
-    if (readyStatuses.includes(currentStatus)) {
-      window.vibeyard.pty.write(sessionId, prompt);
-      return;
-    }
-  }
-
-  const unsubscribe = onStatusChange((sid, status) => {
-    if (sid !== sessionId || resolved) return;
-    if (readyStatuses.includes(status)) {
-      resolved = true;
-      unsubscribe();
-      window.vibeyard.pty.write(sessionId, prompt);
-    }
-  });
-
-  setTimeout(() => {
-    if (!resolved) {
-      resolved = true;
-      unsubscribe();
-    }
-  }, READY_TIMEOUT);
 }
 
 export function initBoardSessionSync(): void {

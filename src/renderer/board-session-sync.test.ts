@@ -115,13 +115,4 @@ describe('board-session-sync', () => {
   });
 });
 
-describe('injectPrompt', () => {
-  it('skips injection for empty prompt', async () => {
-    const { injectPrompt } = await import('./board-session-sync');
-    const writeSpy = vi.fn();
-    (window as any).vibeyard.pty = { write: writeSpy };
 
-    injectPrompt('session-1', '  ');
-    expect(writeSpy).not.toHaveBeenCalled();
-  });
-});

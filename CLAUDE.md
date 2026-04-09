@@ -65,6 +65,11 @@ CLI-specific behavior is encapsulated behind a `CliProvider` interface (`src/mai
 - `session-activity.ts` — Tracks working/waiting/idle status with debounced transitions
 - `session-cost.ts` — Structured cost tracking via Claude CLI status line (`statusLine` setting), with regex fallback for older CLI versions. Provides per-session and aggregate cost data (USD, tokens, cache, duration)
 - `browser-tab/` — Browser tab pane split into focused modules: `types.ts`, `instance.ts` (registry + preload path), `navigation.ts`, `viewport.ts`, `selector-ui.ts`, `inspect-mode.ts`, `flow-recording.ts`, `flow-picker.ts`, `session-integration.ts`, and `pane.ts` (DOM build + event wiring). `browser-tab-pane.ts` is a re-export shim for backward compatibility.
+- `board-state.ts` — Kanban board CRUD: tasks, columns, tags, reorder. Mutates `appState.activeProject.board` in place, calls `appState.notifyBoardChanged()`.
+- `board-filter.ts` — Module-level search query and tag filter state for the board. Observer pattern via `onFilterChange()`.
+- `board-session-sync.ts` — Listens to session lifecycle events and auto-moves board tasks (e.g. to Done on session complete).
+- `components/board/` — Board UI: `board-view.ts` (container + tag row + search), `board-column.ts` (column with header/rename), `board-card.ts` (card with run/resume/focus), `board-task-modal.ts` (create/edit dialog with tags), `board-dnd.ts` (drag-and-drop with injected DOM drop targets), `board-context-menu.ts`.
+- `styles/kanban.css` — All kanban board styles including cards, columns, DnD drop targets, tag pills, and filter UI.
 
 ### Platform Checks
 

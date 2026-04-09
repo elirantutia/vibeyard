@@ -9,8 +9,7 @@ const DRAG_THRESHOLD = 5;
 let pointerStarted = false;
 let onDragEnd: (() => void) | null = null;
 let activeDropTarget: HTMLElement | null = null;
-let lastPointerX = 0;
-let lastPointerY = 0;
+let cachedTargets: { el: HTMLElement; left: number; right: number; centerY: number }[] = [];
 
 const container = () => document.querySelector('.board-columns') as HTMLElement | null;
 
@@ -52,9 +51,6 @@ function onPointerDown(e: PointerEvent): void {
 
 function onPointerMove(e: PointerEvent): void {
   if (!pointerStarted || !dragTaskId) return;
-
-  lastPointerX = e.clientX;
-  lastPointerY = e.clientY;
 
   if (!isDragging) {
     const dx = Math.abs(e.clientX - startX);
@@ -113,6 +109,7 @@ function cancelDrag(): void {
   }
 
   removeDropTargets();
+  cachedTargets = [];
   document.querySelectorAll('.board-card.dragging').forEach(el => el.classList.remove('dragging'));
 
   isDragging = false;
@@ -149,10 +146,16 @@ function injectDropTargets(excludeTaskId: string): void {
       card.insertAdjacentElement('afterend', target);
     }
 
-    // If the column is empty (only contained the dragged card), we already
-    // have the one target at order 0. If the column had no cards at all,
-    // we still have the first target.
   }
+
+  // Cache target positions so highlightNearestTarget avoids querySelectorAll + getBoundingClientRect per pointermove
+  requestAnimationFrame(() => {
+    cachedTargets = [];
+    for (const el of document.querySelectorAll('.board-drop-target')) {
+      const rect = el.getBoundingClientRect();
+      cachedTargets.push({ el: el as HTMLElement, left: rect.left, right: rect.right, centerY: rect.top + rect.height / 2 });
+    }
+  });
 }
 
 function createDropTarget(columnId: string, order: number): HTMLElement {
@@ -169,25 +172,18 @@ function removeDropTargets(): void {
 
 function highlightNearestTarget(x: number, y: number): void {
   const prev = activeDropTarget;
-
-  const targets = document.querySelectorAll('.board-drop-target');
   let best: HTMLElement | null = null;
   let bestDist = Infinity;
 
-  for (const t of targets) {
-    const rect = t.getBoundingClientRect();
-    // Only consider targets within reasonable horizontal range of the pointer
-    if (x < rect.left - 60 || x > rect.right + 60) continue;
-
-    const centerY = rect.top + rect.height / 2;
-    const dist = Math.abs(y - centerY);
+  for (const t of cachedTargets) {
+    if (x < t.left - 60 || x > t.right + 60) continue;
+    const dist = Math.abs(y - t.centerY);
     if (dist < bestDist) {
       bestDist = dist;
-      best = t as HTMLElement;
+      best = t.el;
     }
   }
 
-  // Only update DOM if the target actually changed
   if (best !== prev) {
     if (prev) prev.classList.remove('active');
     if (best) best.classList.add('active');

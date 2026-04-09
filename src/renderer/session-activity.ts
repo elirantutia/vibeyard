@@ -67,10 +67,6 @@ export function getStatus(sessionId: string): SessionStatus {
   return sessions.get(sessionId)?.status ?? 'idle';
 }
 
-export function hasSession(sessionId: string): boolean {
-  return sessions.has(sessionId);
-}
-
 export function onChange(callback: StatusChangeCallback): () => void {
   listeners.push(callback);
   return () => {
