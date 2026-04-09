@@ -41,6 +41,13 @@ export interface GitFileEntry {
 
 // --- Provider Config ---
 
+/**
+ * Represents a configured MCP server entry.
+ * `url` holds either an HTTP/SSE endpoint (e.g. "http://localhost:3000/mcp") or
+ * a command binary path for stdio-launched servers (e.g. "docker"). Both cases
+ * map to this single field because the UI only needs a display identifier, not
+ * transport-level routing.
+ */
 export interface McpServer { name: string; url: string; status: string; scope: 'user' | 'project'; filePath: string }
 export interface Agent { name: string; model: string; category: 'plugin' | 'built-in'; scope: 'user' | 'project'; filePath: string }
 export interface Skill { name: string; description: string; scope: 'user' | 'project'; filePath: string }

@@ -17,16 +17,16 @@ function readMcpServersFromJson(filePath: string, scope: 'user' | 'project'): Mc
   return servers;
 }
 
-export async function getCopilotConfig(_projectPath: string): Promise<ProviderConfig> {
+export function getCopilotConfig(_projectPath: string): Promise<ProviderConfig> {
   // Copilot CLI only supports user-level config; project-level config is not available.
   const copilotDir = path.join(homedir(), '.copilot');
 
   const userMcp = readMcpServersFromJson(path.join(copilotDir, 'mcp-config.json'), 'user');
 
-  return {
+  return Promise.resolve({
     mcpServers: userMcp,
     agents: [],
     skills: [],
     commands: [],
-  };
+  });
 }
