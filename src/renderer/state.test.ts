@@ -1687,4 +1687,43 @@ describe('navigateBack()/navigateForward()', () => {
     appState.navigateForward();
     expect(project.activeSessionId).toBe(sessions[2].id);
   });
+
+  it('prunes a removed session from nav history without corrupting preceding entries', () => {
+    const { project, sessions } = addProjectWithSessions(3);
+    appState.removeSession(project.id, sessions[2].id);
+    appState.navigateBack();
+    expect(appState.activeProject!.activeSessionId).toBe(sessions[0].id);
+  });
+});
+
+describe('setProjectReadiness()', () => {
+  it('sets readiness on the project, persists, and emits readiness-changed', () => {
+    const project = addProject();
+    const cb = vi.fn();
+    appState.on('readiness-changed', cb);
+    const result = { ready: true, details: {} } as unknown as Parameters<typeof appState.setProjectReadiness>[1];
+    appState.setProjectReadiness(project.id, result);
+    expect(project.readiness).toBe(result);
+    expect(cb).toHaveBeenCalledWith(project.id);
+    expect(mockSave).toHaveBeenCalled();
+  });
+
+  it('is a no-op for unknown projectId', () => {
+    const cb = vi.fn();
+    appState.on('readiness-changed', cb);
+    appState.setProjectReadiness('missing', {} as Parameters<typeof appState.setProjectReadiness>[1]);
+    expect(cb).not.toHaveBeenCalled();
+  });
+});
+
+describe('toggleSwarm() sync new CLI sessions', () => {
+  it('adds sessions created while in tabs mode to splitPanes when toggling back to swarm', () => {
+    const { project, sessions } = addProjectWithSessions(2);
+    appState.toggleSwarm();
+    expect(appState.activeProject!.layout.mode).toBe('tabs');
+    const newSession = appState.addSession(project.id, 'extra')!;
+    expect(appState.activeProject!.layout.splitPanes).not.toContain(newSession.id);
+    appState.toggleSwarm();
+    expect(appState.activeProject!.layout.splitPanes).toContain(newSession.id);
+  });
 });
