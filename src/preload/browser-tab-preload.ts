@@ -75,7 +75,7 @@ function onDrawPointerMove(e: PointerEvent): void {
 }
 
 function onDrawPointerUp(e: PointerEvent): void {
-  if (!drawMode) return;
+  if (!drawMode || !drawing) return;
   e.preventDefault();
   drawing = false;
   strokeCompleted = true;
