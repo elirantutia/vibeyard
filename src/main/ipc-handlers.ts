@@ -246,13 +246,49 @@ export function registerIpcHandlers(): void {
     path.join(__dirname, '..', '..', 'preload', 'preload', 'browser-tab-preload.js')
   );
 
+  const MAX_SCREENSHOT_BYTES = 50 * 1024 * 1024;
+  const MAX_SCREENSHOT_B64_LEN = Math.ceil((MAX_SCREENSHOT_BYTES * 4) / 3);
+  const SCREENSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+  let screenshotsPruned = false;
+
+  async function pruneOldScreenshots(dir: string): Promise<void> {
+    try {
+      const entries = await fs.promises.readdir(dir);
+      const now = Date.now();
+      await Promise.all(entries.map(async (name) => {
+        const full = path.join(dir, name);
+        try {
+          const stat = await fs.promises.stat(full);
+          if (now - stat.mtimeMs > SCREENSHOT_MAX_AGE_MS) {
+            await fs.promises.unlink(full);
+          }
+        } catch (err) {
+          console.warn('Failed to prune screenshot', full, err);
+        }
+      }));
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        console.warn('Failed to read screenshots dir for pruning', err);
+      }
+    }
+  }
+
   ipcMain.handle('browser:saveScreenshot', async (_event, sessionId: string, dataUrl: string) => {
-    if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/png;base64,')) {
+    const PREFIX = 'data:image/png;base64,';
+    if (typeof dataUrl !== 'string' || !dataUrl.startsWith(PREFIX)) {
       throw new Error('Invalid screenshot data URL');
     }
-    const buffer = Buffer.from(dataUrl.slice('data:image/png;base64,'.length), 'base64');
+    const b64 = dataUrl.slice(PREFIX.length);
+    if (b64.length > MAX_SCREENSHOT_B64_LEN) {
+      throw new Error('Screenshot data exceeds size limit');
+    }
+    const buffer = Buffer.from(b64, 'base64');
     const dir = path.join(os.tmpdir(), 'vibeyard-screenshots');
     await fs.promises.mkdir(dir, { recursive: true });
+    if (!screenshotsPruned) {
+      screenshotsPruned = true;
+      void pruneOldScreenshots(dir);
+    }
     const safeId = sessionId.replace(/[^a-zA-Z0-9_-]/g, '_');
     const filePath = path.join(dir, `draw-${safeId}-${Date.now()}.png`);
     await fs.promises.writeFile(filePath, buffer);
