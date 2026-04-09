@@ -66,6 +66,15 @@ CLI-specific behavior is encapsulated behind a `CliProvider` interface (`src/mai
 - `session-cost.ts` — Structured cost tracking via Claude CLI status line (`statusLine` setting), with regex fallback for older CLI versions. Provides per-session and aggregate cost data (USD, tokens, cache, duration)
 - `browser-tab/` — Browser tab pane split into focused modules: `types.ts`, `instance.ts` (registry + preload path), `navigation.ts`, `viewport.ts`, `selector-ui.ts`, `inspect-mode.ts`, `flow-recording.ts`, `flow-picker.ts`, `session-integration.ts`, and `pane.ts` (DOM build + event wiring). `browser-tab-pane.ts` is a re-export shim for backward compatibility.
 
+### Platform Checks
+
+Platform detection is centralized in `src/main/platform.ts`. Import
+`isWin`/`isMac`/`isLinux` (and derived constants `pathSep`, `whichCmd`,
+`pythonBin`) from there — do **not** inline `process.platform === 'win32'`
+or redefine `isWin`/`isMac` locally in source or test files. The
+three-way managed-path branch in `claude-cli.ts` is the one intentional
+exception.
+
 ### State Persistence
 
 App state (projects, sessions, layout) persists to `~/.vibeyard/state.json` via the main process store. Saves are debounced and flushed on quit. Sessions track `cliSessionId` for CLI session resume capability. Legacy `claudeSessionId` fields are auto-migrated on load.

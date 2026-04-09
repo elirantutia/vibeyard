@@ -9,6 +9,7 @@ import { initProviders, getAllProviders } from './providers/registry';
 import { initAutoUpdater } from './auto-updater';
 import { stopGitWatcher } from './git-watcher';
 import { checkPythonAvailable } from './prerequisites';
+import { isMac } from './platform';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -143,7 +144,7 @@ app.on('before-quit', () => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  if (!isMac) {
     app.quit();
   }
 });

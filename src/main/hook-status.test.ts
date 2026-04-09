@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as path from 'path';
+import { isWin } from './platform';
 
-const isWin = process.platform === 'win32';
 const STATUS_DIR = path.join('/tmp', 'vibeyard');
 const STATUSLINE_SCRIPT = path.join(STATUS_DIR, isWin ? 'statusline.cmd' : 'statusline.sh');
 

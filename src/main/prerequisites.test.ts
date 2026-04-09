@@ -8,8 +8,7 @@ vi.mock('fs');
 vi.mock('child_process');
 
 import { validatePrerequisites } from './prerequisites';
-
-const isWin = process.platform === 'win32';
+import { isWin } from './platform';
 
 describe('validatePrerequisites', () => {
   beforeEach(() => {

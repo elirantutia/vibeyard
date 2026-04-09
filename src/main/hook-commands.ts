@@ -14,9 +14,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { STATUS_DIR } from './hook-status';
-
-const isWin = process.platform === 'win32';
-const PY = isWin ? 'python' : '/usr/bin/python3';
+import { isWin, pythonBin as PY } from './platform';
 
 // Python helper scripts are written to STATUS_DIR via installEventScript()
 // and cleaned up on app exit. Shared scripts are installed once via

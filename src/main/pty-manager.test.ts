@@ -1,7 +1,6 @@
 import { vi } from 'vitest';
 import * as path from 'path';
-
-const isWin = process.platform === 'win32';
+import { isWin } from './platform';
 
 const { mockSpawn, mockWrite, mockResize, mockKill, mockExecFile } = vi.hoisted(() => ({
   mockSpawn: vi.fn(),

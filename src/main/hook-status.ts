@@ -2,9 +2,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { BrowserWindow } from 'electron';
+import { isWin } from './platform';
 
 export const STATUS_DIR = path.join(os.tmpdir(), 'vibeyard');
-const STATUSLINE_SCRIPT = path.join(STATUS_DIR, process.platform === 'win32' ? 'statusline.cmd' : 'statusline.sh');
+const STATUSLINE_SCRIPT = path.join(STATUS_DIR, isWin ? 'statusline.cmd' : 'statusline.sh');
 
 const KNOWN_EXTENSIONS = ['.status', '.sessionid', '.cost', '.toolfailure', '.events'];
 
@@ -40,7 +41,7 @@ export function installStatusLineScript(): void {
   const statusDir = STATUS_DIR.replace(/\\/g, '/');
 
   let script: string;
-  if (process.platform === 'win32') {
+  if (isWin) {
     // On Windows, write a Python helper script and a .cmd wrapper
     const pyScript = `import sys,json,os
 try:

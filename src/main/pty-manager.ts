@@ -5,6 +5,7 @@ import * as path from 'path';
 import type { ProviderId } from '../shared/types';
 import { getProvider } from './providers/registry';
 import { registerSession } from './hook-status';
+import { isWin, pathSep } from './platform';
 
 interface PtyInstance {
   process: pty.IPty;
@@ -25,8 +26,6 @@ let cachedFullPath: string | null = null;
 export function getFullPath(): string {
   if (cachedFullPath) return cachedFullPath;
 
-  const isWin = process.platform === 'win32';
-  const pathSep = isWin ? ';' : ':';
   const currentPath = process.env.PATH || '';
 
   if (isWin) {
@@ -156,7 +155,7 @@ export function spawnShellPty(
     killPty(sessionId);
   }
 
-  const shell = process.platform === 'win32'
+  const shell = isWin
     ? (process.env.COMSPEC || 'cmd.exe')
     : (process.env.SHELL || '/bin/zsh');
   const shellEnv = { ...process.env, PATH: getFullPath() };
@@ -197,7 +196,7 @@ export function getPtyCwd(sessionId: string): Promise<string | null> {
 
   const pid = instance.process.pid;
 
-  if (process.platform === 'win32') {
+  if (isWin) {
     return getPtyCwdWindows(pid);
   }
 

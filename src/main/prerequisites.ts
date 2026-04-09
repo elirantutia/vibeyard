@@ -2,13 +2,14 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execSync } from 'child_process';
+import { isWin, pathSep, whichCmd } from './platform';
 
 /**
  * Check whether Python is available on Windows (needed for hook scripts).
  * Returns null if OK or not on Windows, or a warning message if missing.
  */
 export function checkPythonAvailable(): string | null {
-  if (process.platform !== 'win32') return null;
+  if (!isWin) return null;
   try {
     execSync('python --version', { encoding: 'utf-8', timeout: 3000, stdio: 'pipe' });
     return null;
@@ -25,8 +26,6 @@ export function checkPythonAvailable(): string | null {
 
 export function validatePrerequisites(): { ok: boolean; message: string } {
   const home = os.homedir();
-  const isWin = process.platform === 'win32';
-  const pathSep = isWin ? ';' : ':';
 
   const candidates = isWin
     ? [
@@ -69,8 +68,7 @@ export function validatePrerequisites(): { ok: boolean; message: string } {
     }
     const augmentedPath = Array.from(pathSet).join(pathSep);
 
-    const cmd = isWin ? 'where claude' : 'which claude';
-    const resolved = execSync(cmd, {
+    const resolved = execSync(`${whichCmd} claude`, {
       env: { ...process.env, PATH: augmentedPath },
       encoding: 'utf-8',
       timeout: 3000,

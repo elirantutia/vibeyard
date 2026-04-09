@@ -3,8 +3,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { execSync } from 'child_process';
 import { getFullPath } from '../pty-manager';
-
-const isWin = process.platform === 'win32';
+import { isWin, whichCmd } from '../platform';
 
 const COMMON_BIN_DIRS = isWin
   ? [
@@ -36,9 +35,8 @@ function findBinaryInDir(dir: string, binaryName: string): string | null {
 }
 
 function whichBinary(binaryName: string, envPath: string): string | null {
-  const cmd = isWin ? 'where' : 'which';
   try {
-    const resolved = execSync(`${cmd} "${binaryName}"`, {
+    const resolved = execSync(`${whichCmd} "${binaryName}"`, {
       env: { ...process.env, PATH: envPath },
       encoding: 'utf-8',
       timeout: 3000,

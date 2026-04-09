@@ -1,7 +1,7 @@
 import { app, Menu, BrowserWindow } from 'electron';
+import { isMac } from './platform';
 
 export function createAppMenu(debugMode = false): void {
-  const isMac = process.platform === 'darwin';
 
   const template: Electron.MenuItemConstructorOptions[] = [
     ...(isMac ? [{

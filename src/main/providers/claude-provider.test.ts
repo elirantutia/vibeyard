@@ -1,7 +1,6 @@
 import { vi } from 'vitest';
 import * as path from 'path';
-
-const isWin = process.platform === 'win32';
+import { isWin } from '../platform';
 
 vi.mock('fs', () => ({
   existsSync: vi.fn(),

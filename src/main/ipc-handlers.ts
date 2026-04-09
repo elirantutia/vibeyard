@@ -20,6 +20,7 @@ import { buildHandoffPrompt } from './providers/resume-handoff';
 import type { ProviderId, GitFileEntry, SettingsValidationResult } from '../shared/types';
 import { analyzeReadiness } from './readiness/analyzer';
 import { expandUserPath } from './fs-utils';
+import { isMac, isWin } from './platform';
 
 /**
  * Check if a resolved path is within one of the known project directories.
@@ -48,9 +49,9 @@ function isAllowedReadPath(resolvedPath: string): boolean {
     path.join(home, '.codex') + path.sep,
   ];
 
-  if (process.platform === 'darwin') {
+  if (isMac) {
     allowedPaths.push('/Library/Application Support/ClaudeCode/');
-  } else if (process.platform === 'win32') {
+  } else if (isWin) {
     allowedPaths.push('C:\\Program Files\\ClaudeCode\\');
   } else {
     allowedPaths.push('/etc/claude-code/');
