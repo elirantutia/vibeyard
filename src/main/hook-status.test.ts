@@ -3,7 +3,8 @@ import * as path from 'path';
 import { isWin } from './platform';
 
 const STATUS_DIR = path.join('/tmp', 'vibeyard');
-const STATUSLINE_SCRIPT = path.join(STATUS_DIR, isWin ? 'statusline.cmd' : 'statusline.sh');
+const SCRIPT_DIR = path.join('/home/test', '.vibeyard', 'run');
+const STATUSLINE_SCRIPT = path.join(SCRIPT_DIR, isWin ? 'statusline.cmd' : 'statusline.sh');
 
 vi.mock('fs', () => ({
   mkdirSync: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock('fs', () => ({
 
 vi.mock('os', () => ({
   tmpdir: () => '/tmp',
+  homedir: () => '/home/test',
 }));
 
 vi.mock('electron', () => ({
@@ -395,12 +397,15 @@ describe('hook-status', () => {
       startWatching(win);
       vi.clearAllMocks();
 
-      vi.mocked(fs.readdirSync).mockReturnValue([
-        'a.status',
-        'b.sessionid',
-        'c.cost',
-        'other.log',
-      ] as any);
+      vi.mocked(fs.readdirSync).mockImplementation(((dir: string) => {
+        if (dir === STATUS_DIR) {
+          return ['a.status', 'b.sessionid', 'c.cost', 'other.log'];
+        }
+        if (dir === SCRIPT_DIR) {
+          return [isWin ? 'statusline.cmd' : 'statusline.sh', 'status_writer.py', 'other.log'];
+        }
+        return [];
+      }) as any);
 
       cleanupAll();
 
@@ -408,11 +413,12 @@ describe('hook-status', () => {
       expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'a.status'));
       expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'b.sessionid'));
       expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'c.cost'));
-      // statusline script removal
       expect(fs.unlinkSync).toHaveBeenCalledWith(STATUSLINE_SCRIPT);
+      expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(SCRIPT_DIR, 'status_writer.py'));
       expect(fs.rmSync).toHaveBeenCalledWith(STATUS_DIR, { recursive: true });
-      // 'other.log' should not be unlinked (3 matching + 1 script = 4)
-      expect(fs.unlinkSync).toHaveBeenCalledTimes(4);
+      expect(fs.rmSync).toHaveBeenCalledWith(SCRIPT_DIR, { recursive: true });
+      // 3 runtime files + 2 scripts; 'other.log' skipped in both dirs
+      expect(fs.unlinkSync).toHaveBeenCalledTimes(5);
     });
 
     it('handles missing directory gracefully', () => {

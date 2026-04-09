@@ -13,7 +13,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { STATUS_DIR } from './hook-status';
+import { STATUS_DIR, SCRIPT_DIR } from './hook-status';
 import { isWin, pythonBin as PY } from './platform';
 
 // Python helper scripts are written to STATUS_DIR via installEventScript()
@@ -84,7 +84,7 @@ export function statusCmd(
   hookMarker: string,
 ): string {
   if (isWin) {
-    const py = path.join(STATUS_DIR, 'status_writer.py').replace(/\\/g, '/');
+    const py = path.join(SCRIPT_DIR, 'status_writer.py').replace(/\\/g, '/');
     const dir = STATUS_DIR.replace(/\\/g, '/');
     return `python "${py}" "${event}" "${status}" "${sessionIdVar}" "${dir}" "${hookMarker}"`;
   }
@@ -98,7 +98,7 @@ export function captureSessionIdCmd(
   sessionIdVar: string,
   hookMarker: string,
 ): string {
-  const py = path.join(STATUS_DIR, 'session_id_capture.py').replace(/\\/g, '/');
+  const py = path.join(SCRIPT_DIR, 'session_id_capture.py').replace(/\\/g, '/');
   const dir = STATUS_DIR.replace(/\\/g, '/');
   return `${PY} "${py}" "${sessionIdVar}" "${dir}" "${hookMarker}"`;
 }
@@ -110,7 +110,7 @@ export function captureToolFailureCmd(
   sessionIdVar: string,
   hookMarker: string,
 ): string {
-  const py = path.join(STATUS_DIR, 'tool_failure_capture.py').replace(/\\/g, '/');
+  const py = path.join(SCRIPT_DIR, 'tool_failure_capture.py').replace(/\\/g, '/');
   const dir = STATUS_DIR.replace(/\\/g, '/');
   return `${PY} "${py}" "${sessionIdVar}" "${dir}" "${hookMarker}"`;
 }
@@ -123,8 +123,8 @@ export function captureToolFailureCmd(
  * @param pythonCode Multi-line Python code
  */
 export function installEventScript(scriptName: string, pythonCode: string): void {
-  fs.mkdirSync(STATUS_DIR, { recursive: true });
-  fs.writeFileSync(path.join(STATUS_DIR, scriptName), pythonCode);
+  fs.mkdirSync(SCRIPT_DIR, { recursive: true });
+  fs.writeFileSync(path.join(SCRIPT_DIR, scriptName), pythonCode);
 }
 
 /**
@@ -144,7 +144,7 @@ export function wrapPythonHookCmd(
   hookMarker: string,
   _pipeStdin = true,
 ): string {
-  const pyCmd = path.join(STATUS_DIR, scriptName).replace(/\\/g, '/');
+  const pyCmd = path.join(SCRIPT_DIR, scriptName).replace(/\\/g, '/');
   return `${PY} "${pyCmd}" "${hookMarker}"`;
 }
 
@@ -154,14 +154,14 @@ export function wrapPythonHookCmd(
 export function cleanupHookScripts(): void {
   const scripts = ['status_writer.py', 'session_id_capture.py', 'tool_failure_capture.py'];
   for (const name of scripts) {
-    try { fs.unlinkSync(path.join(STATUS_DIR, name)); } catch {}
+    try { fs.unlinkSync(path.join(SCRIPT_DIR, name)); } catch {}
   }
   // Also clean up any event capture scripts
   try {
-    const files = fs.readdirSync(STATUS_DIR);
+    const files = fs.readdirSync(SCRIPT_DIR);
     for (const f of files) {
       if (f.endsWith('.py')) {
-        try { fs.unlinkSync(path.join(STATUS_DIR, f)); } catch {}
+        try { fs.unlinkSync(path.join(SCRIPT_DIR, f)); } catch {}
       }
     }
   } catch {}
