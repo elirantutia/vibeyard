@@ -26,6 +26,9 @@ const PY = isWin ? 'python' : '/usr/bin/python3';
 
 let scriptsInstalled = false;
 
+// Marker appended to every vibeyard-managed hook command for identification and cleanup.
+export const VIBEYARD_HOOK_MARKER = '# vibeyard-hook';
+
 /**
  * Ensure the shared Python helper scripts exist in STATUS_DIR.
  */
