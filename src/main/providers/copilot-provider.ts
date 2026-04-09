@@ -31,7 +31,7 @@ export class CopilotProvider implements CliProvider {
   }
 
   validatePrerequisites(): { ok: boolean; message: string } {
-    return validateBinaryExists('copilot', 'GitHub Copilot CLI', 'npm install -g @github/copilot');
+    return validateBinaryExists('copilot', 'GitHub Copilot CLI', 'gh extension install github/gh-copilot');
   }
 
   buildEnv(sessionId: string, baseEnv: Record<string, string>): Record<string, string> {

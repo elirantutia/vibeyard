@@ -2,11 +2,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { homedir } from 'os';
 import { STATUS_DIR } from './hook-status';
-import { statusCmd as mkStatusCmd, captureSessionIdCmd as mkCaptureSessionIdCmd, installEventScript, wrapPythonHookCmd, installHookScripts } from './hook-commands';
+import { statusCmd as mkStatusCmd, captureSessionIdCmd as mkCaptureSessionIdCmd, installEventScript, wrapPythonHookCmd, installHookScripts, VIBEYARD_HOOK_MARKER } from './hook-commands';
 import { readFileSafe, readJsonSafe } from './fs-utils';
 import type { InspectorEventType, SettingsValidationResult } from '../shared/types';
 
-export const CODEX_HOOK_MARKER = '# vibeyard-hook';
+export const CODEX_HOOK_MARKER = VIBEYARD_HOOK_MARKER;
 
 const CODEX_DIR = path.join(homedir(), '.codex');
 const HOOKS_JSON_PATH = path.join(CODEX_DIR, 'hooks.json');

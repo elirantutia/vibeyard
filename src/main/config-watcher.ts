@@ -104,6 +104,7 @@ function setupGeminiWatchers(projectPath: string): void {
 }
 
 function setupCopilotWatchers(_projectPath: string): void {
+  // Copilot CLI only supports user-level config; no project-level files to watch.
   const home = os.homedir();
   const copilotDir = path.join(home, '.copilot');
 

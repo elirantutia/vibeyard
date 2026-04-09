@@ -12,6 +12,9 @@ import { STATUS_DIR } from './hook-status';
 
 const isWin = process.platform === 'win32';
 
+/** Marker appended to every vibeyard-managed hook command for identification and cleanup. */
+export const VIBEYARD_HOOK_MARKER = '# vibeyard-hook';
+
 // On Windows, Python helper scripts are written to STATUS_DIR via installEventScript()
 // and cleaned up on app exit. Shared scripts are installed once via installHookScripts();
 // provider-specific event scripts are installed per session.

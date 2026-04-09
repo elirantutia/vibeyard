@@ -2,11 +2,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { homedir } from 'os';
 import { STATUS_DIR } from './hook-status';
-import { statusCmd as mkStatusCmd, captureSessionIdCmd as mkCaptureSessionIdCmd, installEventScript, wrapPythonHookCmd, installHookScripts } from './hook-commands';
+import { statusCmd as mkStatusCmd, captureSessionIdCmd as mkCaptureSessionIdCmd, installEventScript, wrapPythonHookCmd, installHookScripts, VIBEYARD_HOOK_MARKER } from './hook-commands';
 import { readJsonSafe } from './fs-utils';
 import type { InspectorEventType, SettingsValidationResult } from '../shared/types';
 
-export const COPILOT_HOOK_MARKER = '# vibeyard-hook';
+export const COPILOT_HOOK_MARKER = VIBEYARD_HOOK_MARKER;
 
 const COPILOT_DIR = path.join(homedir(), '.copilot');
 const CONFIG_PATH = path.join(COPILOT_DIR, 'config.json');
@@ -28,7 +28,7 @@ interface HookMatcherEntry {
 type HooksConfig = Record<string, HookMatcherEntry[]>;
 
 function isIdeHook(h: HookHandler): boolean {
-  return h.command?.includes(COPILOT_HOOK_MARKER) ?? false;
+  return h.command.includes(COPILOT_HOOK_MARKER);
 }
 
 // ---------------------------------------------------------------------------

@@ -202,4 +202,19 @@ describe('config-watcher', () => {
     expect(fs.watch).toHaveBeenCalledTimes(4);
     expect(watchFileCallbacks.has('/home/testuser/.codex/config.toml')).toBe(true);
   });
+
+  it('watches copilot config files for a project', () => {
+    const win = createMockWin();
+    vi.mocked(fs.watchFile).mockClear();
+    vi.mocked(fs.watch).mockClear();
+    startConfigWatcher(win, '/projects/test', 'copilot');
+
+    // Watches ~/.copilot/config.json and ~/.copilot/mcp-config.json
+    expect(fs.watchFile).toHaveBeenCalledTimes(2);
+    expect(watchFileCallbacks.has('/home/testuser/.copilot/config.json')).toBe(true);
+    expect(watchFileCallbacks.has('/home/testuser/.copilot/mcp-config.json')).toBe(true);
+
+    // No directory watchers — copilot has no subdirectories to watch
+    expect(fs.watch).toHaveBeenCalledTimes(0);
+  });
 });
