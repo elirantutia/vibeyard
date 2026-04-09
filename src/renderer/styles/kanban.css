@@ -427,3 +427,54 @@
   outline: none;
   width: 100px;
 }
+
+/* Task Modal Tag UI */
+.modal-tag-pills {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.modal-tag-pill {
+  cursor: default;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.modal-tag-remove {
+  cursor: pointer;
+  opacity: 0.6;
+  font-size: 12px;
+  margin-left: 2px;
+}
+
+.modal-tag-remove:hover {
+  opacity: 1;
+}
+
+.tag-autocomplete {
+  display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  z-index: 200;
+  margin-top: 2px;
+}
+
+.tag-autocomplete-item {
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.tag-autocomplete-item:hover {
+  background: var(--bg-hover);
+}
