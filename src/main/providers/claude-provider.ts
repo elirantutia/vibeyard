@@ -1,3 +1,6 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import type { BrowserWindow } from 'electron';
 import type { CliProvider } from './provider';
 import type { CliProviderMeta, ProviderConfig, SettingsValidationResult } from '../../shared/types';
@@ -98,6 +101,13 @@ export class ClaudeProvider implements CliProvider {
 
   getShiftEnterSequence(): string | null {
     return '\x1b[13;2u';
+  }
+
+  getTranscriptPath(cliSessionId: string, projectPath: string): string | null {
+    // Claude encodes the project path by replacing any non-alphanumeric char with '-'
+    const slug = projectPath.replace(/[^a-zA-Z0-9]/g, '-');
+    const filePath = path.join(os.homedir(), '.claude', 'projects', slug, `${cliSessionId}.jsonl`);
+    return fs.existsSync(filePath) ? filePath : null;
   }
 
   parseCostFromOutput(rawText: string): { totalCostUsd: number } | null {

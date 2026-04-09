@@ -16,6 +16,7 @@ import { registerMcpHandlers } from './mcp-ipc-handlers';
 import { checkForUpdates, quitAndInstall } from './auto-updater';
 import { createAppMenu } from './menu';
 import { getProvider, getProviderMeta, getAllProviderMetas } from './providers/registry';
+import { buildHandoffPrompt } from './providers/resume-handoff';
 import type { ProviderId, GitFileEntry, SettingsValidationResult } from '../shared/types';
 import { analyzeReadiness } from './readiness/analyzer';
 import { expandUserPath } from './fs-utils';
@@ -217,6 +218,26 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('provider:listProviders', () => {
     return getAllProviderMetas();
+  });
+
+  ipcMain.handle('session:buildResumeWithPrompt', async (
+    _event,
+    sourceProviderId: ProviderId,
+    sourceCliSessionId: string | null,
+    projectPath: string,
+    sessionName: string,
+  ) => {
+    const sourceProvider = getProvider(sourceProviderId);
+    const fromProviderLabel = sourceProvider.meta.displayName;
+    let transcriptPath: string | null = null;
+    if (sourceCliSessionId && sourceProvider.getTranscriptPath) {
+      try {
+        transcriptPath = sourceProvider.getTranscriptPath(sourceCliSessionId, projectPath);
+      } catch (err) {
+        console.warn('getTranscriptPath failed:', err);
+      }
+    }
+    return buildHandoffPrompt({ fromProviderLabel, sessionName, transcriptPath });
   });
 
   ipcMain.handle('provider:checkBinary', (_event, providerId: ProviderId = 'claude') => {

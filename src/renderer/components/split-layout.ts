@@ -8,6 +8,7 @@ import {
   fitAllVisible,
   setFocused,
   spawnTerminal,
+  setPendingPrompt,
   destroyTerminal,
   getTerminalInstance,
 } from './terminal-pane.js';
@@ -120,6 +121,10 @@ function onSessionAdded(data: unknown): void {
   } else {
     // Create and spawn immediately
     createTerminalPane(session.id, project.path, session.cliSessionId, !!session.cliSessionId, session.args || '', (session.providerId as import('../../shared/types').ProviderId) || 'claude', project.id);
+    const pending = appState.consumePendingInitialPrompt(project.id, session.id);
+    if (pending) {
+      setPendingPrompt(session.id, pending);
+    }
     renderLayout();
 
     // Spawn after layout is rendered so terminal has dimensions

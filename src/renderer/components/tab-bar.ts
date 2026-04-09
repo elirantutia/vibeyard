@@ -12,6 +12,7 @@ import { isSharing } from '../sharing/peer-host.js';
 import { endShare, onShareChange } from '../sharing/share-manager.js';
 import { openInspector, isInspectorOpen, getInspectedSessionId, closeInspector } from './session-inspector.js';
 import { loadProviderAvailability, hasMultipleAvailableProviders, getProviderAvailabilitySnapshot, getProviderCapabilities } from '../provider-availability.js';
+import { buildResumeWithProviderItems } from './resume-with-provider-menu.js';
 
 const tabListEl = document.getElementById('tab-list')!;
 const gitStatusEl = document.getElementById('git-status')!;
@@ -321,6 +322,19 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
     menu.appendChild(inspectSeparator);
     menu.appendChild(inspectItem);
   }
+
+  // Resume with <other provider> — only for CLI sessions
+  if (isCliSession) {
+    const items = buildResumeWithProviderItems(
+      (session.providerId || 'claude') as ProviderId,
+      (targetId) => {
+        hideTabContextMenu();
+        appState.resumeWithProvider(project.id, { sessionId: session.id }, targetId);
+      },
+    );
+    for (const el of items) menu.appendChild(el);
+  }
+
   menu.appendChild(closeItem);
   menu.appendChild(separator);
   menu.appendChild(closeAllItem);

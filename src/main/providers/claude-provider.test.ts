@@ -186,6 +186,27 @@ describe('getShiftEnterSequence', () => {
   });
 });
 
+describe('getTranscriptPath', () => {
+  it('returns slugged path when file exists', () => {
+    mockExistsSync.mockReturnValue(true);
+    const out = provider.getTranscriptPath('abc-123', '/Users/me/dev/my repo');
+    // Non-alphanumeric chars all collapse to '-'
+    expect(out).toBe(path.join('/mock/home', '.claude', 'projects', '-Users-me-dev-my-repo', 'abc-123.jsonl'));
+  });
+
+  it('returns null when the file does not exist', () => {
+    mockExistsSync.mockReturnValue(false);
+    expect(provider.getTranscriptPath('sid', '/tmp/proj')).toBeNull();
+  });
+
+  it('slugs Windows-style project paths', () => {
+    mockExistsSync.mockReturnValue(true);
+    const out = provider.getTranscriptPath('sid', 'C:\\Users\\me\\proj');
+    // ':' and '\' each collapse to '-', producing 'C--Users-me-proj'
+    expect(out).toBe(path.join('/mock/home', '.claude', 'projects', 'C--Users-me-proj', 'sid.jsonl'));
+  });
+});
+
 describe('parseCostFromOutput', () => {
   it('extracts last $X.XX match from text', () => {
     const result = provider.parseCostFromOutput('Total cost: $1.23');

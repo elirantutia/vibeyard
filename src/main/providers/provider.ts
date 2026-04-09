@@ -15,6 +15,8 @@ export interface CliProvider {
   validateSettings(): SettingsValidationResult;
   reinstallSettings(): void;
   parseCostFromOutput?(rawText: string): { totalCostUsd: number } | null;
+  /** Return the absolute path to the source transcript file for a prior session, if any. */
+  getTranscriptPath?(cliSessionId: string, projectPath: string): string | null;
   startConfigWatcher?(win: BrowserWindow, projectPath: string): void;
   stopConfigWatcher?(): void;
 }

@@ -1,3 +1,6 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import type { CliProvider } from './provider';
 import type { CliProviderMeta, ProviderConfig, SettingsValidationResult } from '../../shared/types';
 import { getFullPath } from '../pty-manager';
@@ -89,6 +92,58 @@ export class GeminiProvider implements CliProvider {
 
   reinstallSettings(): void {
     installGeminiHooks();
+  }
+
+  getTranscriptPath(cliSessionId: string, projectPath: string): string | null {
+    try {
+      const tmpRoot = path.join(os.homedir(), '.gemini', 'tmp');
+      if (!fs.existsSync(tmpRoot)) return null;
+
+      // Find the project key dir whose .project_root matches our projectPath
+      let chatsDir: string | null = null;
+      for (const entry of fs.readdirSync(tmpRoot)) {
+        const projectRootFile = path.join(tmpRoot, entry, '.project_root');
+        try {
+          const contents = fs.readFileSync(projectRootFile, 'utf-8').trim();
+          if (contents === projectPath) {
+            chatsDir = path.join(tmpRoot, entry, 'chats');
+            break;
+          }
+        } catch {
+          // missing or unreadable .project_root — skip
+        }
+      }
+      if (!chatsDir || !fs.existsSync(chatsDir)) return null;
+
+      // Filenames only encode the first 8 chars of the id (session-<ts>-<shortId>.json),
+      // so an 8-char prefix can collide. Prefer matching the full sessionId recorded
+      // inside the file; fall back to newest-mtime if we can't read any JSON.
+      const shortId = cliSessionId.slice(0, 8);
+      const suffix = `-${shortId}.json`;
+      const candidates = fs.readdirSync(chatsDir)
+        .filter((f) => f.startsWith('session-') && f.endsWith(suffix))
+        .map((f) => {
+          const full = path.join(chatsDir!, f);
+          let mtime = 0;
+          try { mtime = fs.statSync(full).mtimeMs; } catch {}
+          return { full, mtime };
+        })
+        .sort((a, b) => b.mtime - a.mtime);
+
+      for (const c of candidates) {
+        try {
+          const raw = fs.readFileSync(c.full, 'utf-8');
+          // Gemini transcripts are JSON; session id typically appears near the top.
+          // Cheap substring check avoids a full parse.
+          if (raw.includes(cliSessionId)) return c.full;
+        } catch {
+          // unreadable — skip
+        }
+      }
+      return candidates[0]?.full ?? null;
+    } catch {
+      return null;
+    }
   }
 }
 

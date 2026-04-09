@@ -98,6 +98,8 @@ export interface SessionRecord {
   remoteHostName?: string;
   shareMode?: 'readonly' | 'readwrite';
   browserTabUrl?: string;
+  /** Transient: initial prompt to inject on first spawn. Not persisted. */
+  pendingInitialPrompt?: string;
 }
 
 export interface ArchivedSession {

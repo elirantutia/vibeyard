@@ -1,3 +1,6 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import type { CliProvider } from './provider';
 import type { CliProviderMeta, ProviderConfig, SettingsValidationResult } from '../../shared/types';
 import { getFullPath } from '../pty-manager';
@@ -88,6 +91,34 @@ export class CodexProvider implements CliProvider {
   reinstallSettings(): void {
     installCodexHooks();
   }
+
+  getTranscriptPath(cliSessionId: string, _projectPath: string): string | null {
+    try {
+      const root = path.join(os.homedir(), '.codex', 'sessions');
+      const suffix = `-${cliSessionId}.jsonl`;
+      // sessions are partitioned as YYYY/MM/DD/rollout-<ts>-<id>.jsonl.
+      // Walk newest-first and return on first match.
+      for (const year of descSortedReaddir(root)) {
+        const yearDir = path.join(root, year);
+        for (const month of descSortedReaddir(yearDir)) {
+          const monthDir = path.join(yearDir, month);
+          for (const day of descSortedReaddir(monthDir)) {
+            const dayDir = path.join(monthDir, day);
+            for (const file of descSortedReaddir(dayDir)) {
+              if (file.endsWith(suffix)) return path.join(dayDir, file);
+            }
+          }
+        }
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+}
+
+function descSortedReaddir(dir: string): string[] {
+  try { return fs.readdirSync(dir).sort().reverse(); } catch { return []; }
 }
 
 /** @internal Test-only: reset cached binary path */

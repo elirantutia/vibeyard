@@ -1,4 +1,54 @@
 import { appState, ArchivedSession } from '../state.js';
+import { loadProviderAvailability } from '../provider-availability.js';
+import { buildResumeWithProviderItems } from './resume-with-provider-menu.js';
+import type { ProviderId } from '../../shared/types.js';
+
+let historyContextMenu: HTMLElement | null = null;
+function hideHistoryContextMenu(): void {
+  if (historyContextMenu) {
+    historyContextMenu.remove();
+    historyContextMenu = null;
+  }
+}
+
+function showHistoryContextMenu(x: number, y: number, archived: ArchivedSession): void {
+  hideHistoryContextMenu();
+  const project = appState.activeProject;
+  if (!project) return;
+
+  const menu = document.createElement('div');
+  menu.className = 'tab-context-menu';
+  menu.style.left = `${x}px`;
+  menu.style.top = `${y}px`;
+
+  if (archived.cliSessionId) {
+    const resumeItem = document.createElement('div');
+    resumeItem.className = 'tab-context-menu-item';
+    resumeItem.textContent = 'Resume';
+    resumeItem.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hideHistoryContextMenu();
+      appState.resumeFromHistory(project.id, archived.id);
+    });
+    menu.appendChild(resumeItem);
+  }
+
+  const resumeWithItems = buildResumeWithProviderItems(
+    (archived.providerId || 'claude') as ProviderId,
+    (targetId) => {
+      hideHistoryContextMenu();
+      appState.resumeWithProvider(project.id, { archivedSessionId: archived.id }, targetId);
+    },
+  );
+  for (const el of resumeWithItems) menu.appendChild(el);
+
+  if (!menu.firstChild) return;
+  document.body.appendChild(menu);
+  historyContextMenu = menu;
+  const rect = menu.getBoundingClientRect();
+  if (rect.right > window.innerWidth) menu.style.left = `${window.innerWidth - rect.width - 4}px`;
+  if (rect.bottom > window.innerHeight) menu.style.top = `${window.innerHeight - rect.height - 4}px`;
+}
 
 const MAX_VISIBLE = 50;
 const PROVIDER_LABELS: Record<string, string> = {
@@ -29,6 +79,10 @@ export function initSessionHistory(): void {
   appState.on('project-changed', render);
   appState.on('state-loaded', render);
   appState.on('preferences-changed', () => applyHistoryVisibility());
+  if (typeof document.addEventListener === 'function') {
+    document.addEventListener('click', hideHistoryContextMenu);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideHistoryContextMenu(); });
+  }
 }
 
 function onHistoryChanged(): void {
@@ -165,6 +219,12 @@ function renderList(history: ArchivedSession[]): void {
         }
       });
     }
+    item.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      loadProviderAvailability().catch(() => {});
+      showHistoryContextMenu(e.clientX, e.clientY, archived);
+    });
 
     const info = document.createElement('div');
     info.className = 'history-item-info';

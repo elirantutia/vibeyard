@@ -2,7 +2,7 @@ import type { VibeyardApi } from './types.js';
 import type { SessionRecord, ProjectRecord, Preferences, PersistedState, ArchivedSession, ProviderId, CostInfo, ContextWindowInfo, InitialContextSnapshot, ReadinessResult } from '../shared/types.js';
 import { getCost, restoreCost } from './session-cost.js';
 import { restoreContext } from './session-context.js';
-import { getProviderCapabilities } from './provider-availability.js';
+import { getProviderCapabilities, getProviderAvailabilitySnapshot } from './provider-availability.js';
 
 export type { SessionRecord, ProjectRecord, Preferences, PersistedState, ArchivedSession } from '../shared/types.js';
 
@@ -166,7 +166,15 @@ class AppState {
   }
 
   private persist(): void {
-    window.vibeyard.store.save(this.state);
+    // Strip transient fields before saving
+    const toSave = {
+      ...this.state,
+      projects: this.state.projects.map((p) => ({
+        ...p,
+        sessions: p.sessions.map(({ pendingInitialPrompt, ...rest }) => rest),
+      })),
+    };
+    window.vibeyard.store.save(toSave);
   }
 
   get projects(): ProjectRecord[] {
@@ -625,6 +633,79 @@ class AppState {
     this.emit('session-added', { projectId, session });
     this.emit('session-changed');
     return session;
+  }
+
+  async resumeWithProvider(
+    projectId: string,
+    source: { archivedSessionId?: string; sessionId?: string },
+    targetProviderId: ProviderId,
+  ): Promise<SessionRecord | undefined> {
+    const project = this.state.projects.find((p) => p.id === projectId);
+    if (!project) return undefined;
+
+    // Defense-in-depth: UI gates this by availability, but bail if the target
+    // provider isn't actually installed so we don't create a broken session.
+    const snapshot = getProviderAvailabilitySnapshot();
+    if (snapshot && snapshot.availability.get(targetProviderId) === false) {
+      return undefined;
+    }
+
+    let sourceProviderId: ProviderId | undefined;
+    let sourceCliSessionId: string | null = null;
+    let sourceName = 'session';
+    if (source.archivedSessionId) {
+      const archived = project.sessionHistory?.find((a) => a.id === source.archivedSessionId);
+      if (!archived) return undefined;
+      sourceProviderId = archived.providerId;
+      sourceCliSessionId = archived.cliSessionId;
+      sourceName = archived.name;
+    } else if (source.sessionId) {
+      const existing = project.sessions.find((s) => s.id === source.sessionId);
+      if (!existing) return undefined;
+      sourceProviderId = existing.providerId;
+      sourceCliSessionId = existing.cliSessionId;
+      sourceName = existing.name;
+    } else {
+      return undefined;
+    }
+    if (!sourceProviderId) return undefined;
+
+    const initialPrompt = await window.vibeyard.session.buildResumeWithPrompt(
+      sourceProviderId,
+      sourceCliSessionId,
+      project.path,
+      sourceName,
+    );
+
+    const session: SessionRecord = {
+      id: crypto.randomUUID(),
+      name: `${sourceName} (↪ ${targetProviderId})`,
+      providerId: targetProviderId,
+      cliSessionId: null,
+      createdAt: new Date().toISOString(),
+      pendingInitialPrompt: initialPrompt,
+    };
+    project.sessions.push(session);
+    project.activeSessionId = session.id;
+    this.pushNav(session.id);
+    if (project.layout.mode === 'swarm') {
+      project.layout.splitPanes.push(session.id);
+    }
+    // persist() strips pendingInitialPrompt (transient). split-layout.onSessionAdded
+    // will consume it synchronously from in-memory state before the next persist.
+    this.persist();
+    this.emit('session-added', { projectId, session });
+    this.emit('session-changed');
+    return session;
+  }
+
+  consumePendingInitialPrompt(projectId: string, sessionId: string): string | undefined {
+    const project = this.state.projects.find((p) => p.id === projectId);
+    const session = project?.sessions.find((s) => s.id === sessionId);
+    if (!session?.pendingInitialPrompt) return undefined;
+    const prompt = session.pendingInitialPrompt;
+    delete session.pendingInitialPrompt;
+    return prompt;
   }
 
   setActiveSession(projectId: string, sessionId: string): void {
