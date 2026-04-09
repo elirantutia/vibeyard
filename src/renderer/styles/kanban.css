@@ -478,3 +478,37 @@
 .tag-autocomplete-item:hover {
   background: var(--bg-hover);
 }
+
+.board-search-input {
+  padding: 4px 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+  width: 140px;
+  flex-shrink: 0;
+  outline: none;
+}
+
+.board-search-input:focus {
+  border-color: var(--accent);
+}
+
+.board-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.board-filter-separator {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.board-filter-count {
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  margin-left: auto;
+}

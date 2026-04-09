@@ -5,7 +5,7 @@ import { showTaskModal } from './board-task-modal.js';
 import { showContextMenu } from './board-context-menu.js';
 import { showConfirmModal } from '../modal.js';
 
-export function createColumnElement(column: BoardColumn, tasks: BoardTask[]): HTMLElement {
+export function createColumnElement(column: BoardColumn, tasks: BoardTask[], totalCount?: number): HTMLElement {
   const el = document.createElement('div');
   el.className = 'board-column';
   el.dataset.columnId = column.id;
@@ -22,7 +22,9 @@ export function createColumnElement(column: BoardColumn, tasks: BoardTask[]): HT
 
   const countSpan = document.createElement('span');
   countSpan.className = 'column-count';
-  countSpan.textContent = String(tasks.length);
+  countSpan.textContent = totalCount !== undefined && totalCount !== tasks.length
+    ? `${tasks.length}/${totalCount}`
+    : String(tasks.length);
 
   header.appendChild(titleSpan);
   header.appendChild(countSpan);
