@@ -1,10 +1,13 @@
 import type { BrowserTabInstance, ElementInfo } from './types.js';
 import { buildSelectorOptions } from './selector-ui.js';
+import { positionPopover } from './popover.js';
+import { getViewportContext } from './viewport.js';
 
 export function toggleInspectMode(instance: BrowserTabInstance): void {
   instance.inspectMode = !instance.inspectMode;
   instance.inspectBtn.classList.toggle('active', instance.inspectMode);
   instance.recordBtn.disabled = instance.inspectMode;
+  instance.drawBtn.disabled = instance.inspectMode;
   if (instance.inspectMode) {
     instance.webview.send('enter-inspect-mode');
   } else {
@@ -14,9 +17,10 @@ export function toggleInspectMode(instance: BrowserTabInstance): void {
   }
 }
 
-export function showElementInfo(instance: BrowserTabInstance, info: ElementInfo): void {
+export function showElementInfo(instance: BrowserTabInstance, info: ElementInfo, x: number, y: number): void {
   instance.selectedElement = info;
   instance.inspectPanel.style.display = 'flex';
+  positionPopover(instance, instance.inspectPanel, x, y);
 
   const classStr = info.classes.length ? `.${info.classes.join('.')}` : '';
   const idStr = info.id ? `#${info.id}` : '';
@@ -57,8 +61,7 @@ export function buildPrompt(instance: BrowserTabInstance): string | null {
   const instruction = instance.instructionInput.value.trim();
   if (!instruction) return null;
 
-  const vp = instance.currentViewport;
-  const vpCtx = vp.width !== null ? ` [viewport: ${vp.width}×${vp.height} – ${vp.label}]` : '';
+  const vpCtx = getViewportContext(instance, instance.inspectAttachDimsCheckbox.checked);
 
   return (
     `Regarding the <${info.tagName}> element at ${info.pageUrl}${vpCtx} ` +

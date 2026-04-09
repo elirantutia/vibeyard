@@ -28,3 +28,17 @@ export function openViewportDropdown(instance: BrowserTabInstance): void {
 export function closeViewportDropdown(instance: BrowserTabInstance): void {
   instance.viewportDropdown.classList.remove('visible');
 }
+
+export function getViewportContext(instance: BrowserTabInstance, include: boolean): string {
+  if (!include) return '';
+  const vp = instance.currentViewport;
+  if (vp.width !== null) {
+    return ` [viewport: ${vp.width}×${vp.height} – ${vp.label}]`;
+  }
+  const el = instance.webview as unknown as HTMLElement;
+  const rect = el.getBoundingClientRect();
+  const w = Math.round(rect.width);
+  const h = Math.round(rect.height);
+  if (!w || !h) return '';
+  return ` [viewport: ${w}×${h} – Responsive]`;
+}
