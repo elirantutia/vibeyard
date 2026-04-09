@@ -241,6 +241,49 @@ export function updateTagColor(name: string, color: string): void {
   }
 }
 
+export function addTagToTask(taskId: string, tagName: string): void {
+  const board = getBoard();
+  if (!board) return;
+  const task = board.tasks.find(t => t.id === taskId);
+  if (!task) return;
+
+  const normalized = tagName.toLowerCase().trim();
+  if (!normalized) return;
+
+  // Auto-create the tag in the palette if it doesn't exist
+  addTag(normalized);
+
+  if (!task.tags) task.tags = [];
+  if (task.tags.includes(normalized)) return;
+  task.tags.push(normalized);
+  task.updatedAt = Date.now();
+  appState.notifyBoardChanged();
+}
+
+export function removeTagFromTask(taskId: string, tagName: string): void {
+  const board = getBoard();
+  if (!board) return;
+  const task = board.tasks.find(t => t.id === taskId);
+  if (!task || !task.tags) return;
+
+  const normalized = tagName.toLowerCase().trim();
+  task.tags = task.tags.filter(t => t !== normalized);
+  task.updatedAt = Date.now();
+  appState.notifyBoardChanged();
+}
+
+export function getTagColor(tagName: string): string {
+  const board = getBoard();
+  const tag = board?.tags?.find(t => t.name === tagName);
+  return tag?.color ?? 'gray';
+}
+
+export function getTagCount(tagName: string): number {
+  const board = getBoard();
+  if (!board) return 0;
+  return board.tasks.filter(t => t.tags?.includes(tagName)).length;
+}
+
 export function shouldAutoInject(taskId: string): { inject: boolean; prompt: string } {
   const board = getBoard();
   if (!board) return { inject: false, prompt: '' };
