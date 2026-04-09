@@ -557,10 +557,10 @@ body.sidebar-resizing .browser-webview {
 
 .inspect-clear-btn {
   padding: 8px 12px;
-  background: var(--accent);
-  border: none;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
   border-radius: 4px;
-  color: #fff;
+  color: var(--text-primary);
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
@@ -568,7 +568,14 @@ body.sidebar-resizing .browser-webview {
 }
 
 .inspect-clear-btn:hover {
-  opacity: 0.9;
+  background: var(--bg-tertiary);
+}
+
+.inspect-error-text {
+  display: none;
+  margin-top: 6px;
+  color: var(--accent);
+  font-size: 12px;
 }
 
 /* Record Flow Button */

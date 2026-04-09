@@ -294,6 +294,10 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   drawAttachDimsRow.appendChild(drawAttachDimsText);
   drawPanel.appendChild(drawAttachDimsRow);
 
+  const drawErrorEl = document.createElement('div');
+  drawErrorEl.className = 'inspect-error-text';
+  drawPanel.appendChild(drawErrorEl);
+
   drawPanel.appendChild(drawActions);
   el.appendChild(drawPanel);
 
@@ -412,6 +416,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
     drawPanel,
     drawInstructionInput,
     drawAttachDimsCheckbox,
+    drawErrorEl,
     drawMode: false,
   };
   instances.set(sessionId, instance);

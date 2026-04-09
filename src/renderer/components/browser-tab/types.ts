@@ -96,5 +96,6 @@ export interface BrowserTabInstance {
   drawPanel: HTMLDivElement;
   drawInstructionInput: HTMLTextAreaElement;
   drawAttachDimsCheckbox: HTMLInputElement;
+  drawErrorEl: HTMLDivElement;
   drawMode: boolean;
 }
