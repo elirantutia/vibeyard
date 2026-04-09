@@ -55,7 +55,7 @@ CLI-specific behavior is encapsulated behind a `CliProvider` interface (`src/mai
 
 - **Provider per-session**: Each `SessionRecord` has a `providerId` (defaults to `'claude'`). A project can contain sessions from multiple providers.
 - **Capabilities pattern**: Providers declare what they support via `CliProviderCapabilities`. UI can conditionally enable features per-session.
-- **Current providers**: `ClaudeProvider` (`src/main/providers/claude-provider.ts`) — extracts all Claude-specific logic from `pty-manager.ts`, `prerequisites.ts`, `claude-cli.ts`, and `hook-status.ts`.
+- **Current providers**: `ClaudeProvider` (`src/main/providers/claude-provider.ts`) — extracts all Claude-specific logic from `pty-manager.ts`, `prerequisites.ts`, `claude-cli.ts`, and `hook-status.ts`. `GeminiProvider` (`src/main/providers/gemini-provider.ts`, `src/main/gemini-hooks.ts`, `src/main/gemini-config.ts`). `CodexProvider` (`src/main/providers/codex-provider.ts`, `src/main/codex-hooks.ts`, `src/main/codex-config.ts`). `CopilotProvider` (`src/main/providers/copilot-provider.ts`, `src/main/copilot-hooks.ts`, `src/main/copilot-config.ts`).
 
 ### Key Components
 

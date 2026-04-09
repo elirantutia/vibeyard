@@ -134,7 +134,7 @@ describe('validatePrerequisites', () => {
     const result = provider.validatePrerequisites();
     expect(result.ok).toBe(false);
     expect(result.message).toContain('GitHub Copilot CLI not found');
-    expect(result.message).toContain('gh extension install github/gh-copilot');
+    expect(result.message).toContain('npm install -g @github/copilot');
   });
 });
 

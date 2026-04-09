@@ -9,6 +9,7 @@ function readMcpServersFromJson(filePath: string, scope: 'user' | 'project'): Mc
 
   const servers: McpServer[] = [];
   for (const [name, config] of Object.entries(json.mcpServers as Record<string, Record<string, unknown>>)) {
+    // url: HTTP/SSE endpoint; command: stdio binary path — both map to McpServer.url for display
     const url = (config?.url as string) || (config?.command as string) || '';
     if (url) {
       servers.push({ name, url, status: 'configured', scope, filePath });

@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { homedir } from 'os';
 import { STATUS_DIR } from './hook-status';
+// captureToolFailureCmd is not imported — Copilot CLI does not fire a ToolFailure event
 import { statusCmd as mkStatusCmd, captureSessionIdCmd as mkCaptureSessionIdCmd, installEventScript, wrapPythonHookCmd, installHookScripts, VIBEYARD_HOOK_MARKER } from './hook-commands';
 import { readJsonSafe } from './fs-utils';
 import type { InspectorEventType, SettingsValidationResult } from '../shared/types';
@@ -13,6 +14,7 @@ const CONFIG_PATH = path.join(COPILOT_DIR, 'config.json');
 
 export const SESSION_ID_VAR = 'VIBEYARD_SESSION_ID';
 
+// PreToolUse is inspector-only (no status-line effect) and intentionally excluded from validation
 const EXPECTED_HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'Stop'];
 
 interface HookHandler {
