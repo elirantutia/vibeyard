@@ -1,7 +1,7 @@
 import type { BoardTask } from '../../../shared/types.js';
 import { appState } from '../../state.js';
-import { getColumnByBehavior, updateTask, moveTask, deleteTask } from '../../board-state.js';
-import { getStatus, type SessionStatus } from '../../session-activity.js';
+import { getColumnByBehavior, updateTask, moveTask, deleteTask, getTagColor } from '../../board-state.js';
+import { getStatus } from '../../session-activity.js';
 import { showTaskModal } from './board-task-modal.js';
 import { showContextMenu } from './board-context-menu.js';
 import { showConfirmModal } from '../modal.js';
@@ -13,34 +13,13 @@ export function createCardElement(task: BoardTask): HTMLElement {
   el.dataset.taskId = task.id;
   el.draggable = true;
 
-  // Title
+  // Top row: title + action button
+  const topRow = document.createElement('div');
+  topRow.className = 'board-card-top';
+
   const titleEl = document.createElement('div');
   titleEl.className = 'board-card-title';
   titleEl.textContent = task.title || truncate(task.prompt, 60) || 'Untitled';
-
-  // Meta
-  const metaEl = document.createElement('div');
-  metaEl.className = 'board-card-meta';
-  const folderSpan = document.createElement('span');
-  folderSpan.className = 'card-folder';
-  folderSpan.textContent = shortenPath(task.cwd);
-  metaEl.appendChild(folderSpan);
-
-  el.appendChild(titleEl);
-  el.appendChild(metaEl);
-
-  // Status section (only when task has an active session)
-  if (task.sessionId) {
-    const status = getStatus(task.sessionId);
-    if (status) {
-      const statusEl = createStatusElement(status, task.sessionId);
-      el.appendChild(statusEl);
-    }
-  }
-
-  // Actions
-  const actionsEl = document.createElement('div');
-  actionsEl.className = 'board-card-actions';
 
   const runBtn = document.createElement('button');
   runBtn.className = 'card-run-btn';
@@ -52,18 +31,72 @@ export function createCardElement(task: BoardTask): HTMLElement {
     e.stopPropagation();
     runTask(task);
   });
-  actionsEl.appendChild(runBtn);
 
-  el.appendChild(actionsEl);
+  topRow.appendChild(titleEl);
+  topRow.appendChild(runBtn);
+  el.appendChild(topRow);
 
-  // Click card body → edit modal
+  // Tags row (if any)
+  if (task.tags && task.tags.length > 0) {
+    const tagsEl = document.createElement('div');
+    tagsEl.className = 'board-card-tags';
+    const maxVisible = 3;
+    const visibleTags = task.tags.slice(0, maxVisible);
+    for (const tagName of visibleTags) {
+      const pill = document.createElement('span');
+      pill.className = 'tag-pill tag-pill-sm';
+      pill.dataset.color = getTagColor(tagName);
+      pill.textContent = tagName;
+      tagsEl.appendChild(pill);
+    }
+    if (task.tags.length > maxVisible) {
+      const more = document.createElement('span');
+      more.className = 'tag-pill-overflow';
+      more.textContent = `+${task.tags.length - maxVisible}`;
+      tagsEl.appendChild(more);
+    }
+    el.appendChild(tagsEl);
+  }
+
+  // Bottom row: path + status
+  const bottomRow = document.createElement('div');
+  bottomRow.className = 'board-card-bottom';
+
+  const folderSpan = document.createElement('span');
+  folderSpan.className = 'card-folder';
+  folderSpan.textContent = shortenPath(task.cwd);
+  bottomRow.appendChild(folderSpan);
+
+  if (task.sessionId) {
+    const status = getStatus(task.sessionId);
+    if (status) {
+      const statusEl = document.createElement('span');
+      statusEl.className = 'board-card-status-inline';
+      const dot = document.createElement('span');
+      dot.className = `card-status-dot ${status}`;
+      const statusLabels: Record<string, string> = {
+        working: 'Working',
+        waiting: 'Waiting',
+        'prompt-waiting': 'Waiting',
+        idle: 'Idle',
+        completed: 'Done',
+        input: 'Input',
+      };
+      statusEl.appendChild(dot);
+      statusEl.appendChild(document.createTextNode(statusLabels[status] ?? status));
+      bottomRow.appendChild(statusEl);
+    }
+  }
+
+  el.appendChild(bottomRow);
+
+  // Click card body -> edit modal
   el.addEventListener('click', (e) => {
-    // Don't trigger if clicking a button
     if ((e.target as HTMLElement).closest('button')) return;
     showTaskModal('edit', task);
   });
 
-  // Right-click → context menu
+  // Right-click -> context menu
   el.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -85,28 +118,6 @@ function confirmDeleteTask(task: BoardTask): void {
   );
 }
 
-function createStatusElement(status: SessionStatus, sessionId: string): HTMLElement {
-  const statusEl = document.createElement('div');
-  statusEl.className = 'board-card-status';
-
-  const dot = document.createElement('span');
-  dot.className = `card-status-dot ${status}`;
-
-  const label = document.createElement('span');
-  const statusLabels: Record<string, string> = {
-    working: 'Working',
-    waiting: 'Waiting for input',
-    'prompt-waiting': 'Waiting for input',
-    idle: 'Idle',
-    completed: 'Completed',
-    input: 'Input',
-  };
-  label.textContent = statusLabels[status] ?? status;
-
-  statusEl.appendChild(dot);
-  statusEl.appendChild(label);
-  return statusEl;
-}
 
 export function runTask(task: BoardTask): void {
   const project = appState.activeProject;
