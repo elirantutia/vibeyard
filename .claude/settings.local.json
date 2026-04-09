@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm test:*)",
+      "Bash(/Users/itay.laufer/.nvm/versions/node/v24.14.0/bin/npm test:*)",
+      "Bash(/usr/bin/git status:*)",
+      "Bash(/usr/bin/git diff:*)",
+      "Bash(/usr/bin/git add:*)",
+      "Bash(/usr/bin/git commit:*)",
+      "Bash(git commit:*)",
+      "Bash(/usr/local/bin/npm test:*)",
+      "Bash(/Users/itay.laufer/.nvm/versions/node/v24.0.2/bin/node --version)",
+      "Bash(~/.nvm/versions/node/v24.0.0/bin/npm test:*)",
+      "Bash(~/.nvm/versions/node/v24.14.0/bin/npm test:*)",
+      "Bash(gh issue:*)",
+      "WebSearch",
+      "Bash(git checkout:*)"
+    ]
+  }
+}
