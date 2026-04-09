@@ -103,6 +103,17 @@ function setupGeminiWatchers(projectPath: string): void {
   for (const f of files) watchFile(f);
 }
 
+function setupCopilotWatchers(_projectPath: string): void {
+  const home = os.homedir();
+  const copilotDir = path.join(home, '.copilot');
+
+  const files = [
+    path.join(copilotDir, 'config.json'),
+    path.join(copilotDir, 'mcp-config.json'),
+  ];
+  for (const f of files) watchFile(f);
+}
+
 export function startConfigWatcher(win: BrowserWindow, projectPath: string, providerId: ProviderId = 'claude'): void {
   if (projectPath === currentProjectPath && providerId === currentProviderId) return;
   stopAll();
@@ -113,6 +124,8 @@ export function startConfigWatcher(win: BrowserWindow, projectPath: string, prov
     setupCodexWatchers(projectPath);
   } else if (providerId === 'gemini') {
     setupGeminiWatchers(projectPath);
+  } else if (providerId === 'copilot') {
+    setupCopilotWatchers(projectPath);
   } else {
     setupClaudeWatchers(projectPath);
   }
