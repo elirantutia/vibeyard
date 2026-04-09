@@ -239,6 +239,15 @@
   margin-top: 4px;
 }
 
+.board-column-empty-hint {
+  padding: 20px 12px;
+  text-align: center;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
 /* Board empty state */
 .board-empty {
   display: flex;

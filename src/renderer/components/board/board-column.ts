@@ -39,6 +39,19 @@ export function createColumnElement(column: BoardColumn, tasks: BoardTask[]): HT
   cardsArea.className = 'board-column-cards';
   cardsArea.dataset.columnId = column.id;
 
+  if (tasks.length === 0) {
+    const hint = document.createElement('div');
+    hint.className = 'board-column-empty-hint';
+    const hintMap: Record<string, string> = {
+      inbox: 'New tasks land here',
+      active: 'Tasks run here',
+      terminal: 'Completed tasks',
+      none: 'Drop tasks here',
+    };
+    hint.textContent = hintMap[column.behavior] || 'Drop tasks here';
+    cardsArea.appendChild(hint);
+  }
+
   for (const task of tasks) {
     cardsArea.appendChild(createCardElement(task));
   }
