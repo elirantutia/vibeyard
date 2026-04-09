@@ -519,7 +519,7 @@ body.sidebar-resizing .browser-webview {
 .inspect-submit-btn {
   padding: 8px 16px;
   background: var(--accent);
-  border: none;
+  border: 1px solid var(--accent);
   border-radius: 4px 0 0 4px;
   color: #fff;
   cursor: pointer;
