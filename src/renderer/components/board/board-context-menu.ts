@@ -1,4 +1,5 @@
 let activeMenu: HTMLElement | null = null;
+let pendingClose: { click: (e: Event) => void; keydown: (e: Event) => void } | null = null;
 
 export interface MenuOption {
   label: string;
@@ -8,6 +9,12 @@ export interface MenuOption {
 }
 
 export function showContextMenu(x: number, y: number, options: MenuOption[]): void {
+  if (pendingClose) {
+    document.removeEventListener('click', pendingClose.click);
+    document.removeEventListener('keydown', pendingClose.keydown);
+    pendingClose = null;
+  }
+
   hideContextMenu();
 
   const menu = document.createElement('div');
@@ -42,11 +49,13 @@ export function showContextMenu(x: number, y: number, options: MenuOption[]): vo
     hideContextMenu();
     document.removeEventListener('click', close);
     document.removeEventListener('keydown', close);
+    pendingClose = null;
   };
   // Delay to avoid the triggering contextmenu click from immediately closing
   requestAnimationFrame(() => {
     document.addEventListener('click', close);
     document.addEventListener('keydown', close);
+    pendingClose = { click: close, keydown: close };
   });
 }
 
