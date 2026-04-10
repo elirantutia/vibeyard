@@ -194,10 +194,10 @@ function truncate(str: string, len: number): string {
   return firstLine.length > len ? firstLine.slice(0, len) + '...' : firstLine;
 }
 
-const HOME_RE_UNIX = /^\/Users\/[^/]+/;
+const HOME_RE_UNIX = /^(?:\/Users|\/home)\/[^/]+/;
 const HOME_RE_WIN = /^[A-Z]:\\Users\\[^\\]+/i;
 
-function shortenPath(path: string): string {
+export function shortenPath(path: string): string {
   if (!path) return '';
   const sep = path.includes('\\') ? '\\' : '/';
   const home = path.replace(HOME_RE_UNIX, '~').replace(HOME_RE_WIN, '~');
