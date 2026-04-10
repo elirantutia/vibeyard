@@ -1,5 +1,5 @@
 import type { BoardColumn, BoardTask } from '../../../shared/types.js';
-import { renameColumn, deleteColumn, addColumn, getBoard, reorderColumns } from '../../board-state.js';
+import { renameColumn, deleteColumn, addColumn, getBoard, reorderColumns, getColumnByBehavior } from '../../board-state.js';
 import { createCardElement } from './board-card.js';
 import { showTaskModal } from './board-task-modal.js';
 import { showContextMenu } from './board-context-menu.js';
@@ -115,8 +115,9 @@ function moveColumn(columnId: string, direction: -1 | 1): void {
 function confirmDeleteColumn(column: BoardColumn): void {
   const board = getBoard();
   const taskCount = board?.tasks.filter(t => t.columnId === column.id).length ?? 0;
+  const inboxTitle = getColumnByBehavior('inbox')?.title ?? 'Backlog';
   const message = taskCount > 0
-    ? `Delete column "${column.title}"? Its ${taskCount} task(s) will be moved to Backlog.`
+    ? `Delete column "${column.title}"? Its ${taskCount} task(s) will be moved to ${inboxTitle}.`
     : `Delete column "${column.title}"?`;
   showConfirmModal('Delete Column', message, () => deleteColumn(column.id));
 }
