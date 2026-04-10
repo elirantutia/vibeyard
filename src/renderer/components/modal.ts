@@ -49,6 +49,7 @@ export function showModal(
 ): void {
   titleEl.textContent = title;
   btnConfirm.textContent = options?.confirmLabel ?? 'Create';
+  btnConfirm.style.display = '';
   btnConfirm.style.background = '';
   btnConfirm.style.borderColor = '';
   bodyEl.innerHTML = '';
