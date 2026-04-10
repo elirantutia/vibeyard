@@ -172,7 +172,6 @@ async function main(): Promise<void> {
   initSessionInspector();
   startGitPolling();
 
-  window.vibeyard.menu.onUsageStats(() => showUsageModal());
   document.getElementById('btn-usage-stats')!.addEventListener('click', () => showUsageModal());
 
   function isMcpSession(sessionId: string): boolean {

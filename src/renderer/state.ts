@@ -3,6 +3,7 @@ import type { SessionRecord, ProjectRecord, Preferences, PersistedState, Archive
 import { getCost, restoreCost } from './session-cost.js';
 import { restoreContext } from './session-context.js';
 import { getProviderCapabilities, getProviderAvailabilitySnapshot } from './provider-availability.js';
+import { basename } from '../shared/platform.js';
 
 export type { SessionRecord, ProjectRecord, Preferences, PersistedState, ArchivedSession } from '../shared/types.js';
 
@@ -356,7 +357,7 @@ class AppState {
       return existing;
     }
 
-    const name = filePath.split('/').pop() || filePath;
+    const name = basename(filePath);
     const session: SessionRecord = {
       id: crypto.randomUUID(),
       name,
@@ -454,7 +455,7 @@ class AppState {
       return existing;
     }
 
-    const name = filePath.split('/').pop() || filePath;
+    const name = basename(filePath);
     const session: SessionRecord = {
       id: crypto.randomUUID(),
       name,

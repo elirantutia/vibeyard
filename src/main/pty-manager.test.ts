@@ -27,6 +27,7 @@ vi.mock('os', () => ({
 
 vi.mock('fs', () => ({
   existsSync: vi.fn(() => false),
+  statSync: vi.fn(() => { throw new Error('ENOENT'); }),
   mkdirSync: vi.fn(),
   writeFileSync: vi.fn(),
   readFileSync: vi.fn(() => { throw new Error('ENOENT'); }),
@@ -34,10 +35,13 @@ vi.mock('fs', () => ({
 }));
 
 import * as fs from 'fs';
-import { spawnPty, writePty, resizePty, killPty, getPtyCwd } from './pty-manager';
+import * as child_process from 'child_process';
+import { spawnPty, writePty, resizePty, killPty, getPtyCwd, getRegistryPath, getFullPath, resetPathCache, resolveWindowsShell } from './pty-manager';
 import { initProviders } from './providers/registry';
 
 const mockExistsSync = vi.mocked(fs.existsSync);
+const mockStatSync = vi.mocked(fs.statSync);
+const fileStat = { isFile: () => true } as fs.Stats;
 
 function createMockPtyProcess() {
   const dataCallbacks: ((data: string) => void)[] = [];
@@ -146,7 +150,10 @@ describe('spawnPty', () => {
     const expectedPath = isWin
       ? path.join('/mock/home', 'AppData', 'Roaming', 'npm', 'claude.cmd')
       : '/usr/local/bin/claude';
-    mockExistsSync.mockImplementation((p) => String(p) === expectedPath);
+    mockStatSync.mockImplementation((p) => {
+      if (String(p) === expectedPath) return fileStat;
+      throw new Error('ENOENT');
+    });
     const proc = createMockPtyProcess();
     mockSpawn.mockReturnValue(proc);
 
@@ -155,11 +162,20 @@ describe('spawnPty', () => {
     freshInit();
     freshSpawnPty('s1', '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
 
-    expect(mockSpawn).toHaveBeenCalledWith(
-      expectedPath,
-      [],
-      expect.any(Object),
-    );
+    if (isWin) {
+      // On Windows, .cmd files are wrapped with cmd.exe /c
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'cmd.exe',
+        ['/c', expectedPath],
+        expect.any(Object),
+      );
+    } else {
+      expect(mockSpawn).toHaveBeenCalledWith(
+        expectedPath,
+        [],
+        expect.any(Object),
+      );
+    }
   });
 
   it('sets required env vars', () => {
@@ -295,4 +311,129 @@ describe('getPtyCwd', () => {
     const result = await getPtyCwd('s2');
     expect(result).toBeNull();
   });
+});
+
+const mockExecSync = vi.mocked(child_process.execSync);
+
+describe('getRegistryPath', () => {
+  beforeEach(() => {
+    resetPathCache();
+  });
+
+  if (isWin) {
+    it('parses REG_SZ registry output', () => {
+      mockExecSync
+        .mockReturnValueOnce(
+          '\r\nHKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment\r\n    Path    REG_SZ    C:\\Windows\\system32;C:\\Windows\r\n\r\n',
+        )
+        .mockReturnValueOnce(
+          '\r\nHKCU\\Environment\r\n    Path    REG_SZ    C:\\Users\\test\\AppData\\Roaming\\npm\r\n\r\n',
+        );
+
+      const result = getRegistryPath();
+      expect(result).toContain('C:\\Windows\\system32;C:\\Windows');
+      expect(result).toContain('C:\\Users\\test\\AppData\\Roaming\\npm');
+    });
+
+    it('expands %VAR% references in REG_EXPAND_SZ values', () => {
+      process.env.SystemRoot = 'C:\\Windows';
+      process.env.USERPROFILE = 'C:\\Users\\test';
+
+      mockExecSync
+        .mockReturnValueOnce(
+          '    Path    REG_EXPAND_SZ    %SystemRoot%\\system32;%SystemRoot%\r\n',
+        )
+        .mockReturnValueOnce(
+          '    Path    REG_EXPAND_SZ    %USERPROFILE%\\AppData\\Roaming\\npm\r\n',
+        );
+
+      const result = getRegistryPath();
+      expect(result).toContain('C:\\Windows\\system32');
+      expect(result).toContain('C:\\Users\\test\\AppData\\Roaming\\npm');
+      expect(result).not.toContain('%SystemRoot%');
+      expect(result).not.toContain('%USERPROFILE%');
+    });
+
+    it('returns empty string when registry queries fail', () => {
+      mockExecSync.mockImplementation(() => { throw new Error('access denied'); });
+
+      const result = getRegistryPath();
+      expect(result).toBe('');
+    });
+
+    it('handles partial failure (system path fails, user path succeeds)', () => {
+      mockExecSync
+        .mockImplementationOnce(() => { throw new Error('access denied'); })
+        .mockReturnValueOnce(
+          '    Path    REG_SZ    C:\\Users\\test\\AppData\\Roaming\\npm\r\n',
+        );
+
+      const result = getRegistryPath();
+      expect(result).toContain('C:\\Users\\test\\AppData\\Roaming\\npm');
+    });
+  } else {
+    it('returns empty string on non-Windows', () => {
+      expect(getRegistryPath()).toBe('');
+    });
+  }
+});
+
+describe('resolveWindowsShell', () => {
+  if (isWin) {
+    it('wraps .cmd files with cmd.exe /c', () => {
+      const result = resolveWindowsShell('C:\\Users\\test\\npm\\claude.cmd', ['--help']);
+      expect(result).toEqual({
+        shell: 'cmd.exe',
+        args: ['/c', 'C:\\Users\\test\\npm\\claude.cmd', '--help'],
+      });
+    });
+
+    it('wraps .bat files with cmd.exe /c', () => {
+      const result = resolveWindowsShell('C:\\tools\\run.bat', ['-v']);
+      expect(result).toEqual({
+        shell: 'cmd.exe',
+        args: ['/c', 'C:\\tools\\run.bat', '-v'],
+      });
+    });
+
+    it('wraps .ps1 files with powershell.exe', () => {
+      const result = resolveWindowsShell('C:\\scripts\\tool.ps1', ['arg1']);
+      expect(result).toEqual({
+        shell: 'powershell.exe',
+        args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'C:\\scripts\\tool.ps1', 'arg1'],
+      });
+    });
+
+    it('passes .exe files through unchanged', () => {
+      const result = resolveWindowsShell('C:\\tools\\claude.exe', ['--help']);
+      expect(result).toEqual({
+        shell: 'C:\\tools\\claude.exe',
+        args: ['--help'],
+      });
+    });
+
+    it('wraps bare binary names with cmd.exe /c', () => {
+      const result = resolveWindowsShell('claude', ['--help']);
+      expect(result).toEqual({
+        shell: 'cmd.exe',
+        args: ['/c', 'claude', '--help'],
+      });
+    });
+
+    it('wraps absolute extensionless paths with cmd.exe /c', () => {
+      const result = resolveWindowsShell('C:\\tools\\claude', ['--help']);
+      expect(result).toEqual({
+        shell: 'cmd.exe',
+        args: ['/c', 'C:\\tools\\claude', '--help'],
+      });
+    });
+  } else {
+    it('passes through unchanged on non-Windows', () => {
+      const result = resolveWindowsShell('/usr/local/bin/claude', ['--help']);
+      expect(result).toEqual({
+        shell: '/usr/local/bin/claude',
+        args: ['--help'],
+      });
+    });
+  }
 });

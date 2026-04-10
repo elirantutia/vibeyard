@@ -3,7 +3,7 @@ import { closeModal } from './modal.js';
 import { esc, scoreColor } from '../dom-utils.js';
 import { setPendingPrompt } from './terminal-pane.js';
 import { promptNewSession } from './tab-bar.js';
-import { loadProviderMetas, getCachedProviderMetas, getProviderDisplayName } from '../provider-availability.js';
+import { loadProviderAvailability, getProviderAvailabilitySnapshot, getProviderDisplayName } from '../provider-availability.js';
 import type { ReadinessResult, ReadinessCategory, ReadinessCheck, ReadinessCheckStatus } from '../../shared/types.js';
 
 const overlay = document.getElementById('modal-overlay')!;
@@ -161,9 +161,12 @@ export async function showReadinessModal(result: ReadinessResult): Promise<void>
   `;
   container.appendChild(scoreSection);
 
-  // Provider filter — only shown when multiple providers are available
-  await loadProviderMetas();
-  const metas = getCachedProviderMetas();
+  // Provider filter — only shown when multiple providers are actually installed
+  await loadProviderAvailability();
+  const snapshot = getProviderAvailabilitySnapshot();
+  const metas = snapshot
+    ? snapshot.providers.filter(p => snapshot.availability.get(p.id))
+    : [];
 
   if (metas.length > 1) {
     const filterSection = document.createElement('div');

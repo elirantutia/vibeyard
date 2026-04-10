@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mockClipboardWrite = vi.fn();
+const mockClipboardWrite = vi.fn().mockResolvedValue(undefined);
 const mockPtyWrite = vi.fn();
 
 class FakeTerminal {

@@ -111,6 +111,8 @@ export function createTerminalPane(
     }
   }));
 
+  const writeToPty = (data: string) => window.vibeyard.pty.write(sessionId, data);
+
   // Send CSI u encoding for Shift+Enter so Claude CLI treats it as newline
   attachClipboardCopyHandler(terminal, (e) => {
     if (e.shiftKey && e.key === 'Enter') {
@@ -118,7 +120,7 @@ export function createTerminalPane(
       e.preventDefault();
       return false;
     }
-  });
+  }, writeToPty);
 
   const instance: TerminalInstance = {
     terminal,

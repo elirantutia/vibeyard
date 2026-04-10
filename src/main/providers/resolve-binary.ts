@@ -1,15 +1,19 @@
-import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { execSync } from 'child_process';
 import { getFullPath } from '../pty-manager';
 import { isWin, whichCmd } from '../platform';
+import { fileExists } from '../fs-utils';
 
 const COMMON_BIN_DIRS = isWin
   ? [
       path.join(os.homedir(), 'AppData', 'Roaming', 'npm'),
       path.join(os.homedir(), 'AppData', 'Local', 'Programs'),
+      path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'claude'),
       path.join(os.homedir(), '.local', 'bin'),
+      path.join(os.homedir(), 'scoop', 'shims'),
+      path.join(os.homedir(), '.volta', 'bin'),
+      path.join(process.env.ProgramData || 'C:\\ProgramData', 'chocolatey', 'bin'),
     ]
   : [
       '/usr/local/bin',
@@ -25,13 +29,12 @@ function findBinaryInDir(dir: string, binaryName: string): string | null {
   if (isWin) {
     for (const ext of WIN_EXTENSIONS) {
       const candidate = path.join(dir, binaryName + ext);
-      try { if (fs.existsSync(candidate)) return candidate; } catch {}
+      if (fileExists(candidate)) return candidate;
     }
     return null;
   }
   const candidate = path.join(dir, binaryName);
-  try { if (fs.existsSync(candidate)) return candidate; } catch {}
-  return null;
+  return fileExists(candidate) ? candidate : null;
 }
 
 function whichBinary(binaryName: string, envPath: string): string | null {
@@ -47,6 +50,28 @@ function whichBinary(binaryName: string, envPath: string): string | null {
   } catch {
     return null;
   }
+}
+
+// Cached result of `npm prefix -g` (Windows only, avoids repeated subprocess spawns)
+let cachedNpmPrefix: string | null | undefined;
+
+function getNpmGlobalPrefix(fullPath: string): string | null {
+  if (!isWin) return null;
+  if (cachedNpmPrefix !== undefined) return cachedNpmPrefix;
+  try {
+    cachedNpmPrefix = execSync('npm prefix -g', {
+      encoding: 'utf-8', timeout: 5000, windowsHide: true,
+      env: { ...process.env, PATH: fullPath },
+    }).trim() || null;
+  } catch {
+    cachedNpmPrefix = null;
+  }
+  return cachedNpmPrefix;
+}
+
+function findViaNpmPrefix(binaryName: string, fullPath: string): string | null {
+  const prefix = getNpmGlobalPrefix(fullPath);
+  return prefix ? findBinaryInDir(prefix, binaryName) : null;
 }
 
 export function resolveBinary(binaryName: string, cache: { path: string | null }): string {
@@ -68,6 +93,9 @@ export function resolveBinary(binaryName: string, cache: { path: string | null }
     return resolved;
   }
 
+  const npmFound = findViaNpmPrefix(binaryName, fullPath);
+  if (npmFound) { cache.path = npmFound; return npmFound; }
+
   cache.path = binaryName;
   return binaryName;
 }
@@ -81,7 +109,10 @@ export function validateBinaryExists(
     if (findBinaryInDir(dir, binaryName)) return { ok: true, message: '' };
   }
 
-  if (whichBinary(binaryName, getFullPath())) return { ok: true, message: '' };
+  const fullPath = getFullPath();
+  if (whichBinary(binaryName, fullPath)) return { ok: true, message: '' };
+
+  if (findViaNpmPrefix(binaryName, fullPath)) return { ok: true, message: '' };
 
   return {
     ok: false,

@@ -67,9 +67,9 @@ function ensureShell(projectId: string, projectPath: string): ShellTerminalInsta
   const searchAddon = new SearchAddon();
   terminal.loadAddon(searchAddon);
 
-  attachClipboardCopyHandler(terminal);
-
   const sessionId = shellSessionId(projectId);
+
+  attachClipboardCopyHandler(terminal, undefined, (data) => window.vibeyard.pty.write(sessionId, data));
 
   const instance: ShellTerminalInstance = {
     terminal,

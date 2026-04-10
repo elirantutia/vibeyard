@@ -4,6 +4,7 @@ import { setPendingPrompt } from '../terminal-pane.js';
 import type { BrowserTabInstance } from './types.js';
 import { positionPopover } from './popover.js';
 import { getViewportContext } from './viewport.js';
+import { isWin } from '../../platform.js';
 
 export function toggleDrawMode(instance: BrowserTabInstance): void {
   instance.drawMode = !instance.drawMode;
@@ -58,13 +59,16 @@ async function captureScreenshotPath(instance: BrowserTabInstance): Promise<stri
   }
 }
 
-function buildDrawPrompt(instance: BrowserTabInstance, imagePath: string): string {
+/** @internal Exported for testing */
+export function buildDrawPrompt(instance: BrowserTabInstance, imagePath: string): string {
   const instruction = instance.drawInstructionInput.value.trim();
   const pageUrl = instance.urlInput.value;
   const vpCtx = getViewportContext(instance, instance.drawAttachDimsCheckbox.checked);
+  // On Windows, cmd.exe /c truncates arguments at newline characters.
+  const sep = isWin ? ' | ' : '\n';
   return (
-    `Regarding the page at ${pageUrl}${vpCtx}:\n` +
-    `See annotated screenshot: ${imagePath}\n` +
+    `Regarding the page at ${pageUrl}${vpCtx}:${sep}` +
+    `See annotated screenshot: ${imagePath}${sep}` +
     `${instruction}`
   );
 }

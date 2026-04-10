@@ -3,6 +3,7 @@ import { showModal, setModalError, closeModal } from './modal.js';
 import { showPreferencesModal } from './preferences-modal.js';
 import { onChange as onCostChange, getAggregateCost } from '../session-cost.js';
 import { hasUnreadInProject, onChange as onUnreadChange } from '../session-unread.js';
+import { basename, lastSeparatorIndex } from '../../shared/platform.js';
 
 const projectListEl = document.getElementById('project-list')!;
 let activeProjectContextMenu: HTMLElement | null = null;
@@ -132,7 +133,7 @@ export function promptNewProject(): void {
 
   const autoFillName = (path: string) => {
     if (nameInput && !nameManuallyEdited) {
-      nameInput.value = path.split('/').pop() || '';
+      nameInput.value = basename(path);
     }
   };
 
@@ -162,7 +163,7 @@ export function promptNewProject(): void {
       for (const dir of dirs) {
         const item = document.createElement('div');
         item.className = 'path-autocomplete-item';
-        item.textContent = dirPart + (dir.split('/').pop() ?? '');
+        item.textContent = dirPart + basename(dir);
         item.addEventListener('mousedown', (e) => {
           e.preventDefault();
           pathInput.value = item.textContent!;
@@ -177,7 +178,7 @@ export function promptNewProject(): void {
     pathInput.addEventListener('input', async () => {
       const value = pathInput.value;
       autoFillName(value);
-      const lastSlash = value.lastIndexOf('/');
+      const lastSlash = lastSeparatorIndex(value);
       if (lastSlash === -1) { hideDropdown(); return; }
 
       const dirPart = value.substring(0, lastSlash + 1);

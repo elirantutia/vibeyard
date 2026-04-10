@@ -19,9 +19,46 @@ const silencedExits = new Set<string>();
  * Get the full PATH by sourcing the user's login shell.
  * When Electron is launched from macOS Finder/Dock, process.env.PATH
  * is minimal (/usr/bin:/bin:/usr/sbin:/sbin) and misses nvm, homebrew, etc.
- * We resolve this once by running a login shell to get the real PATH.
+ * On Windows, packaged Electron apps inherit PATH from explorer.exe which
+ * may be stale — we read the registry for the current PATH.
+ * We resolve this once by running a login shell / reading the registry.
  */
 let cachedFullPath: string | null = null;
+
+export function getRegistryPath(): string {
+  if (!isWin) return '';
+
+  const parse = (output: string): string => {
+    const match = output.match(/REG_(?:EXPAND_)?SZ\s+(.+)/);
+    if (!match) return '';
+    let value = match[1].trim();
+    value = value.replace(/%([^%]+)%/g, (_m, varName) => process.env[varName] || `%${varName}%`);
+    return value;
+  };
+
+  let systemPath = '';
+  try {
+    systemPath = parse(execSync(
+      'reg query "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment" /v Path',
+      { encoding: 'utf-8', timeout: 3000, windowsHide: true },
+    ));
+  } catch {}
+
+  let userPath = '';
+  try {
+    userPath = parse(execSync(
+      'reg query "HKCU\\Environment" /v Path',
+      { encoding: 'utf-8', timeout: 3000, windowsHide: true },
+    ));
+  } catch {}
+
+  return [systemPath, userPath].filter(Boolean).join(pathSep);
+}
+
+/** Reset cached PATH (used after install-then-retry flows and in tests). */
+export function resetPathCache(): void {
+  cachedFullPath = null;
+}
 
 export function getFullPath(): string {
   if (cachedFullPath) return cachedFullPath;
@@ -29,13 +66,19 @@ export function getFullPath(): string {
   const currentPath = process.env.PATH || '';
 
   if (isWin) {
-    // On Windows, PATH is generally correct — just ensure npm/appdata dirs are present
     const home = os.homedir();
     const extraDirs = [
       path.join(home, 'AppData', 'Roaming', 'npm'),
       path.join(home, '.local', 'bin'),
     ];
-    const pathSet = new Set(currentPath.split(pathSep));
+
+    // Read the up-to-date PATH from the Windows registry
+    const registryPath = getRegistryPath();
+
+    const pathSet = new Set([
+      ...currentPath.split(pathSep),
+      ...registryPath.split(pathSep),
+    ]);
     for (const dir of extraDirs) {
       pathSet.add(dir);
     }
@@ -78,6 +121,30 @@ export function getFullPath(): string {
   return cachedFullPath;
 }
 
+/**
+ * On Windows, .cmd/.bat and .ps1 files cannot be spawned directly by node-pty
+ * (CreateProcess returns error 193). Wrap them via cmd.exe or powershell.exe.
+ */
+export function resolveWindowsShell(
+  shell: string,
+  args: string[]
+): { shell: string; args: string[] } {
+  if (!isWin) return { shell, args };
+  const ext = path.extname(shell).toLowerCase();
+  // .exe files can be spawned directly by CreateProcess
+  if (ext === '.exe') return { shell, args };
+  // .ps1 scripts need PowerShell
+  if (ext === '.ps1') {
+    return {
+      shell: 'powershell.exe',
+      args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', shell, ...args],
+    };
+  }
+  // Everything else (.cmd, .bat, bare names, extensionless paths):
+  // wrap with cmd.exe so CreateProcess doesn't choke on non-PE binaries.
+  return { shell: 'cmd.exe', args: ['/c', shell, ...args] };
+}
+
 export function spawnPty(
   sessionId: string,
   cwd: string,
@@ -100,9 +167,10 @@ export function spawnPty(
   const provider = getProvider(providerId);
   const env = provider.buildEnv(sessionId, { ...process.env } as Record<string, string>);
   const args = provider.buildArgs({ cliSessionId, isResume, extraArgs, initialPrompt });
-  const shell = provider.resolveBinaryPath();
+  const resolvedShell = provider.resolveBinaryPath();
+  const { shell, args: spawnArgs } = resolveWindowsShell(resolvedShell, args);
 
-  const ptyProcess = pty.spawn(shell, args, {
+  const ptyProcess = pty.spawn(shell, spawnArgs, {
     name: 'xterm-256color',
     cols: 120,
     rows: 30,

@@ -1,6 +1,7 @@
 import picomatch from 'picomatch';
 import type { ToolFailureData } from '../../shared/types.js';
 import { DEFAULT_SCAN_IGNORE, EXCLUDED_DIRECTORIES, EXTRA_ALERT_IGNORE } from '../../shared/constants.js';
+import { basename as pathBasename } from '../../shared/platform.js';
 import { appState } from '../state.js';
 
 export interface LargeFileAlert {
@@ -59,8 +60,8 @@ async function matchesVibeyardignore(projectPath: string, relative: string): Pro
   }
   const matchers = ignoreMatcherCache.get(projectPath);
   if (!matchers) return false;
-  const basename = relative.split('/').pop() || relative;
-  return matchers.basename(basename) || matchers.fullPath(relative);
+  const base = pathBasename(relative);
+  return matchers.basename(base) || matchers.fullPath(relative);
 }
 
 const alertedPerSession = new Map<string, Set<string>>();

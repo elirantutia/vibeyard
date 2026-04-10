@@ -363,6 +363,82 @@ describe('ShortcutManager', () => {
   });
 });
 
+describe('ShortcutManager.matchesAnyShortcut', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.stubGlobal('navigator', { platform: 'MacIntel' });
+    mockAppState.preferences.keybindings = {};
+    mockAppState.setPreference.mockClear();
+  });
+
+  it('returns true for a matching shortcut key', async () => {
+    const { ShortcutManager } = await import('./shortcuts');
+    const mgr = new ShortcutManager();
+    // CmdOrCtrl+T on Mac = metaKey + 't' (new-session shortcut)
+    const e = makeKeyEvent({ key: 't', metaKey: true });
+    expect(mgr.matchesAnyShortcut(e)).toBe(true);
+  });
+
+  it('returns true even without a registered handler', async () => {
+    const { ShortcutManager } = await import('./shortcuts');
+    const mgr = new ShortcutManager();
+    // CmdOrCtrl+J on Mac = metaKey + 'j' (project-terminal-alt), no handler registered
+    const e = makeKeyEvent({ key: 'j', metaKey: true });
+    expect(mgr.matchesAnyShortcut(e)).toBe(true);
+  });
+
+  it('returns false for a non-shortcut key', async () => {
+    const { ShortcutManager } = await import('./shortcuts');
+    const mgr = new ShortcutManager();
+    const e = makeKeyEvent({ key: 'z', metaKey: true });
+    expect(mgr.matchesAnyShortcut(e)).toBe(false);
+  });
+
+  it('does not execute handler or call preventDefault', async () => {
+    const { ShortcutManager } = await import('./shortcuts');
+    const mgr = new ShortcutManager();
+    const handler = vi.fn();
+    mgr.registerHandler('new-session', handler);
+    const e = makeKeyEvent({ key: 't', metaKey: true });
+    mgr.matchesAnyShortcut(e);
+    expect(handler).not.toHaveBeenCalled();
+    expect(e.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('respects keybinding overrides', async () => {
+    mockAppState.preferences.keybindings = { 'new-session': 'CmdOrCtrl+K' };
+    const { ShortcutManager } = await import('./shortcuts');
+    const mgr = new ShortcutManager();
+    // Old default key should not match
+    expect(mgr.matchesAnyShortcut(makeKeyEvent({ key: 't', metaKey: true }))).toBe(false);
+    // New override key should match
+    expect(mgr.matchesAnyShortcut(makeKeyEvent({ key: 'k', metaKey: true }))).toBe(true);
+  });
+});
+
+describe('ShortcutManager.matchesAnyShortcut (Windows)', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.stubGlobal('navigator', { platform: 'Win32' });
+    mockAppState.preferences.keybindings = {};
+    mockAppState.setPreference.mockClear();
+  });
+
+  it('matches Ctrl+J for project-terminal-alt', async () => {
+    const { ShortcutManager } = await import('./shortcuts');
+    const mgr = new ShortcutManager();
+    const e = makeKeyEvent({ key: 'j', ctrlKey: true });
+    expect(mgr.matchesAnyShortcut(e)).toBe(true);
+  });
+
+  it('matches Ctrl+B for toggle-sidebar', async () => {
+    const { ShortcutManager } = await import('./shortcuts');
+    const mgr = new ShortcutManager();
+    const e = makeKeyEvent({ key: 'b', ctrlKey: true });
+    expect(mgr.matchesAnyShortcut(e)).toBe(true);
+  });
+});
+
 describe('shortcutManager singleton', () => {
   beforeEach(() => {
     vi.resetModules();
