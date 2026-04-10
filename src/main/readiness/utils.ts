@@ -1,16 +1,11 @@
 import * as fs from 'fs';
-import { execSync } from 'child_process';
 import type { ReadinessCheck } from '../../shared/types';
+import { getGitTrackedFiles } from '../git-status';
 
 export { readFileSafe, fileExists, dirExists, readDirSafe } from '../fs-utils';
 
 export function getTrackedFiles(projectPath: string): string[] {
-  try {
-    const output = execSync('git ls-files', { cwd: projectPath, encoding: 'utf-8', timeout: 5000 });
-    return output.split('\n').filter(Boolean);
-  } catch {
-    return [];
-  }
+  return getGitTrackedFiles(projectPath);
 }
 
 /**

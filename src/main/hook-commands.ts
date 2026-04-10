@@ -13,7 +13,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { STATUS_DIR, SCRIPT_DIR } from './hook-status';
+import { STATUS_DIR, SCRIPT_DIR, getWslHookPaths } from './hook-status';
 import { isWin, pythonBin as PY } from './platform';
 
 // Python helper scripts are written to STATUS_DIR via installEventScript()
@@ -83,6 +83,11 @@ export function statusCmd(
   sessionIdVar: string,
   hookMarker: string,
 ): string {
+  const wslPaths = getWslHookPaths();
+  if (wslPaths) {
+    const py = `${wslPaths.scriptDir}/status_writer.py`;
+    return `sh -c 'mkdir -p ${wslPaths.statusDir} && echo ${event}:${status} > ${wslPaths.statusDir}/$${sessionIdVar}.status ${hookMarker}'`;
+  }
   if (isWin) {
     const py = path.join(SCRIPT_DIR, 'status_writer.py').replace(/\\/g, '/');
     const dir = STATUS_DIR.replace(/\\/g, '/');
@@ -98,6 +103,11 @@ export function captureSessionIdCmd(
   sessionIdVar: string,
   hookMarker: string,
 ): string {
+  const wslPaths = getWslHookPaths();
+  if (wslPaths) {
+    const py = `${wslPaths.scriptDir}/session_id_capture.py`;
+    return `${wslPaths.pythonBin} "${py}" "${sessionIdVar}" "${wslPaths.statusDir}" "${hookMarker}"`;
+  }
   const py = path.join(SCRIPT_DIR, 'session_id_capture.py').replace(/\\/g, '/');
   const dir = STATUS_DIR.replace(/\\/g, '/');
   return `${PY} "${py}" "${sessionIdVar}" "${dir}" "${hookMarker}"`;
@@ -110,6 +120,11 @@ export function captureToolFailureCmd(
   sessionIdVar: string,
   hookMarker: string,
 ): string {
+  const wslPaths = getWslHookPaths();
+  if (wslPaths) {
+    const py = `${wslPaths.scriptDir}/tool_failure_capture.py`;
+    return `${wslPaths.pythonBin} "${py}" "${sessionIdVar}" "${wslPaths.statusDir}" "${hookMarker}"`;
+  }
   const py = path.join(SCRIPT_DIR, 'tool_failure_capture.py').replace(/\\/g, '/');
   const dir = STATUS_DIR.replace(/\\/g, '/');
   return `${PY} "${py}" "${sessionIdVar}" "${dir}" "${hookMarker}"`;
@@ -144,6 +159,11 @@ export function wrapPythonHookCmd(
   hookMarker: string,
   _pipeStdin = true,
 ): string {
+  const wslPaths = getWslHookPaths();
+  if (wslPaths) {
+    const pyCmd = `${wslPaths.scriptDir}/${scriptName}`;
+    return `${wslPaths.pythonBin} "${pyCmd}" "${hookMarker}"`;
+  }
   const pyCmd = path.join(SCRIPT_DIR, scriptName).replace(/\\/g, '/');
   return `${PY} "${pyCmd}" "${hookMarker}"`;
 }

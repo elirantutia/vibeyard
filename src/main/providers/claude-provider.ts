@@ -1,13 +1,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import type { BrowserWindow } from 'electron';
 import type { CliProvider } from './provider';
 import type { CliProviderMeta, ProviderConfig, SettingsValidationResult } from '../../shared/types';
 import { getFullPath } from '../pty-manager';
 import { installStatusLineScript, cleanupAll as cleanupHookStatus } from '../hook-status';
 import { startConfigWatcher as startConfigWatch, stopConfigWatcher as stopConfigWatch } from '../config-watcher';
-import { installHooksOnly, installStatusLine, getClaudeConfig } from '../claude-cli';
+import { installHooksOnly, installStatusLine, getClaudeConfig, claudeProjectDirSlugs, getEffectiveCliUserHome } from '../claude-cli';
 import { guardedInstall, validateSettings, reinstallSettings } from '../settings-guard';
 import { resolveBinary, validateBinaryExists } from './resolve-binary';
 
@@ -104,10 +103,12 @@ export class ClaudeProvider implements CliProvider {
   }
 
   getTranscriptPath(cliSessionId: string, projectPath: string): string | null {
-    // Claude encodes the project path by replacing any non-alphanumeric char with '-'
-    const slug = projectPath.replace(/[^a-zA-Z0-9]/g, '-');
-    const filePath = path.join(os.homedir(), '.claude', 'projects', slug, `${cliSessionId}.jsonl`);
-    return fs.existsSync(filePath) ? filePath : null;
+    const base = path.join(getEffectiveCliUserHome(), '.claude', 'projects');
+    for (const slug of claudeProjectDirSlugs(projectPath)) {
+      const filePath = path.join(base, slug, `${cliSessionId}.jsonl`);
+      if (fs.existsSync(filePath)) return filePath;
+    }
+    return null;
   }
 
   parseCostFromOutput(rawText: string): { totalCostUsd: number } | null {

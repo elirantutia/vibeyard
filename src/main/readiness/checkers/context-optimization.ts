@@ -1,4 +1,5 @@
 import * as path from 'path';
+import { joinStoredProjectPath } from '../../project-fs-path';
 import * as fs from 'fs';
 import picomatch from 'picomatch';
 import type { ReadinessCheck } from '../../../shared/types';
@@ -13,7 +14,7 @@ const VIBEYARDIGNORE_HEADER = `# Files and patterns to exclude from AI readiness
 `;
 
 function ensureVibeyardignore(projectPath: string): void {
-  const filePath = path.join(projectPath, '.vibeyardignore');
+  const filePath = joinStoredProjectPath(projectPath, '.vibeyardignore');
   if (fileExists(filePath)) return;
   try {
     fs.writeFileSync(filePath, VIBEYARDIGNORE_HEADER + DEFAULT_SCAN_IGNORE.join('\n') + '\n', 'utf-8');
@@ -24,7 +25,7 @@ function ensureVibeyardignore(projectPath: string): void {
 
 function loadScanIgnorePatterns(projectPath: string): string[] {
   const patterns: string[] = [];
-  const content = readFileSafe(path.join(projectPath, '.vibeyardignore'));
+  const content = readFileSafe(joinStoredProjectPath(projectPath, '.vibeyardignore'));
   if (content) {
     for (const raw of content.split('\n')) {
       const line = raw.trim();
@@ -74,7 +75,7 @@ function checkLargeFiles(projectPath: string, trackedFiles: string[]): Readiness
     checked++;
 
     try {
-      const fullPath = path.join(projectPath, file);
+      const fullPath = joinStoredProjectPath(projectPath, file);
       const lines = countFileLines(fullPath);
       if (lines > LINE_THRESHOLD) {
         largeFiles.push(`${file} (${lines} lines)`);

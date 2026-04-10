@@ -1,4 +1,4 @@
-import * as path from 'path';
+import { joinStoredProjectPath } from '../../project-fs-path';
 import type { ReadinessCheck } from '../../../shared/types';
 import { fileExists, readFileSafe } from '../utils';
 
@@ -9,7 +9,7 @@ export interface InstructionFileOpts {
 }
 
 export function checkFileExists(projectPath: string, opts: InstructionFileOpts): ReadinessCheck {
-  const exists = fileExists(path.join(projectPath, opts.fileName));
+  const exists = fileExists(joinStoredProjectPath(projectPath, opts.fileName));
   return {
     id: `${opts.idPrefix}-exists`,
     name: `${opts.displayName} exists`,
@@ -147,7 +147,7 @@ export function checkFileSize(content: string | null, opts: InstructionFileOpts)
 }
 
 export function checkNotBloated(projectPath: string, opts: InstructionFileOpts): ReadinessCheck {
-  const content = readFileSafe(path.join(projectPath, opts.fileName));
+  const content = readFileSafe(joinStoredProjectPath(projectPath, opts.fileName));
   if (!content) {
     return {
       id: `${opts.idPrefix}-bloat`,
@@ -175,7 +175,7 @@ export function checkNotBloated(projectPath: string, opts: InstructionFileOpts):
 }
 
 export function runAllInstructionChecks(projectPath: string, opts: InstructionFileOpts): ReadinessCheck[] {
-  const content = readFileSafe(path.join(projectPath, opts.fileName));
+  const content = readFileSafe(joinStoredProjectPath(projectPath, opts.fileName));
   return [
     checkFileExists(projectPath, opts),
     checkBuildCommands(content, opts),

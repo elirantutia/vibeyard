@@ -2,6 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import type { BrowserWindow } from 'electron';
+import { resolveGitCommand, getGitWorktrees } from './git-status';
+import { joinStoredProjectPath, projectRootForFsWatch, storedPathToMainFs } from './project-fs-path';
 
 const DEBOUNCE_MS = 300;
 const IGNORE_SEGMENTS = new Set(['.git', 'node_modules', 'dist', 'build', '.next', '.cache', 'coverage', '__pycache__']);
@@ -40,15 +42,17 @@ function watchDir(dirPath: string, shouldSkip?: (filename: string | null) => boo
 }
 
 function resolveGitDir(projectPath: string): Promise<string> {
+  const g = resolveGitCommand(projectPath);
   return new Promise((resolve) => {
-    execFile('git', ['rev-parse', '--git-dir'], { cwd: projectPath, timeout: 3000 }, (err, stdout) => {
+    execFile(g.bin, [...g.prefixArgs, 'rev-parse', '--git-dir'], { cwd: g.execCwd, timeout: 3000 }, (err, stdout) => {
       if (err) {
-        resolve(path.join(projectPath, '.git'));
+        resolve(joinStoredProjectPath(projectPath, '.git'));
         return;
       }
-      const gitDir = stdout.trim();
-      // Could be absolute or relative
-      resolve(path.isAbsolute(gitDir) ? gitDir : path.join(projectPath, gitDir));
+      const raw = stdout.trim().replace(/\\/g, '/');
+      const root = projectPath.replace(/\\/g, '/');
+      const gitDir = path.posix.isAbsolute(raw) ? raw : path.posix.join(root, raw);
+      resolve(storedPathToMainFs(gitDir));
     });
   });
 }
@@ -73,8 +77,19 @@ async function setupWatchers(projectPath: string): Promise<void> {
   // Watch refs for commits, branch creation/deletion, remote updates
   watchDir(path.join(gitDir, 'refs'));
 
-  // Watch working tree for file edits, filtering out ignored directories
-  watchDir(projectPath, shouldIgnore);
+  // Watch every linked worktree working tree (main checkout + `git worktree add` paths)
+  const worktrees = await getGitWorktrees(projectPath);
+  const watchedRoots = new Set<string>();
+  for (const wt of worktrees) {
+    if (wt.isBare) continue;
+    const fsRoot = projectRootForFsWatch(wt.path);
+    if (watchedRoots.has(fsRoot)) continue;
+    watchedRoots.add(fsRoot);
+    watchDir(fsRoot, shouldIgnore);
+  }
+  if (watchedRoots.size === 0) {
+    watchDir(projectRootForFsWatch(projectPath), shouldIgnore);
+  }
 
   // Watch HEAD file directly for reliable branch-switch detection.
   // The recursive .git/ watcher may miss HEAD changes when macOS FSEvents

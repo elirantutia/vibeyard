@@ -161,6 +161,10 @@ export interface Preferences {
     costFooter: boolean;
     readinessSection: boolean;
   };
+  /** When true on Windows, spawn CLI tools inside WSL2 instead of natively. */
+  wslEnabled?: boolean;
+  /** WSL distro to use. When unset, the system default distro is used. */
+  wslDistro?: string;
 }
 
 // --- Settings Validation ---

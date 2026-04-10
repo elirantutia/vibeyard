@@ -103,6 +103,12 @@ export interface VibeyardApi {
   stats: {
     getCache(): Promise<StatsCache | null>;
   };
+  wsl: {
+    isAvailable(): Promise<boolean>;
+    getDistros(): Promise<string[]>;
+    getDefaultDistro(): Promise<string | null>;
+    browseDirs(dirPath: string, prefix?: string): Promise<string[]>;
+  };
   settings: {
     onWarning(callback: (data: SettingsWarningData) => void): () => void;
     onConflictDialog(callback: (data: StatusLineConflictData) => void): () => void;
@@ -251,6 +257,12 @@ const api: VibeyardApi = {
   },
   stats: {
     getCache: () => ipcRenderer.invoke('stats:getCache'),
+  },
+  wsl: {
+    isAvailable: () => ipcRenderer.invoke('wsl:isAvailable'),
+    getDistros: () => ipcRenderer.invoke('wsl:getDistros'),
+    getDefaultDistro: () => ipcRenderer.invoke('wsl:getDefaultDistro'),
+    browseDirs: (dirPath: string, prefix?: string) => ipcRenderer.invoke('wsl:browseDirs', dirPath, prefix),
   },
   settings: {
     onWarning: (cb) => onChannel('settings:warning', (data) => cb(data as SettingsWarningData)),

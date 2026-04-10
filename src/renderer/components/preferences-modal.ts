@@ -63,6 +63,8 @@ export function showPreferencesModal(): void {
   let autoTitleCheckbox: HTMLInputElement | null = null;
   let defaultProviderSelect: CustomSelectInstance | null = null;
   let debugModeCheckbox: HTMLInputElement | null = null;
+  let wslCheckbox: HTMLInputElement | null = null;
+  let wslDistroSelect: CustomSelectInstance | null = null;
   let sidebarCheckboxes: { configSections: HTMLInputElement; gitPanel: HTMLInputElement; sessionHistory: HTMLInputElement; costFooter: HTMLInputElement; readinessSection: HTMLInputElement } | null = null;
   let activeRecorder: { cleanup: () => void } | null = null;
 
@@ -196,6 +198,68 @@ export function showPreferencesModal(): void {
       autoTitleRow.appendChild(autoTitleLabel);
       autoTitleRow.appendChild(autoTitleCheckbox);
       content.appendChild(autoTitleRow);
+
+      // WSL2 section (only relevant on Windows builds)
+      const wslSection = document.createElement('div');
+      wslSection.className = 'preferences-wsl-section';
+      wslSection.style.display = 'none'; // hidden until we confirm WSL is available
+
+      const wslHeader = document.createElement('div');
+      wslHeader.className = 'pref-section-header';
+      wslHeader.textContent = 'WSL2 Integration';
+      wslSection.appendChild(wslHeader);
+
+      const wslRow = document.createElement('div');
+      wslRow.className = 'modal-toggle-field';
+      const wslLabel = document.createElement('label');
+      wslLabel.htmlFor = 'pref-wsl-enabled';
+      wslLabel.textContent = 'Run CLI tools inside WSL2';
+      wslCheckbox = document.createElement('input');
+      wslCheckbox.type = 'checkbox';
+      wslCheckbox.id = 'pref-wsl-enabled';
+      wslCheckbox.checked = appState.preferences.wslEnabled ?? false;
+      wslRow.appendChild(wslLabel);
+      wslRow.appendChild(wslCheckbox);
+      wslSection.appendChild(wslRow);
+
+      const wslDistroRow = document.createElement('div');
+      wslDistroRow.className = 'modal-toggle-field';
+      const wslDistroLabel = document.createElement('label');
+      wslDistroLabel.textContent = 'WSL Distro';
+      wslDistroRow.appendChild(wslDistroLabel);
+
+      const distroPlaceholder = document.createElement('span');
+      distroPlaceholder.textContent = 'Detecting…';
+      distroPlaceholder.className = 'pref-wsl-detecting';
+      wslDistroRow.appendChild(distroPlaceholder);
+      wslSection.appendChild(wslDistroRow);
+
+      content.appendChild(wslSection);
+
+      // Async: check WSL availability and populate distro dropdown
+      window.vibeyard.wsl.isAvailable().then(async (available) => {
+        if (!available || currentSection !== 'general') return;
+        wslSection.style.display = '';
+
+        const distros = await window.vibeyard.wsl.getDistros();
+        const defaultDistro = await window.vibeyard.wsl.getDefaultDistro();
+        const current = appState.preferences.wslDistro ?? defaultDistro ?? distros[0] ?? '';
+
+        distroPlaceholder.remove();
+        if (distros.length > 0) {
+          wslDistroSelect = createCustomSelect(
+            'pref-wsl-distro',
+            distros.map(d => ({ value: d, label: d === defaultDistro ? `${d} (default)` : d })),
+            current,
+          );
+          wslDistroRow.appendChild(wslDistroSelect.element);
+        } else {
+          const noDistro = document.createElement('span');
+          noDistro.textContent = 'No WSL distros found';
+          noDistro.style.color = 'var(--text-muted)';
+          wslDistroRow.appendChild(noDistro);
+        }
+      }).catch(() => {});
 
     } else if (section === 'sidebar') {
       const views = appState.preferences.sidebarViews ?? { configSections: true, gitPanel: true, sessionHistory: true, costFooter: true, readinessSection: true };
@@ -697,6 +761,12 @@ export function showPreferencesModal(): void {
         costFooter: sidebarCheckboxes.costFooter.checked,
         readinessSection: sidebarCheckboxes.readinessSection.checked,
       });
+    }
+    if (wslCheckbox) {
+      appState.setPreference('wslEnabled', wslCheckbox.checked);
+    }
+    if (wslDistroSelect) {
+      appState.setPreference('wslDistro', wslDistroSelect.getValue());
     }
   };
 

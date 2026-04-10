@@ -2,6 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import type { PersistedState } from '../shared/types';
+import { isWin, isWslMode } from './platform';
+import { getEffectiveDistro, normalizeProjectPathForWslStorage } from './wsl';
 
 export type { SessionRecord, ProjectRecord, Preferences, PersistedState } from '../shared/types';
 
@@ -27,6 +29,7 @@ export function loadState(): PersistedState {
       const parsed = JSON.parse(raw) as PersistedState;
       if (parsed.version !== 1) continue;
       migrateSessionIds(parsed);
+      normalizeWslProjectPaths(parsed);
       if (file !== STATE_FILE) {
         console.warn('Recovered state from temp file');
       }
@@ -37,6 +40,20 @@ export function loadState(): PersistedState {
   }
   console.warn('No valid state file found, using defaults');
   return defaultState();
+}
+
+/** When WSL mode is on, persist project paths as Linux paths (`/home/...`), not `\\wsl$\...`. */
+export function normalizeWslProjectPaths(state: PersistedState): void {
+  if (!isWin || !isWslMode(state.preferences)) return;
+  const distro = getEffectiveDistro(state.preferences.wslDistro) ?? undefined;
+  for (const p of state.projects) {
+    p.path = normalizeProjectPathForWslStorage(p.path, distro);
+    for (const s of p.sessions) {
+      if (s.worktreePath) {
+        s.worktreePath = normalizeProjectPathForWslStorage(s.worktreePath, distro);
+      }
+    }
+  }
 }
 
 /** Migrate legacy claudeSessionId fields to cliSessionId */

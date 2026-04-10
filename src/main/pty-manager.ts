@@ -2,10 +2,11 @@ import * as pty from 'node-pty';
 import { execSync, execFile } from 'child_process';
 import * as os from 'os';
 import * as path from 'path';
-import type { ProviderId } from '../shared/types';
+import type { ProviderId, Preferences } from '../shared/types';
 import { getProvider } from './providers/registry';
 import { registerSession } from './hook-status';
-import { isWin, pathSep } from './platform';
+import { isWin, pathSep, isWslMode } from './platform';
+import { loadState } from './store';
 
 interface PtyInstance {
   process: pty.IPty;
@@ -90,7 +91,6 @@ export function spawnPty(
   onExit: (exitCode: number, signal?: number) => void
 ): void {
   if (ptys.has(sessionId)) {
-    // Silence the old PTY's exit event so it doesn't remove the new session
     silencedExits.add(sessionId);
     killPty(sessionId);
   }
@@ -99,20 +99,48 @@ export function spawnPty(
 
   const provider = getProvider(providerId);
   const env = provider.buildEnv(sessionId, { ...process.env } as Record<string, string>);
-  const args = provider.buildArgs({ cliSessionId, isResume, extraArgs, initialPrompt });
-  const shell = provider.resolveBinaryPath();
+  const cliArgs = provider.buildArgs({ cliSessionId, isResume, extraArgs, initialPrompt });
+  const cliBinary = provider.resolveBinaryPath();
+
+  const state = loadState();
+  const wslActive = isWslMode(state.preferences);
+
+  let shell: string;
+  let args: string[];
+  let ptyCwd: string;
+
+  if (wslActive) {
+    const { getEffectiveDistro, winPathToWsl, uncWslPathToLinuxPath } = require('./wsl') as typeof import('./wsl');
+    const distro = getEffectiveDistro(state.preferences.wslDistro) || 'Ubuntu';
+
+    shell = 'wsl.exe';
+    // Linux cwd for the CLI: `wsl` was previously spawned without --cd, so Claude
+    // always saw `/mnt/c/.../Temp`. `--cd` sets the WSL working directory.
+    const fromUnc = uncWslPathToLinuxPath(cwd);
+    ptyCwd = fromUnc
+      ? fromUnc
+      : cwd.includes('\\') || /^[A-Za-z]:/.test(cwd)
+        ? winPathToWsl(cwd, distro)
+        : cwd;
+
+    const envPairs = [`CLAUDE_IDE_SESSION_ID=${env.CLAUDE_IDE_SESSION_ID || sessionId}`];
+    args = ['-d', distro, '--cd', ptyCwd, '--', 'env', ...envPairs, cliBinary, ...cliArgs];
+  } else {
+    shell = cliBinary;
+    args = cliArgs;
+    ptyCwd = cwd;
+  }
 
   const ptyProcess = pty.spawn(shell, args, {
     name: 'xterm-256color',
     cols: 120,
     rows: 30,
-    cwd,
-    env,
+    cwd: wslActive ? os.tmpdir() : ptyCwd,
+    env: wslActive ? process.env as Record<string, string> : env,
   });
 
   ptyProcess.onData((data) => onData(data));
   ptyProcess.onExit(({ exitCode, signal }) => {
-    // Only remove from map if this PTY is still the active one for this session
     const current = ptys.get(sessionId);
     if (current?.process === ptyProcess) {
       ptys.delete(sessionId);
@@ -155,15 +183,41 @@ export function spawnShellPty(
     killPty(sessionId);
   }
 
-  const shell = isWin
-    ? (process.env.COMSPEC || 'cmd.exe')
-    : (process.env.SHELL || '/bin/zsh');
+  const state = loadState();
+  const wslActive = isWslMode(state.preferences);
+
+  let shell: string;
+  let shellArgs: string[];
+  let ptyCwd: string;
+
+  if (wslActive) {
+    const { getEffectiveDistro, winPathToWsl, uncWslPathToLinuxPath } = require('./wsl') as typeof import('./wsl');
+    const distro = getEffectiveDistro(state.preferences.wslDistro) || 'Ubuntu';
+    shell = 'wsl.exe';
+    const fromUnc = uncWslPathToLinuxPath(cwd);
+    const wslShellCwd = fromUnc
+      ? fromUnc
+      : cwd.includes('\\') || /^[A-Za-z]:/.test(cwd)
+        ? winPathToWsl(cwd, distro)
+        : cwd;
+    shellArgs = ['-d', distro, '--cd', wslShellCwd];
+    ptyCwd = os.tmpdir();
+  } else if (isWin) {
+    shell = process.env.COMSPEC || 'cmd.exe';
+    shellArgs = [];
+    ptyCwd = cwd;
+  } else {
+    shell = process.env.SHELL || '/bin/zsh';
+    shellArgs = [];
+    ptyCwd = cwd;
+  }
+
   const shellEnv = { ...process.env, PATH: getFullPath() };
-  const ptyProcess = pty.spawn(shell, [], {
+  const ptyProcess = pty.spawn(shell, shellArgs, {
     name: 'xterm-256color',
     cols: 120,
     rows: 15,
-    cwd,
+    cwd: ptyCwd,
     env: shellEnv,
   });
 

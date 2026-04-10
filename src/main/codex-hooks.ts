@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { homedir } from 'os';
-import { STATUS_DIR } from './hook-status';
+import { getStatusDirForHookEmbed } from './hook-status';
 import { statusCmd as mkStatusCmd, captureSessionIdCmd as mkCaptureSessionIdCmd, installEventScript, wrapPythonHookCmd, installHookScripts } from './hook-commands';
 import { readFileSafe, readJsonSafe } from './fs-utils';
 import type { InspectorEventType, SettingsValidationResult } from '../shared/types';
@@ -131,6 +131,7 @@ export function installCodexHooks(): void {
   const captureSessionIdCmd = mkCaptureSessionIdCmd(SESSION_ID_VAR, CODEX_HOOK_MARKER);
 
   const captureEventCmd = (hookEvent: string, eventType: string) => {
+    const statusDirEmbed = getStatusDirForHookEmbed().replace(/\\/g, '\\\\');
     const pyCode = `import sys,json,os,time
 try:
  d=json.load(sys.stdin)
@@ -150,7 +151,7 @@ for fld in ("session_id","cwd","model","turn_id"):
  v=d.get(fld,"")
  if v:
   e[fld]=v
-status_dir=r'${STATUS_DIR}'
+status_dir=r'${statusDirEmbed}'
 with open(os.path.join(status_dir,sid+".events"),"a") as f:
  f.write(json.dumps(e)+"\\n")
 `;

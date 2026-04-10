@@ -1,4 +1,5 @@
 import * as path from 'path';
+import { joinStoredProjectPath } from '../../project-fs-path';
 import picomatch from 'picomatch';
 import type { ReadinessCheck } from '../../../shared/types';
 import type { ReadinessCheckProducer, TaggedCheck, AnalysisContext } from '../types';
@@ -30,7 +31,7 @@ function findSensitiveFiles(trackedFiles: string[]): string[] {
 }
 
 function checkClaudeignore(projectPath: string, trackedFiles: string[]): ReadinessCheck {
-  const exists = fileExists(path.join(projectPath, '.claudeignore'));
+  const exists = fileExists(joinStoredProjectPath(projectPath, '.claudeignore'));
   const fileCount = trackedFiles.length;
   const sensitiveFiles = findSensitiveFiles(trackedFiles);
 

@@ -2,11 +2,39 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { BrowserWindow } from 'electron';
-import { isWin } from './platform';
+import { isWin, isWslMode } from './platform';
+import { loadState } from './store';
 
 export const STATUS_DIR = path.join(os.tmpdir(), 'vibeyard');
 export const SCRIPT_DIR = path.join(os.homedir(), '.vibeyard', 'run');
 const STATUSLINE_SCRIPT = path.join(SCRIPT_DIR, isWin ? 'statusline.cmd' : 'statusline.sh');
+
+/**
+ * When WSL mode is active, return the STATUS_DIR and SCRIPT_DIR as Linux paths
+ * that are accessible from both Windows (for watching) and WSL (for writing).
+ * The Windows temp dir maps to `/mnt/c/...` inside WSL.
+ */
+export function getWslHookPaths(): { statusDir: string; scriptDir: string; pythonBin: string; statusLineScript: string } | null {
+  const state = loadState();
+  if (!isWslMode(state.preferences)) return null;
+  const { winPathToWsl, getEffectiveDistro } = require('./wsl') as typeof import('./wsl');
+  const distro = getEffectiveDistro(state.preferences.wslDistro);
+  return {
+    statusDir: winPathToWsl(STATUS_DIR, distro ?? undefined),
+    scriptDir: winPathToWsl(SCRIPT_DIR, distro ?? undefined),
+    pythonBin: '/usr/bin/python3',
+    statusLineScript: winPathToWsl(SCRIPT_DIR, distro ?? undefined) + '/statusline.sh',
+  };
+}
+
+/**
+ * Path to embed in generated Python hook scripts. In WSL mode this is a Linux path
+ * (`/mnt/c/...`) so scripts running inside WSL can open status files.
+ */
+export function getStatusDirForHookEmbed(): string {
+  const wslPaths = getWslHookPaths();
+  return wslPaths?.statusDir ?? STATUS_DIR;
+}
 
 const KNOWN_EXTENSIONS = ['.status', '.sessionid', '.cost', '.toolfailure', '.events'];
 
@@ -29,6 +57,8 @@ function isKnownExtension(filename: string): boolean {
 }
 
 export function getStatusLineScriptPath(): string {
+  const wslPaths = getWslHookPaths();
+  if (wslPaths) return wslPaths.statusLineScript;
   return STATUSLINE_SCRIPT;
 }
 
@@ -42,8 +72,44 @@ export function installStatusLineScript(): void {
   // interfere with cmd.exe's >> redirection parsing on some Windows versions.
   const statusDir = STATUS_DIR.replace(/\\/g, '/');
 
+  const wslPaths = getWslHookPaths();
+
   let script: string;
-  if (isWin) {
+  if (wslPaths) {
+    // WSL mode: generate a Unix shell script that writes to the shared temp dir
+    // (the Windows temp dir mounted inside WSL via /mnt/c/...)
+    const wslStatusDir = wslPaths.statusDir;
+    script = `#!/bin/sh
+/usr/bin/python3 -c "
+import sys,json,os
+try:
+    d=json.load(sys.stdin)
+except:
+    sys.exit(0)
+sid=os.environ.get('CLAUDE_IDE_SESSION_ID','')
+if not sid:
+    sys.exit(0)
+cost=d.get('cost',{})
+ctx=d.get('context_window',{})
+model=d.get('model',{}).get('display_name','')
+if cost or ctx or model:
+    payload={'cost':cost,'context_window':ctx}
+    if model:
+        payload['model']=model
+    with open(f'${wslStatusDir}/{sid}.cost','w') as f:
+        json.dump(payload,f)
+claude_sid=d.get('session_id','')
+if claude_sid:
+    with open(f'${wslStatusDir}/{sid}.sessionid','w') as f:
+        f.write(claude_sid)
+" 2>>${wslStatusDir}/statusline.log
+`;
+    // Write the script to the Windows-side SCRIPT_DIR (accessible from WSL via /mnt/c/...)
+    fs.writeFileSync(STATUSLINE_SCRIPT.replace(/\.cmd$/, '.sh'), script, { mode: 0o755 });
+    // Also write a .sh copy at the standard location
+    fs.writeFileSync(path.join(SCRIPT_DIR, 'statusline.sh'), script, { mode: 0o755 });
+    return;
+  } else if (isWin) {
     // On Windows, write a Python helper script and a .cmd wrapper
     const pyScript = `import sys,json,os
 try:

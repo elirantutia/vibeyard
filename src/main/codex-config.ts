@@ -1,6 +1,7 @@
 import * as path from 'path';
 import { homedir } from 'os';
 import { fileExists, readDirSafe, readFileSafe } from './fs-utils';
+import { joinStoredProjectPath } from './project-fs-path';
 import type { Agent, McpServer, ProviderConfig, Skill } from '../shared/types';
 
 function parseFrontmatter(filePath: string): Record<string, string> {
@@ -133,7 +134,7 @@ function readMcpServersFromToml(filePath: string, scope: 'user' | 'project'): Mc
 
 export async function getCodexConfig(projectPath: string): Promise<ProviderConfig> {
   const codexDir = path.join(homedir(), '.codex');
-  const projectCodexDir = path.join(projectPath, '.codex');
+  const projectCodexDir = joinStoredProjectPath(projectPath, '.codex');
 
   const userMcp = readMcpServersFromToml(path.join(codexDir, 'config.toml'), 'user');
   const projectMcp = readMcpServersFromToml(path.join(projectCodexDir, 'config.toml'), 'project');

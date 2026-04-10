@@ -1,10 +1,11 @@
 import * as path from 'path';
+import { joinStoredProjectPath } from '../../project-fs-path';
 import type { ReadinessCheck } from '../../../shared/types';
 import type { ReadinessCheckProducer, TaggedCheck, AnalysisContext } from '../types';
 import { dirExists, readDirSafe } from '../utils';
 
 function checkCustomCommands(projectPath: string): ReadinessCheck {
-  const commandsDir = path.join(projectPath, '.claude', 'commands');
+  const commandsDir = joinStoredProjectPath(projectPath, '.claude', 'commands');
   const files = readDirSafe(commandsDir).filter(f => f.endsWith('.md'));
   const has = files.length > 0;
   return {
@@ -19,7 +20,7 @@ function checkCustomCommands(projectPath: string): ReadinessCheck {
 }
 
 function checkCustomSkills(projectPath: string): ReadinessCheck {
-  const skillsDir = path.join(projectPath, '.claude', 'skills');
+  const skillsDir = joinStoredProjectPath(projectPath, '.claude', 'skills');
   let has = false;
   if (dirExists(skillsDir)) {
     const entries = readDirSafe(skillsDir);
@@ -37,7 +38,7 @@ function checkCustomSkills(projectPath: string): ReadinessCheck {
 }
 
 function checkCustomAgents(projectPath: string): ReadinessCheck {
-  const agentsDir = path.join(projectPath, '.claude', 'agents');
+  const agentsDir = joinStoredProjectPath(projectPath, '.claude', 'agents');
   const files = readDirSafe(agentsDir).filter(f => f.endsWith('.md'));
   const has = files.length > 0;
   return {

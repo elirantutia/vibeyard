@@ -47,7 +47,8 @@
     "dist": "npm run build && electron-builder",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "sync": "bash scripts/sync-to-windows.sh"
   },
   "build": {
     "appId": "com.vibeyard.app",

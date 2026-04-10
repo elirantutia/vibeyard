@@ -83,6 +83,12 @@ export interface VibeyardApi {
   stats: {
     getCache(): Promise<StatsCache | null>;
   };
+  wsl: {
+    isAvailable(): Promise<boolean>;
+    getDistros(): Promise<string[]>;
+    getDefaultDistro(): Promise<string | null>;
+    browseDirs(dirPath: string, prefix?: string): Promise<string[]>;
+  };
   menu: {
     onNewProject(callback: () => void): () => void;
     onNewSession(callback: () => void): () => void;

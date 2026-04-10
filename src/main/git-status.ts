@@ -1,9 +1,85 @@
-import { execFile } from 'child_process';
+import { execFile, execFileSync } from 'child_process';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import type { GitWorktree, GitFileEntry } from '../shared/types';
+import { isWslMode } from './platform';
+import { loadState } from './store';
+import { joinStoredProjectPath, pathIsWithinStoredProject } from './project-fs-path';
+
+/**
+ * Resolve the git binary and cwd for execution.
+ * In WSL mode, routes through `wsl.exe -d <distro> -- git`.
+ */
+export function resolveGitCommand(cwd: string): { bin: string; prefixArgs: string[]; execCwd: string } {
+  const state = loadState();
+  if (isWslMode(state.preferences)) {
+    const { getEffectiveDistro, winPathToWsl, uncWslPathToLinuxPath } = require('./wsl') as typeof import('./wsl');
+    const distro = getEffectiveDistro(state.preferences.wslDistro) || 'Ubuntu';
+    const fromUnc = uncWslPathToLinuxPath(cwd);
+    const linuxCwd = fromUnc
+      ? fromUnc
+      : cwd.includes('\\') || /^[A-Za-z]:/.test(cwd)
+        ? winPathToWsl(cwd, distro)
+        : cwd;
+    return {
+      bin: 'wsl.exe',
+      prefixArgs: ['-d', distro, '--', 'git', '-C', linuxCwd],
+      execCwd: os.tmpdir(),
+    };
+  }
+  return { bin: 'git', prefixArgs: [], execCwd: cwd };
+}
+
+/** Tracked file paths from `git ls-files` (works with POSIX project roots in WSL mode). */
+export function getGitTrackedFiles(projectPath: string): string[] {
+  const g = resolveGitCommand(projectPath);
+  try {
+    const out = execFileSync(g.bin, [...g.prefixArgs, 'ls-files'], {
+      cwd: g.execCwd,
+      encoding: 'utf-8',
+      timeout: 5000,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    return out.split('\n').filter(Boolean);
+  } catch {
+    return [];
+  }
+}
 
 export type { GitWorktree, GitFileEntry } from '../shared/types';
+
+/** Queried project path → non-bare worktree roots (for fs access + watchers). */
+const worktreeRootsByProject = new Map<string, string[]>();
+
+function worktreeCacheKey(projectPath: string): string {
+  return projectPath.replace(/\\/g, '/');
+}
+
+export function clearWorktreeRootsCache(): void {
+  worktreeRootsByProject.clear();
+}
+
+function recordWorktreeRoots(projectPath: string, worktrees: GitWorktree[]): void {
+  const roots = worktrees.filter((w) => !w.isBare).map((w) => w.path.replace(/\\/g, '/'));
+  worktreeRootsByProject.set(worktreeCacheKey(projectPath), roots);
+}
+
+/**
+ * True when the path lies under a linked worktree of a known project (sibling dirs, etc.).
+ * Populated when `getGitWorktrees` runs for that project's stored root path.
+ */
+export function isPathWithinKnownLinkedWorktree(resolvedAbsolute: string): boolean {
+  const state = loadState();
+  for (const p of state.projects) {
+    const roots = worktreeRootsByProject.get(worktreeCacheKey(p.path));
+    if (!roots) continue;
+    for (const root of roots) {
+      if (pathIsWithinStoredProject(resolvedAbsolute, root)) return true;
+    }
+  }
+  return false;
+}
 
 export interface GitStatus {
   isGitRepo: boolean;
@@ -29,10 +105,11 @@ const NOT_A_REPO: GitStatus = {
 
 export function getGitStatus(cwd: string): Promise<GitStatus> {
   return new Promise((resolve) => {
+    const g = resolveGitCommand(cwd);
     execFile(
-      'git',
-      ['status', '--porcelain=v2', '--branch'],
-      { cwd, timeout: 5000 },
+      g.bin,
+      [...g.prefixArgs, 'status', '--porcelain=v2', '--branch'],
+      { cwd: g.execCwd, timeout: 5000 },
       (err, stdout) => {
         if (err) {
           resolve(NOT_A_REPO);
@@ -90,8 +167,7 @@ export function getGitStatus(cwd: string): Promise<GitStatus> {
 export function getGitDiff(cwd: string, filePath: string, area: string): Promise<string> {
   return new Promise((resolve) => {
     if (area === 'untracked') {
-      // Read file content and format as "all added" diff
-      const fullPath = path.join(cwd, filePath);
+      const fullPath = joinStoredProjectPath(cwd, filePath);
       try {
         const content = fs.readFileSync(fullPath, 'utf-8');
         const lines = content.split('\n');
@@ -104,14 +180,15 @@ export function getGitDiff(cwd: string, filePath: string, area: string): Promise
       return;
     }
 
-    const args = area === 'staged'
+    const diffArgs = area === 'staged'
       ? ['diff', '--cached', '--', filePath]
       : ['diff', '--', filePath];
 
+    const g = resolveGitCommand(cwd);
     execFile(
-      'git',
-      args,
-      { cwd, timeout: 10000, maxBuffer: 1024 * 1024 },
+      g.bin,
+      [...g.prefixArgs, ...diffArgs],
+      { cwd: g.execCwd, timeout: 10000, maxBuffer: 1024 * 1024 },
       (err, stdout) => {
         if (err && !stdout) {
           resolve('(no diff available)');
@@ -134,10 +211,11 @@ function xyToStatus(ch: string): 'added' | 'modified' | 'deleted' | 'renamed' {
 
 export function getGitFiles(cwd: string): Promise<GitFileEntry[]> {
   return new Promise((resolve) => {
+    const g = resolveGitCommand(cwd);
     execFile(
-      'git',
-      ['status', '--porcelain=v2'],
-      { cwd, timeout: 5000, maxBuffer: 1024 * 1024 },
+      g.bin,
+      [...g.prefixArgs, 'status', '--porcelain=v2'],
+      { cwd: g.execCwd, timeout: 5000, maxBuffer: 1024 * 1024 },
       (err, stdout) => {
         if (err) {
           resolve([]);
@@ -186,8 +264,9 @@ export function getGitFiles(cwd: string): Promise<GitFileEntry[]> {
 }
 
 function execGit(cwd: string, args: string[]): Promise<void> {
+  const g = resolveGitCommand(cwd);
   return new Promise((resolve, reject) => {
-    execFile('git', args, { cwd, timeout: 5000 }, (err) => {
+    execFile(g.bin, [...g.prefixArgs, ...args], { cwd: g.execCwd, timeout: 5000 }, (err) => {
       if (err) reject(err);
       else resolve();
     });
@@ -195,8 +274,9 @@ function execGit(cwd: string, args: string[]): Promise<void> {
 }
 
 function execGitWithOutput(cwd: string, args: string[]): Promise<string> {
+  const g = resolveGitCommand(cwd);
   return new Promise((resolve, reject) => {
-    execFile('git', args, { cwd, timeout: 5000, maxBuffer: 1024 * 1024 }, (err, stdout) => {
+    execFile(g.bin, [...g.prefixArgs, ...args], { cwd: g.execCwd, timeout: 5000, maxBuffer: 1024 * 1024 }, (err, stdout) => {
       if (err) reject(err);
       else resolve(stdout);
     });
@@ -241,7 +321,7 @@ export function gitUnstageFile(cwd: string, filePath: string): Promise<void> {
 
 export function gitDiscardFile(cwd: string, filePath: string, area: GitFileEntry['area']): Promise<void> {
   if (area === 'untracked') {
-    const fullPath = path.join(cwd, filePath);
+    const fullPath = joinStoredProjectPath(cwd, filePath);
     return fs.promises.unlink(fullPath);
   }
   return execGit(cwd, ['checkout', '--', filePath]);
@@ -249,12 +329,15 @@ export function gitDiscardFile(cwd: string, filePath: string, area: GitFileEntry
 
 export function getGitWorktrees(cwd: string): Promise<GitWorktree[]> {
   return new Promise((resolve) => {
+    const g = resolveGitCommand(cwd);
     execFile(
-      'git',
-      ['worktree', 'list', '--porcelain'],
-      { cwd, timeout: 5000 },
+      g.bin,
+      [...g.prefixArgs, 'worktree', 'list', '--porcelain'],
+      { cwd: g.execCwd, timeout: 5000 },
       (err, stdout) => {
+        const key = worktreeCacheKey(cwd);
         if (err) {
+          worktreeRootsByProject.delete(key);
           resolve([]);
           return;
         }
@@ -291,6 +374,7 @@ export function getGitWorktrees(cwd: string): Promise<GitWorktree[]> {
           }
         }
 
+        recordWorktreeRoots(cwd, worktrees);
         resolve(worktrees);
       }
     );
@@ -299,7 +383,8 @@ export function getGitWorktrees(cwd: string): Promise<GitWorktree[]> {
 
 export function getGitRemoteUrl(cwd: string): Promise<string | null> {
   return new Promise((resolve) => {
-    execFile('git', ['remote', 'get-url', 'origin'], { cwd }, (err, stdout) => {
+    const g = resolveGitCommand(cwd);
+    execFile(g.bin, [...g.prefixArgs, 'remote', 'get-url', 'origin'], { cwd: g.execCwd }, (err, stdout) => {
       if (err) { resolve(null); return; }
       const raw = stdout.trim();
       // Normalize SSH (git@github.com:owner/repo.git) to HTTPS

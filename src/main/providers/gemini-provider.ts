@@ -1,11 +1,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import type { CliProvider } from './provider';
 import type { CliProviderMeta, ProviderConfig, SettingsValidationResult } from '../../shared/types';
 import { getFullPath } from '../pty-manager';
 import { resolveBinary, validateBinaryExists } from './resolve-binary';
+import { getEffectiveCliUserHome } from '../claude-cli';
 import { getGeminiConfig } from '../gemini-config';
+import { storedProjectPathsEquivalent } from '../project-fs-path';
 import { installGeminiHooks, validateGeminiHooks, cleanupGeminiHooks, SESSION_ID_VAR } from '../gemini-hooks';
 import { startConfigWatcher as startConfigWatch, stopConfigWatcher as stopConfigWatch } from '../config-watcher';
 import type { BrowserWindow } from 'electron';
@@ -96,7 +97,7 @@ export class GeminiProvider implements CliProvider {
 
   getTranscriptPath(cliSessionId: string, projectPath: string): string | null {
     try {
-      const tmpRoot = path.join(os.homedir(), '.gemini', 'tmp');
+      const tmpRoot = path.join(getEffectiveCliUserHome(), '.gemini', 'tmp');
       if (!fs.existsSync(tmpRoot)) return null;
 
       // Find the project key dir whose .project_root matches our projectPath
@@ -105,7 +106,7 @@ export class GeminiProvider implements CliProvider {
         const projectRootFile = path.join(tmpRoot, entry, '.project_root');
         try {
           const contents = fs.readFileSync(projectRootFile, 'utf-8').trim();
-          if (contents === projectPath) {
+          if (storedProjectPathsEquivalent(contents, projectPath)) {
             chatsDir = path.join(tmpRoot, entry, 'chats');
             break;
           }

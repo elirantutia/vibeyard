@@ -10,9 +10,11 @@ vi.mock('fs', () => ({
   readFileSync: vi.fn(),
 }));
 
+import * as path from 'path';
 import { execFile } from 'child_process';
 import { readFileSync } from 'fs';
-import { getGitStatus, getGitFiles, getGitDiff, getGitWorktrees } from './git-status';
+import * as store from './store';
+import { getGitStatus, getGitFiles, getGitDiff, getGitWorktrees, isPathWithinKnownLinkedWorktree, clearWorktreeRootsCache } from './git-status';
 
 const mockExecFile = vi.mocked(execFile);
 const mockReadFileSync = vi.mocked(readFileSync);
@@ -26,6 +28,7 @@ function simulateExecFile(err: ExecFileException | null, stdout: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clearWorktreeRootsCache();
 });
 
 describe('getGitStatus', () => {
@@ -309,5 +312,64 @@ describe('getGitWorktrees', () => {
 
     expect(worktrees).toHaveLength(1);
     expect(worktrees[0].path).toBe('/repo');
+  });
+});
+
+describe('linked worktree path helpers', () => {
+  const mockState = {
+    version: 1 as const,
+    activeProjectId: null,
+    projects: [
+      {
+        id: 'p1',
+        name: 'Repo',
+        path: '/repo',
+        sessions: [] as never[],
+        activeSessionId: null,
+        layout: { mode: 'tabs' as const, splitPanes: [], splitDirection: 'horizontal' as const },
+      },
+    ],
+    preferences: {
+      soundOnSessionWaiting: true,
+      notificationsDesktop: true,
+      debugMode: false,
+      sessionHistoryEnabled: true,
+      insightsEnabled: true,
+      autoTitleEnabled: true,
+    },
+  };
+
+  it('treats paths under a linked worktree as in-scope when worktrees are cached', async () => {
+    vi.spyOn(store, 'loadState').mockReturnValue(mockState);
+    const output = [
+      'worktree /repo',
+      'HEAD abcdef1234567890abcdef1234567890abcdef12',
+      'branch refs/heads/main',
+      '',
+      'worktree /repo-wt',
+      'HEAD abcdef1234567890abcdef1234567890abcdef12',
+      'branch refs/heads/feature',
+    ].join('\n');
+    simulateExecFile(null, output);
+    await getGitWorktrees('/repo');
+    expect(isPathWithinKnownLinkedWorktree(path.resolve('/repo-wt/foo.ts'))).toBe(true);
+    expect(isPathWithinKnownLinkedWorktree(path.resolve('/other/outside'))).toBe(false);
+  });
+
+  it('drops cached roots when worktree list fails', async () => {
+    vi.spyOn(store, 'loadState').mockReturnValue(mockState);
+    const ok = [
+      'worktree /repo',
+      'HEAD abc',
+      '',
+      'worktree /repo-wt',
+      'HEAD abc',
+      'branch refs/heads/feature',
+    ].join('\n');
+    simulateExecFile(null, ok);
+    await getGitWorktrees('/repo');
+    simulateExecFile(new Error('git failed') as ExecFileException, '');
+    await getGitWorktrees('/repo');
+    expect(isPathWithinKnownLinkedWorktree(path.resolve('/repo-wt/x'))).toBe(false);
   });
 });
