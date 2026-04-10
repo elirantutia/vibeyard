@@ -502,3 +502,28 @@
   flex-shrink: 0;
   margin-left: auto;
 }
+
+/* Task modal tag input */
+.board-modal-tag-input {
+  padding: 4px 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  outline: none;
+}
+
+/* Task modal run button */
+.board-modal-run-btn {
+  margin-right: auto;
+  padding: 6px 14px;
+  background: var(--accent);
+  color: var(--accent-text, #fff);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}

@@ -148,9 +148,8 @@ export function showTaskModal(mode: 'create' | 'edit', task?: BoardTask, default
   tagInputWrapper.style.position = 'relative';
 
   const tagInput = document.createElement('input');
-  tagInput.className = 'modal-tag-input';
+  tagInput.className = 'board-modal-tag-input';
   tagInput.placeholder = 'Add tag...';
-  tagInput.style.cssText = 'padding:4px 8px;background:var(--bg-primary);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);font-size:12px;width:100%;box-sizing:border-box;outline:none;';
 
   const autocompleteList = document.createElement('div');
   autocompleteList.className = 'tag-autocomplete';
@@ -222,11 +221,10 @@ export function showTaskModal(mode: 'create' | 'edit', task?: BoardTask, default
 
     if (mode === 'edit' && task) {
       const runBtn = document.createElement('button');
-      runBtn.className = 'modal-run-btn';
+      runBtn.className = 'board-modal-run-btn';
       const hasActiveSession = !!task.sessionId;
       const canResume = !hasActiveSession && !!task.cliSessionId;
       runBtn.textContent = hasActiveSession ? 'Focus Session' : canResume ? 'Resume' : 'Run';
-      runBtn.style.cssText = 'margin-right:auto;padding:6px 14px;background:var(--accent);color:#fff;border:1px solid var(--accent);border-radius:6px;cursor:pointer;font-size:13px;';
       runBtn.addEventListener('click', () => {
         // Save current edits before running
         const prompt = (document.getElementById('modal-prompt') as HTMLTextAreaElement)?.value?.trim() ?? '';
