@@ -84,6 +84,7 @@ export interface SessionRecord {
   worktreePath?: string;
   fileReaderPath?: string;
   fileReaderLine?: number;
+  cwd?: string;  // Override project path for task-specific working directory
   createdAt: string;
   userRenamed?: boolean;
   cost?: CostInfo;

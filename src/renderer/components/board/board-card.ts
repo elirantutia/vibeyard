@@ -157,7 +157,8 @@ export function runTask(task: BoardTask): void {
       return;
     }
     const sessionName = task.title || task.prompt.slice(0, 40);
-    const session = appState.addSession(project.id, sessionName);
+    const taskCwd = task.cwd && task.cwd !== project.path ? task.cwd : undefined;
+    const session = appState.addSession(project.id, sessionName, undefined, undefined, taskCwd);
     if (session) {
       updateTask(task.id, { sessionId: session.id });
       const activeCol = getColumnByBehavior('active');
