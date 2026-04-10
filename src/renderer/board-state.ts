@@ -201,7 +201,7 @@ export function reorderColumns(columnIds: string[]): void {
   appState.notifyBoardChanged();
 }
 
-const TAG_COLORS = ['blue', 'green', 'amber', 'red', 'purple', 'cyan', 'pink', 'gray'];
+export const TAG_COLORS = ['blue', 'green', 'amber', 'red', 'purple', 'cyan', 'pink', 'gray'];
 
 export function addTag(name: string, color?: string): TagDefinition | undefined {
   const board = getBoard();

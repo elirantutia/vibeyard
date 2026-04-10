@@ -1,5 +1,5 @@
 import { appState } from '../../state.js';
-import { getBoard, addTag, removeTag, updateTagColor, getTagCount } from '../../board-state.js';
+import { getBoard, addTag, removeTag, updateTagColor, getTagCount, TAG_COLORS } from '../../board-state.js';
 import { createColumnElement } from './board-column.js';
 import { showTaskModal } from './board-task-modal.js';
 import { initBoardDnd, cleanupBoardDnd, isDragActive, setDragEndCallback } from './board-dnd.js';
@@ -132,8 +132,6 @@ export function destroyBoardView(): void {
     dndInitialized = false;
   }
 }
-
-const TAG_COLORS = ['blue', 'green', 'amber', 'red', 'purple', 'cyan', 'pink', 'gray'];
 
 function renderTagRow(container: HTMLElement, board: BoardData): void {
   container.innerHTML = '';
