@@ -68,6 +68,7 @@ CLI-specific behavior is encapsulated behind a `CliProvider` interface (`src/mai
 - `confirm-dialog.ts` — Promise-based confirmation dialog (`showConfirmDialog()`) returning `true`/`false`. Separate from `modal.ts` (which handles form inputs). Supports optional warning banner via `detail` HTML.
 - `confirm-helpers.ts` — Utility functions `countActiveStatuses()` and `buildWarningBannerDetail()` for building session status warning banners in close confirmation dialogs.
 - `close-guard.ts` — Window close guard; listens for `app:confirmClose` IPC from main process, checks active session status and `confirmCloseActive` preference, shows warning banner dialog if needed, responds with `app:closeConfirmed` or `app:closeCancelled`.
+- `terminal-context-menu.ts` — Right-click context menu for terminal panes (Copy, Paste, Select All, Clear Terminal). DOM-based using shared `tab-context-menu` CSS classes. `showTerminalContextMenu()` / `hideTerminalContextMenu()` exports; integrated via `contextmenu` listener on `xtermWrap` in `terminal-pane.ts`.
 
 ### Close Confirmation System
 
