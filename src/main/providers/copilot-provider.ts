@@ -75,7 +75,7 @@ export class CopilotProvider implements CliProvider {
   }
 
   async getConfig(projectPath: string): Promise<ProviderConfig> {
-    return getCopilotConfig(projectPath);
+    return Promise.resolve(getCopilotConfig(projectPath));
   }
 
   getShiftEnterSequence(): string | null {

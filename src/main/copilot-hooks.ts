@@ -4,6 +4,7 @@ import { homedir } from 'os';
 import { STATUS_DIR, SCRIPT_DIR } from './hook-status';
 import { statusCmd as mkStatusCmd, installEventScript, installHookScripts } from './hook-commands';
 import { readJsonSafe } from './fs-utils';
+import { pythonBin } from './platform';
 import type { SettingsValidationResult } from '../shared/types';
 
 export const COPILOT_HOOK_MARKER = '# vibeyard-hook';
@@ -13,7 +14,8 @@ const CONFIG_JSON_PATH = path.join(COPILOT_DIR, 'config.json');
 
 export const SESSION_ID_VAR = 'VIBEYARD_SESSION_ID';
 
-// Copilot events that drive vibeyard session status
+// TODO: verify event names (sessionStart, userPromptSubmitted, postToolUse, sessionEnd)
+// and the `sessionId` field name against actual Copilot CLI hook documentation.
 const STATUS_EVENTS: Record<string, string> = {
   sessionStart: 'waiting',
   userPromptSubmitted: 'working',
@@ -34,11 +36,10 @@ interface HookEntry {
 type HooksConfig = Record<string, HookEntry[]>;
 
 function isIdeHook(h: HookEntry): boolean {
-  return (
-    h.command?.includes(COPILOT_HOOK_MARKER) ??
-    h.bash?.includes(COPILOT_HOOK_MARKER) ??
-    h.powershell?.includes(COPILOT_HOOK_MARKER) ??
-    false
+  return !!(
+    h.command?.includes(COPILOT_HOOK_MARKER) ||
+    h.bash?.includes(COPILOT_HOOK_MARKER) ||
+    h.powershell?.includes(COPILOT_HOOK_MARKER)
   );
 }
 
@@ -60,8 +61,8 @@ try:
     d=json.load(sys.stdin)
 except:
     sys.exit(0)
-sid_env=os.environ.get('${SESSION_ID_VAR}','')
-status_dir='${STATUS_DIR.replace(/\\/g, '/')}'
+sid_env=os.environ.get(sys.argv[1],'')
+status_dir=sys.argv[2]
 copilot_sid=d.get('sessionId','')
 if sid_env and copilot_sid:
     with open(os.path.join(status_dir,sid_env+'.sessionid'),'w') as f:
@@ -69,7 +70,8 @@ if sid_env and copilot_sid:
 `;
   installEventScript(scriptName, pyCode);
   const pyPath = path.join(SCRIPT_DIR, scriptName).replace(/\\/g, '/');
-  return `python "${pyPath}" "${COPILOT_HOOK_MARKER}"`;
+  const dir = STATUS_DIR.replace(/\\/g, '/');
+  return `${pythonBin} "${pyPath}" "${SESSION_ID_VAR}" "${dir}" "${COPILOT_HOOK_MARKER}"`;
 }
 
 // ---------------------------------------------------------------------------

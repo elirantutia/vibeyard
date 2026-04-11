@@ -17,7 +17,7 @@ function readMcpServersFromJson(filePath: string, scope: 'user' | 'project'): Mc
   return servers;
 }
 
-export async function getCopilotConfig(projectPath: string): Promise<ProviderConfig> {
+export function getCopilotConfig(projectPath: string): ProviderConfig {
   const copilotDir = path.join(homedir(), '.copilot');
   const projectCopilotDir = path.join(projectPath, '.copilot');
 

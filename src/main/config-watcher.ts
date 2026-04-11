@@ -48,6 +48,18 @@ function stopAll(): void {
   dirWatchers = [];
 }
 
+function setupCopilotWatchers(projectPath: string): void {
+  const home = os.homedir();
+  const copilotDir = path.join(home, '.copilot');
+
+  const files = [
+    path.join(copilotDir, 'config.json'),
+    path.join(copilotDir, 'mcp-config.json'),
+    path.join(projectPath, '.copilot', 'mcp-config.json'),
+  ];
+  for (const f of files) watchFile(f);
+}
+
 function setupClaudeWatchers(projectPath: string): void {
   const home = os.homedir();
   const claudeDir = path.join(home, '.claude');
@@ -113,6 +125,8 @@ export function startConfigWatcher(win: BrowserWindow, projectPath: string, prov
     setupCodexWatchers(projectPath);
   } else if (providerId === 'gemini') {
     setupGeminiWatchers(projectPath);
+  } else if (providerId === 'copilot') {
+    setupCopilotWatchers(projectPath);
   } else {
     setupClaudeWatchers(projectPath);
   }
