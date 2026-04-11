@@ -62,6 +62,8 @@ export function showPreferencesModal(): void {
   let historyCheckbox: HTMLInputElement | null = null;
   let insightsCheckbox: HTMLInputElement | null = null;
   let autoTitleCheckbox: HTMLInputElement | null = null;
+  let confirmCloseActiveCheckbox: HTMLInputElement | null = null;
+  let confirmCloseInactiveCheckbox: HTMLInputElement | null = null;
   let defaultProviderSelect: CustomSelectInstance | null = null;
   let debugModeCheckbox: HTMLInputElement | null = null;
   let sidebarCheckboxes: { configSections: HTMLInputElement; gitPanel: HTMLInputElement; sessionHistory: HTMLInputElement; costFooter: HTMLInputElement; readinessSection: HTMLInputElement } | null = null;
@@ -197,6 +199,38 @@ export function showPreferencesModal(): void {
       autoTitleRow.appendChild(autoTitleLabel);
       autoTitleRow.appendChild(autoTitleCheckbox);
       content.appendChild(autoTitleRow);
+
+      const confirmActiveRow = document.createElement('div');
+      confirmActiveRow.className = 'modal-toggle-field';
+
+      const confirmActiveLabel = document.createElement('label');
+      confirmActiveLabel.htmlFor = 'pref-confirm-close-active';
+      confirmActiveLabel.textContent = 'Confirm before closing active sessions';
+
+      confirmCloseActiveCheckbox = document.createElement('input');
+      confirmCloseActiveCheckbox.type = 'checkbox';
+      confirmCloseActiveCheckbox.id = 'pref-confirm-close-active';
+      confirmCloseActiveCheckbox.checked = appState.preferences.confirmCloseActive;
+
+      confirmActiveRow.appendChild(confirmActiveLabel);
+      confirmActiveRow.appendChild(confirmCloseActiveCheckbox);
+      content.appendChild(confirmActiveRow);
+
+      const confirmInactiveRow = document.createElement('div');
+      confirmInactiveRow.className = 'modal-toggle-field';
+
+      const confirmInactiveLabel = document.createElement('label');
+      confirmInactiveLabel.htmlFor = 'pref-confirm-close-inactive';
+      confirmInactiveLabel.textContent = 'Confirm before closing inactive sessions';
+
+      confirmCloseInactiveCheckbox = document.createElement('input');
+      confirmCloseInactiveCheckbox.type = 'checkbox';
+      confirmCloseInactiveCheckbox.id = 'pref-confirm-close-inactive';
+      confirmCloseInactiveCheckbox.checked = appState.preferences.confirmCloseInactive;
+
+      confirmInactiveRow.appendChild(confirmInactiveLabel);
+      confirmInactiveRow.appendChild(confirmCloseInactiveCheckbox);
+      content.appendChild(confirmInactiveRow);
 
     } else if (section === 'sidebar') {
       const views = appState.preferences.sidebarViews ?? { configSections: true, gitPanel: true, sessionHistory: true, costFooter: true, readinessSection: true };
@@ -669,6 +703,12 @@ export function showPreferencesModal(): void {
     }
     if (autoTitleCheckbox) {
       appState.setPreference('autoTitleEnabled', autoTitleCheckbox.checked);
+    }
+    if (confirmCloseActiveCheckbox) {
+      appState.setPreference('confirmCloseActive', confirmCloseActiveCheckbox.checked);
+    }
+    if (confirmCloseInactiveCheckbox) {
+      appState.setPreference('confirmCloseInactive', confirmCloseInactiveCheckbox.checked);
     }
     if (defaultProviderSelect) {
       appState.setPreference('defaultProvider', defaultProviderSelect.getValue() as ProviderId);
