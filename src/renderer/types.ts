@@ -67,6 +67,8 @@ export interface VibeyardApi {
     getVersion(): Promise<string>;
     openExternal(url: string): Promise<void>;
     onQuitting(callback: () => void): () => void;
+    onConfirmClose(callback: () => void): () => void;
+    closeConfirmed(): void;
   };
   mcp: {
     connect(id: string, url: string): Promise<McpResult>;

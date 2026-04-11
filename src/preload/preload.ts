@@ -82,6 +82,8 @@ export interface VibeyardApi {
     openExternal(url: string): Promise<void>;
     getBrowserPreloadPath(): Promise<string>;
     onQuitting(callback: () => void): () => void;
+    onConfirmClose(callback: () => void): () => void;
+    closeConfirmed(): void;
   };
   browser: {
     saveScreenshot(sessionId: string, dataUrl: string): Promise<string>;
@@ -231,6 +233,8 @@ const api: VibeyardApi = {
     openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', url),
     getBrowserPreloadPath: () => ipcRenderer.invoke('app:getBrowserPreloadPath'),
     onQuitting: (cb: () => void) => onChannel('app:quitting', cb),
+    onConfirmClose: (cb: () => void) => onChannel('app:confirmClose', cb),
+    closeConfirmed: () => { ipcRenderer.send('app:closeConfirmed'); },
   },
   browser: {
     saveScreenshot: (sessionId: string, dataUrl: string) =>

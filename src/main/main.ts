@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, powerMonitor, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, powerMonitor, shell } from 'electron';
 import * as path from 'path';
 import { registerIpcHandlers, resetHookWatcher } from './ipc-handlers';
 import { killAllPtys } from './pty-manager';
@@ -48,8 +48,20 @@ function createWindow(): void {
     }
   });
 
-  mainWindow.on('close', () => {
+  let forceClose = false;
+
+  mainWindow.on('close', (e) => {
     flushState();
+    if (forceClose) return;
+    e.preventDefault();
+    mainWindow!.webContents.send('app:confirmClose');
+  });
+
+  ipcMain.on('app:closeConfirmed', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      forceClose = true;
+      mainWindow.close();
+    }
   });
 
   mainWindow.on('closed', () => {
