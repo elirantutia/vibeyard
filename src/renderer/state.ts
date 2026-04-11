@@ -41,6 +41,8 @@ const defaultPreferences: Preferences = {
   sessionHistoryEnabled: true,
   insightsEnabled: true,
   autoTitleEnabled: true,
+  confirmCloseActive: true,
+  confirmCloseInactive: false,
   readinessExcludedProviders: [],
   sidebarViews: { configSections: true, gitPanel: true, sessionHistory: true, costFooter: true, readinessSection: true },
 };
