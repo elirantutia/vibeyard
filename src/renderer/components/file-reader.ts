@@ -11,11 +11,17 @@ interface FileReaderInstance {
   loaded: boolean;
   targetLine?: number;
   viewMode: 'raw' | 'rendered';
+  kind: 'text' | 'image';
   rawContent?: string;
+  imageDataUrl?: string;
 }
 
 function isMarkdownFile(filePath: string): boolean {
   return /\.(md|markdown|mdown|mkd|mdx)$/i.test(filePath);
+}
+
+function isImageFile(filePath: string): boolean {
+  return /\.(png|jpe?g|gif|webp|bmp|ico|svg)$/i.test(filePath);
 }
 
 const instances = new Map<string, FileReaderInstance>();
@@ -54,6 +60,16 @@ function renderMarkdownContent(content: string): HTMLElement {
   return wrapper;
 }
 
+function renderImageContent(dataUrl: string, filePath: string): HTMLElement {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'file-reader-image-container';
+  const img = document.createElement('img');
+  img.src = dataUrl;
+  img.alt = filePath;
+  wrapper.appendChild(img);
+  return wrapper;
+}
+
 function renderBody(instance: FileReaderInstance): void {
   const body = instance.element.querySelector('.file-reader-body')!;
   // Preserve text selection if user is selecting
@@ -62,6 +78,12 @@ function renderBody(instance: FileReaderInstance): void {
     return;
   }
   body.innerHTML = '';
+  if (instance.kind === 'image') {
+    if (instance.imageDataUrl) {
+      body.appendChild(renderImageContent(instance.imageDataUrl, instance.filePath));
+    }
+    return;
+  }
   if (instance.viewMode === 'rendered') {
     body.appendChild(renderMarkdownContent(instance.rawContent!));
   } else {
@@ -75,6 +97,10 @@ function resolveFilePath(instance: FileReaderInstance): string {
   return project ? `${project.path}/${instance.filePath}` : instance.filePath;
 }
 
+function showFileReaderMessage(body: Element, message: string): void {
+  body.innerHTML = `<div class="file-reader-content"><div class="file-reader-line"><span class="file-reader-line-text">${message}</span></div></div>`;
+}
+
 async function loadFile(instance: FileReaderInstance): Promise<void> {
   if (instance.loaded) return;
 
@@ -82,24 +108,30 @@ async function loadFile(instance: FileReaderInstance): Promise<void> {
   if (!project) return;
 
   const body = instance.element.querySelector('.file-reader-body')!;
-  body.innerHTML = '';
-  const loading = document.createElement('div');
-  loading.className = 'file-reader-content';
-  loading.innerHTML = '<div class="file-reader-line"><span class="file-reader-line-text">Loading...</span></div>';
-  body.appendChild(loading);
+  showFileReaderMessage(body, 'Loading...');
 
   try {
     const fullPath = resolveFilePath(instance);
+    if (instance.kind === 'image') {
+      const result = await window.vibeyard.fs.readImage(fullPath);
+      if (!result) {
+        showFileReaderMessage(body, 'Failed to load file');
+        return;
+      }
+      instance.imageDataUrl = result.dataUrl;
+      renderBody(instance);
+      instance.loaded = true;
+      return;
+    }
     const content = await window.vibeyard.fs.readFile(fullPath);
     instance.rawContent = content;
-    body.innerHTML = '';
     renderBody(instance);
     instance.loaded = true;
     if (instance.targetLine && instance.viewMode === 'raw') {
       scrollToLine(instance);
     }
   } catch {
-    body.innerHTML = '<div class="file-reader-content"><div class="file-reader-line"><span class="file-reader-line-text">Failed to load file</span></div></div>';
+    showFileReaderMessage(body, 'Failed to load file');
   }
 }
 
@@ -144,9 +176,11 @@ export function createFileReaderPane(sessionId: string, filePath: string, target
   header.appendChild(badge);
 
   const isMd = isMarkdownFile(filePath);
+  const isImage = isImageFile(filePath);
   const instance: FileReaderInstance = {
     element: el, filePath, resolvedPath: null, loaded: false, targetLine,
     viewMode: isMd ? 'rendered' : 'raw',
+    kind: isImage ? 'image' : 'text',
   };
 
   if (isMd) {
@@ -281,6 +315,7 @@ const RAW_TEXT_SELECTOR = '.file-reader-line-text';
 export function getFileReaderTextSelector(sessionId: string): string {
   const instance = instances.get(sessionId);
   if (!instance) return RAW_TEXT_SELECTOR;
+  if (instance.kind === 'image') return '.file-reader-no-search';
   return instance.viewMode === 'rendered' ? MARKDOWN_TEXT_SELECTOR : RAW_TEXT_SELECTOR;
 }
 
@@ -289,6 +324,7 @@ const goToLineBars = new Map<string, { bar: HTMLDivElement; input: HTMLInputElem
 export function showGoToLineBar(sessionId: string): void {
   const instance = instances.get(sessionId);
   if (!instance) return;
+  if (instance.kind === 'image') return;
   if (instance.viewMode === 'rendered') return;
 
   const existing = goToLineBars.get(sessionId);

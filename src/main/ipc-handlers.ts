@@ -445,6 +445,40 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  const IMAGE_MIME_BY_EXT: Record<string, string> = {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.bmp': 'image/bmp',
+    '.ico': 'image/x-icon',
+    '.svg': 'image/svg+xml',
+  };
+  const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
+
+  ipcMain.handle('fs:readImage', (_event, filePath: string) => {
+    try {
+      const resolved = path.resolve(filePath);
+      if (!isAllowedReadPath(resolved)) {
+        console.warn(`fs:readImage blocked: ${resolved} is not within an allowed path`);
+        return null;
+      }
+      const mime = IMAGE_MIME_BY_EXT[path.extname(resolved).toLowerCase()];
+      if (!mime) return null;
+      const stat = fs.statSync(resolved);
+      if (stat.size > MAX_IMAGE_BYTES) {
+        console.warn(`fs:readImage rejected: ${resolved} exceeds ${MAX_IMAGE_BYTES} bytes`);
+        return null;
+      }
+      const buf = fs.readFileSync(resolved);
+      return { dataUrl: `data:${mime};base64,${buf.toString('base64')}` };
+    } catch (err) {
+      console.warn('fs:readImage failed:', err);
+      return null;
+    }
+  });
+
   ipcMain.on('fs:watchFile', (event, filePath: string) => {
     const resolved = path.resolve(filePath);
     if (!isAllowedReadPath(resolved)) return;
