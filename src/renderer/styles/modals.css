@@ -543,3 +543,32 @@
   font-size: 11px;
   color: var(--text-muted);
 }
+
+/* Close confirmation dialog */
+.confirm-warning-banner {
+  background: rgba(233, 69, 96, 0.1);
+  border: 1px solid rgba(233, 69, 96, 0.3);
+  border-radius: 4px;
+  padding: 10px 12px;
+}
+
+.confirm-warning-header {
+  font-size: 12px;
+  color: #e94560;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.confirm-status-line {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.confirm-message {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
