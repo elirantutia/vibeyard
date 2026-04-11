@@ -32,7 +32,7 @@ export function buildWarningBannerDetail(counts: ActiveStatusCounts): string {
     if (counts[key] > 0) {
       const color = STATUS_COLORS[key];
       const label = STATUS_LABELS[key];
-      parts.push(`<span style="color:${color}">&#9679;</span> ${counts[key]} ${label}`);
+      parts.push(`<span><span style="color:${color}">&#9679;</span> ${counts[key]} ${label}</span>`);
     }
   }
 

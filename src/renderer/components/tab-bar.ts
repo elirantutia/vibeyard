@@ -31,7 +31,7 @@ async function confirmBeforeClose(sessionId: string, sessionName: string): Promi
   const isActive = status === 'working' || status === 'waiting' || status === 'input';
 
   if (isActive && appState.preferences.confirmCloseActive) {
-    const statusWord = status === 'input' ? 'waiting for input' : status;
+    const statusWord = status === 'input' ? 'needs input' : status;
     return showConfirmDialog({
       title: 'Close active session?',
       message: `<span style="color:${status === 'working' ? '#e94560' : status === 'waiting' ? '#f4b400' : '#e67e22'}">&#9679;</span> &nbsp;<strong>${escapeHtml(sessionName)}</strong> is currently ${statusWord}.`,

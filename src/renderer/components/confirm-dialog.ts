@@ -46,7 +46,7 @@ export function showConfirmDialog(options: ConfirmDialogOptions): Promise<boolea
     cancelBtn.textContent = 'Cancel';
 
     const confirmBtn = document.createElement('button');
-    confirmBtn.className = 'modal-btn primary';
+    confirmBtn.className = options.confirmDangerous ? 'modal-btn primary danger' : 'modal-btn primary';
     confirmBtn.textContent = options.confirmLabel;
 
     actions.appendChild(cancelBtn);
