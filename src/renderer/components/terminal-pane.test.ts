@@ -88,6 +88,10 @@ vi.mock('./terminal-link-provider.js', () => ({
   GithubLinkProvider: class FakeGithubLinkProvider {},
 }));
 
+vi.mock('./terminal-context-menu.js', () => ({
+  showTerminalContextMenu: vi.fn(),
+}));
+
 class FakeClassList {
   private values = new Set<string>();
 

@@ -13,6 +13,7 @@ import { appState } from '../state.js';
 import { FilePathLinkProvider, GithubLinkProvider } from './terminal-link-provider.js';
 import { attachClipboardCopyHandler, attachCopyOnSelect, loadWebglWithFallback, wrapBracketedPaste } from './terminal-utils.js';
 import { FILE_PATH_DRAG_TYPE, NATIVE_FILES_DRAG_TYPE } from '../drag-types.js';
+import { showTerminalContextMenu } from './terminal-context-menu.js';
 
 interface TerminalInstance {
   terminal: Terminal;
@@ -182,6 +183,11 @@ export function createTerminalPane(
     if (injectTextIntoRunningSession(sessionId, paths.join(' ') + ' ')) {
       terminal.focus();
     }
+  });
+
+  xtermWrap.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    showTerminalContextMenu(e.clientX, e.clientY, terminal, writeToPty);
   });
 
   return instance;

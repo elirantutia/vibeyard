@@ -4,6 +4,10 @@ vi.mock('../shortcuts.js', () => ({
   shortcutManager: { matchesAnyShortcut: () => false },
 }));
 
+vi.mock('./terminal-context-menu.js', () => ({
+  showTerminalContextMenu: vi.fn(),
+}));
+
 vi.mock('../session-inspector-state.js', () => ({
   getEvents: vi.fn(),
   getCostDeltas: vi.fn(() => []),
