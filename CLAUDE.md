@@ -38,7 +38,7 @@ Three renderer modules (`session-cost.ts`, `session-activity.ts`, `session-conte
 Three-process Electron architecture with strict context isolation:
 
 - **Main process** (`src/main/`) — Node.js side: window creation, PTY lifecycle via `node-pty`, filesystem access, persistent state (`~/.vibeyard/state.json`). IPC handlers in `ipc-handlers.ts` dispatch to `pty-manager.ts` and `store.ts`. CLI tool behavior is abstracted via the provider system (`src/main/providers/`).
-- **Preload** (`src/preload/preload.ts`) — Secure bridge exposing `window.vibeyard` API via `contextBridge` with namespaces: `pty`, `session`, `store`, `fs`, `provider`, `menu`, `app`.
+- **Preload** (`src/preload/preload.ts`) — Secure bridge exposing `window.vibeyard` API via `contextBridge` with namespaces: `pty`, `session`, `fs`, `store`, `provider`, `claude`, `git`, `update`, `app`, `browser`, `mcp`, `readiness`, `stats`, `settings`, `menu`.
 - **Renderer** (`src/renderer/`) — Vanilla TypeScript DOM UI (no framework). `AppState` singleton in `state.ts` uses an event emitter pattern; components in `components/` subscribe to state changes.
 
 ### Data Flow
