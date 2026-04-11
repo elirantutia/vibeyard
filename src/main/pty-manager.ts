@@ -156,7 +156,7 @@ export function resolveWindowsShell(
   return { shell: 'cmd.exe', args: ['/c', shell, ...args] };
 }
 
-export function spawnPty(
+export async function spawnPty(
   sessionId: string,
   cwd: string,
   cliSessionId: string | null,
@@ -166,7 +166,7 @@ export function spawnPty(
   initialPrompt: string | undefined,
   onData: (data: string) => void,
   onExit: (exitCode: number, signal?: number) => void
-): void {
+): Promise<void> {
   if (ptys.has(sessionId)) {
     // Silence the old PTY's exit event so it doesn't remove the new session
     silencedExits.add(sessionId);
@@ -176,6 +176,18 @@ export function spawnPty(
   registerSession(sessionId);
 
   const provider = getProvider(providerId);
+
+  // Copilot CLI loads hooks from <cwd>/.github/hooks/*.json, so we must
+  // install the hook file before spawning the binary. Other providers use
+  // global config and are already handled at app boot.
+  if (providerId === 'copilot') {
+    try {
+      await provider.installHooks(null, cwd);
+    } catch (err) {
+      console.warn('Failed to install Copilot hooks for project:', cwd, err);
+    }
+  }
+
   const env = provider.buildEnv(sessionId, { ...process.env } as Record<string, string>);
   const args = provider.buildArgs({ cliSessionId, isResume, extraArgs, initialPrompt });
   const resolvedShell = provider.resolveBinaryPath();

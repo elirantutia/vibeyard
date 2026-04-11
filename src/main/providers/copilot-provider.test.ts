@@ -208,9 +208,9 @@ describe('getShiftEnterSequence', () => {
 });
 
 describe('hooks integration', () => {
-  it('installHooks delegates to installCopilotHooks', async () => {
-    await provider.installHooks();
-    expect(mockInstallCopilotHooks).toHaveBeenCalled();
+  it('installHooks delegates to installCopilotHooks with projectPath', async () => {
+    await provider.installHooks(null, '/some/project');
+    expect(mockInstallCopilotHooks).toHaveBeenCalledWith('/some/project');
   });
 
   it('validateSettings delegates to validateCopilotHooks', () => {

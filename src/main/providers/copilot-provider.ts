@@ -55,8 +55,8 @@ export class CopilotProvider implements CliProvider {
     return args;
   }
 
-  async installHooks(): Promise<void> {
-    installCopilotHooks();
+  async installHooks(_win?: BrowserWindow | null, projectPath?: string): Promise<void> {
+    installCopilotHooks(projectPath);
   }
 
   installStatusScripts(): void {}

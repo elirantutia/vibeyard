@@ -56,6 +56,7 @@ function setupCopilotWatchers(projectPath: string): void {
     path.join(copilotDir, 'config.json'),
     path.join(copilotDir, 'mcp-config.json'),
     path.join(projectPath, '.copilot', 'mcp-config.json'),
+    path.join(projectPath, '.github', 'hooks', 'vibeyard-copilot-hooks.json'),
   ];
   for (const f of files) watchFile(f);
 }

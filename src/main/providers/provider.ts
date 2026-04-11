@@ -7,7 +7,7 @@ export interface CliProvider {
   validatePrerequisites(): boolean;
   buildEnv(sessionId: string, baseEnv: Record<string, string>): Record<string, string>;
   buildArgs(opts: { cliSessionId: string | null; isResume: boolean; extraArgs: string; initialPrompt?: string }): string[];
-  installHooks(win?: BrowserWindow | null): Promise<void>;
+  installHooks(win?: BrowserWindow | null, projectPath?: string): Promise<void>;
   installStatusScripts(): void;
   cleanup(): void;
   getConfig(projectPath: string): Promise<ProviderConfig>;

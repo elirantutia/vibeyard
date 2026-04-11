@@ -65,7 +65,7 @@ export class ClaudeProvider implements CliProvider {
     return args;
   }
 
-  async installHooks(win?: BrowserWindow | null): Promise<void> {
+  async installHooks(win?: BrowserWindow | null, _projectPath?: string): Promise<void> {
     await guardedInstall(win ?? null);
   }
 
