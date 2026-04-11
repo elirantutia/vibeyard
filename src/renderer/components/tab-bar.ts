@@ -4,6 +4,8 @@ import { showModal, closeModal, setModalError, FieldDef } from './modal.js';
 import { onChange as onStatusChange, getStatus, type SessionStatus } from '../session-activity.js';
 import { onChange as onGitStatusChange, getGitStatus, getActiveGitPath, refreshGitStatus } from '../git-status.js';
 
+import { showConfirmDialog } from './confirm-dialog.js';
+import { countActiveStatuses, buildWarningBannerDetail } from './confirm-helpers.js';
 import { isUnread, onChange as onUnreadChange } from '../session-unread.js';
 import { showHelpDialog } from './help-dialog.js';
 import { showShareDialog } from './share-dialog.js';
@@ -23,6 +25,37 @@ const btnHelp = document.getElementById('btn-help')!;
 
 let activeContextMenu: HTMLElement | null = null;
 const prevStatus = new Map<string, SessionStatus>();
+
+async function confirmBeforeClose(sessionId: string, sessionName: string): Promise<boolean> {
+  const status = getStatus(sessionId);
+  const isActive = status === 'working' || status === 'waiting' || status === 'input';
+
+  if (isActive && appState.preferences.confirmCloseActive) {
+    const statusWord = status === 'input' ? 'waiting for input' : status;
+    return showConfirmDialog({
+      title: 'Close active session?',
+      message: `<span style="color:${status === 'working' ? '#e94560' : status === 'waiting' ? '#f4b400' : '#e67e22'}">&#9679;</span> &nbsp;<strong>${escapeHtml(sessionName)}</strong> is currently ${statusWord}.`,
+      confirmLabel: 'Close',
+      confirmDangerous: true,
+    });
+  }
+
+  if (!isActive && appState.preferences.confirmCloseInactive) {
+    return showConfirmDialog({
+      title: 'Close session?',
+      message: `Close "${escapeHtml(sessionName)}"?`,
+      confirmLabel: 'Close',
+    });
+  }
+
+  return true;
+}
+
+function escapeHtml(text: string): string {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
 
 function buildTooltip(status: SessionStatus, cliSessionId?: string): string {
   const statusLine = `Status: ${status}`;
@@ -147,10 +180,12 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
   const closeItem = document.createElement('div');
   closeItem.className = 'tab-context-menu-item';
   closeItem.textContent = 'Close';
-  closeItem.addEventListener('click', (e) => {
+  closeItem.addEventListener('click', async (e) => {
     e.stopPropagation();
     hideTabContextMenu();
-    appState.removeSession(project.id, session.id);
+    if (await confirmBeforeClose(session.id, session.name)) {
+      appState.removeSession(project.id, session.id);
+    }
   });
 
   const sessionIdx = project.sessions.findIndex((s) => s.id === session.id);
@@ -162,9 +197,24 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
   const closeAllItem = document.createElement('div');
   closeAllItem.className = 'tab-context-menu-item';
   closeAllItem.textContent = 'Close All';
-  closeAllItem.addEventListener('click', (e) => {
+  closeAllItem.addEventListener('click', async (e) => {
     e.stopPropagation();
     hideTabContextMenu();
+    const statuses = project.sessions.map(s => getStatus(s.id));
+    const counts = countActiveStatuses(statuses);
+    const hasActive = counts.working + counts.waiting + counts.input > 0;
+
+    if (hasActive && appState.preferences.confirmCloseActive) {
+      const detail = buildWarningBannerDetail(counts);
+      const confirmed = await showConfirmDialog({
+        title: 'Close all sessions?',
+        message: '',
+        detail,
+        confirmLabel: 'Close All',
+        confirmDangerous: true,
+      });
+      if (!confirmed) return;
+    }
     appState.removeAllSessions(project.id);
   });
 
@@ -172,9 +222,25 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
   closeOthersItem.className = 'tab-context-menu-item' + (totalSessions <= 1 ? ' disabled' : '');
   closeOthersItem.textContent = 'Close Others';
   if (totalSessions > 1) {
-    closeOthersItem.addEventListener('click', (e) => {
+    closeOthersItem.addEventListener('click', async (e) => {
       e.stopPropagation();
       hideTabContextMenu();
+      const others = project.sessions.filter(s => s.id !== session.id);
+      const statuses = others.map(s => getStatus(s.id));
+      const counts = countActiveStatuses(statuses);
+      const hasActive = counts.working + counts.waiting + counts.input > 0;
+
+      if (hasActive && appState.preferences.confirmCloseActive) {
+        const detail = buildWarningBannerDetail(counts);
+        const confirmed = await showConfirmDialog({
+          title: 'Close other sessions?',
+          message: '',
+          detail,
+          confirmLabel: 'Close Others',
+          confirmDangerous: true,
+        });
+        if (!confirmed) return;
+      }
       appState.removeOtherSessions(project.id, session.id);
     });
   }
@@ -183,9 +249,25 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
   closeRightItem.className = 'tab-context-menu-item' + (sessionIdx >= totalSessions - 1 ? ' disabled' : '');
   closeRightItem.textContent = 'Close to the Right';
   if (sessionIdx < totalSessions - 1) {
-    closeRightItem.addEventListener('click', (e) => {
+    closeRightItem.addEventListener('click', async (e) => {
       e.stopPropagation();
       hideTabContextMenu();
+      const rightSessions = project.sessions.slice(sessionIdx + 1);
+      const statuses = rightSessions.map(s => getStatus(s.id));
+      const counts = countActiveStatuses(statuses);
+      const hasActive = counts.working + counts.waiting + counts.input > 0;
+
+      if (hasActive && appState.preferences.confirmCloseActive) {
+        const detail = buildWarningBannerDetail(counts);
+        const confirmed = await showConfirmDialog({
+          title: 'Close sessions to the right?',
+          message: '',
+          detail,
+          confirmLabel: 'Close to Right',
+          confirmDangerous: true,
+        });
+        if (!confirmed) return;
+      }
       appState.removeSessionsFromRight(project.id, session.id);
     });
   }
@@ -194,9 +276,25 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
   closeLeftItem.className = 'tab-context-menu-item' + (sessionIdx <= 0 ? ' disabled' : '');
   closeLeftItem.textContent = 'Close to the Left';
   if (sessionIdx > 0) {
-    closeLeftItem.addEventListener('click', (e) => {
+    closeLeftItem.addEventListener('click', async (e) => {
       e.stopPropagation();
       hideTabContextMenu();
+      const leftSessions = project.sessions.slice(0, sessionIdx);
+      const statuses = leftSessions.map(s => getStatus(s.id));
+      const counts = countActiveStatuses(statuses);
+      const hasActive = counts.working + counts.waiting + counts.input > 0;
+
+      if (hasActive && appState.preferences.confirmCloseActive) {
+        const detail = buildWarningBannerDetail(counts);
+        const confirmed = await showConfirmDialog({
+          title: 'Close sessions to the left?',
+          message: '',
+          detail,
+          confirmLabel: 'Close to Left',
+          confirmDangerous: true,
+        });
+        if (!confirmed) return;
+      }
       appState.removeSessionsFromLeft(project.id, session.id);
     });
   }
@@ -400,10 +498,12 @@ function render(): void {
     });
 
     // Middle-click to close
-    tab.addEventListener('auxclick', (e) => {
+    tab.addEventListener('auxclick', async (e) => {
       if (e.button === 1) {
         e.preventDefault();
-        appState.removeSession(project.id, session.id);
+        if (await confirmBeforeClose(session.id, session.name)) {
+          appState.removeSession(project.id, session.id);
+        }
       }
     });
 
@@ -417,8 +517,10 @@ function render(): void {
     });
 
     // Close button
-    tab.querySelector('.tab-close')!.addEventListener('click', () => {
-      appState.removeSession(project.id, session.id);
+    tab.querySelector('.tab-close')!.addEventListener('click', async () => {
+      if (await confirmBeforeClose(session.id, session.name)) {
+        appState.removeSession(project.id, session.id);
+      }
     });
 
     tab.addEventListener('dragstart', (e) => {
