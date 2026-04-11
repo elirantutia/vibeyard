@@ -213,9 +213,9 @@ describe('hooks integration', () => {
     expect(mockInstallCopilotHooks).toHaveBeenCalledWith('/some/project');
   });
 
-  it('validateSettings delegates to validateCopilotHooks', () => {
-    const result = provider.validateSettings();
-    expect(mockValidateCopilotHooks).toHaveBeenCalled();
+  it('validateSettings delegates to validateCopilotHooks with projectPath', () => {
+    const result = provider.validateSettings('/some/project');
+    expect(mockValidateCopilotHooks).toHaveBeenCalledWith('/some/project');
     expect(result).toEqual({ statusLine: 'vibeyard', hooks: 'complete', hookDetails: {} });
   });
 

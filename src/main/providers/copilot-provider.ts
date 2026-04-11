@@ -82,8 +82,8 @@ export class CopilotProvider implements CliProvider {
     return null;
   }
 
-  validateSettings(): SettingsValidationResult {
-    return validateCopilotHooks();
+  validateSettings(projectPath?: string): SettingsValidationResult {
+    return validateCopilotHooks(projectPath);
   }
 
   reinstallSettings(): void {

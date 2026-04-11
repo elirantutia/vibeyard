@@ -12,7 +12,7 @@ export interface CliProvider {
   cleanup(): void;
   getConfig(projectPath: string): Promise<ProviderConfig>;
   getShiftEnterSequence(): string | null;
-  validateSettings(): SettingsValidationResult;
+  validateSettings(projectPath?: string): SettingsValidationResult;
   reinstallSettings(): void;
   parseCostFromOutput?(rawText: string): { totalCostUsd: number } | null;
   /** Return the absolute path to the source transcript file for a prior session, if any. */
