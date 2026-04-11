@@ -84,6 +84,7 @@ export interface VibeyardApi {
     onQuitting(callback: () => void): () => void;
     onConfirmClose(callback: () => void): () => void;
     closeConfirmed(): void;
+    closeCancelled(): void;
   };
   browser: {
     saveScreenshot(sessionId: string, dataUrl: string): Promise<string>;
@@ -235,6 +236,7 @@ const api: VibeyardApi = {
     onQuitting: (cb: () => void) => onChannel('app:quitting', cb),
     onConfirmClose: (cb: () => void) => onChannel('app:confirmClose', cb),
     closeConfirmed: () => { ipcRenderer.send('app:closeConfirmed'); },
+    closeCancelled: () => { ipcRenderer.send('app:closeCancelled'); },
   },
   browser: {
     saveScreenshot: (sessionId: string, dataUrl: string) =>

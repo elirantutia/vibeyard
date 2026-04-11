@@ -69,6 +69,7 @@ export interface VibeyardApi {
     onQuitting(callback: () => void): () => void;
     onConfirmClose(callback: () => void): () => void;
     closeConfirmed(): void;
+    closeCancelled(): void;
   };
   mcp: {
     connect(id: string, url: string): Promise<McpResult>;

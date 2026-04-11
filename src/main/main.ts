@@ -12,6 +12,7 @@ import { checkPythonAvailable } from './prerequisites';
 import { isMac } from './platform';
 
 let mainWindow: BrowserWindow | null = null;
+let forceClose = false;
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -48,8 +49,6 @@ function createWindow(): void {
     }
   });
 
-  let forceClose = false;
-
   mainWindow.on('close', (e) => {
     flushState();
     if (forceClose) return;
@@ -62,6 +61,12 @@ function createWindow(): void {
       forceClose = true;
       mainWindow.close();
     }
+  });
+
+  ipcMain.on('app:closeCancelled', () => {
+    // Reset forceClose so the next close attempt shows the dialog again.
+    // This matters on macOS where closing hides the window instead of quitting.
+    forceClose = false;
   });
 
   mainWindow.on('closed', () => {
@@ -136,6 +141,9 @@ app.whenReady().then(async () => {
 });
 
 app.on('before-quit', () => {
+  // Skip close confirmation during app quit (Cmd+Q / menu quit).
+  // The quit is already committed at this point — cleanup is happening.
+  forceClose = true;
   flushState();
   const win = BrowserWindow.getAllWindows()[0];
   if (win && !win.isDestroyed()) {

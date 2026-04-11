@@ -37,6 +37,8 @@ export function initCloseGuard(): void {
 
     if (confirmed) {
       window.vibeyard.app.closeConfirmed();
+    } else {
+      window.vibeyard.app.closeCancelled();
     }
   });
 }
