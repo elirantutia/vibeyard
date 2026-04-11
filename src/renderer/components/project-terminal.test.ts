@@ -101,7 +101,7 @@ describe('project-terminal Ctrl+Shift+C clipboard copy', () => {
 
   async function setupTerminal() {
     const { appState } = await import('../state.js');
-    const { initProjectTerminal, getShellTerminalInstance } = await import('./project-terminal.js');
+    const { initProjectTerminal, getShellTerminalInstance, getActiveShellSessionId } = await import('./project-terminal.js');
 
     const project = { id: 'proj1', path: '/project', terminalPanelOpen: true, terminalPanelHeight: 200, sessions: [] };
     (appState as any).activeProject = project;
@@ -109,10 +109,11 @@ describe('project-terminal Ctrl+Shift+C clipboard copy', () => {
 
     initProjectTerminal();
 
-    // Trigger state-loaded → showPanel → ensureShell
+    // Trigger state-loaded → showPanel → createShell
     stateHandlers['state-loaded']?.forEach(cb => cb());
 
-    return getShellTerminalInstance('shell-proj1');
+    const sessionId = getActiveShellSessionId();
+    return sessionId ? getShellTerminalInstance(sessionId) : undefined;
   }
 
   it('copies selected text to clipboard on Ctrl+Shift+C keydown', async () => {

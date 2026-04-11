@@ -4,6 +4,7 @@ import { execSync } from 'child_process';
 import { getFullPath } from '../pty-manager';
 import { isWin, whichCmd } from '../platform';
 import { fileExists } from '../fs-utils';
+import { findBinaryInNvm } from './nvm';
 
 const COMMON_BIN_DIRS = isWin
   ? [
@@ -87,6 +88,12 @@ export function resolveBinary(binaryName: string, cache: { path: string | null }
     }
   }
 
+  const nvmFound = findBinaryInNvm(binaryName);
+  if (nvmFound) {
+    cache.path = nvmFound;
+    return nvmFound;
+  }
+
   const resolved = whichBinary(binaryName, fullPath);
   if (resolved) {
     cache.path = resolved;
@@ -100,27 +107,17 @@ export function resolveBinary(binaryName: string, cache: { path: string | null }
   return binaryName;
 }
 
-export function validateBinaryExists(
-  binaryName: string,
-  displayName: string,
-  installCommand: string,
-): { ok: boolean; message: string } {
+export function validateBinaryExists(binaryName: string): boolean {
   for (const dir of COMMON_BIN_DIRS) {
-    if (findBinaryInDir(dir, binaryName)) return { ok: true, message: '' };
+    if (findBinaryInDir(dir, binaryName)) return true;
   }
 
+  if (findBinaryInNvm(binaryName)) return true;
+
   const fullPath = getFullPath();
-  if (whichBinary(binaryName, fullPath)) return { ok: true, message: '' };
+  if (whichBinary(binaryName, fullPath)) return true;
 
-  if (findViaNpmPrefix(binaryName, fullPath)) return { ok: true, message: '' };
+  if (findViaNpmPrefix(binaryName, fullPath)) return true;
 
-  return {
-    ok: false,
-    message:
-      `${displayName} not found.\n\n` +
-      `Vibeyard requires the ${displayName} to be installed.\n\n` +
-      `Install it with:\n` +
-      `  ${installCommand}\n\n` +
-      `After installing, restart Vibeyard.`,
-  };
+  return false;
 }

@@ -23,7 +23,7 @@ function makeFakeProvider(meta: CliProviderMeta): CliProvider {
   return {
     meta,
     resolveBinaryPath: () => '/usr/bin/fake',
-    validatePrerequisites: () => ({ ok: true, message: '' }),
+    validatePrerequisites: () => true,
     buildEnv: (_sid, env) => env,
     buildArgs: () => [],
     installHooks: async () => {},

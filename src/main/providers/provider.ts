@@ -4,7 +4,7 @@ import type { CliProviderMeta, ProviderConfig, SettingsValidationResult } from '
 export interface CliProvider {
   readonly meta: CliProviderMeta;
   resolveBinaryPath(): string;
-  validatePrerequisites(): { ok: boolean; message: string };
+  validatePrerequisites(): boolean;
   buildEnv(sessionId: string, baseEnv: Record<string, string>): Record<string, string>;
   buildArgs(opts: { cliSessionId: string | null; isResume: boolean; extraArgs: string; initialPrompt?: string }): string[];
   installHooks(win?: BrowserWindow | null): Promise<void>;

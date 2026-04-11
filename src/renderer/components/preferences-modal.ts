@@ -512,7 +512,7 @@ export function showPreferencesModal(): void {
         Promise.all([
           window.vibeyard.settings.validate(meta.id),
           window.vibeyard.provider.checkBinary(meta.id),
-        ]).then(([validation, binary]) => ({ meta, validation, binary })),
+        ]).then(([validation, binaryOk]) => ({ meta, validation, binaryOk })),
       ),
     );
   }
@@ -535,18 +535,18 @@ export function showPreferencesModal(): void {
 
     section.innerHTML = '';
 
-    for (const { meta, validation, binary } of results) {
+    for (const { meta, validation, binaryOk } of results) {
       renderProviderHeader(section, meta.displayName);
 
       renderCheckItem(section, {
         label: meta.displayName,
         description: `The ${meta.binaryName} binary must be installed for sessions to work.`,
-        ok: binary.ok,
-        statusText: binary.ok ? 'Installed' : 'Not found',
-        helpText: binary.ok ? undefined : binary.message,
+        ok: binaryOk,
+        statusText: binaryOk ? 'Installed' : 'Not found',
+        helpText: binaryOk ? undefined : `${meta.binaryName} not found.`,
       });
 
-      if (!binary.ok) continue;
+      if (!binaryOk) continue;
 
       const { capabilities } = meta;
 

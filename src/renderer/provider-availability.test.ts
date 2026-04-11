@@ -75,7 +75,7 @@ describe('provider-availability', () => {
   describe('loadProviderAvailability', () => {
     it('populates availability map from checkBinary results', async () => {
       listProviders.mockResolvedValue([metaClaude, metaCodex]);
-      checkBinary.mockImplementation(async (id: string) => ({ ok: id === 'claude' }));
+      checkBinary.mockImplementation(async (id: string) => id === 'claude');
       const mod = await loadModule();
       await mod.loadProviderAvailability();
       const snapshot = mod.getProviderAvailabilitySnapshot();
@@ -89,7 +89,7 @@ describe('provider-availability', () => {
   describe('hasMultipleAvailableProviders', () => {
     it('returns false when zero available', async () => {
       listProviders.mockResolvedValue([metaClaude, metaCodex]);
-      checkBinary.mockResolvedValue({ ok: false });
+      checkBinary.mockResolvedValue(false);
       const mod = await loadModule();
       await mod.loadProviderAvailability();
       expect(mod.hasMultipleAvailableProviders()).toBe(false);
@@ -97,7 +97,7 @@ describe('provider-availability', () => {
 
     it('returns false when exactly one available', async () => {
       listProviders.mockResolvedValue([metaClaude, metaCodex]);
-      checkBinary.mockImplementation(async (id: string) => ({ ok: id === 'claude' }));
+      checkBinary.mockImplementation(async (id: string) => id === 'claude');
       const mod = await loadModule();
       await mod.loadProviderAvailability();
       expect(mod.hasMultipleAvailableProviders()).toBe(false);
@@ -105,7 +105,7 @@ describe('provider-availability', () => {
 
     it('returns true when two or more available', async () => {
       listProviders.mockResolvedValue([metaClaude, metaCodex]);
-      checkBinary.mockResolvedValue({ ok: true });
+      checkBinary.mockResolvedValue(true);
       const mod = await loadModule();
       await mod.loadProviderAvailability();
       expect(mod.hasMultipleAvailableProviders()).toBe(true);

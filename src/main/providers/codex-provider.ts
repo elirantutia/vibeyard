@@ -33,8 +33,8 @@ export class CodexProvider implements CliProvider {
     return resolveBinary('codex', binaryCache);
   }
 
-  validatePrerequisites(): { ok: boolean; message: string } {
-    return validateBinaryExists('codex', 'Codex CLI', 'npm install -g @openai/codex');
+  validatePrerequisites(): boolean {
+    return validateBinaryExists('codex');
   }
 
   buildEnv(sessionId: string, baseEnv: Record<string, string>): Record<string, string> {

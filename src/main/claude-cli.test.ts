@@ -15,7 +15,7 @@ vi.mock('os', () => ({
 
 vi.mock('./providers/resolve-binary', () => ({
   resolveBinary: vi.fn(() => '/mock/bin/claude'),
-  validateBinaryExists: vi.fn(() => ({ ok: true, message: '' })),
+  validateBinaryExists: vi.fn(() => true),
 }));
 
 vi.mock('./providers/claude-version', () => ({

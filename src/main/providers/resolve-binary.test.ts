@@ -139,8 +139,7 @@ describe('validateBinaryExists (Windows)', () => {
       throw new Error('ENOENT');
     });
 
-    const result = validateBinaryExists('claude', 'Claude Code CLI', 'npm install -g @anthropic-ai/claude-code');
-    expect(result.ok).toBe(true);
+    expect(validateBinaryExists('claude')).toBe(true);
   });
 
   it('returns ok when npm prefix -g finds the binary', () => {
@@ -156,13 +155,10 @@ describe('validateBinaryExists (Windows)', () => {
       throw new Error('not found');
     });
 
-    const result = validateBinaryExists('claude', 'Claude Code CLI', 'npm install -g @anthropic-ai/claude-code');
-    expect(result.ok).toBe(true);
+    expect(validateBinaryExists('claude')).toBe(true);
   });
 
-  it('returns not ok with message when all methods fail', () => {
-    const result = validateBinaryExists('claude', 'Claude Code CLI', 'npm install -g @anthropic-ai/claude-code');
-    expect(result.ok).toBe(false);
-    expect(result.message).toContain('Claude Code CLI not found');
+  it('returns false when all methods fail', () => {
+    expect(validateBinaryExists('claude')).toBe(false);
   });
 });

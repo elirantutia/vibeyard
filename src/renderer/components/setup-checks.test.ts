@@ -34,7 +34,7 @@ function makeStatus(overrides: Partial<ProviderStatus> = {}): ProviderStatus {
   return {
     meta: makeMeta(),
     validation: makeValidation(),
-    binary: { ok: true, message: '' },
+    binaryOk: true,
     ...overrides,
   };
 }
@@ -44,7 +44,7 @@ describe('hasProviderIssue', () => {
     const status = makeStatus({
       meta: makeMeta({ costTracking: true, hookStatus: true }),
       validation: makeValidation({ statusLine: 'missing', hooks: 'missing' }),
-      binary: { ok: false, message: 'Not found' },
+      binaryOk: false,
     });
     expect(hasProviderIssue(status)).toBe(false);
   });
