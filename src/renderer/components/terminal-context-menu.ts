@@ -27,7 +27,7 @@ export function showTerminalContextMenu(
       e.stopPropagation();
       hideTerminalContextMenu();
       const selection = terminal.getSelection();
-      if (selection) navigator.clipboard.writeText(selection).catch(() => {});
+      if (selection) navigator.clipboard.writeText(selection).catch((err) => console.warn('Clipboard write failed:', err));
     });
   }
   menu.appendChild(copyItem);
@@ -41,10 +41,11 @@ export function showTerminalContextMenu(
     hideTerminalContextMenu();
     navigator.clipboard.readText().then((text) => {
       if (!text) return;
+      // xterm.js exposes modes but it's not in the public type definitions
       const modes = (terminal as any).modes;
       const bp = modes?.bracketedPasteMode;
       writeToPty(bp ? `\x1b[200~${text}\x1b[201~` : text);
-    }).catch(() => {});
+    }).catch((err) => console.warn('Clipboard read failed:', err));
   });
   menu.appendChild(pasteItem);
 
