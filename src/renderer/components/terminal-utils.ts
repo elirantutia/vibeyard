@@ -5,6 +5,17 @@ import { isWin } from '../platform.js';
 type ExtraKeyHandler = (e: KeyboardEvent) => boolean | undefined;
 
 /**
+ * Writes text to the PTY, wrapping in bracketed paste escape sequences
+ * if the shell has enabled bracketed paste mode.
+ */
+export function pasteWithBracketedMode(terminal: Terminal, text: string, writeToPty: (data: string) => void): void {
+  // xterm.js exposes modes but it's not in the public type definitions
+  const modes = (terminal as any).modes;
+  const bp = modes?.bracketedPasteMode;
+  writeToPty(bp ? `\x1b[200~${text}\x1b[201~` : text);
+}
+
+/**
  * Attaches shared key event handling to a terminal:
  * - Cmd/Ctrl+F: bubbles up to document (prevents xterm from consuming it)
  * - Ctrl+Shift+C: copies selected text to clipboard
@@ -50,10 +61,7 @@ export function attachClipboardCopyHandler(
       if (e.type === 'keydown') {
         navigator.clipboard.readText().then((text) => {
           if (!text) return;
-          // Respect bracketed paste mode if the shell enabled it
-          const modes = (terminal as any).modes;
-          const bp = modes?.bracketedPasteMode;
-          writeToPty(bp ? `\x1b[200~${text}\x1b[201~` : text);
+          pasteWithBracketedMode(terminal, text, writeToPty);
         }).catch(() => {});
       }
       e.preventDefault(); // prevent native paste event from firing

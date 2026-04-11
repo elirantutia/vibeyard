@@ -1,5 +1,6 @@
 import type { Terminal } from '@xterm/xterm';
 import { isMac } from '../platform.js';
+import { pasteWithBracketedMode } from './terminal-utils.js';
 
 let activeMenu: HTMLElement | null = null;
 
@@ -18,7 +19,6 @@ export function showTerminalContextMenu(
 
   const hasSelection = terminal.hasSelection();
 
-  // Copy
   const copyItem = document.createElement('div');
   copyItem.className = 'tab-context-menu-item' + (hasSelection ? '' : ' disabled');
   copyItem.innerHTML = `<span>Copy</span><span class="shortcut-hint">${isMac ? '⇧⌘C' : 'Ctrl+Shift+C'}</span>`;
@@ -32,7 +32,6 @@ export function showTerminalContextMenu(
   }
   menu.appendChild(copyItem);
 
-  // Paste
   const pasteItem = document.createElement('div');
   pasteItem.className = 'tab-context-menu-item';
   pasteItem.innerHTML = `<span>Paste</span><span class="shortcut-hint">${isMac ? '⌘V' : 'Ctrl+V'}</span>`;
@@ -41,20 +40,15 @@ export function showTerminalContextMenu(
     hideTerminalContextMenu();
     navigator.clipboard.readText().then((text) => {
       if (!text) return;
-      // xterm.js exposes modes but it's not in the public type definitions
-      const modes = (terminal as any).modes;
-      const bp = modes?.bracketedPasteMode;
-      writeToPty(bp ? `\x1b[200~${text}\x1b[201~` : text);
+      pasteWithBracketedMode(terminal, text, writeToPty);
     }).catch((err) => console.warn('Clipboard read failed:', err));
   });
   menu.appendChild(pasteItem);
 
-  // Separator
   const sep1 = document.createElement('div');
   sep1.className = 'tab-context-menu-separator';
   menu.appendChild(sep1);
 
-  // Select All
   const selectAllItem = document.createElement('div');
   selectAllItem.className = 'tab-context-menu-item';
   selectAllItem.textContent = 'Select All';
@@ -65,12 +59,10 @@ export function showTerminalContextMenu(
   });
   menu.appendChild(selectAllItem);
 
-  // Separator
   const sep2 = document.createElement('div');
   sep2.className = 'tab-context-menu-separator';
   menu.appendChild(sep2);
 
-  // Clear Terminal
   const clearItem = document.createElement('div');
   clearItem.className = 'tab-context-menu-item';
   clearItem.textContent = 'Clear Terminal';
