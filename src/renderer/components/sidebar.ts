@@ -4,6 +4,9 @@ import { showPreferencesModal } from './preferences-modal.js';
 import { onChange as onCostChange, getAggregateCost } from '../session-cost.js';
 import { hasUnreadInProject, onChange as onUnreadChange } from '../session-unread.js';
 import { basename, lastSeparatorIndex } from '../../shared/platform.js';
+import { showConfirmDialog } from './confirm-dialog.js';
+import { getStatus } from '../session-activity.js';
+import { countActiveStatuses, buildWarningBannerDetail } from './confirm-helpers.js';
 
 const projectListEl = document.getElementById('project-list')!;
 let activeProjectContextMenu: HTMLElement | null = null;
@@ -275,12 +278,30 @@ function renderCostFooter(): void {
   }
 }
 
-function confirmRemoveProject(project: ProjectRecord): void {
-  const historyCount = project.sessionHistory?.length ?? 0;
-  const message = historyCount > 0
-    ? `Remove project "${project.name}"? This will delete all sessions and history (${historyCount} entries) from Vibeyard. No files on disk will be affected.`
-    : `Remove project "${project.name}"? No files on disk will be affected.`;
-  if (!confirm(message)) return;
+async function confirmRemoveProject(project: ProjectRecord): Promise<void> {
+  const statuses = project.sessions.map(s => getStatus(s.id));
+  const counts = countActiveStatuses(statuses);
+  const hasActive = counts.working + counts.waiting + counts.input > 0;
+
+  if (hasActive && appState.preferences.confirmCloseActive) {
+    const detail = buildWarningBannerDetail(counts);
+    const confirmed = await showConfirmDialog({
+      title: `Remove ${project.name}?`,
+      message: 'The project and all its sessions will be removed. No files on disk will be affected.',
+      detail,
+      confirmLabel: 'Remove',
+      confirmDangerous: true,
+    });
+    if (!confirmed) return;
+  } else {
+    // No active sessions — use simple native confirm for project removal
+    const historyCount = project.sessionHistory?.length ?? 0;
+    const message = historyCount > 0
+      ? `Remove project "${project.name}"? This will delete all sessions and history (${historyCount} entries) from Vibeyard. No files on disk will be affected.`
+      : `Remove project "${project.name}"? No files on disk will be affected.`;
+    if (!confirm(message)) return;
+  }
+
   appState.removeProject(project.id);
 }
 
