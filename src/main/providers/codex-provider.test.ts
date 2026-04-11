@@ -129,22 +129,19 @@ describe('validatePrerequisites', () => {
       if (p === validateCandidate) return fileStat;
       throw new Error('ENOENT');
     });
-    expect(provider.validatePrerequisites()).toEqual({ ok: true, message: '' });
+    expect(provider.validatePrerequisites()).toBe(true);
   });
 
   it('returns ok when binary found via which', () => {
     mockExistsSync.mockReturnValue(false);
     mockExecSync.mockReturnValue('/resolved/codex\n' as any);
-    expect(provider.validatePrerequisites()).toEqual({ ok: true, message: '' });
+    expect(provider.validatePrerequisites()).toBe(true);
   });
 
   it('returns not ok when binary not found anywhere', () => {
     mockExistsSync.mockReturnValue(false);
     mockExecSync.mockImplementation(() => { throw new Error('not found'); });
-    const result = provider.validatePrerequisites();
-    expect(result.ok).toBe(false);
-    expect(result.message).toContain('Codex CLI not found');
-    expect(result.message).toContain('@openai/codex');
+    expect(provider.validatePrerequisites()).toBe(false);
   });
 });
 

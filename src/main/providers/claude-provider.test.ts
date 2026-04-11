@@ -117,21 +117,19 @@ describe('validatePrerequisites', () => {
       if (p === validateCandidate) return fileStat;
       throw new Error('ENOENT');
     });
-    expect(provider.validatePrerequisites()).toEqual({ ok: true, message: '' });
+    expect(provider.validatePrerequisites()).toBe(true);
   });
 
   it('returns ok when binary found via which', () => {
     mockExistsSync.mockReturnValue(false);
     mockExecSync.mockReturnValue('/resolved/claude\n' as any);
-    expect(provider.validatePrerequisites()).toEqual({ ok: true, message: '' });
+    expect(provider.validatePrerequisites()).toBe(true);
   });
 
   it('returns not ok when binary not found anywhere', () => {
     mockExistsSync.mockReturnValue(false);
     mockExecSync.mockImplementation(() => { throw new Error('not found'); });
-    const result = provider.validatePrerequisites();
-    expect(result.ok).toBe(false);
-    expect(result.message).toContain('Claude Code CLI not found');
+    expect(provider.validatePrerequisites()).toBe(false);
   });
 });
 

@@ -35,8 +35,8 @@ export class ClaudeProvider implements CliProvider {
     return resolveBinary('claude', binaryCache);
   }
 
-  validatePrerequisites(): { ok: boolean; message: string } {
-    return validateBinaryExists('claude', 'Claude Code CLI', 'npm install -g @anthropic-ai/claude-code');
+  validatePrerequisites(): boolean {
+    return validateBinaryExists('claude');
   }
 
   buildEnv(sessionId: string, baseEnv: Record<string, string>): Record<string, string> {

@@ -40,6 +40,6 @@ export function getAllProviderMetas(): CliProviderMeta[] {
 
 export function getAvailableProviderIds(): ProviderId[] {
   return getAllProviders()
-    .filter(p => p.validatePrerequisites().ok)
+    .filter(p => p.validatePrerequisites())
     .map(p => p.meta.id);
 }

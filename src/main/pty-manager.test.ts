@@ -2,12 +2,13 @@ import { vi } from 'vitest';
 import * as path from 'path';
 import { isWin } from './platform';
 
-const { mockSpawn, mockWrite, mockResize, mockKill, mockExecFile } = vi.hoisted(() => ({
+const { mockSpawn, mockWrite, mockResize, mockKill, mockExecFile, mockNvmDefaultNodeBinDir } = vi.hoisted(() => ({
   mockSpawn: vi.fn(),
   mockWrite: vi.fn(),
   mockResize: vi.fn(),
   mockKill: vi.fn(),
   mockExecFile: vi.fn(),
+  mockNvmDefaultNodeBinDir: vi.fn(() => null as string | null),
 }));
 
 vi.mock('node-pty', () => ({
@@ -32,6 +33,11 @@ vi.mock('fs', () => ({
   writeFileSync: vi.fn(),
   readFileSync: vi.fn(() => { throw new Error('ENOENT'); }),
   readdirSync: vi.fn(() => { throw new Error('ENOENT'); }),
+}));
+
+vi.mock('./providers/nvm', () => ({
+  nvmDefaultNodeBinDir: mockNvmDefaultNodeBinDir,
+  findBinaryInNvm: vi.fn(() => null),
 }));
 
 import * as fs from 'fs';
@@ -413,6 +419,59 @@ describe('getRegistryPath', () => {
       expect(getRegistryPath()).toBe('');
     });
   }
+});
+
+describe('getFullPath (macOS)', () => {
+  if (isWin) {
+    it.skip('macOS-only', () => {});
+    return;
+  }
+
+  beforeEach(() => {
+    resetPathCache();
+    mockNvmDefaultNodeBinDir.mockReturnValue(null);
+    mockExecSync.mockImplementation(() => { throw new Error('not found'); });
+  });
+
+  it('parses PATH from output with plugin garbage around the marker block', () => {
+    mockExecSync.mockImplementation(() =>
+      'p10k instant prompt noise\n' +
+      '\x1b[?2004h__VY_PATH_BEGIN__/opt/homebrew/bin:/usr/local/bin__VY_PATH_END__\n' +
+      'trailing zshrc chatter\n',
+    );
+    const result = getFullPath();
+    expect(result).toBe('/opt/homebrew/bin:/usr/local/bin');
+  });
+
+  it('invokes the shell with -ilc (regression guard: do not drop -i)', () => {
+    mockExecSync.mockImplementation((cmd: string) => {
+      expect(cmd).toContain('-ilc');
+      return '__VY_PATH_BEGIN__/usr/bin__VY_PATH_END__\n';
+    });
+    getFullPath();
+    expect(mockExecSync).toHaveBeenCalled();
+  });
+
+  it('caches both successful and fallback results; resetPathCache allows retry', () => {
+    mockExecSync.mockImplementation(() => { throw new Error('timeout'); });
+    getFullPath();
+    getFullPath();
+    expect(mockExecSync).toHaveBeenCalledTimes(1);
+
+    resetPathCache();
+    mockExecSync.mockImplementation(() => '__VY_PATH_BEGIN__/usr/bin__VY_PATH_END__');
+    const second = getFullPath();
+    expect(second).toBe('/usr/bin');
+    expect(mockExecSync).toHaveBeenCalledTimes(2);
+  });
+
+  it('appends nvm default node bin to the fallback PATH when discoverable', () => {
+    mockNvmDefaultNodeBinDir.mockReturnValue('/mock/home/.nvm/versions/node/v24.11.1/bin');
+    mockExecSync.mockImplementation(() => { throw new Error('no shell'); });
+    const result = getFullPath();
+    expect(result).toContain('/mock/home/.nvm/versions/node/v24.11.1/bin');
+    expect(result).toContain('/opt/homebrew/bin');
+  });
 });
 
 describe('resolveWindowsShell', () => {

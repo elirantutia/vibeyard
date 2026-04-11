@@ -12,7 +12,7 @@ export async function loadProviderMetas(): Promise<void> {
 export async function loadProviderAvailability(): Promise<void> {
   await loadProviderMetas();
   const checks = await Promise.all(
-    cachedProviders.map(async p => ({ id: p.id, ok: (await window.vibeyard.provider.checkBinary(p.id)).ok }))
+    cachedProviders.map(async p => ({ id: p.id, ok: await window.vibeyard.provider.checkBinary(p.id) }))
   );
   cachedAvailability = new Map(checks.map(c => [c.id, c.ok]));
 }

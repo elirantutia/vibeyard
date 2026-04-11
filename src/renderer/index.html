@@ -48,9 +48,15 @@
       <div id="project-terminal-panel" class="hidden">
         <div id="project-terminal-header">
           <span class="project-terminal-title">Terminal</span>
-          <button id="btn-close-terminal" class="icon-btn" title="Close Terminal">&times;</button>
+          <div class="project-terminal-header-actions">
+            <button id="btn-new-terminal" class="icon-btn" title="New Terminal">+</button>
+            <button id="btn-close-terminal" class="icon-btn" title="Close Terminal">&times;</button>
+          </div>
         </div>
-        <div id="project-terminal-container"></div>
+        <div id="project-terminal-body">
+          <div id="project-terminal-container"></div>
+          <div id="project-terminal-sidebar" class="hidden"></div>
+        </div>
       </div>
     </div>
   </div>
