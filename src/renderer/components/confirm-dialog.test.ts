@@ -47,7 +47,6 @@ describe('showConfirmDialog', () => {
       message: '',
       detail: '<div class="confirm-status-line">1 working</div>',
       confirmLabel: 'Close Anyway',
-      confirmDangerous: true,
     });
     const banner = document.querySelector('.confirm-warning-banner');
     expect(banner).not.toBeNull();

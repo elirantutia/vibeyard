@@ -36,7 +36,6 @@ async function confirmBeforeClose(sessionId: string, sessionName: string): Promi
       title: 'Close active session?',
       message: `<span style="color:${status === 'working' ? '#e94560' : status === 'waiting' ? '#f4b400' : '#e67e22'}">&#9679;</span> &nbsp;<strong>${escapeHtml(sessionName)}</strong> is currently ${statusWord}.`,
       confirmLabel: 'Close',
-      confirmDangerous: true,
     });
   }
 
@@ -211,8 +210,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
         message: '',
         detail,
         confirmLabel: 'Close All',
-        confirmDangerous: true,
-      });
+        });
       if (!confirmed) return;
     }
     appState.removeAllSessions(project.id);
@@ -237,8 +235,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
           message: '',
           detail,
           confirmLabel: 'Close Others',
-          confirmDangerous: true,
-        });
+            });
         if (!confirmed) return;
       }
       appState.removeOtherSessions(project.id, session.id);
@@ -264,8 +261,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
           message: '',
           detail,
           confirmLabel: 'Close to Right',
-          confirmDangerous: true,
-        });
+            });
         if (!confirmed) return;
       }
       appState.removeSessionsFromRight(project.id, session.id);
@@ -291,8 +287,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
           message: '',
           detail,
           confirmLabel: 'Close to Left',
-          confirmDangerous: true,
-        });
+            });
         if (!confirmed) return;
       }
       appState.removeSessionsFromLeft(project.id, session.id);

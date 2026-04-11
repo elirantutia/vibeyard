@@ -56,25 +56,25 @@ function createWindow(): void {
     mainWindow!.webContents.send('app:confirmClose');
   });
 
-  ipcMain.on('app:closeConfirmed', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      forceClose = true;
-      mainWindow.close();
-    }
-  });
-
-  ipcMain.on('app:closeCancelled', () => {
-    // Reset forceClose so the next close attempt shows the dialog again.
-    // This matters on macOS where closing hides the window instead of quitting.
-    forceClose = false;
-  });
-
   mainWindow.on('closed', () => {
     killAllPtys();
     resetHookWatcher();
     mainWindow = null;
   });
 }
+
+// Close confirmation IPC — registered once at module scope to avoid
+// duplicate listeners when createWindow() is called again on macOS dock click.
+ipcMain.on('app:closeConfirmed', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    forceClose = true;
+    mainWindow.close();
+  }
+});
+
+ipcMain.on('app:closeCancelled', () => {
+  forceClose = false;
+});
 
 app.whenReady().then(async () => {
   initProviders();

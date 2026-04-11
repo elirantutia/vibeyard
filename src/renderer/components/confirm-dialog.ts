@@ -3,7 +3,6 @@ export interface ConfirmDialogOptions {
   message: string;
   detail?: string;
   confirmLabel: string;
-  confirmDangerous?: boolean;
 }
 
 export function showConfirmDialog(options: ConfirmDialogOptions): Promise<boolean> {
@@ -46,7 +45,7 @@ export function showConfirmDialog(options: ConfirmDialogOptions): Promise<boolea
     cancelBtn.textContent = 'Cancel';
 
     const confirmBtn = document.createElement('button');
-    confirmBtn.className = options.confirmDangerous ? 'modal-btn primary danger' : 'modal-btn primary';
+    confirmBtn.className = 'modal-btn primary';
     confirmBtn.textContent = options.confirmLabel;
 
     actions.appendChild(cancelBtn);

@@ -3,8 +3,12 @@ import { getStatus } from './session-activity.js';
 import { showConfirmDialog } from './components/confirm-dialog.js';
 import { countActiveStatuses, buildWarningBannerDetail } from './components/confirm-helpers.js';
 
+let dialogPending = false;
+
 export function initCloseGuard(): void {
   window.vibeyard.app.onConfirmClose(async () => {
+    if (dialogPending) return;
+
     if (!appState.preferences.confirmCloseActive) {
       window.vibeyard.app.closeConfirmed();
       return;
@@ -26,14 +30,15 @@ export function initCloseGuard(): void {
       return;
     }
 
+    dialogPending = true;
     const detail = buildWarningBannerDetail(counts);
     const confirmed = await showConfirmDialog({
       title: 'Close Vibeyard?',
       message: '',
       detail,
       confirmLabel: 'Close Anyway',
-      confirmDangerous: true,
     });
+    dialogPending = false;
 
     if (confirmed) {
       window.vibeyard.app.closeConfirmed();

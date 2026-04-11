@@ -290,7 +290,6 @@ async function confirmRemoveProject(project: ProjectRecord): Promise<void> {
       message: 'The project and all its sessions will be removed. No files on disk will be affected.',
       detail,
       confirmLabel: 'Remove',
-      confirmDangerous: true,
     });
     if (!confirmed) return;
   } else {
