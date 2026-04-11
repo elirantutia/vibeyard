@@ -53,12 +53,19 @@ function setupCopilotWatchers(projectPath: string): void {
   const copilotDir = path.join(home, '.copilot');
 
   const files = [
-    path.join(copilotDir, 'config.json'),
     path.join(copilotDir, 'mcp-config.json'),
     path.join(projectPath, '.copilot', 'mcp-config.json'),
     path.join(projectPath, '.github', 'hooks', 'vibeyard-copilot-hooks.json'),
   ];
   for (const f of files) watchFile(f);
+
+  const dirs = [
+    path.join(copilotDir, 'agents'),
+    path.join(copilotDir, 'skills'),
+    path.join(projectPath, '.github', 'agents'),
+    path.join(projectPath, '.github', 'skills'),
+  ];
+  for (const d of dirs) watchDir(d);
 }
 
 function setupClaudeWatchers(projectPath: string): void {

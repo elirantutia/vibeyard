@@ -185,7 +185,7 @@ async function refresh(): Promise<void> {
     config.skills.length,
   ));
 
-  if (providerId !== 'codex') {
+  if (providerId !== 'codex' && providerId !== 'copilot') {
     container.appendChild(renderSection(
       'commands',
       'Commands',
