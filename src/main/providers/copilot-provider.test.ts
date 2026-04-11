@@ -125,27 +125,24 @@ describe('validatePrerequisites', () => {
     ? path.join('/mock/home', 'AppData', 'Roaming', 'npm', 'copilot.cmd')
     : '/opt/homebrew/bin/copilot';
 
-  it('returns ok when binary found via statSync', () => {
+  it('returns true when binary found via statSync', () => {
     mockStatSync.mockImplementation((p) => {
       if (p === validateCandidate) return fileStat;
       throw new Error('ENOENT');
     });
-    expect(provider.validatePrerequisites()).toEqual({ ok: true, message: '' });
+    expect(provider.validatePrerequisites()).toBe(true);
   });
 
-  it('returns ok when binary found via which', () => {
+  it('returns true when binary found via which', () => {
     mockExistsSync.mockReturnValue(false);
     mockExecSync.mockReturnValue('/resolved/copilot\n' as any);
-    expect(provider.validatePrerequisites()).toEqual({ ok: true, message: '' });
+    expect(provider.validatePrerequisites()).toBe(true);
   });
 
-  it('returns not ok when binary not found anywhere', () => {
+  it('returns false when binary not found anywhere', () => {
     mockExistsSync.mockReturnValue(false);
     mockExecSync.mockImplementation(() => { throw new Error('not found'); });
-    const result = provider.validatePrerequisites();
-    expect(result.ok).toBe(false);
-    expect(result.message).toContain('GitHub Copilot CLI not found');
-    expect(result.message).toContain('@github/copilot');
+    expect(provider.validatePrerequisites()).toBe(false);
   });
 });
 
