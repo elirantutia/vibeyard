@@ -24,3 +24,6 @@ out/
 
 # Log files
 *.log
+
+# Superpowers brainstorm sessions
+.superpowers/

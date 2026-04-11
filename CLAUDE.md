@@ -38,7 +38,7 @@ Three renderer modules (`session-cost.ts`, `session-activity.ts`, `session-conte
 Three-process Electron architecture with strict context isolation:
 
 - **Main process** (`src/main/`) — Node.js side: window creation, PTY lifecycle via `node-pty`, filesystem access, persistent state (`~/.vibeyard/state.json`). IPC handlers in `ipc-handlers.ts` dispatch to `pty-manager.ts` and `store.ts`. CLI tool behavior is abstracted via the provider system (`src/main/providers/`).
-- **Preload** (`src/preload/preload.ts`) — Secure bridge exposing `window.vibeyard` API via `contextBridge` with namespaces: `pty`, `session`, `store`, `fs`, `provider`, `menu`.
+- **Preload** (`src/preload/preload.ts`) — Secure bridge exposing `window.vibeyard` API via `contextBridge` with namespaces: `pty`, `session`, `store`, `fs`, `provider`, `menu`, `app`.
 - **Renderer** (`src/renderer/`) — Vanilla TypeScript DOM UI (no framework). `AppState` singleton in `state.ts` uses an event emitter pattern; components in `components/` subscribe to state changes.
 
 ### Data Flow
@@ -65,6 +65,18 @@ CLI-specific behavior is encapsulated behind a `CliProvider` interface (`src/mai
 - `session-activity.ts` — Tracks working/waiting/idle status with debounced transitions
 - `session-cost.ts` — Structured cost tracking via Claude CLI status line (`statusLine` setting), with regex fallback for older CLI versions. Provides per-session and aggregate cost data (USD, tokens, cache, duration)
 - `browser-tab/` — Browser tab pane split into focused modules: `types.ts`, `instance.ts` (registry + preload path), `navigation.ts`, `viewport.ts`, `selector-ui.ts`, `inspect-mode.ts`, `flow-recording.ts`, `flow-picker.ts`, `session-integration.ts`, and `pane.ts` (DOM build + event wiring). `browser-tab-pane.ts` is a re-export shim for backward compatibility.
+- `confirm-dialog.ts` — Promise-based confirmation dialog (`showConfirmDialog()`) returning `true`/`false`. Separate from `modal.ts` (which handles form inputs). Supports optional warning banner via `detail` HTML.
+- `confirm-helpers.ts` — Utility functions `countActiveStatuses()` and `buildWarningBannerDetail()` for building session status warning banners in close confirmation dialogs.
+- `close-guard.ts` — Window close guard; listens for `app:confirmClose` IPC from main process, checks active session status and `confirmCloseActive` preference, shows warning banner dialog if needed, responds with `app:closeConfirmed` or `app:closeCancelled`.
+
+### Close Confirmation System
+
+Three close actions are gated by confirmation dialogs when active sessions (working/waiting/input) exist:
+- **Tab close** (X button, middle-click, context menu) — minimal dialog with session name and status dot
+- **Project removal** (sidebar context menu) — warning banner with aggregated status counts
+- **Window close** (X / Alt+F4) — warning banner via IPC round-trip (`app:confirmClose` → renderer checks → `app:closeConfirmed`/`app:closeCancelled`)
+
+Two preferences in General section: `confirmCloseActive` (default: on), `confirmCloseInactive` (default: off). The `forceClose` flag in `main.ts` is module-scoped and reset on cancel; `before-quit` sets it to bypass the dialog during Cmd+Q/menu quit.
 
 ### Platform Checks
 
