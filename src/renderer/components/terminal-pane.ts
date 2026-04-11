@@ -11,6 +11,7 @@ import type { ProviderId } from '../types.js';
 import { getProviderCapabilities } from '../provider-availability.js';
 import { FilePathLinkProvider, GithubLinkProvider } from './terminal-link-provider.js';
 import { attachClipboardCopyHandler } from './terminal-utils.js';
+import { showTerminalContextMenu } from './terminal-context-menu.js';
 
 interface TerminalInstance {
   terminal: Terminal;
@@ -167,6 +168,12 @@ export function createTerminalPane(
     if (focusedSessionId !== sessionId) {
       setFocused(sessionId);
     }
+  });
+
+  // Right-click context menu
+  xtermWrap.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    showTerminalContextMenu(e.clientX, e.clientY, terminal, writeToPty);
   });
 
   return instance;

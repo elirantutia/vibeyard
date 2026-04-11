@@ -4,6 +4,10 @@ vi.mock('../shortcuts.js', () => ({
   shortcutManager: { matchesAnyShortcut: () => false },
 }));
 
+vi.mock('./terminal-context-menu.js', () => ({
+  showTerminalContextMenu: vi.fn(),
+}));
+
 import { isMcpToolEvent, parseMcpToolName } from './session-inspector-utils.js';
 
 describe('parseMcpToolName', () => {
