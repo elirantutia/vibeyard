@@ -68,7 +68,9 @@ export async function getOpenCodeConfig(projectPath: string): Promise<ProviderCo
   const projectConfigFile = path.join(projectPath, 'opencode.json');
   const projectOpenCodeDir = path.join(projectPath, '.opencode');
 
-  // MCP servers: user config + project config; project overrides user on name collision
+  // MCP servers: user config + project config; project overrides user on name collision.
+  // Note: this intentionally differs from agents/skills/commands where user wins. MCP
+  // uses project-wins semantics to match OpenCode's own behavior for server resolution.
   const userMcp = readMcpFromJson(userConfigFile, 'user');
   const projectMcp = readMcpFromJson(projectConfigFile, 'project');
 

@@ -130,12 +130,6 @@ describe('getOpenCodeConfig', () => {
       }
       throw new Error('ENOENT');
     });
-    mockStatSync.mockImplementation((inputPath) => {
-      if (n(String(inputPath)) === '/project/.opencode/skills/git-release/SKILL.md') {
-        return { isFile: () => true } as any;
-      }
-      throw new Error('ENOENT');
-    });
 
     const result = await getOpenCodeConfig('/project');
     expect(result.skills).toEqual([
@@ -171,12 +165,6 @@ describe('getOpenCodeConfig', () => {
     mockReadFileSync.mockImplementation((inputPath) => {
       if (n(String(inputPath)).endsWith('/skills/shared/SKILL.md')) {
         return '---\nname: shared\ndescription: Shared skill\n---\n' as any;
-      }
-      throw new Error('ENOENT');
-    });
-    mockStatSync.mockImplementation((inputPath) => {
-      if (n(String(inputPath)).endsWith('/skills/shared/SKILL.md')) {
-        return { isFile: () => true } as any;
       }
       throw new Error('ENOENT');
     });
