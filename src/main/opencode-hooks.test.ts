@@ -24,6 +24,7 @@ import {
   _resetForTesting,
 } from './opencode-hooks';
 
+const mockExistsSync = vi.mocked(fs.existsSync);
 const mockReadFileSync = vi.mocked(fs.readFileSync);
 const mockWriteFileSync = vi.mocked(fs.writeFileSync);
 const mockMkdirSync = vi.mocked(fs.mkdirSync);
@@ -36,6 +37,7 @@ const PLUGIN_PATH = path.join('/project', '.opencode', 'plugins', 'vibeyard-stat
 function mockFiles(rawFiles: Record<string, string>): void {
   const files: Record<string, string> = {};
   for (const [k, v] of Object.entries(rawFiles)) files[n(k)] = v;
+  mockExistsSync.mockImplementation((p: any) => n(String(p)) in files);
   mockReadFileSync.mockImplementation((p: any) => {
     const content = files[n(String(p))];
     if (content !== undefined) return content;
@@ -121,6 +123,35 @@ describe('installOpenCodeHooks', () => {
     mockFiles({});
     installOpenCodeHooks(); // no path, no prior project
     expect(mockWriteFileSync).not.toHaveBeenCalled();
+  });
+
+  it('adds plugin path to .gitignore when .gitignore does not exist', () => {
+    mockFiles({});
+    installOpenCodeHooks('/project');
+
+    const gitignorePath = n(path.join('/project', '.gitignore'));
+    const gitignoreWrite = mockWriteFileSync.mock.calls.find(c => n(String(c[0])) === gitignorePath);
+    expect(gitignoreWrite).toBeDefined();
+    expect(String(gitignoreWrite![1])).toContain('.opencode/plugins/vibeyard-status.js');
+  });
+
+  it('appends plugin path to existing .gitignore that does not contain it', () => {
+    const gitignorePath = path.join('/project', '.gitignore');
+    mockFiles({ [gitignorePath]: 'node_modules\ndist\n' });
+    installOpenCodeHooks('/project');
+
+    const gitignoreWrite = mockWriteFileSync.mock.calls.find(c => n(String(c[0])) === n(gitignorePath));
+    expect(gitignoreWrite).toBeDefined();
+    expect(String(gitignoreWrite![1])).toContain('.opencode/plugins/vibeyard-status.js');
+  });
+
+  it('does not modify .gitignore when entry already present', () => {
+    const gitignorePath = path.join('/project', '.gitignore');
+    mockFiles({ [gitignorePath]: 'node_modules\n.opencode/plugins/vibeyard-status.js\n' });
+    installOpenCodeHooks('/project');
+
+    const gitignoreWrite = mockWriteFileSync.mock.calls.find(c => n(String(c[0])) === n(gitignorePath));
+    expect(gitignoreWrite).toBeUndefined();
   });
 });
 

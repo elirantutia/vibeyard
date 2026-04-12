@@ -66,14 +66,14 @@ export const VibeyardStatus = async () => ({
       writeStatus('session.idle', 'completed');
       appendEvt({ type: 'stop', timestamp: t, hookEvent: 'session.idle' });
     } else if (event.type === 'session.error') {
-      writeStatus('session.error', 'working');
-      appendEvt({ type: 'tool_failure', timestamp: t, hookEvent: 'session.error' });
+      writeStatus('session.error', 'completed');
+      appendEvt({ type: 'stop_failure', timestamp: t, hookEvent: 'session.error' });
     } else if (event.type === 'session.status') {
       writeStatus('session.status', 'working');
-      appendEvt({ type: 'user_prompt', timestamp: t, hookEvent: 'session.status' });
+      appendEvt({ type: 'status_update', timestamp: t, hookEvent: 'session.status' });
     } else if (event.type === 'permission.asked') {
       writeStatus('permission.asked', 'input');
-      appendEvt({ type: 'permission_asked', timestamp: t, hookEvent: 'permission.asked' });
+      appendEvt({ type: 'permission_request', timestamp: t, hookEvent: 'permission.asked' });
     }
   },
   'tool.execute.before': async (input) => {
@@ -97,6 +97,21 @@ function isVibeyardPlugin(content: string): boolean {
 // Installation
 // ---------------------------------------------------------------------------
 
+/** Ensures `entry` is present in the project's .gitignore (best-effort). */
+function addToGitignore(projectPath: string, entry: string): void {
+  const gitignorePath = path.join(projectPath, '.gitignore');
+  try {
+    const existing = fs.existsSync(gitignorePath) ? String(fs.readFileSync(gitignorePath, 'utf8')) : '';
+    if (existing.split('\n').some((line) => line.trim() === entry)) return;
+    const newContent = existing === '' || existing.endsWith('\n')
+      ? existing + entry + '\n'
+      : existing + '\n' + entry + '\n';
+    fs.writeFileSync(gitignorePath, newContent);
+  } catch {
+    // best-effort
+  }
+}
+
 export function installOpenCodeHooks(projectPath?: string): void {
   const target = projectPath ?? lastProjectPath;
   if (!target) return;
@@ -111,6 +126,9 @@ export function installOpenCodeHooks(projectPath?: string): void {
   if (readFileSafe(filePath) !== content) {
     fs.writeFileSync(filePath, content);
   }
+
+  // The generated plugin file is machine-specific and should not be committed.
+  addToGitignore(target, `.opencode/plugins/${PLUGIN_FILENAME}`);
 }
 
 // ---------------------------------------------------------------------------
