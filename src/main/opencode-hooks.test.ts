@@ -169,6 +169,9 @@ describe('validateOpenCodeHooks', () => {
     expect(result.hooks).toBe('complete');
     expect(result.hookDetails['session.created']).toBe(true);
     expect(result.hookDetails['session.idle']).toBe(true);
+    expect(result.hookDetails['session.error']).toBe(true);
+    expect(result.hookDetails['session.status']).toBe(true);
+    expect(result.hookDetails['permission.asked']).toBe(true);
     expect(result.hookDetails['tool.execute.before']).toBe(true);
     expect(result.hookDetails['tool.execute.after']).toBe(true);
   });

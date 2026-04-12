@@ -13,6 +13,9 @@ const PLUGIN_FILENAME = 'vibeyard-status.js';
 const EXPECTED_HOOK_EVENTS = [
   'session.created',
   'session.idle',
+  'session.error',
+  'session.status',
+  'permission.asked',
   'tool.execute.before',
   'tool.execute.after',
 ];
@@ -66,6 +69,8 @@ export const VibeyardStatus = async () => ({
       writeStatus('session.idle', 'completed');
       appendEvt({ type: 'stop', timestamp: t, hookEvent: 'session.idle' });
     } else if (event.type === 'session.error') {
+      // 'completed' is used because hook-status.ts only accepts working/waiting/completed/input;
+      // there is no separate error status. 'completed' correctly signals the session has terminated.
       writeStatus('session.error', 'completed');
       appendEvt({ type: 'stop_failure', timestamp: t, hookEvent: 'session.error' });
     } else if (event.type === 'session.status') {
