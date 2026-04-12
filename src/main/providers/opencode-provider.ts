@@ -45,9 +45,8 @@ export class OpenCodeProvider implements CliProvider {
 
   buildArgs(opts: { cliSessionId: string | null; isResume: boolean; extraArgs: string; initialPrompt?: string }): string[] {
     const args: string[] = [];
-    if (opts.isResume && opts.cliSessionId) {
-      args.push('--session', opts.cliSessionId);
-    } else if (opts.initialPrompt) {
+    // sessionResume is false — no --session path until .sessionid write is wired up in the plugin
+    if (opts.initialPrompt) {
       args.push('--prompt', opts.initialPrompt);
     }
     if (opts.extraArgs) {

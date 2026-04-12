@@ -167,11 +167,6 @@ describe('buildEnv', () => {
 });
 
 describe('buildArgs', () => {
-  it('returns ["--session", id] when isResume=true with cliSessionId', () => {
-    const args = provider.buildArgs({ cliSessionId: 'sid-1', isResume: true, extraArgs: '' });
-    expect(args).toEqual(['--session', 'sid-1']);
-  });
-
   it('returns [] when isResume=false with no initialPrompt', () => {
     const args = provider.buildArgs({ cliSessionId: 'sid-1', isResume: false, extraArgs: '' });
     expect(args).toEqual([]);
@@ -182,14 +177,9 @@ describe('buildArgs', () => {
     expect(args).toEqual([]);
   });
 
-  it('passes initialPrompt via --prompt when not resuming', () => {
+  it('passes initialPrompt via --prompt', () => {
     const args = provider.buildArgs({ cliSessionId: null, isResume: false, extraArgs: '', initialPrompt: 'fix the bug' });
     expect(args).toEqual(['--prompt', 'fix the bug']);
-  });
-
-  it('does not pass initialPrompt when resuming', () => {
-    const args = provider.buildArgs({ cliSessionId: 'sid-1', isResume: true, extraArgs: '', initialPrompt: 'fix the bug' });
-    expect(args).toEqual(['--session', 'sid-1']);
   });
 
   it('splits extraArgs on whitespace and appends', () => {
@@ -197,9 +187,9 @@ describe('buildArgs', () => {
     expect(args).toEqual(['--model', 'anthropic/claude-sonnet-4-5', '--log-level', 'DEBUG']);
   });
 
-  it('combines resume args and extra args', () => {
-    const args = provider.buildArgs({ cliSessionId: 'sid-1', isResume: true, extraArgs: '--model anthropic/claude-opus-4-5' });
-    expect(args).toEqual(['--session', 'sid-1', '--model', 'anthropic/claude-opus-4-5']);
+  it('passes initialPrompt alongside extraArgs', () => {
+    const args = provider.buildArgs({ cliSessionId: null, isResume: false, extraArgs: '--model anthropic/claude-opus-4-5', initialPrompt: 'hello' });
+    expect(args).toEqual(['--prompt', 'hello', '--model', 'anthropic/claude-opus-4-5']);
   });
 });
 
