@@ -214,24 +214,42 @@ export async function spawnPty(
   ptys.set(sessionId, { process: ptyProcess, sessionId });
 }
 
+// node-pty on Windows throws synchronously from write/resize/kill when the
+// underlying child process has already exited (see microsoft/node-pty#887).
+// A single dead PTY must not be allowed to crash the main Electron process
+// — it would take down every other active session with it. Guard each
+// operation, log a warning, and drop the dead handle from the map.
+
 export function writePty(sessionId: string, data: string): void {
   const instance = ptys.get(sessionId);
-  if (instance) {
+  if (!instance) return;
+  try {
     instance.process.write(data);
+  } catch (err) {
+    console.warn(`[pty-manager] writePty("${sessionId}") failed: ${(err as Error).message}`);
+    ptys.delete(sessionId);
   }
 }
 
 export function resizePty(sessionId: string, cols: number, rows: number): void {
   const instance = ptys.get(sessionId);
-  if (instance) {
+  if (!instance) return;
+  try {
     instance.process.resize(cols, rows);
+  } catch (err) {
+    console.warn(`[pty-manager] resizePty("${sessionId}") failed: ${(err as Error).message}`);
+    ptys.delete(sessionId);
   }
 }
 
 export function killPty(sessionId: string): void {
   const instance = ptys.get(sessionId);
-  if (instance) {
+  if (!instance) return;
+  try {
     instance.process.kill();
+  } catch (err) {
+    console.warn(`[pty-manager] killPty("${sessionId}") failed: ${(err as Error).message}`);
+  } finally {
     ptys.delete(sessionId);
   }
 }

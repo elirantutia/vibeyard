@@ -274,6 +274,63 @@ describe('resizePty', () => {
     resizePty('s1', 200, 50);
     expect(mockResize).toHaveBeenCalledWith(200, 50);
   });
+
+  // Regression test for #70: node-pty on Windows throws synchronously from
+  // WindowsPtyAgent.resize when the underlying child has exited. Before the
+  // fix, this crashed the main process and killed every open session.
+  it('swallows errors from node-pty on already-exited PTY (issue #70)', () => {
+    const proc = createMockPtyProcess();
+    mockSpawn.mockReturnValue(proc);
+    spawnPty('s1', '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
+
+    mockResize.mockImplementationOnce(() => {
+      throw new Error('Cannot resize a pty that has already exited');
+    });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(() => resizePty('s1', 120, 30)).not.toThrow();
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+});
+
+describe('writePty error handling (issue #70)', () => {
+  it('swallows errors when writing to an already-exited PTY', () => {
+    const proc = createMockPtyProcess();
+    mockSpawn.mockReturnValue(proc);
+    spawnPty('s1', '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
+
+    mockWrite.mockImplementationOnce(() => {
+      throw new Error('Cannot write to a pty that has already exited');
+    });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(() => writePty('s1', 'hello')).not.toThrow();
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+});
+
+describe('killPty error handling (issue #70)', () => {
+  it('swallows errors when killing an already-exited PTY and still drops the handle', () => {
+    const proc = createMockPtyProcess();
+    mockSpawn.mockReturnValue(proc);
+    spawnPty('s1', '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
+
+    mockKill.mockImplementationOnce(() => {
+      throw new Error('Cannot kill a pty that has already exited');
+    });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(() => killPty('s1')).not.toThrow();
+    expect(warnSpy).toHaveBeenCalled();
+    // After kill (even if it throws), a subsequent resize must be a no-op —
+    // the handle is gone, so mockResize must not be called.
+    mockResize.mockClear();
+    resizePty('s1', 120, 30);
+    expect(mockResize).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
 });
 
 describe('killPty', () => {
