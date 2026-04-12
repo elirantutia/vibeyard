@@ -314,7 +314,8 @@ export function cleanupAll(): void {
     watcher = null;
   }
   cleanupDir(STATUS_DIR, isKnownExtension);
-  cleanupDir(SCRIPT_DIR, (f) => f.endsWith('.py') || f.endsWith('.cmd') || f.endsWith('.sh'));
+  // SCRIPT_DIR is intentionally kept — scripts are idempotent and reinstalled
+  // on launch. Deleting them races with CLI processes that outlive the app.
 }
 
 function cleanupDir(dir: string, shouldUnlink: (filename: string) => boolean): void {

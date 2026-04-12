@@ -392,7 +392,7 @@ describe('hook-status', () => {
   });
 
   describe('cleanupAll', () => {
-    it('closes watcher, removes matching files, script, and dir', () => {
+    it('closes watcher, removes status files but keeps script dir', () => {
       const win = createMockWin();
       startWatching(win);
       vi.clearAllMocks();
@@ -400,9 +400,6 @@ describe('hook-status', () => {
       vi.mocked(fs.readdirSync).mockImplementation(((dir: string) => {
         if (dir === STATUS_DIR) {
           return ['a.status', 'b.sessionid', 'c.cost', 'other.log'];
-        }
-        if (dir === SCRIPT_DIR) {
-          return [isWin ? 'statusline.cmd' : 'statusline.sh', 'status_writer.py', 'other.log'];
         }
         return [];
       }) as any);
@@ -413,12 +410,11 @@ describe('hook-status', () => {
       expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'a.status'));
       expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'b.sessionid'));
       expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'c.cost'));
-      expect(fs.unlinkSync).toHaveBeenCalledWith(STATUSLINE_SCRIPT);
-      expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(SCRIPT_DIR, 'status_writer.py'));
       expect(fs.rmSync).toHaveBeenCalledWith(STATUS_DIR, { recursive: true });
-      expect(fs.rmSync).toHaveBeenCalledWith(SCRIPT_DIR, { recursive: true });
-      // 3 runtime files + 2 scripts; 'other.log' skipped in both dirs
-      expect(fs.unlinkSync).toHaveBeenCalledTimes(5);
+      // SCRIPT_DIR should NOT be cleaned up — scripts persist across restarts
+      expect(fs.rmSync).not.toHaveBeenCalledWith(SCRIPT_DIR, { recursive: true });
+      // 3 runtime files; 'other.log' skipped
+      expect(fs.unlinkSync).toHaveBeenCalledTimes(3);
     });
 
     it('handles missing directory gracefully', () => {

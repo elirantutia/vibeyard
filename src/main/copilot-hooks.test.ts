@@ -16,7 +16,6 @@ vi.mock('os', () => ({
 vi.mock('./hook-commands', () => ({
   installHookScripts: vi.fn(),
   installEventScript: vi.fn(),
-  cleanupHookScripts: vi.fn(),
 }));
 
 vi.mock('./platform', () => ({

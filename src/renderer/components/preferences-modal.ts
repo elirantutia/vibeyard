@@ -201,7 +201,7 @@ export function showPreferencesModal(): void {
     } else if (section === 'sidebar') {
       const views = appState.preferences.sidebarViews ?? { configSections: true, gitPanel: true, sessionHistory: true, costFooter: true, readinessSection: true };
       const toggles: { key: keyof typeof views; label: string }[] = [
-        { key: 'configSections', label: 'Config Sections (MCP Servers, Agents, Skills, Commands)' },
+        { key: 'configSections', label: 'Provider Tools (MCP Servers, Agents, Skills, Commands)' },
         { key: 'readinessSection', label: 'AI Readiness' },
         { key: 'gitPanel', label: 'Git Panel' },
         { key: 'sessionHistory', label: 'Session History' },

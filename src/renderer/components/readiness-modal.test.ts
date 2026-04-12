@@ -10,6 +10,7 @@ const mockProviderAvailability = vi.hoisted(() => ({
     providers: Array<{ id: string; displayName: string }>;
     availability: Map<string, boolean>;
   } | null),
+  getAvailableProviderMetas: vi.fn(() => [] as Array<{ id: string; displayName: string }>),
   getProviderDisplayName: vi.fn((id: string) => id),
 }));
 
@@ -156,6 +157,9 @@ describe('readiness-modal provider filter', () => {
       providers: allProviderMetas,
       availability,
     });
+    mockProviderAvailability.getAvailableProviderMetas.mockReturnValue(
+      allProviderMetas.filter(p => availability.get(p.id)),
+    );
   }
 
   it('does not show provider filter when only one provider is available', async () => {

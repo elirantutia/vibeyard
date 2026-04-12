@@ -1,8 +1,16 @@
 import { appState } from '../state.js';
 import { showMcpAddModal } from './mcp-add-modal.js';
+import { createCustomSelect, type CustomSelectInstance } from './custom-select.js';
+import {
+  getAvailableProviderMetas,
+  getProviderAvailabilitySnapshot,
+  loadProviderAvailability,
+} from '../provider-availability.js';
 import type { ProviderConfig, ProviderId, McpServer, Agent, Skill, Command } from '../types.js';
 
 const collapsed: Record<string, boolean> = {};
+const selectedProviderByProject = new Map<string, ProviderId>();
+let providerSelect: CustomSelectInstance | null = null;
 
 function scopeBadge(scope: 'user' | 'project'): string {
   return `<span class="scope-badge ${scope}">${scope}</span>`;
@@ -121,17 +129,12 @@ function applyVisibility(): void {
   container.classList.toggle('hidden', !visible);
 }
 
-export function getConfigProviderId(): ProviderId {
-  const project = appState.activeProject;
-  if (!project) return 'claude';
-
-  const activeSession = appState.activeSession;
-  if (activeSession && !activeSession.type) {
-    return (activeSession.providerId || 'claude') as ProviderId;
-  }
-
-  const recentCliSession = [...project.sessions].reverse().find(session => !session.type);
-  return (recentCliSession?.providerId || 'claude') as ProviderId;
+export function getActiveConfigProviderId(projectId: string): ProviderId {
+  const available = getAvailableProviderMetas().map(p => p.id);
+  const stored = selectedProviderByProject.get(projectId);
+  if (stored && available.includes(stored)) return stored;
+  if (available.length > 0) return available[0];
+  return 'claude';
 }
 
 async function refresh(): Promise<void> {
@@ -142,6 +145,7 @@ async function refresh(): Promise<void> {
 
   const project = appState.activeProject;
   if (!project) {
+    destroyProviderSelect();
     container.innerHTML = '';
     return;
   }
@@ -152,16 +156,48 @@ async function refresh(): Promise<void> {
     container.innerHTML = '<div class="config-loading">Loading...</div>';
   }
 
-  const providerId = getConfigProviderId();
+  if (!getProviderAvailabilitySnapshot()) {
+    await loadProviderAvailability();
+  }
+
+  const available = getAvailableProviderMetas();
+  const providerId = getActiveConfigProviderId(project.id);
+
   let config: ProviderConfig;
   try {
     config = await window.vibeyard.provider.getConfig(providerId, project.path);
   } catch {
+    destroyProviderSelect();
     container.innerHTML = '';
     return;
   }
 
+  destroyProviderSelect();
   container.innerHTML = '';
+
+  const header = document.createElement('div');
+  header.className = 'config-panel-header';
+
+  const title = document.createElement('span');
+  title.className = 'config-panel-title';
+  title.textContent = 'Provider Tools';
+  header.appendChild(title);
+
+  if (available.length > 1) {
+    providerSelect = createCustomSelect(
+      'config-provider-select-input',
+      available.map(p => ({ value: p.id, label: p.displayName })),
+      providerId,
+      (value) => {
+        selectedProviderByProject.set(project.id, value as ProviderId);
+        watchActiveProject();
+        refresh();
+      },
+    );
+    header.appendChild(providerSelect.element);
+  }
+
+  container.appendChild(header);
 
   container.appendChild(renderSection(
     'mcp',
@@ -195,17 +231,23 @@ async function refresh(): Promise<void> {
   }
 }
 
+function destroyProviderSelect(): void {
+  if (providerSelect) {
+    providerSelect.destroy();
+    providerSelect = null;
+  }
+}
+
 function watchActiveProject(): void {
   const project = appState.activeProject;
   if (project) {
-    window.vibeyard.provider.watchProject(getConfigProviderId(), project.path);
+    window.vibeyard.provider.watchProject(getActiveConfigProviderId(project.id), project.path);
   }
 }
 
 export function initConfigSections(): void {
   appState.on('project-changed', () => { watchActiveProject(); refresh(); });
   appState.on('state-loaded', () => { watchActiveProject(); refresh(); });
-  appState.on('session-changed', () => { watchActiveProject(); refresh(); });
   appState.on('preferences-changed', () => applyVisibility());
   window.vibeyard.provider.onConfigChanged(() => refresh());
 }

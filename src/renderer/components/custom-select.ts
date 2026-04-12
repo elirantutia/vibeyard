@@ -14,6 +14,7 @@ export function createCustomSelect(
   id: string,
   options: SelectOption[],
   defaultValue?: string,
+  onChange?: (value: string) => void,
 ): CustomSelectInstance {
   const defaultOpt = options.find(o => o.value === defaultValue) ?? options.find(o => !o.disabled) ?? options[0];
 
@@ -63,11 +64,13 @@ export function createCustomSelect(
   function selectOption(index: number): void {
     const opt = options[index];
     if (!opt || opt.disabled) return;
+    const changed = hidden.value !== opt.value;
     hidden.value = opt.value;
     trigger.textContent = opt.label;
     items.forEach(el => el.classList.remove('selected'));
     items[index].classList.add('selected');
     closeDropdown();
+    if (changed) onChange?.(opt.value);
   }
 
   function updateActive(): void {
