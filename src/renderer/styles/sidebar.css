@@ -56,6 +56,7 @@
 #sidebar.collapsed .sidebar-title,
 #sidebar.collapsed .sidebar-header-actions,
 #sidebar.collapsed #sidebar-content,
+#sidebar.collapsed #sidebar-discussions,
 #sidebar.collapsed #sidebar-footer {
   display: none;
 }
@@ -81,6 +82,29 @@
 
 #sidebar-footer.hidden {
   display: none;
+}
+
+#sidebar-discussions {
+  border-top: 1px solid var(--border);
+  padding: 10px 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+#sidebar-discussions:hover {
+  background: var(--bg-hover);
+}
+
+#sidebar-discussions .discussions-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+#sidebar-discussions .discussions-desc {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 #project-list {

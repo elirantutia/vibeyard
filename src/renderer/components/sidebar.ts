@@ -13,6 +13,7 @@ const sidebarEl = document.getElementById('sidebar')!;
 const resizeHandle = document.getElementById('sidebar-resize-handle')!;
 
 const sidebarFooterEl = document.getElementById('sidebar-footer')!;
+const sidebarDiscussionsEl = document.getElementById('sidebar-discussions')!;
 const btnToggleSidebar = document.getElementById('btn-toggle-sidebar')!;
 
 const SIDEBAR_MIN = 150;
@@ -32,6 +33,14 @@ export function initSidebar(): void {
   btnAddProject.addEventListener('click', promptNewProject);
   btnPreferences.addEventListener('click', showPreferencesModal);
   btnToggleSidebar.addEventListener('click', toggleSidebar);
+
+  sidebarDiscussionsEl.innerHTML =
+    '<div class="discussions-title">Vibeyard Discussions</div>' +
+    '<div class="discussions-desc">Join the conversation about coding with AI</div>';
+  sidebarDiscussionsEl.addEventListener('click', () => {
+    window.vibeyard.app.openExternal('https://github.com/elirantutia/vibeyard/discussions');
+  });
+
   initResizeHandle();
   appState.on('state-loaded', () => {
     if (appState.sidebarWidth) {
