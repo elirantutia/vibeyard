@@ -15,7 +15,7 @@ export class OpenCodeProvider implements CliProvider {
     displayName: 'OpenCode',
     binaryName: 'opencode',
     capabilities: {
-      sessionResume: true,
+      sessionResume: false,
       costTracking: false,
       contextWindow: false,
       hookStatus: true,

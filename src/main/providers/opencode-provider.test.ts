@@ -68,9 +68,9 @@ describe('meta', () => {
     expect(provider.meta.binaryName).toBe('opencode');
   });
 
-  it('has sessionResume and hookStatus capabilities enabled', () => {
+  it('has sessionResume disabled and hookStatus capabilities enabled', () => {
     const caps = provider.meta.capabilities;
-    expect(caps.sessionResume).toBe(true);
+    expect(caps.sessionResume).toBe(false);
     expect(caps.costTracking).toBe(false);
     expect(caps.contextWindow).toBe(false);
     expect(caps.hookStatus).toBe(true);
