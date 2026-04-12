@@ -33,6 +33,9 @@ function readAgentsFromJson(filePath: string, scope: 'user' | 'project'): Agent[
 }
 
 function readAgentsFromDir(dirPath: string, scope: 'user' | 'project'): Agent[] {
+  // Agents without a 'name' frontmatter key are intentionally skipped: an unnamed
+  // agent cannot be selected by the user, unlike commands where the filename serves
+  // as a reasonable fallback display name.
   const agents: Agent[] = [];
   for (const file of readDirSafe(dirPath)) {
     if (!file.endsWith('.md')) continue;
@@ -78,7 +81,10 @@ export async function getOpenCodeConfig(projectPath: string): Promise<ProviderCo
   for (const server of userMcp) serverMap.set(server.name, server);
   for (const server of projectMcp) serverMap.set(server.name, server);
 
-  // Agents: JSON config keys (built-in) + markdown files (custom)
+  // Agents: JSON config keys (built-in) + markdown files (custom).
+  // User-level agent markdown dir (~/.config/opencode/agents/) follows the same
+  // convention OpenCode uses for project-level agents (.opencode/agents/), applied
+  // globally. If OpenCode's spec changes, this dir read is harmless when absent.
   const agents = dedupeByName(
     readAgentsFromJson(userConfigFile, 'user'),
     readAgentsFromDir(path.join(userConfigDir, 'agents'), 'user'),
