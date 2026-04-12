@@ -42,6 +42,8 @@ const defaultPreferences: Preferences = {
   autoTitleEnabled: true,
   readinessExcludedProviders: [],
   sidebarViews: { configSections: true, gitPanel: true, sessionHistory: true, costFooter: true, readinessSection: true },
+  uiZoom: 1,
+  terminalFontSize: 14,
 };
 
 const NAV_HISTORY_MAX = 50;
@@ -261,6 +263,13 @@ class AppState {
     this.emit('preferences-changed');
   }
 
+  /** Apply several preference fields in one persist/emit (e.g. keyboard zoom in/out). */
+  patchPreferences(patch: Partial<Preferences>): void {
+    Object.assign(this.state.preferences, patch);
+    this.persist();
+    this.emit('preferences-changed');
+  }
+
   setActiveProject(id: string | null): void {
     this.state.activeProjectId = id;
     const project = this.state.projects.find((p) => p.id === id);
@@ -314,10 +323,21 @@ class AppState {
     return this.addSession(projectId, name, args, providerId);
   }
 
-  addSession(projectId: string, name: string, args?: string, providerId?: ProviderId): SessionRecord | undefined {
+  /**
+   * @param gitWorktreeOverride Set when creating from "New Session" (etc.) so `session-added` sees
+   * the final worktree before the PTY is created. `path: null` clears inherited path (Auto mode).
+   */
+  addSession(
+    projectId: string,
+    name: string,
+    args?: string,
+    providerId?: ProviderId,
+    gitWorktreeOverride?: { path: string | null; userPinned: boolean },
+  ): SessionRecord | undefined {
     const project = this.state.projects.find((p) => p.id === projectId);
     if (!project) return undefined;
 
+    const activeSession = project.sessions.find((s) => s.id === project.activeSessionId);
     const effectiveArgs = args ?? project.defaultArgs;
     const session: SessionRecord = {
       id: crypto.randomUUID(),
@@ -327,6 +347,25 @@ class AppState {
       cliSessionId: null,
       createdAt: new Date().toISOString(),
     };
+    if (gitWorktreeOverride !== undefined) {
+      const p = gitWorktreeOverride.path?.trim() ?? '';
+      if (p) {
+        session.gitWorktreePath = p;
+        if (gitWorktreeOverride.userPinned) {
+          session.gitWorktreeUserPinned = true;
+        } else {
+          delete session.gitWorktreeUserPinned;
+        }
+      } else {
+        delete session.gitWorktreePath;
+        delete session.gitWorktreeUserPinned;
+      }
+    } else if (activeSession && !activeSession.type && activeSession.gitWorktreePath) {
+      session.gitWorktreePath = activeSession.gitWorktreePath;
+      if (activeSession.gitWorktreeUserPinned) {
+        session.gitWorktreeUserPinned = true;
+      }
+    }
     project.sessions.push(session);
     project.activeSessionId = session.id;
     this.pushNav(session.id);
@@ -523,6 +562,7 @@ class AppState {
 
   private archiveSession(project: ProjectRecord, session: SessionRecord): void {
     const costInfo = getCost(session.id);
+    const wt = session.gitWorktreePath?.trim();
     const archived: ArchivedSession = {
       id: crypto.randomUUID(),
       name: session.name,
@@ -530,6 +570,7 @@ class AppState {
       cliSessionId: session.cliSessionId,
       createdAt: session.createdAt,
       closedAt: new Date().toISOString(),
+      ...(wt ? { gitWorktreePath: wt, ...(session.gitWorktreeUserPinned ? { gitWorktreeUserPinned: true as const } : {}) } : {}),
       cost: costInfo ? {
         totalCostUsd: costInfo.totalCostUsd,
         totalInputTokens: costInfo.totalInputTokens,
@@ -549,6 +590,15 @@ class AppState {
       if (archived.cost) project.sessionHistory[existingIndex].cost = archived.cost;
       if (archived.name !== project.sessionHistory[existingIndex].name) {
         project.sessionHistory[existingIndex].name = archived.name;
+      }
+      const entry = project.sessionHistory[existingIndex];
+      if (archived.gitWorktreePath) {
+        entry.gitWorktreePath = archived.gitWorktreePath;
+        if (archived.gitWorktreeUserPinned) entry.gitWorktreeUserPinned = true;
+        else delete entry.gitWorktreeUserPinned;
+      } else {
+        delete entry.gitWorktreePath;
+        delete entry.gitWorktreeUserPinned;
       }
     } else {
       project.sessionHistory.push(archived);
@@ -615,12 +665,16 @@ class AppState {
       return existing;
     }
 
+    const resumedWt = archived.gitWorktreePath?.trim();
     const session: SessionRecord = {
       id: crypto.randomUUID(),
       name: archived.name,
       providerId: archived.providerId,
       cliSessionId: archived.cliSessionId,
       createdAt: new Date().toISOString(),
+      ...(resumedWt
+        ? { gitWorktreePath: resumedWt, ...(archived.gitWorktreeUserPinned ? { gitWorktreeUserPinned: true as const } : {}) }
+        : {}),
     };
     project.sessions.push(session);
     project.activeSessionId = session.id;
@@ -773,6 +827,75 @@ class AppState {
     if (!session || session.browserTabUrl === url) return;
     session.browserTabUrl = url;
     this.persist();
+  }
+
+  /**
+   * Set which git worktree this terminal tab uses. null clears path and user pin (PTY sync).
+   * Pass `{ userPinned: true }` when the user chose a worktree from the menu.
+   */
+  setSessionGitWorktree(
+    projectId: string,
+    sessionId: string,
+    worktreePath: string | null,
+    opts?: { userPinned?: boolean },
+  ): void {
+    const project = this.state.projects.find((p) => p.id === projectId);
+    const session = project?.sessions.find((s) => s.id === sessionId);
+    if (!project || !session) return;
+    if (worktreePath === null || worktreePath === '') {
+      delete session.gitWorktreePath;
+      delete session.gitWorktreeUserPinned;
+    } else {
+      session.gitWorktreePath = worktreePath;
+      if (opts?.userPinned) {
+        session.gitWorktreeUserPinned = true;
+      } else {
+        delete session.gitWorktreeUserPinned;
+      }
+    }
+    this.persist();
+    this.emit('session-changed');
+  }
+
+  /**
+   * Update git worktree from PTY cwd detection. Does not emit `session-changed` (caller refreshes git UI).
+   */
+  syncSessionGitWorktreeFromDetect(projectId: string, sessionId: string, worktreePath: string | null): void {
+    const project = this.state.projects.find((p) => p.id === projectId);
+    const session = project?.sessions.find((s) => s.id === sessionId);
+    if (!project || !session || session.gitWorktreeUserPinned) return;
+    const norm = (p: string | undefined) => (p ?? '').replace(/\\/g, '/').replace(/\/+$/, '');
+    const next = worktreePath && worktreePath !== '' ? worktreePath : undefined;
+    const cur = session.gitWorktreePath;
+    if (norm(cur) === norm(next) || (!cur && !next)) return;
+    if (next) {
+      session.gitWorktreePath = next;
+    } else {
+      delete session.gitWorktreePath;
+    }
+    this.persist();
+  }
+
+  /** Drop git worktree pins that no longer exist (e.g. after `git worktree remove`). */
+  pruneStaleSessionGitWorktrees(projectId: string, validPaths: Set<string>): void {
+    const project = this.state.projects.find((p) => p.id === projectId);
+    if (!project) return;
+    const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '');
+    const normalizedValid = new Set([...validPaths].map(norm));
+    let changed = false;
+    for (const s of project.sessions) {
+      if (!s.gitWorktreePath) continue;
+      const n = norm(s.gitWorktreePath);
+      if (![...normalizedValid].some((v) => v === n)) {
+        delete s.gitWorktreePath;
+        delete s.gitWorktreeUserPinned;
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.persist();
+      this.emit('session-changed');
+    }
   }
 
   renameSession(projectId: string, sessionId: string, name: string, userRenamed?: boolean): void {

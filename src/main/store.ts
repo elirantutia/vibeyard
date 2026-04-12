@@ -52,6 +52,14 @@ export function normalizeWslProjectPaths(state: PersistedState): void {
       if (s.worktreePath) {
         s.worktreePath = normalizeProjectPathForWslStorage(s.worktreePath, distro);
       }
+      if (s.gitWorktreePath) {
+        s.gitWorktreePath = normalizeProjectPathForWslStorage(s.gitWorktreePath, distro);
+      }
+    }
+    for (const h of p.sessionHistory ?? []) {
+      if (h.gitWorktreePath) {
+        h.gitWorktreePath = normalizeProjectPathForWslStorage(h.gitWorktreePath, distro);
+      }
     }
   }
 }

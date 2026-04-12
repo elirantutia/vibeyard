@@ -11,6 +11,7 @@ import type { ProviderId } from '../types.js';
 import { getProviderCapabilities } from '../provider-availability.js';
 import { FilePathLinkProvider, GithubLinkProvider } from './terminal-link-provider.js';
 import { attachClipboardCopyHandler } from './terminal-utils.js';
+import { getEffectiveTerminalFontSize } from '../terminal-font-size.js';
 
 interface TerminalInstance {
   terminal: Terminal;
@@ -86,7 +87,7 @@ export function createTerminalPane(
       cyan: '#00acc1',
       white: '#e0e0e0',
     },
-    fontSize: 14,
+    fontSize: getEffectiveTerminalFontSize(),
     fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace",
     cursorBlink: true,
     allowProposedApi: true,

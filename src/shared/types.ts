@@ -81,7 +81,15 @@ export interface SessionRecord {
   mcpServerUrl?: string;
   diffFilePath?: string;
   diffArea?: string;
+  /** Diff viewer only: repo root used for that diff tab. */
   worktreePath?: string;
+  /**
+   * Terminal tabs: git status / branch menu / sidebar root. When `gitWorktreeUserPinned`
+   * is set, this path was chosen explicitly; otherwise it may be synced from PTY cwd.
+   */
+  gitWorktreePath?: string;
+  /** True when the user pinned a worktree from the menu (not PTY sync). */
+  gitWorktreeUserPinned?: boolean;
   fileReaderPath?: string;
   fileReaderLine?: number;
   createdAt: string;
@@ -102,6 +110,9 @@ export interface ArchivedSession {
   cliSessionId: string | null;
   createdAt: string;
   closedAt: string;
+  /** Git worktree cwd used for this CLI session (so resume spawns in the same checkout). */
+  gitWorktreePath?: string;
+  gitWorktreeUserPinned?: boolean;
   bookmarked?: boolean;
   cost: {
     totalCostUsd: number;
@@ -165,6 +176,12 @@ export interface Preferences {
   wslEnabled?: boolean;
   /** WSL distro to use. When unset, the system default distro is used. */
   wslDistro?: string;
+  /**
+   * Whole-app UI scale (Chromium `zoom` on `#app`). 1 = 100%. Helps on high-DPI tablets.
+   */
+  uiZoom?: number;
+  /** xterm.js font size in CSS pixels. Default 14. */
+  terminalFontSize?: number;
 }
 
 // --- Settings Validation ---

@@ -37,6 +37,7 @@ import type { InspectorEvent } from '../shared/types.js';
 import { getContext } from './session-context.js';
 import { initSessionInspector } from './components/session-inspector.js';
 import { loadProviderMetas } from './provider-availability.js';
+import { applyDisplayPreferences } from './display-preferences.js';
 
 let isQuitting = false;
 window.vibeyard.app.onQuitting(() => {
@@ -197,6 +198,10 @@ async function main(): Promise<void> {
 
   // Load persisted state
   await appState.load();
+  void applyDisplayPreferences();
+  appState.on('preferences-changed', () => {
+    void applyDisplayPreferences();
+  });
 
   // Auto-open new project modal when no projects exist
   if (appState.projects.length === 0) {

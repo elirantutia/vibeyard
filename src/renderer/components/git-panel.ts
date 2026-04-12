@@ -1,5 +1,6 @@
 import { appState } from '../state.js';
-import { onChange as onGitStatusChange, getGitStatus, getActiveGitPath, getWorktrees, setActiveWorktree, onWorktreeChange } from '../git-status.js';
+import { onChange as onGitStatusChange, getGitStatus, getActiveGitPath, getWorktrees, onWorktreeChange, sessionSupportsGitWorktreePin } from '../git-status.js';
+import { applyWorktreeSelection } from '../worktree-actions.js';
 import { onChange as onStatusChange } from '../session-activity.js';
 import { showFileViewer } from './file-viewer.js';
 import { areaLabel } from '../dom-utils.js';
@@ -137,13 +138,18 @@ function renderWorktreeSelector(container: HTMLElement, project: { id: string; p
 
   if (!worktrees || worktrees.length <= 1) return;
 
-  const activeGitPath = getActiveGitPath(project.id);
-
   const wrapper = document.createElement('div');
   wrapper.className = 'git-worktree-selector';
 
   const select = document.createElement('select');
   select.className = 'git-worktree-select';
+
+  const session = appState.activeSession;
+  const autoOpt = document.createElement('option');
+  autoOpt.value = '';
+  autoOpt.textContent = 'Auto (shell CWD)';
+  autoOpt.selected = !session?.gitWorktreeUserPinned;
+  select.appendChild(autoOpt);
 
   for (const wt of worktrees) {
     if (wt.isBare) continue;
@@ -152,12 +158,12 @@ function renderWorktreeSelector(container: HTMLElement, project: { id: string; p
     const label = wt.branch || `detached (${wt.head.slice(0, 7)})`;
     const pathHint = wt.path === project.path ? '' : ` — ${shortPath(wt.path)}`;
     option.textContent = label + pathHint;
-    option.selected = wt.path === activeGitPath;
+    option.selected = Boolean(session?.gitWorktreeUserPinned && session.gitWorktreePath === wt.path);
     select.appendChild(option);
   }
 
   select.addEventListener('change', () => {
-    setActiveWorktree(project.id, select.value);
+    applyWorktreeSelection(project.id, select.value || null);
   });
 
   wrapper.appendChild(select);
@@ -211,7 +217,8 @@ async function refresh(): Promise<void> {
 
   const activeGitPath = getActiveGitPath(project.id);
   const worktrees = getWorktrees(project.id);
-  const hasMultipleWorktrees = worktrees && worktrees.length > 1;
+  const pinWorktreeUi = sessionSupportsGitWorktreePin(appState.activeSession);
+  const hasMultipleWorktrees = pinWorktreeUi && worktrees && worktrees.length > 1;
 
   // Find active worktree branch for header
   let headerSuffix = '';

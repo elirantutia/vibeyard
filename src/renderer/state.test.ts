@@ -372,6 +372,38 @@ describe('addSession()', () => {
     const session = appState.addSession(project.id, 'S1')!;
     expect(session.args).toBeUndefined();
   });
+
+  it('applies gitWorktreeOverride before session-added (PTY path + menu see same state)', () => {
+    const addedCb = vi.fn();
+    const project = addProject();
+    appState.on('session-added', addedCb);
+    appState.addSession(project.id, 'S1', undefined, undefined, {
+      path: '/wt/feature',
+      userPinned: true,
+    });
+    expect(addedCb).toHaveBeenCalledTimes(1);
+    const payload = addedCb.mock.calls[0][0] as { session: { gitWorktreePath?: string; gitWorktreeUserPinned?: boolean } };
+    expect(payload.session.gitWorktreePath).toBe('/wt/feature');
+    expect(payload.session.gitWorktreeUserPinned).toBe(true);
+  });
+
+  it('gitWorktreeOverride with null path clears worktree (Auto) and does not inherit active tab', () => {
+    const project = addProject();
+    const s0 = appState.addSession(project.id, 'S0')!;
+    appState.setSessionGitWorktree(project.id, s0.id, '/wt/pinned', { userPinned: true });
+    const s1 = appState.addSession(project.id, 'S1', undefined, undefined, { path: null, userPinned: false })!;
+    expect(s1.gitWorktreePath).toBeUndefined();
+    expect(s1.gitWorktreeUserPinned).toBeUndefined();
+  });
+
+  it('inherits git worktree from active CLI tab when override omitted', () => {
+    const project = addProject();
+    const s0 = appState.addSession(project.id, 'S0')!;
+    appState.setSessionGitWorktree(project.id, s0.id, '/wt/shared', { userPinned: true });
+    const s1 = appState.addSession(project.id, 'S1')!;
+    expect(s1.gitWorktreePath).toBe('/wt/shared');
+    expect(s1.gitWorktreeUserPinned).toBe(true);
+  });
 });
 
 describe('addDiffViewerSession()', () => {
@@ -1297,6 +1329,22 @@ describe('resumeFromHistory()', () => {
     expect(resumed.providerId).toBe('claude');
     expect(resumed.id).not.toBe(session.id); // new id
     expect(resumed.createdAt).toBeDefined(); // has its own createdAt
+  });
+
+  it('restores git worktree path when resuming from history', () => {
+    const project = addProject();
+    const session = appState.addSession(project.id, 'Wt tab')!;
+    appState.updateSessionCliId(project.id, session.id, 'cli-wt');
+    appState.setSessionGitWorktree(project.id, session.id, '/repo/feature-wt', { userPinned: true });
+    appState.removeSession(project.id, session.id);
+
+    const archived = appState.getSessionHistory(project.id)[0];
+    expect(archived.gitWorktreePath).toBe('/repo/feature-wt');
+    expect(archived.gitWorktreeUserPinned).toBe(true);
+
+    const resumed = appState.resumeFromHistory(project.id, archived.id)!;
+    expect(resumed.gitWorktreePath).toBe('/repo/feature-wt');
+    expect(resumed.gitWorktreeUserPinned).toBe(true);
   });
 
   it('sets resumed session as active', () => {

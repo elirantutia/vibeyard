@@ -46,6 +46,7 @@
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
     "test": "vitest run",
+    "test:worktrees": "vitest run src/renderer/session-pty-cwd.test.ts src/renderer/state.test.ts src/main/git-status.test.ts",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "sync": "bash scripts/sync-to-windows.sh"

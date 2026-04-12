@@ -2,7 +2,9 @@ import { appState, MAX_SESSION_NAME_LENGTH, type ProjectRecord, type SessionReco
 import type { ProviderId } from '../../shared/types.js';
 import { showModal, closeModal, setModalError, FieldDef } from './modal.js';
 import { onChange as onStatusChange, getStatus, type SessionStatus } from '../session-activity.js';
-import { onChange as onGitStatusChange, getGitStatus, getActiveGitPath, refreshGitStatus } from '../git-status.js';
+import { onChange as onGitStatusChange, onWorktreeChange, getGitStatus, getActiveGitPath, refreshGitStatus, sessionSupportsGitWorktreePin, getSessionWorktree, getWorktrees } from '../git-status.js';
+import type { GitWorktree } from '../types.js';
+import { applyWorktreeSelection, promptCreateWorktree } from '../worktree-actions.js';
 
 import { isUnread, onChange as onUnreadChange } from '../session-unread.js';
 import { showHelpDialog } from './help-dialog.js';
@@ -23,6 +25,32 @@ const btnHelp = document.getElementById('btn-help')!;
 
 let activeContextMenu: HTMLElement | null = null;
 const prevStatus = new Map<string, SessionStatus>();
+
+function shortWtLabelPath(fullPath: string): string {
+  const parts = fullPath.split('/');
+  return parts.length > 2 ? '.../' + parts.slice(-2).join('/') : fullPath;
+}
+
+/** True when the path is the project root (main checkout), not a linked `git worktree add` path. */
+function isMainWorktreePath(worktreePath: string, projectPath: string): boolean {
+  const norm = (s: string) => s.replace(/\\/g, '/').replace(/\/+$/, '');
+  return norm(worktreePath) === norm(projectPath);
+}
+
+function worktreeSelectLabel(wt: GitWorktree, projectPath: string): string {
+  const labelBase = wt.branch || `detached (${wt.head.slice(0, 7)})`;
+  return wt.path === projectPath ? labelBase : `${labelBase} \u2014 ${shortWtLabelPath(wt.path)}`;
+}
+
+/** Branch-style label for tab pill; tooltip carries full path. */
+function worktreeTabPillLabel(effPath: string, wts: GitWorktree[]): { label: string; title: string } {
+  const wt = wts.find((w) => !w.isBare && w.path === effPath);
+  if (wt) {
+    const label = wt.branch || `detached (${wt.head.slice(0, 7)})`;
+    return { label, title: `${label} — ${effPath}` };
+  }
+  return { label: shortWtLabelPath(effPath), title: effPath };
+}
 
 function buildTooltip(status: SessionStatus, cliSessionId?: string): string {
   const statusLine = `Status: ${status}`;
@@ -45,7 +73,10 @@ export function initTabBar(): void {
     if (hasMultipleAvailableProviders()) render();
   }).catch(() => {});
 
-  appState.on('state-loaded', render);
+  appState.on('state-loaded', () => {
+    render();
+    void refreshGitStatus().then(() => renderGitStatus());
+  });
   appState.on('project-changed', render);
   appState.on('session-added', render);
   appState.on('session-removed', (data?: unknown) => {
@@ -80,7 +111,15 @@ export function initTabBar(): void {
   onGitStatusChange((projectId) => {
     if (projectId === appState.activeProjectId) renderGitStatus();
   });
-  appState.on('project-changed', renderGitStatus);
+  onWorktreeChange(() => {
+    if (appState.activeProjectId) {
+      renderGitStatus();
+      render();
+    }
+  });
+  appState.on('project-changed', () => {
+    void refreshGitStatus().then(() => renderGitStatus());
+  });
 
   document.addEventListener('click', hideTabContextMenu);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideTabContextMenu(); });
@@ -383,9 +422,21 @@ function render(): void {
     const namePrefix = isDiff ? '<span class="tab-diff-badge">DIFF</span> ' : isMcp ? '<span class="tab-mcp-badge">MCP</span> ' : isFileReader ? '<span class="tab-file-badge">FILE</span> ' : isRemoteTab ? '<span class="tab-remote-badge">P2P</span> ' : isBrowserTab ? '<span class="tab-browser-badge">WEB</span> ' : !isSpecial ? providerIcon : '';
     const shareIndicator = sharing ? '<span class="tab-share-indicator" title="Sharing"></span>' : '';
     const statusDot = isSpecial ? '' : `<span class="tab-status ${getStatus(session.id)}"></span>`;
+    const wts = getWorktrees(project.id);
+    const barePickable = wts?.filter((w) => !w.isBare) ?? [];
+    const effWt = !isSpecial ? getSessionWorktree(session.id) : null;
+    let wtPill = '';
+    if (
+      effWt &&
+      barePickable.length > 1 &&
+      !isMainWorktreePath(effWt, project.path)
+    ) {
+      const { label, title } = worktreeTabPillLabel(effWt, barePickable);
+      wtPill = ` <span class="tab-worktree-pill" title="${escAttr(title)}">${esc(label)}</span>`;
+    }
     tab.innerHTML = `
       ${statusDot}
-      <span class="tab-name">${namePrefix}${esc(session.name)}</span>
+      <span class="tab-name">${namePrefix}${esc(session.name)}${wtPill}</span>
       ${shareIndicator}
       <span class="tab-close" title="Close session">&times;</span>
     `;
@@ -519,6 +570,8 @@ async function showBranchContextMenu(e: MouseEvent): Promise<void> {
   const project = appState.activeProject;
   if (!project) return;
 
+  // Warm cache for the current worktree path (path can change before the next interval poll).
+  await refreshGitStatus();
   const status = getGitStatus(project.id);
   if (!status || !status.isGitRepo) return;
 
@@ -542,13 +595,25 @@ async function showBranchContextMenu(e: MouseEvent): Promise<void> {
   activeContextMenu = menu;
 
   try {
-    const branches = await window.vibeyard.git.listBranches(gitPath);
+    const activeSession = appState.activeSession;
+    const [branches, worktreesRaw] = await Promise.all([
+      window.vibeyard.git.listBranches(gitPath),
+      window.vibeyard.git.getWorktrees(project.path),
+    ]);
 
     // Menu was dismissed during loading
     if (activeContextMenu !== menu) return;
 
     menu.innerHTML = '';
     menu.addEventListener('click', (ev) => ev.stopPropagation());
+
+    const worktrees = worktreesRaw as GitWorktree[];
+    const pickableWt = worktrees.filter((w) => !w.isBare);
+
+    const branchesHeader = document.createElement('div');
+    branchesHeader.className = 'tab-context-menu-header';
+    branchesHeader.textContent = 'Branches';
+    menu.appendChild(branchesHeader);
 
     const searchInput = document.createElement('input');
     searchInput.className = 'branch-search-input';
@@ -667,6 +732,50 @@ async function showBranchContextMenu(e: MouseEvent): Promise<void> {
       promptCreateBranch(gitPath);
     });
     menu.appendChild(createItem);
+
+    if (activeSession && sessionSupportsGitWorktreePin(activeSession) && pickableWt.length > 1) {
+      const wtSepBefore = document.createElement('div');
+      wtSepBefore.className = 'tab-context-menu-separator';
+      menu.appendChild(wtSepBefore);
+
+      const wtHeader = document.createElement('div');
+      wtHeader.className = 'tab-context-menu-header';
+      wtHeader.textContent = 'Worktrees';
+      menu.appendChild(wtHeader);
+
+      const autoItem = document.createElement('div');
+      const autoSelected = !activeSession.gitWorktreeUserPinned;
+      autoItem.className = 'tab-context-menu-item' + (autoSelected ? ' active' : '');
+      autoItem.textContent = (autoSelected ? '\u2713 ' : '  ') + 'Auto (shell CWD)';
+      autoItem.addEventListener('click', () => {
+        hideTabContextMenu();
+        applyWorktreeSelection(project.id, null);
+      });
+      menu.appendChild(autoItem);
+
+      for (const wt of pickableWt) {
+        const labelBase = wt.branch || `detached (${wt.head.slice(0, 7)})`;
+        const label = wt.path === project.path ? labelBase : `${labelBase} \u2014 ${shortWtLabelPath(wt.path)}`;
+        const rowSelected = Boolean(activeSession.gitWorktreeUserPinned && activeSession.gitWorktreePath === wt.path);
+        const item = document.createElement('div');
+        item.className = 'tab-context-menu-item' + (rowSelected ? ' active' : '');
+        item.textContent = (rowSelected ? '\u2713 ' : '  ') + label;
+        item.addEventListener('click', () => {
+          hideTabContextMenu();
+          applyWorktreeSelection(project.id, wt.path);
+        });
+        menu.appendChild(item);
+      }
+
+      const createWtItem = document.createElement('div');
+      createWtItem.className = 'tab-context-menu-item';
+      createWtItem.textContent = 'Create New Worktree\u2026';
+      createWtItem.addEventListener('click', () => {
+        hideTabContextMenu();
+        promptCreateWorktree(project);
+      });
+      menu.appendChild(createWtItem);
+    }
 
     // Adjust if off-screen
     const rect = menu.getBoundingClientRect();
@@ -833,6 +942,31 @@ export async function promptNewSession(onCreated?: (session: SessionRecord) => v
     });
   }
 
+  let pickableWt: GitWorktree[] = [];
+  try {
+    const raw = (await window.vibeyard.git.getWorktrees(project.path)) as GitWorktree[];
+    pickableWt = raw.filter((w) => !w.isBare);
+  } catch {
+    // Ignore — no worktree selector
+  }
+
+  if (pickableWt.length > 1) {
+    fields.push({
+      label: 'Git worktree',
+      id: 'session-worktree',
+      type: 'select',
+      defaultValue: '__inherit__',
+      options: [
+        { value: '__inherit__', label: 'Same as active tab' },
+        { value: '__auto__', label: 'Auto (shell CWD)' },
+        ...pickableWt.map((w) => ({
+          value: w.path,
+          label: worktreeSelectLabel(w, project.path),
+        })),
+      ],
+    });
+  }
+
   showModal('New Session', fields, (values) => {
     const name = values['session-name']?.trim();
     if (name) {
@@ -841,7 +975,14 @@ export async function promptNewSession(onCreated?: (session: SessionRecord) => v
       const keepArgs = values['keep-args'] === 'true';
       project.defaultArgs = keepArgs ? (args || undefined) : undefined;
       const providerId = (values['provider'] || 'claude') as ProviderId;
-      const session = appState.addSession(project.id, name, args, providerId);
+      const wtChoice = values['session-worktree'];
+      let gitWt: { path: string | null; userPinned: boolean } | undefined;
+      if (wtChoice === '__auto__') {
+        gitWt = { path: null, userPinned: false };
+      } else if (wtChoice && wtChoice !== '__inherit__') {
+        gitWt = { path: wtChoice, userPinned: true };
+      }
+      const session = appState.addSession(project.id, name, args, providerId, gitWt);
       if (session && onCreated) onCreated(session);
     }
   });
@@ -867,4 +1008,8 @@ function esc(s: string): string {
   const el = document.createElement('span');
   el.textContent = s;
   return el.innerHTML;
+}
+
+function escAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }

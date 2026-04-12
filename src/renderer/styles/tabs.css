@@ -20,6 +20,7 @@
 #tab-list {
   display: flex;
   flex: 1;
+  min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
   height: 100%;
@@ -189,6 +190,7 @@
   align-items: center;
   gap: 2px;
   padding: 0 8px;
+  flex-shrink: 0;
 }
 
 .icon-btn {
@@ -248,6 +250,41 @@
   height: 1px;
   background: var(--border);
   margin: 4px 0;
+}
+
+.tab-context-menu-header {
+  padding: 6px 14px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+/* Linked git worktree only (not main checkout): muted hint; full path in tooltip */
+.tab-worktree-pill {
+  display: inline-block;
+  margin-left: 5px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.35;
+  padding: 0 5px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--text-muted) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  opacity: 0.92;
+}
+
+.tab-item.active .tab-worktree-pill {
+  opacity: 1;
+  color: color-mix(in srgb, var(--text-primary) 72%, var(--text-muted));
+  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
 }
 
 /* Branch search input */

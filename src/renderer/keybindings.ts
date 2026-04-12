@@ -10,6 +10,7 @@ import { getActiveShellSessionId } from './components/project-terminal.js';
 import { toggleGitPanel } from './components/git-panel.js';
 import { showQuickOpen } from './components/quick-open.js';
 import { shortcutManager } from './shortcuts.js';
+import { stepUiAndTerminalZoom } from './display-preferences.js';
 import { getFileReaderInstance, getFileReaderTextSelector, showGoToLineBar } from './components/file-reader.js';
 import { getFileViewerInstance } from './components/file-viewer.js';
 import { DomSearchBackend } from './components/dom-search-backend.js';
@@ -88,6 +89,8 @@ export function initKeybindings(): void {
     }
   });
   shortcutManager.registerHandler('help', () => showHelpDialog());
+  shortcutManager.registerHandler('ui-zoom-in', () => stepUiAndTerminalZoom(1));
+  shortcutManager.registerHandler('ui-zoom-out', () => stepUiAndTerminalZoom(-1));
 
   document.addEventListener('keydown', (e) => {
     shortcutManager.matchEvent(e);

@@ -16,9 +16,11 @@ function makeKeyEvent(opts: {
   metaKey?: boolean;
   shiftKey?: boolean;
   altKey?: boolean;
+  code?: string;
 }): KeyboardEvent {
   return {
     key: opts.key,
+    code: opts.code ?? '',
     ctrlKey: opts.ctrlKey ?? false,
     metaKey: opts.metaKey ?? false,
     shiftKey: opts.shiftKey ?? false,
@@ -262,6 +264,7 @@ describe('ShortcutManager', () => {
     expect(all.has('Sessions')).toBe(true);
     expect(all.has('Panels')).toBe(true);
     expect(all.has('Search & Help')).toBe(true);
+    expect(all.has('Display')).toBe(true);
   });
 
   it('getAll entries have resolvedKeys property', async () => {
@@ -360,6 +363,58 @@ describe('ShortcutManager', () => {
     const e = makeKeyEvent({ key: '1', metaKey: true });
     expect(mgr.matchEvent(e)).toBe(true);
     expect(handler).toHaveBeenCalled();
+  });
+
+  it('matchEvent handles CmdOrCtrl+Plus as meta + equals (Mac)', async () => {
+    const { ShortcutManager } = await import('./shortcuts');
+    const mgr = new ShortcutManager();
+    const handler = vi.fn();
+    mgr.registerHandler('ui-zoom-in', handler);
+    const e = makeKeyEvent({ key: '=', metaKey: true });
+    expect(mgr.matchEvent(e)).toBe(true);
+    expect(handler).toHaveBeenCalled();
+  });
+
+  it('matchEvent handles CmdOrCtrl+Plus as ctrl + equals (Windows)', async () => {
+    vi.resetModules();
+    vi.stubGlobal('navigator', { platform: 'Win32' });
+    mockAppState.preferences.keybindings = {};
+    const { ShortcutManager } = await import('./shortcuts');
+    const mgr = new ShortcutManager();
+    const handler = vi.fn();
+    mgr.registerHandler('ui-zoom-in', handler);
+    const e = makeKeyEvent({ key: '=', ctrlKey: true });
+    expect(mgr.matchEvent(e)).toBe(true);
+    expect(handler).toHaveBeenCalled();
+  });
+
+  it('matchEvent handles CmdOrCtrl+Minus (Mac)', async () => {
+    vi.resetModules();
+    vi.stubGlobal('navigator', { platform: 'MacIntel' });
+    mockAppState.preferences.keybindings = {};
+    const { ShortcutManager } = await import('./shortcuts');
+    const mgr = new ShortcutManager();
+    const handler = vi.fn();
+    mgr.registerHandler('ui-zoom-out', handler);
+    const e = makeKeyEvent({ key: '-', metaKey: true });
+    expect(mgr.matchEvent(e)).toBe(true);
+    expect(handler).toHaveBeenCalled();
+  });
+
+  it('displayKeys shows Ctrl++ for CmdOrCtrl+Plus on Windows', async () => {
+    vi.resetModules();
+    vi.stubGlobal('navigator', { platform: 'Win32' });
+    const { displayKeys } = await import('./shortcuts');
+    expect(displayKeys('CmdOrCtrl+Plus')).toBe('Ctrl++');
+    expect(displayKeys('CmdOrCtrl+Minus')).toBe('Ctrl+-');
+  });
+
+  it('displayKeys shows zoom chords on Mac', async () => {
+    vi.resetModules();
+    vi.stubGlobal('navigator', { platform: 'MacIntel' });
+    const { displayKeys } = await import('./shortcuts');
+    expect(displayKeys('CmdOrCtrl+Plus')).toBe('\u2318+');
+    expect(displayKeys('CmdOrCtrl+Minus')).toBe('\u2318\u2212');
   });
 });
 

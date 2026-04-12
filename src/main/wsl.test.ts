@@ -78,72 +78,61 @@ describe('getDefaultWslDistro', () => {
 });
 
 describe('winPathToWsl', () => {
-  it('converts via wslpath when available', () => {
-    // isWslAvailable
-    mockExecFileSync.mockReturnValueOnce(Buffer.from('') as any);
-    // getDefaultWslDistro → --list --verbose
-    mockExecFileSync.mockReturnValueOnce('* Ubuntu  Running  2\r\n' as any);
-    // wslpath call
-    mockExecFileSync.mockReturnValueOnce('/mnt/c/Users/test/project\n' as any);
-
+  it('converts drive-letter paths via heuristic without calling wsl', () => {
     expect(wsl.winPathToWsl('C:\\Users\\test\\project')).toBe('/mnt/c/Users/test/project');
+    expect(mockExecFileSync).not.toHaveBeenCalled();
   });
 
-  it('falls back to heuristic when wslpath fails', () => {
-    // isWslAvailable
-    mockExecFileSync.mockReturnValueOnce(Buffer.from('') as any);
-    // getDefaultWslDistro
-    mockExecFileSync.mockReturnValueOnce('* Ubuntu  Running  2\r\n' as any);
-    // wslpath throws
-    mockExecFileSync.mockImplementationOnce(() => { throw new Error('wslpath fail'); });
-
-    expect(wsl.winPathToWsl('D:\\code\\repo')).toBe('/mnt/d/code/repo');
+  it('normalizes \\\\wsl$\\ UNC to a Linux path without calling wslpath', () => {
+    expect(wsl.winPathToWsl('\\\\wsl$\\Ubuntu\\home\\u\\proj')).toBe('/home/u/proj');
+    expect(mockExecFileSync).not.toHaveBeenCalled();
   });
 
-  it('uses -e for wslpath -u so the default shell does not mangle backslashes or special chars', () => {
-    mockExecFileSync.mockReturnValueOnce('/mnt/c/Users/test/(parens)/x\n' as any);
-    wsl.winPathToWsl('C:\\Users\\test\\(parens)\\x', 'Ubuntu');
+  it('converts paths with parentheses via heuristic without calling wsl', () => {
+    expect(wsl.winPathToWsl('C:\\Users\\test\\(parens)\\x')).toBe('/mnt/c/Users/test/(parens)/x');
+    expect(mockExecFileSync).not.toHaveBeenCalled();
+  });
+
+  it('uses wslpath -u when the path is not a drive-letter path or wsl$ UNC', () => {
+    mockExecFileSync.mockReturnValueOnce('/mnt/c/from-wslpath\n' as any);
+    expect(wsl.winPathToWsl('\\\\?\\Volume{abc}\\x', 'Ubuntu')).toBe('/mnt/c/from-wslpath');
     expect(mockExecFileSync).toHaveBeenCalledWith(
       'wsl.exe',
-      ['-d', 'Ubuntu', '-e', 'wslpath', '-u', 'C:\\Users\\test\\(parens)\\x'],
-      expect.objectContaining({ timeout: 3000, encoding: 'utf8' }),
+      ['-d', 'Ubuntu', '-e', 'wslpath', '-u', '\\\\?\\Volume{abc}\\x'],
+      expect.objectContaining({ timeout: 3000, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }),
     );
+  });
+
+  it('falls back to forward slashes when wslpath fails for non-drive paths', () => {
+    mockExecFileSync.mockImplementationOnce(() => { throw new Error('wslpath fail'); });
+    mockExecFileSync.mockImplementationOnce(() => { throw new Error('wslpath fail'); });
+    mockExecFileSync.mockImplementationOnce(() => { throw new Error('wslpath fail'); });
+    // Heuristic skipped; wslpath fails; final replace only flips backslashes (no /mnt mapping)
+    expect(wsl.winPathToWsl('\\\\?\\Z:\\odd\\path', 'Ubuntu')).toBe('//?/Z:/odd/path');
   });
 });
 
 describe('wslPathToWin', () => {
-  it('converts via wslpath when available', () => {
-    // isWslAvailable
-    mockExecFileSync.mockReturnValueOnce(Buffer.from('') as any);
-    // getDefaultWslDistro
-    mockExecFileSync.mockReturnValueOnce('* Ubuntu  Running  2\r\n' as any);
-    // wslpath -w
-    mockExecFileSync.mockReturnValueOnce('\\\\wsl$\\Ubuntu\\home\\user\n' as any);
-
-    expect(wsl.wslPathToWin('/home/user')).toBe('\\\\wsl$\\Ubuntu\\home\\user');
+  it('maps Linux home paths to \\\\wsl$\\ UNC without calling wsl', () => {
+    expect(wsl.wslPathToWin('/home/user', 'Ubuntu')).toBe('\\\\wsl$\\Ubuntu\\home\\user');
+    expect(mockExecFileSync).not.toHaveBeenCalled();
   });
 
-  it('falls back to UNC construction for pure Linux paths', () => {
-    // wslpath throws (distro passed explicitly, no isWslAvailable needed for the path itself)
-    mockExecFileSync.mockImplementationOnce(() => { throw new Error('fail'); });
-
+  it('maps pure Linux project paths to UNC', () => {
     expect(wsl.wslPathToWin('/home/user/project', 'Ubuntu')).toBe('\\\\wsl$\\Ubuntu\\home\\user\\project');
+    expect(mockExecFileSync).not.toHaveBeenCalled();
   });
 
-  it('falls back to drive letter for /mnt/ paths', () => {
-    mockExecFileSync.mockImplementationOnce(() => { throw new Error('fail'); });
-
+  it('maps /mnt/ paths back to a Windows drive letter', () => {
     expect(wsl.wslPathToWin('/mnt/c/Users/test', 'Ubuntu')).toBe('C:\\Users\\test');
+    expect(mockExecFileSync).not.toHaveBeenCalled();
   });
 
-  it('uses -e for wslpath -w so paths with parentheses are not parsed by bash', () => {
-    mockExecFileSync.mockReturnValueOnce('\\\\wsl$\\Ubuntu\\home\\user\\(app)\\page.tsx\n' as any);
-    wsl.wslPathToWin('/home/user/(app)/page.tsx', 'Ubuntu');
-    expect(mockExecFileSync).toHaveBeenCalledWith(
-      'wsl.exe',
-      ['-d', 'Ubuntu', '-e', 'wslpath', '-w', '/home/user/(app)/page.tsx'],
-      expect.objectContaining({ timeout: 3000, encoding: 'utf8' }),
+  it('maps paths with parentheses to UNC without subprocesses', () => {
+    expect(wsl.wslPathToWin('/home/user/(app)/page.tsx', 'Ubuntu')).toBe(
+      '\\\\wsl$\\Ubuntu\\home\\user\\(app)\\page.tsx',
     );
+    expect(mockExecFileSync).not.toHaveBeenCalled();
   });
 });
 
@@ -186,15 +175,9 @@ describe('getWslHome', () => {
 });
 
 describe('getSharedTempDir', () => {
-  it('converts Windows temp to WSL path', () => {
-    // isWslAvailable
-    mockExecFileSync.mockReturnValueOnce(Buffer.from('') as any);
-    // getDefaultWslDistro
-    mockExecFileSync.mockReturnValueOnce('* Ubuntu  Running  2\r\n' as any);
-    // wslpath -u for temp dir
-    mockExecFileSync.mockReturnValueOnce('/mnt/c/Users/test/AppData/Local/Temp\n' as any);
-
+  it('converts Windows temp to WSL path via heuristic', () => {
     expect(wsl.getSharedTempDir()).toBe('/mnt/c/Users/test/AppData/Local/Temp');
+    expect(mockExecFileSync).not.toHaveBeenCalled();
   });
 });
 

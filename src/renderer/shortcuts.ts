@@ -42,13 +42,22 @@ export const SHORTCUT_DEFAULTS: ShortcutDefault[] = [
   { id: 'find-in-terminal', label: 'Find', category: 'Search & Help', defaultKeys: 'CmdOrCtrl+F' },
   { id: 'goto-line', label: 'Go to Line', category: 'Search & Help', defaultKeys: 'CmdOrCtrl+L' },
   { id: 'help', label: 'Help', category: 'Search & Help', defaultKeys: 'F1' },
+  { id: 'ui-zoom-in', label: 'Increase Scale (+5% UI, +1px terminal)', category: 'Display', defaultKeys: 'CmdOrCtrl+Plus' },
+  { id: 'ui-zoom-out', label: 'Decrease Scale (−5% UI, −1px terminal)', category: 'Display', defaultKeys: 'CmdOrCtrl+Minus' },
 ];
 
 const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
 
 /** Convert accelerator string to platform-specific display string */
 export function displayKeys(accelerator: string): string {
-  let display = accelerator;
+  if (accelerator === 'CmdOrCtrl+Plus') {
+    return isMac ? '\u2318+' : 'Ctrl++';
+  }
+  if (accelerator === 'CmdOrCtrl+Minus') {
+    return isMac ? '\u2318\u2212' : 'Ctrl+-';
+  }
+
+  let display = accelerator.replace(/\+Plus$/g, '++').replace(/\+Minus$/g, '+-');
   if (isMac) {
     display = display.replace(/CmdOrCtrl/g, 'Cmd');
     display = display.replace(/Ctrl\+/g, 'Ctrl+');
@@ -68,28 +77,30 @@ export function displayKeys(accelerator: string): string {
 
 /** Parse an accelerator string into modifier flags and a key */
 function parseAccelerator(accelerator: string): { ctrl: boolean; meta: boolean; shift: boolean; alt: boolean; key: string } {
-  const parts = accelerator.split('+');
+  const lastPlus = accelerator.lastIndexOf('+');
+  const key = lastPlus === -1 ? accelerator : accelerator.slice(lastPlus + 1);
+  const modPart = lastPlus === -1 ? '' : accelerator.slice(0, lastPlus);
+
   let ctrl = false;
   let meta = false;
   let shift = false;
   let alt = false;
-  let key = '';
 
-  for (const part of parts) {
-    const lower = part.toLowerCase();
-    if (lower === 'cmdorctrl') {
-      if (isMac) meta = true;
-      else ctrl = true;
-    } else if (lower === 'ctrl') {
-      ctrl = true;
-    } else if (lower === 'cmd') {
-      meta = true;
-    } else if (lower === 'shift') {
-      shift = true;
-    } else if (lower === 'alt') {
-      alt = true;
-    } else {
-      key = part;
+  if (modPart) {
+    for (const part of modPart.split('+')) {
+      const lower = part.toLowerCase();
+      if (lower === 'cmdorctrl') {
+        if (isMac) meta = true;
+        else ctrl = true;
+      } else if (lower === 'ctrl') {
+        ctrl = true;
+      } else if (lower === 'cmd') {
+        meta = true;
+      } else if (lower === 'shift') {
+        shift = true;
+      } else if (lower === 'alt') {
+        alt = true;
+      }
     }
   }
 
@@ -107,12 +118,30 @@ function matchesAccelerator(e: KeyboardEvent, accelerator: string): boolean {
 
   if (parsed.ctrl !== eventCtrl) return false;
   if (parsed.meta !== eventMeta) return false;
-  if (parsed.shift !== eventShift) return false;
   if (parsed.alt !== eventAlt) return false;
+
+  const parsedKey = parsed.key;
+  const isZoomChord =
+    parsedKey === 'Plus' || parsedKey === '+' || parsedKey === 'Minus' || parsedKey === '-';
+  if (parsed.shift !== eventShift) {
+    const allowShiftMismatch = isZoomChord && !parsed.shift;
+    if (!allowShiftMismatch) return false;
+  }
 
   // Compare key - handle special cases
   const eventKey = e.key;
-  const parsedKey = parsed.key;
+
+  if (parsedKey === 'Plus' || parsedKey === '+') {
+    if (eventKey === '+') return true;
+    if (eventKey === '=') return true;
+    if (e.code === 'NumpadAdd') return true;
+    return false;
+  }
+  if (parsedKey === 'Minus' || parsedKey === '-') {
+    if (eventKey === '-') return true;
+    if (e.code === 'NumpadSubtract') return true;
+    return false;
+  }
 
   // Direct match
   if (eventKey === parsedKey) return true;
@@ -220,7 +249,15 @@ export class ShortcutManager {
   matchEvent(e: KeyboardEvent): boolean {
     const overrides = appState.preferences.keybindings ?? {};
 
-    for (const shortcut of this.shortcuts) {
+    // Display / zoom chords first so they win over session shortcuts that share Ctrl+= etc.
+    const priorityIds = new Set(['ui-zoom-in', 'ui-zoom-out']);
+    const ordered = [...this.shortcuts].sort((a, b) => {
+      const ap = priorityIds.has(a.id) ? 0 : 1;
+      const bp = priorityIds.has(b.id) ? 0 : 1;
+      return ap - bp;
+    });
+
+    for (const shortcut of ordered) {
       const keys = overrides[shortcut.id] ?? shortcut.defaultKeys;
       if (matchesAccelerator(e, keys) && shortcut.handler) {
         e.preventDefault();

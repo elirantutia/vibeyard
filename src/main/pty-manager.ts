@@ -6,6 +6,7 @@ import type { ProviderId, Preferences } from '../shared/types';
 import { getProvider } from './providers/registry';
 import { registerSession } from './hook-status';
 import { isWin, pathSep, isWslMode } from './platform';
+import { mergePreferredBinDirsFirst } from './path-precedence';
 import { loadState } from './store';
 
 interface PtyInstance {
@@ -40,7 +41,7 @@ export function getFullPath(): string {
     for (const dir of extraDirs) {
       pathSet.add(dir);
     }
-    cachedFullPath = Array.from(pathSet).join(pathSep);
+    cachedFullPath = mergePreferredBinDirsFirst(Array.from(pathSet).join(pathSep));
     return cachedFullPath;
   }
 
@@ -55,18 +56,18 @@ export function getFullPath(): string {
     });
     const match = shellPath.match(/__PATH__=(.+)/);
     if (match && match[1]) {
-      cachedFullPath = match[1].trim();
+      cachedFullPath = mergePreferredBinDirsFirst(match[1].trim());
       return cachedFullPath;
     }
   } catch (err) { console.warn('Failed to resolve PATH from login shell:', err); }
 
-  // Fallback: merge current PATH with common directories
+  // Fallback: merge current PATH with common directories (user-local first; see resolve-binary.ts)
   const home = os.homedir();
   const extraDirs = [
-    '/usr/local/bin',
-    '/opt/homebrew/bin',
     path.join(home, '.local', 'bin'),
     path.join(home, '.npm-global', 'bin'),
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
     '/usr/local/sbin',
     '/opt/homebrew/sbin',
   ];
@@ -75,7 +76,7 @@ export function getFullPath(): string {
   for (const dir of extraDirs) {
     pathSet.add(dir);
   }
-  cachedFullPath = Array.from(pathSet).join(pathSep);
+  cachedFullPath = mergePreferredBinDirsFirst(Array.from(pathSet).join(pathSep));
   return cachedFullPath;
 }
 

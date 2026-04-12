@@ -7,6 +7,7 @@ import { fitAllVisible } from './terminal-pane.js';
 import { destroySearchBar, hideSearchBar } from './search-bar.js';
 import { shortcutManager, displayKeys } from '../shortcuts.js';
 import { attachClipboardCopyHandler } from './terminal-utils.js';
+import { getEffectiveTerminalFontSize, applyXtermFontSize } from '../terminal-font-size.js';
 
 interface ShellTerminalInstance {
   terminal: Terminal;
@@ -55,7 +56,7 @@ function ensureShell(projectId: string, projectPath: string): ShellTerminalInsta
       cyan: '#00acc1',
       white: '#e0e0e0',
     },
-    fontSize: 14,
+    fontSize: getEffectiveTerminalFontSize(),
     fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace",
     cursorBlink: true,
     allowProposedApi: true,
@@ -166,6 +167,15 @@ function fitShellTerminal(projectId: string): void {
     window.vibeyard.pty.resize(instance.sessionId, cols, rows);
   } catch {
     // not visible yet
+  }
+}
+
+export function applyShellTerminalsFontSize(fontSize: number): void {
+  for (const [, inst] of shells) {
+    applyXtermFontSize(inst.terminal, fontSize);
+    if (!panelEl.classList.contains('hidden') && inst.projectId === currentProjectId) {
+      fitShellTerminal(inst.projectId);
+    }
   }
 }
 

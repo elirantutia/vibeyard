@@ -13,6 +13,73 @@ import { isWin } from './platform';
 
 const WSL_EXE = 'wsl.exe';
 
+/** Options for wslpath probes: avoid spamming stderr when a method fails and we retry. */
+const wslExecFileWslpathOpts: Parameters<typeof execFileSync>[2] = {
+  timeout: 3000,
+  encoding: 'utf8',
+  stdio: ['ignore', 'pipe', 'pipe'],
+};
+
+/**
+ * `C:\` / `C:/` → `/mnt/c/...` without calling into WSL (avoids wslpath/shell entirely).
+ */
+function winPathToWslHeuristic(winPath: string): string | null {
+  const t = winPath.trim();
+  if (!/^[A-Za-z]:[\\/]/.test(t)) return null;
+  return t
+    .replace(/^([A-Za-z]):\\/, (_, drive: string) => `/mnt/${drive.toLowerCase()}/`)
+    .replace(/^([A-Za-z]):\//, (_, drive: string) => `/mnt/${drive.toLowerCase()}/`)
+    .replace(/\\/g, '/');
+}
+
+/**
+ * Linux absolute path → Windows path for `fs` / UNC access, without `wslpath -w`.
+ * Matches what `wslpath -w` does for normal WSL2 layouts; avoids subprocesses and
+ * shell parsing issues on paths with `(`, spaces, etc.
+ */
+function linuxPathToWinHeuristic(linuxPath: string, distro: string): string {
+  const mntMatch = linuxPath.match(/^\/mnt\/([a-z])\/(.*)/);
+  if (mntMatch) {
+    return `${mntMatch[1].toUpperCase()}:\\${mntMatch[2].replace(/\//g, '\\')}`;
+  }
+  if (linuxPath.startsWith('/')) {
+    return `\\\\wsl$\\${distro}${linuxPath.replace(/\//g, '\\')}`;
+  }
+  return linuxPath;
+}
+
+/**
+ * Run `wslpath -u` inside WSL for Windows paths that are not plain `X:\` (e.g. `\\?\`, odd UNC).
+ * Uses `-e` and a `sh -c` fallback so the path is not parsed by the login shell.
+ */
+function execWslpathUnix(distro: string, winPath: string): string | null {
+  const direct: string[][] = [
+    ['-d', distro, '-e', 'wslpath', '-u', winPath],
+    ['-d', distro, '--exec', 'wslpath', '-u', winPath],
+  ];
+  for (const args of direct) {
+    try {
+      const out = String(execFileSync(WSL_EXE, args, wslExecFileWslpathOpts)).trim();
+      if (out) return out;
+    } catch {
+      // try next
+    }
+  }
+  try {
+    const out = String(
+      execFileSync(
+        WSL_EXE,
+        ['-d', distro, '--', 'sh', '-c', 'exec wslpath -u "$1"', '_', winPath],
+        wslExecFileWslpathOpts,
+      ),
+    ).trim();
+    if (out) return out;
+  } catch {
+    // fall through
+  }
+  return null;
+}
+
 // ── Caches ──────────────────────────────────────────────────────────
 
 let cachedAvailable: boolean | null = null;
@@ -154,23 +221,27 @@ export function winPathToWsl(winPath: string, distro?: string): string {
   const cached = pathCache.get(key);
   if (cached) return cached;
 
+  const t = winPath.trim();
+  const fromUnc = uncWslPathToLinuxPath(t);
+  if (fromUnc !== null) {
+    const r = collapsePosixPath(fromUnc);
+    pathCache.set(key, r);
+    return r;
+  }
+
+  const heuristic = winPathToWslHeuristic(t);
+  if (heuristic) {
+    pathCache.set(key, heuristic);
+    return heuristic;
+  }
+
   const d = distro || getDefaultWslDistro();
   if (!d) return winPath;
 
-  try {
-    // `-e` runs wslpath directly; `--` runs via the default shell and breaks on
-    // Windows paths with backslash escapes and on Linux paths with `(` `)`.
-    const args = ['-d', d, '-e', 'wslpath', '-u', winPath];
-    const result = execFileSync(WSL_EXE, args, {
-      timeout: 3000,
-      encoding: 'utf8',
-    }).trim();
-    if (result) {
-      pathCache.set(key, result);
-      return result;
-    }
-  } catch {
-    // Fallback: simple heuristic for common drive letter paths
+  const converted = execWslpathUnix(d, winPath);
+  if (converted) {
+    pathCache.set(key, converted);
+    return converted;
   }
 
   const fallback = winPath
@@ -192,30 +263,7 @@ export function wslPathToWin(linuxPath: string, distro?: string): string {
   const d = distro || getDefaultWslDistro();
   if (!d) return linuxPath;
 
-  try {
-    const args = ['-d', d, '-e', 'wslpath', '-w', linuxPath];
-    const result = execFileSync(WSL_EXE, args, {
-      timeout: 3000,
-      encoding: 'utf8',
-    }).trim();
-    if (result) {
-      pathCache.set(key, result);
-      return result;
-    }
-  } catch {
-    // Fallback: manual UNC construction
-  }
-
-  // For paths starting with /mnt/<drive>/, convert back to drive letter
-  const mntMatch = linuxPath.match(/^\/mnt\/([a-z])\/(.*)/);
-  if (mntMatch) {
-    const result = `${mntMatch[1].toUpperCase()}:\\${mntMatch[2].replace(/\//g, '\\')}`;
-    pathCache.set(key, result);
-    return result;
-  }
-
-  // For pure Linux paths, use UNC
-  const result = `\\\\wsl$\\${d}${linuxPath.replace(/\//g, '\\')}`;
+  const result = linuxPathToWinHeuristic(linuxPath, d);
   pathCache.set(key, result);
   return result;
 }

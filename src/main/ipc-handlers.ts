@@ -9,7 +9,7 @@ import type { McpServerConfig } from './claude-cli';
 import { loadState, saveState, PersistedState, normalizeWslProjectPaths } from './store';
 import { startWatching, cleanupSessionStatus } from './hook-status';
 import { startCodexSessionWatcher, registerPendingCodexSession, unregisterCodexSession } from './codex-session-watcher';
-import { getGitStatus, getGitFiles, getGitDiff, getGitWorktrees, gitStageFile, gitUnstageFile, gitDiscardFile, getGitRemoteUrl, listGitBranches, checkoutGitBranch, createGitBranch, isPathWithinKnownLinkedWorktree } from './git-status';
+import { getGitStatus, getGitFiles, getGitDiff, getGitWorktrees, gitStageFile, gitUnstageFile, gitDiscardFile, getGitRemoteUrl, listGitBranches, checkoutGitBranch, createGitBranch, createGitWorktree, isPathWithinKnownLinkedWorktree } from './git-status';
 import { startGitWatcher, stopGitWatcher, notifyGitChanged } from './git-watcher';
 import { watchFile as watchFileForChanges, unwatchFile as unwatchFileForChanges, setFileWatcherWindow } from './file-watcher';
 import { registerMcpHandlers } from './mcp-ipc-handlers';
@@ -281,6 +281,14 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('app:getVersion', () => app.getVersion());
+
+  ipcMain.handle('app:setZoomFactor', (event, factor: unknown) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed()) return;
+    const z = typeof factor === 'number' ? factor : Number(factor);
+    if (!Number.isFinite(z) || z < 0.5 || z > 4) return;
+    win.webContents.setZoomFactor(z);
+  });
   ipcMain.handle('app:getBrowserPreloadPath', () =>
     path.join(__dirname, '..', '..', 'preload', 'preload', 'browser-tab-preload.js')
   );
@@ -383,6 +391,14 @@ export function registerIpcHandlers(): void {
     await createGitBranch(projectPath, branch);
     notifyGitChanged();
   });
+
+  ipcMain.handle(
+    'git:createWorktree',
+    async (_event, projectPath: string, worktreePath: string, newBranch?: string) => {
+      await createGitWorktree(projectPath, worktreePath, newBranch);
+      notifyGitChanged();
+    },
+  );
 
   ipcMain.handle('git:openInEditor', (_event, projectPath: string, filePath: string) => {
     const fullPath = joinStoredProjectPath(projectPath, filePath);

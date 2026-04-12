@@ -64,6 +64,7 @@ export interface VibeyardApi {
     listBranches(path: string): Promise<{ name: string; current: boolean }[]>;
     checkoutBranch(path: string, branch: string): Promise<void>;
     createBranch(path: string, branch: string): Promise<void>;
+    createWorktree(path: string, worktreePath: string, newBranch?: string): Promise<void>;
     watchProject(path: string): void;
     onChanged(callback: () => void): () => void;
   };
@@ -80,6 +81,8 @@ export interface VibeyardApi {
     getVersion(): Promise<string>;
     openExternal(url: string): Promise<void>;
     getBrowserPreloadPath(): Promise<string>;
+    /** Chromium page zoom (1 = 100%). Replaces CSS `zoom` for reliable layout on all platforms. */
+    setZoomFactor(factor: number): Promise<void>;
     onQuitting(callback: () => void): () => void;
   };
   browser: {
@@ -218,6 +221,8 @@ const api: VibeyardApi = {
     listBranches: (path: string) => ipcRenderer.invoke('git:listBranches', path),
     checkoutBranch: (path: string, branch: string) => ipcRenderer.invoke('git:checkoutBranch', path, branch),
     createBranch: (path: string, branch: string) => ipcRenderer.invoke('git:createBranch', path, branch),
+    createWorktree: (path: string, worktreePath: string, newBranch?: string) =>
+      ipcRenderer.invoke('git:createWorktree', path, worktreePath, newBranch),
     watchProject: (path: string) => ipcRenderer.send('git:watchProject', path),
     onChanged: (callback: () => void) => onChannel('git:changed', callback),
   },
@@ -234,6 +239,7 @@ const api: VibeyardApi = {
     getVersion: () => ipcRenderer.invoke('app:getVersion'),
     openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', url),
     getBrowserPreloadPath: () => ipcRenderer.invoke('app:getBrowserPreloadPath'),
+    setZoomFactor: (factor: number) => ipcRenderer.invoke('app:setZoomFactor', factor),
     onQuitting: (cb: () => void) => onChannel('app:quitting', cb),
   },
   browser: {

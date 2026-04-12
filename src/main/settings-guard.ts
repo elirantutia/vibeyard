@@ -1,8 +1,7 @@
 import * as path from 'path';
-import { homedir } from 'os';
 import { ipcMain, BrowserWindow } from 'electron';
 import { getStatusLineScriptPath } from './hook-status';
-import { HOOK_MARKER, installHooksOnly, installStatusLine, getSupportedHookEvents } from './claude-cli';
+import { HOOK_MARKER, installHooksOnly, installStatusLine, getSupportedHookEvents, getEffectiveCliUserHome } from './claude-cli';
 import { readJsonSafe } from './fs-utils';
 import { loadState, saveState } from './store';
 import type { SettingsValidationResult } from '../shared/types';
@@ -24,7 +23,9 @@ function getExpectedHookEvents(): string[] {
 }
 
 function readClaudeSettings(): Record<string, unknown> {
-  return readJsonSafe(path.join(homedir(), '.claude', 'settings.json')) ?? {};
+  // Match claude-cli hook/statusLine install paths: WSL mode uses the distro
+  // home (UNC), not the Windows profile — otherwise validation reads the wrong file.
+  return readJsonSafe(path.join(getEffectiveCliUserHome(), '.claude', 'settings.json')) ?? {};
 }
 
 export function isVibeyardStatusLine(statusLine: unknown): boolean {

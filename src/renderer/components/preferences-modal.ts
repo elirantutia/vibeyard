@@ -4,6 +4,8 @@ import { createCustomSelect, type CustomSelectInstance } from './custom-select.j
 import { shortcutManager, displayKeys, eventToAccelerator } from '../shortcuts.js';
 import { loadProviderAvailability, getProviderAvailabilitySnapshot } from '../provider-availability.js';
 import type { CliProviderMeta, ProviderId, SettingsValidationResult } from '../../shared/types.js';
+import { UI_ZOOM_SIZE_OPTIONS } from '../display-preferences.js';
+import { TERMINAL_FONT_SIZE_OPTIONS } from '../terminal-font-size.js';
 
 
 const overlay = document.getElementById('modal-overlay')!;
@@ -62,6 +64,8 @@ export function showPreferencesModal(): void {
   let insightsCheckbox: HTMLInputElement | null = null;
   let autoTitleCheckbox: HTMLInputElement | null = null;
   let defaultProviderSelect: CustomSelectInstance | null = null;
+  let uiZoomSelect: CustomSelectInstance | null = null;
+  let terminalFontSelect: CustomSelectInstance | null = null;
   let debugModeCheckbox: HTMLInputElement | null = null;
   let wslCheckbox: HTMLInputElement | null = null;
   let wslDistroSelect: CustomSelectInstance | null = null;
@@ -118,6 +122,52 @@ export function showPreferencesModal(): void {
       providerRow.appendChild(providerLabel);
       providerRow.appendChild(defaultProviderSelect.element);
       content.appendChild(providerRow);
+
+      uiZoomSelect?.destroy();
+      terminalFontSelect?.destroy();
+      uiZoomSelect = null;
+      terminalFontSelect = null;
+
+      const displayHeader = document.createElement('div');
+      displayHeader.className = 'pref-section-header';
+      displayHeader.textContent = 'Display';
+      content.appendChild(displayHeader);
+
+      const uiZoomRow = document.createElement('div');
+      uiZoomRow.className = 'modal-toggle-field';
+      const uiZoomLabel = document.createElement('label');
+      uiZoomLabel.textContent = 'Interface scale';
+      const zoomRaw = appState.preferences.uiZoom ?? 1;
+      const zoomSnapped = UI_ZOOM_SIZE_OPTIONS.reduce((best, z) =>
+        Math.abs(z - zoomRaw) < Math.abs(best - zoomRaw) ? z : best,
+        UI_ZOOM_SIZE_OPTIONS[0],
+      );
+      const zoomVal = zoomSnapped.toFixed(2);
+      uiZoomSelect = createCustomSelect(
+        'pref-ui-zoom',
+        UI_ZOOM_SIZE_OPTIONS.map((z) => ({
+          value: z.toFixed(2),
+          label: z === 1 ? '100% (default)' : `${Math.round(z * 100)}%`,
+        })),
+        zoomVal,
+      );
+      uiZoomRow.appendChild(uiZoomLabel);
+      uiZoomRow.appendChild(uiZoomSelect.element);
+      content.appendChild(uiZoomRow);
+
+      const termFontRow = document.createElement('div');
+      termFontRow.className = 'modal-toggle-field';
+      const termFontLabel = document.createElement('label');
+      termFontLabel.textContent = 'Terminal font size';
+      const fontVal = String(appState.preferences.terminalFontSize ?? 14);
+      terminalFontSelect = createCustomSelect(
+        'pref-terminal-font',
+        TERMINAL_FONT_SIZE_OPTIONS.map((n) => ({ value: String(n), label: `${n}px` })),
+        fontVal,
+      );
+      termFontRow.appendChild(termFontLabel);
+      termFontRow.appendChild(terminalFontSelect.element);
+      content.appendChild(termFontRow);
 
       const row = document.createElement('div');
       row.className = 'modal-toggle-field';
@@ -749,6 +799,18 @@ export function showPreferencesModal(): void {
     if (defaultProviderSelect) {
       appState.setPreference('defaultProvider', defaultProviderSelect.getValue() as ProviderId);
     }
+    if (uiZoomSelect) {
+      const z = Number.parseFloat(uiZoomSelect.getValue());
+      if (Number.isFinite(z) && z >= 0.5 && z <= 4) {
+        appState.setPreference('uiZoom', z);
+      }
+    }
+    if (terminalFontSelect) {
+      const fs = Number.parseInt(terminalFontSelect.getValue(), 10);
+      if (Number.isFinite(fs)) {
+        appState.setPreference('terminalFontSize', Math.min(32, Math.max(10, fs)));
+      }
+    }
     if (debugModeCheckbox && debugModeCheckbox.checked !== appState.preferences.debugMode) {
       appState.setPreference('debugMode', debugModeCheckbox.checked);
       window.vibeyard.menu.rebuild(debugModeCheckbox.checked);
@@ -804,6 +866,8 @@ export function showPreferencesModal(): void {
   (overlay as any)._cleanup = () => {
     cleanupRecorder();
     if (defaultProviderSelect) defaultProviderSelect.destroy();
+    if (uiZoomSelect) uiZoomSelect.destroy();
+    if (terminalFontSelect) terminalFontSelect.destroy();
     btnConfirm.removeEventListener('click', handleConfirm);
     btnCancel.removeEventListener('click', handleCancel);
     document.removeEventListener('keydown', handleKeydown);

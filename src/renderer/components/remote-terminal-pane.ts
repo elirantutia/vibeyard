@@ -5,6 +5,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import type { ShareMode } from '../../shared/sharing-types.js';
+import { getEffectiveTerminalFontSize, applyXtermFontSize } from '../terminal-font-size.js';
 
 interface RemoteTerminalInstance {
   terminal: Terminal;
@@ -69,7 +70,7 @@ export function createRemoteTerminalPane(
       cyan: '#00acc1',
       white: '#e0e0e0',
     },
-    fontSize: 14,
+    fontSize: getEffectiveTerminalFontSize(),
     fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace",
     cursorBlink: mode === 'readwrite',
     allowProposedApi: true,
@@ -156,6 +157,15 @@ export function fitRemoteTerminal(sessionId: string): void {
     instance.fitAddon.fit();
   } catch {
     // Element not yet visible
+  }
+}
+
+export function applyRemoteTerminalsFontSize(fontSize: number): void {
+  for (const [sessionId, inst] of instances) {
+    applyXtermFontSize(inst.terminal, fontSize);
+    if (!inst.element.classList.contains('hidden')) {
+      fitRemoteTerminal(sessionId);
+    }
   }
 }
 

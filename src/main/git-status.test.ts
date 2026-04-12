@@ -14,7 +14,16 @@ import * as path from 'path';
 import { execFile } from 'child_process';
 import { readFileSync } from 'fs';
 import * as store from './store';
-import { getGitStatus, getGitFiles, getGitDiff, getGitWorktrees, isPathWithinKnownLinkedWorktree, clearWorktreeRootsCache } from './git-status';
+import {
+  getGitStatus,
+  getGitFiles,
+  getGitDiff,
+  getGitWorktrees,
+  isPathWithinKnownLinkedWorktree,
+  clearWorktreeRootsCache,
+  resolveWorktreeDestination,
+  createGitWorktree,
+} from './git-status';
 
 const mockExecFile = vi.mocked(execFile);
 const mockReadFileSync = vi.mocked(readFileSync);
@@ -371,5 +380,55 @@ describe('linked worktree path helpers', () => {
     simulateExecFile(new Error('git failed') as ExecFileException, '');
     await getGitWorktrees('/repo');
     expect(isPathWithinKnownLinkedWorktree(path.resolve('/repo-wt/x'))).toBe(false);
+  });
+});
+
+describe('resolveWorktreeDestination', () => {
+  it('joins a relative path to the parent of the repo root', () => {
+    expect(resolveWorktreeDestination('/home/u/code/src/fridge-inventory-app', 'fridge-wt')).toBe(
+      path.normalize('/home/u/code/src/fridge-wt'),
+    );
+  });
+
+  it('does not nest under the repo directory', () => {
+    expect(resolveWorktreeDestination('/repo/my-app', 'wt')).toBe(path.normalize('/repo/wt'));
+  });
+
+  it('leaves absolute paths unchanged (only normalizes)', () => {
+    expect(resolveWorktreeDestination('/repo/my-app', '/tmp/explicit-wt')).toBe('/tmp/explicit-wt');
+  });
+});
+
+describe('createGitWorktree', () => {
+  const noWslPrefs = {
+    version: 1 as const,
+    activeProjectId: null,
+    projects: [],
+    preferences: {
+      soundOnSessionWaiting: true,
+      notificationsDesktop: true,
+      debugMode: false,
+      sessionHistoryEnabled: true,
+      insightsEnabled: true,
+      autoTitleEnabled: true,
+    },
+  };
+
+  it('passes repo-parent-relative path to git worktree add', async () => {
+    vi.spyOn(store, 'loadState').mockReturnValue(noWslPrefs as never);
+    simulateExecFile(null, '');
+    await createGitWorktree('/home/u/code/src/my-app', 'parallel-wt');
+    const args = mockExecFile.mock.calls[0][1] as string[];
+    expect(args).toContain(path.normalize('/home/u/code/src/parallel-wt'));
+    expect(args.join(' ')).toContain('worktree add');
+  });
+
+  it('passes absolute worktree path through to git', async () => {
+    vi.spyOn(store, 'loadState').mockReturnValue(noWslPrefs as never);
+    simulateExecFile(null, '');
+    const abs = path.normalize('/var/worktrees/foo');
+    await createGitWorktree('/home/u/code/src/my-app', abs);
+    const args = mockExecFile.mock.calls[0][1] as string[];
+    expect(args).toContain(abs);
   });
 });

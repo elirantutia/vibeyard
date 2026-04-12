@@ -311,6 +311,41 @@ export async function createGitBranch(cwd: string, branch: string): Promise<void
   await execGit(cwd, ['checkout', '-b', branch]);
 }
 
+/**
+ * Where `git worktree add` should place a new checkout.
+ * Relative segments resolve next to the repo's parent directory (sibling of the project
+ * folder), not under the repo — avoids nested worktrees inside the main tree.
+ */
+export function resolveWorktreeDestination(repoRoot: string, userWorktreePath: string): string {
+  const rootNorm = path.normalize(repoRoot.trim());
+  const wt = userWorktreePath.trim();
+  if (!wt) return wt;
+  if (path.isAbsolute(wt)) return path.normalize(wt);
+  return path.normalize(path.join(path.dirname(rootNorm), wt));
+}
+
+/** Add a linked worktree (`git worktree add`). Longer timeout for checkout-heavy trees. */
+export async function createGitWorktree(repoRoot: string, worktreePath: string, newBranch?: string): Promise<void> {
+  const g = resolveGitCommand(repoRoot);
+  const wt = resolveWorktreeDestination(repoRoot, worktreePath);
+  if (!wt) throw new Error('Worktree path is required');
+  const nb = newBranch?.trim();
+  const args = nb
+    ? (['worktree', 'add', '-b', nb, wt, 'HEAD'] as const)
+    : (['worktree', 'add', wt, 'HEAD'] as const);
+  return new Promise((resolve, reject) => {
+    execFile(
+      g.bin,
+      [...g.prefixArgs, ...args],
+      { cwd: g.execCwd, timeout: 120_000, maxBuffer: 1024 * 1024 },
+      (err) => {
+        if (err) reject(err);
+        else resolve();
+      },
+    );
+  });
+}
+
 export function gitStageFile(cwd: string, filePath: string): Promise<void> {
   return execGit(cwd, ['add', '--', filePath]);
 }
