@@ -38,7 +38,7 @@ export class OpenCodeProvider implements CliProvider {
   buildEnv(sessionId: string, baseEnv: Record<string, string>): Record<string, string> {
     const env = { ...baseEnv };
     env[SESSION_ID_VAR] = sessionId;
-    env.OPENCODE_CLIENT = 'vibeyard';
+    env.OPENCODE_CLIENT = 'vibeyard'; // identifies the client to OpenCode for telemetry/routing
     env.PATH = getFullPath();
     return env;
   }

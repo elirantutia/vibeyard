@@ -1,9 +1,8 @@
 import * as path from 'path';
 import { homedir } from 'os';
-import { readDirSafe } from './fs-utils';
+import { readDirSafe, readJsonSafe } from './fs-utils';
 import { parseFrontmatter } from './frontmatter';
 import { dedupeByName, readSkillsFromDir } from './provider-config-utils';
-import { readJsonSafe } from './fs-utils';
 import type { Agent, Command, McpServer, ProviderConfig } from '../shared/types';
 
 function readMcpFromJson(filePath: string, scope: 'user' | 'project'): McpServer[] {
