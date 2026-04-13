@@ -214,24 +214,73 @@ export async function spawnPty(
   ptys.set(sessionId, { process: ptyProcess, sessionId });
 }
 
+// node-pty on Windows throws synchronously from write/resize/kill when the
+// underlying child process has already exited (see microsoft/node-pty#887).
+// A single dead PTY must not be allowed to crash the main Electron process
+// — it would take down every other active session with it. Guard each
+// operation, log a warning, and drop the dead handle only when the error
+// indicates the PTY is actually dead.
+
+/**
+ * True when a node-pty exception means the underlying process has already
+ * exited (as opposed to a transient or unknown failure). node-pty emits
+ * messages like "Cannot write to a pty that has already exited" / "Cannot
+ * resize a pty that has already exited" / "Cannot kill a pty that has
+ * already exited" — we only prune the map in that case, so a transient
+ * error does not silently leave the session unresponsive.
+ */
+function isPtyExitedError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /already exited/i.test(msg);
+}
+
+/**
+ * Escape sessionId for inclusion in a log message. sessionId arrives from
+ * the renderer over IPC, so it is semi-trusted — JSON.stringify neutralises
+ * newlines, ANSI escape sequences, and any other control characters that
+ * could confuse log output.
+ */
+function formatSessionIdForLog(sessionId: string): string {
+  return JSON.stringify(sessionId);
+}
+
 export function writePty(sessionId: string, data: string): void {
   const instance = ptys.get(sessionId);
-  if (instance) {
+  if (!instance) return;
+  try {
     instance.process.write(data);
+  } catch (err) {
+    const message = (err as Error).message;
+    console.warn(`[pty-manager] writePty(${formatSessionIdForLog(sessionId)}) failed: ${message}`);
+    if (isPtyExitedError(err)) {
+      ptys.delete(sessionId);
+    }
   }
 }
 
 export function resizePty(sessionId: string, cols: number, rows: number): void {
   const instance = ptys.get(sessionId);
-  if (instance) {
+  if (!instance) return;
+  try {
     instance.process.resize(cols, rows);
+  } catch (err) {
+    const message = (err as Error).message;
+    console.warn(`[pty-manager] resizePty(${formatSessionIdForLog(sessionId)}) failed: ${message}`);
+    if (isPtyExitedError(err)) {
+      ptys.delete(sessionId);
+    }
   }
 }
 
 export function killPty(sessionId: string): void {
   const instance = ptys.get(sessionId);
-  if (instance) {
+  if (!instance) return;
+  try {
     instance.process.kill();
+  } catch (err) {
+    console.warn(`[pty-manager] killPty(${formatSessionIdForLog(sessionId)}) failed: ${(err as Error).message}`);
+  } finally {
+    // kill is an intentional teardown — always drop the handle, even on throw.
     ptys.delete(sessionId);
   }
 }
