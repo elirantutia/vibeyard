@@ -3,6 +3,7 @@ import { showModal, setModalError, closeModal } from './modal.js';
 import { showPreferencesModal } from './preferences-modal.js';
 import { onChange as onCostChange, getAggregateCost } from '../session-cost.js';
 import { hasUnreadInProject, onChange as onUnreadChange } from '../session-unread.js';
+import { init as initDiscussionsBadge, getNewCount as getDiscussionsNewCount, markSeen as markDiscussionsSeen, onChange as onDiscussionsChange, DISCUSSIONS_URL } from '../discussions-badge.js';
 import { basename, lastSeparatorIndex } from '../../shared/platform.js';
 
 const projectListEl = document.getElementById('project-list')!;
@@ -34,12 +35,13 @@ export function initSidebar(): void {
   btnPreferences.addEventListener('click', showPreferencesModal);
   btnToggleSidebar.addEventListener('click', toggleSidebar);
 
-  sidebarDiscussionsEl.innerHTML =
-    '<div class="discussions-title">Vibeyard Discussions</div>' +
-    '<div class="discussions-desc">Join the conversation about coding with AI</div>';
+  renderDiscussions();
   sidebarDiscussionsEl.addEventListener('click', () => {
-    window.vibeyard.app.openExternal('https://github.com/elirantutia/vibeyard/discussions');
+    markDiscussionsSeen();
+    window.vibeyard.app.openExternal(DISCUSSIONS_URL);
   });
+  initDiscussionsBadge();
+  onDiscussionsChange(renderDiscussions);
 
   initResizeHandle();
   appState.on('state-loaded', () => {
@@ -342,6 +344,14 @@ function hideProjectContextMenu(): void {
     activeProjectContextMenu.remove();
     activeProjectContextMenu = null;
   }
+}
+
+function renderDiscussions(): void {
+  const count = getDiscussionsNewCount();
+  const badge = count > 0 ? ` <span class="discussions-badge">${count}</span>` : '';
+  sidebarDiscussionsEl.innerHTML =
+    `<div class="discussions-title">Vibeyard Discussions${badge}</div>` +
+    '<div class="discussions-desc">Join the conversation about coding with AI</div>';
 }
 
 function esc(s: string): string {

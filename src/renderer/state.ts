@@ -215,6 +215,15 @@ class AppState {
     this.emit('sidebar-toggled');
   }
 
+  get discussionsLastSeen(): string | undefined {
+    return this.state.discussionsLastSeen;
+  }
+
+  setDiscussionsLastSeen(timestamp: string): void {
+    this.state.discussionsLastSeen = timestamp;
+    this.persist();
+  }
+
   setTerminalPanelOpen(open: boolean): void {
     const project = this.activeProject;
     if (!project) return;

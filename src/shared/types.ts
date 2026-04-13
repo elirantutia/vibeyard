@@ -192,6 +192,7 @@ export interface PersistedState {
   lastSeenVersion?: string;
   appLaunchCount?: number;
   starPromptDismissed?: boolean;
+  discussionsLastSeen?: string;
 }
 
 // --- AI Readiness ---
