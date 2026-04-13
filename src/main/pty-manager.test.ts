@@ -289,8 +289,38 @@ describe('resizePty', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     expect(() => resizePty('s1', 120, 30)).not.toThrow();
-    expect(warnSpy).toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('s1'));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('resizePty'));
     warnSpy.mockRestore();
+
+    // After an "already exited" error the handle must be dropped —
+    // a subsequent resize on the same session is a no-op.
+    mockResize.mockClear();
+    resizePty('s1', 80, 24);
+    expect(mockResize).not.toHaveBeenCalled();
+  });
+
+  // The map is pruned ONLY when the error signals process exit. A transient
+  // or unknown error must leave the handle intact so retries can succeed,
+  // otherwise the session would silently become unresponsive.
+  it('keeps the handle on transient (non-exit) errors (issue #70 review)', () => {
+    const proc = createMockPtyProcess();
+    mockSpawn.mockReturnValue(proc);
+    spawnPty('s1', '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
+
+    mockResize.mockImplementationOnce(() => {
+      throw new Error('EBUSY: some transient failure');
+    });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(() => resizePty('s1', 120, 30)).not.toThrow();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('s1'));
+    warnSpy.mockRestore();
+
+    // Handle is still registered — a subsequent successful resize must go through.
+    mockResize.mockClear();
+    resizePty('s1', 80, 24);
+    expect(mockResize).toHaveBeenCalledWith(80, 24);
   });
 });
 
@@ -306,7 +336,58 @@ describe('writePty error handling (issue #70)', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     expect(() => writePty('s1', 'hello')).not.toThrow();
-    expect(warnSpy).toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('s1'));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('writePty'));
+    warnSpy.mockRestore();
+
+    // Handle dropped — subsequent write is a no-op.
+    mockWrite.mockClear();
+    writePty('s1', 'again');
+    expect(mockWrite).not.toHaveBeenCalled();
+  });
+
+  it('keeps the handle on transient (non-exit) errors (issue #70 review)', () => {
+    const proc = createMockPtyProcess();
+    mockSpawn.mockReturnValue(proc);
+    spawnPty('s1', '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
+
+    mockWrite.mockImplementationOnce(() => {
+      throw new Error('EAGAIN: resource temporarily unavailable');
+    });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(() => writePty('s1', 'hello')).not.toThrow();
+    warnSpy.mockRestore();
+
+    // Handle still registered — subsequent successful write must go through.
+    mockWrite.mockClear();
+    writePty('s1', 'again');
+    expect(mockWrite).toHaveBeenCalledWith('again');
+  });
+
+  // Security-review follow-up: sessionId arrives from the renderer over IPC
+  // and must be sanitised in log output so that crafted values (newlines,
+  // ANSI escape sequences) cannot confuse log consumers.
+  it('sanitises sessionId with control characters in log output', () => {
+    const proc = createMockPtyProcess();
+    mockSpawn.mockReturnValue(proc);
+    const hostileId = "evil\n[pty-manager] fake log line\x1b[31m";
+    spawnPty(hostileId, '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
+
+    mockWrite.mockImplementationOnce(() => {
+      throw new Error('Cannot write to a pty that has already exited');
+    });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    writePty(hostileId, 'hello');
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    const logged = warnSpy.mock.calls[0][0] as string;
+    // Raw newline/ESC must not appear in the logged string — JSON.stringify
+    // must have escaped them.
+    expect(logged).not.toMatch(/\n(?!$)/);
+    expect(logged).not.toContain('\x1b');
+    expect(logged).toContain('\\n');
     warnSpy.mockRestore();
   });
 });
@@ -323,7 +404,8 @@ describe('killPty error handling (issue #70)', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     expect(() => killPty('s1')).not.toThrow();
-    expect(warnSpy).toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('s1'));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('killPty'));
     // After kill (even if it throws), a subsequent resize must be a no-op —
     // the handle is gone, so mockResize must not be called.
     mockResize.mockClear();
