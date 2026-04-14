@@ -2,7 +2,7 @@ import * as path from 'path';
 import { expandUserPath } from './fs-utils';
 import { isWin, isWslMode } from './platform';
 import { loadState } from './store';
-import { getEffectiveDistro, normalizeProjectPathForWslStorage, wslPathToWin } from './wsl';
+import { getEffectiveDistro, normalizeProjectPathForWslStorage, uncWslPathToLinuxPath, wslPathToWin } from './wsl';
 
 function wslDistro(): string | undefined {
   return getEffectiveDistro(loadState().preferences.wslDistro) ?? undefined;
@@ -41,10 +41,17 @@ export function joinStoredProjectPath(storedRoot: string, ...segments: string[])
 
 /** Resolve a path string for main-process `fs` (handles POSIX `/...` under WSL mode). */
 export function resolvePathForMainProcess(filePath: string): string {
-  let x = expandUserPath(filePath);
+  let x = expandUserPath(filePath.trim());
   if (isWin && isWslMode(loadState().preferences)) {
+    // Prefer UNC → Linux mapping so mixed `/` and `\` WSL paths are not mis-handled by
+    // `path.win32` (e.g. `path.resolve('/home/...')` → `\home\...` on Windows).
+    const fromUnc = uncWslPathToLinuxPath(x);
+    if (fromUnc !== null) {
+      x = storedPathToMainFs(fromUnc);
+      return path.resolve(x);
+    }
     const s = x.replace(/\\/g, '/');
-    if (s.startsWith('/')) {
+    if (s.startsWith('/') && !/^[A-Za-z]:\//.test(s)) {
       x = storedPathToMainFs(s);
     }
   }

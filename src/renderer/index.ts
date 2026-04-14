@@ -3,7 +3,14 @@ import { initSidebar, promptNewProject } from './components/sidebar.js';
 import { initTabBar } from './components/tab-bar.js';
 import { initSplitLayout } from './components/split-layout.js';
 import { initKeybindings } from './keybindings.js';
-import { handlePtyData, destroyTerminal, updateCostDisplay, updateContextDisplay } from './components/terminal-pane.js';
+import {
+  handlePtyData,
+  destroyTerminal,
+  updateCostDisplay,
+  updateContextDisplay,
+  restartCliWithoutSavedConversation,
+} from './components/terminal-pane.js';
+import { showAlertBanner, removeAlertBanner } from './components/alert-banner.js';
 import { setIdle, setHookStatus, notifyInterrupt } from './session-activity.js';
 import { parseCost, setCostData, onChange as onCostChange } from './session-cost.js';
 import { parseTitle, clearSession as clearTitleSession } from './session-title.js';
@@ -46,6 +53,8 @@ window.vibeyard.app.onQuitting(() => {
 });
 
 async function main(): Promise<void> {
+  const staleResumeErrorBannerShown = new Set<string>();
+
   // Wire PTY data/exit events from main process
   window.vibeyard.pty.onData((sessionId, data) => {
     if (isShellSessionId(sessionId)) {
@@ -54,6 +63,29 @@ async function main(): Promise<void> {
       handlePtyData(sessionId, data);
       parseCost(sessionId, data);
       parseTitle(sessionId, data);
+      if (
+        data.includes('No conversation found with session ID') &&
+        !staleResumeErrorBannerShown.has(sessionId)
+      ) {
+        staleResumeErrorBannerShown.add(sessionId);
+        const project = appState.projects.find((p) => p.sessions.some((s) => s.id === sessionId));
+        const session = project?.sessions.find((s) => s.id === sessionId);
+        if (project && session?.cliSessionId && appState.activeSession?.id === sessionId) {
+          showAlertBanner({
+            icon: '\u26A0\uFE0F',
+            message:
+              'Saved Claude session no longer exists (cleared data, different account, or it was removed). Start fresh to open a new conversation in this tab.',
+            cta: {
+              label: 'Start fresh',
+              onClick: async () => {
+                removeAlertBanner();
+                await restartCliWithoutSavedConversation(project.id, sessionId);
+                staleResumeErrorBannerShown.delete(sessionId);
+              },
+            },
+          });
+        }
+      }
       if (data.includes('Interrupted')) {
         notifyInterrupt(sessionId);
       }

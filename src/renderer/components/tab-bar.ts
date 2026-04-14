@@ -15,6 +15,7 @@ import { endShare, onShareChange } from '../sharing/share-manager.js';
 import { openInspector, isInspectorOpen, getInspectedSessionId, closeInspector } from './session-inspector.js';
 import { loadProviderAvailability, hasMultipleAvailableProviders, getProviderAvailabilitySnapshot, getProviderCapabilities } from '../provider-availability.js';
 import { buildResumeWithProviderItems } from './resume-with-provider-menu.js';
+import { restartCliWithoutSavedConversation } from './terminal-pane.js';
 
 const tabListEl = document.getElementById('tab-list')!;
 const gitStatusEl = document.getElementById('git-status')!;
@@ -372,6 +373,19 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
       },
     );
     for (const el of items) menu.appendChild(el);
+
+    const canForgetResume = !!session.cliSessionId && providerCapabilities?.sessionResume !== false;
+    const forgetResumeItem = document.createElement('div');
+    forgetResumeItem.className = 'tab-context-menu-item' + (!canForgetResume ? ' disabled' : '');
+    forgetResumeItem.textContent = 'Start fresh (forget saved CLI session)';
+    if (canForgetResume) {
+      forgetResumeItem.addEventListener('click', (e) => {
+        e.stopPropagation();
+        hideTabContextMenu();
+        void restartCliWithoutSavedConversation(project.id, session.id);
+      });
+    }
+    menu.appendChild(forgetResumeItem);
   }
 
   menu.appendChild(closeItem);
@@ -733,7 +747,7 @@ async function showBranchContextMenu(e: MouseEvent): Promise<void> {
     });
     menu.appendChild(createItem);
 
-    if (activeSession && sessionSupportsGitWorktreePin(activeSession) && pickableWt.length > 1) {
+    if (activeSession && sessionSupportsGitWorktreePin(activeSession) && pickableWt.length >= 1) {
       const wtSepBefore = document.createElement('div');
       wtSepBefore.className = 'tab-context-menu-separator';
       menu.appendChild(wtSepBefore);
@@ -982,7 +996,7 @@ export async function promptNewSession(onCreated?: (session: SessionRecord) => v
       } else if (wtChoice && wtChoice !== '__inherit__') {
         gitWt = { path: wtChoice, userPinned: true };
       }
-      const session = appState.addSession(project.id, name, args, providerId, gitWt);
+      const session = appState.addSession(project.id, name, args, providerId, gitWt, { userChoseDisplayName: true });
       if (session && onCreated) onCreated(session);
     }
   });

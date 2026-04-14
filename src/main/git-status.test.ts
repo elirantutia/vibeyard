@@ -397,6 +397,21 @@ describe('resolveWorktreeDestination', () => {
   it('leaves absolute paths unchanged (only normalizes)', () => {
     expect(resolveWorktreeDestination('/repo/my-app', '/tmp/explicit-wt')).toBe('/tmp/explicit-wt');
   });
+
+  it('resolves \\wsl$\\ repo + relative folder to a Linux sibling path (not under the repo)', () => {
+    expect(
+      resolveWorktreeDestination('\\\\wsl$\\Ubuntu\\home\\u\\code\\src\\audio-articles', 'companion-pdf'),
+    ).toBe('/home/u/code/src/companion-pdf');
+  });
+
+  it('does not nest a POSIX absolute destination under a \\wsl$\\ repo (win32 join bug)', () => {
+    expect(
+      resolveWorktreeDestination(
+        '\\\\wsl$\\Ubuntu\\home\\sc7639\\code\\src\\audio-articles',
+        '/home/sc7639/code/src/companion-pdf',
+      ),
+    ).toBe('/home/sc7639/code/src/companion-pdf');
+  });
 });
 
 describe('createGitWorktree', () => {

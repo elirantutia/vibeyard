@@ -4,6 +4,80 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  position: relative;
+}
+
+/*
+ * Backdrop layers live on #main-area so they cannot be lost if DOM is reordered
+ * (e.g. update banner prepend) or an older HTML template omitted the inner div.
+ */
+#main-area.main-area-has-backdrop::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: var(--vy-terminal-backdrop-image, none);
+  background-color: var(--vy-terminal-backdrop-color, transparent);
+  background-size: var(--vy-terminal-backdrop-size, auto);
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+#main-area.main-area-has-backdrop::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: rgba(0, 0, 0, var(--vy-terminal-backdrop-dim, 0));
+}
+
+/*
+ * Custom images use a real <img> + blob: URL — huge data: strings in CSS variables
+ * often fail silently; <img src="blob:…"> is reliable and covered by img-src.
+ */
+#main-area.main-area-has-backdrop #main-area-backdrop-photo {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+}
+
+#main-area.main-area-has-backdrop.main-area-has-custom-photo #main-area-backdrop-photo {
+  opacity: 1;
+  visibility: visible;
+}
+
+#main-area.main-area-has-backdrop.main-area-has-custom-photo::before {
+  background-image: none;
+  background-color: transparent;
+}
+
+#main-area.main-area-has-backdrop #tab-bar {
+  background: rgba(10, 10, 10, 0.72);
+}
+
+#main-area.main-area-has-backdrop #project-terminal-panel {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+#main-area.main-area-has-backdrop #project-terminal-header {
+  background: rgba(15, 15, 15, 0.82);
+}
+
+#tab-bar,
+#terminal-container,
+#project-terminal-resize-handle,
+#project-terminal-panel {
+  position: relative;
+  z-index: 1;
 }
 
 /* Tab bar */

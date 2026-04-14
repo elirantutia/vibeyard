@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { execSync } from 'child_process';
 import { spawnPty, spawnShellPty, writePty, resizePty, killPty, isSilencedExit, getPtyCwd } from './pty-manager';
-import { addMcpServer, removeMcpServer } from './claude-cli';
+import { addMcpServer, removeMcpServer, getEffectiveCliUserHome } from './claude-cli';
 import type { McpServerConfig } from './claude-cli';
 import { loadState, saveState, PersistedState, normalizeWslProjectPaths } from './store';
 import { startWatching, cleanupSessionStatus } from './hook-status';
@@ -23,6 +23,7 @@ import { expandUserPath } from './fs-utils';
 import { isMac, isWin, isWslMode } from './platform';
 import { joinStoredProjectPath, pathIsWithinStoredProject, resolvePathForMainProcess } from './project-fs-path';
 import { getEffectiveDistro, normalizeProjectPathForWslStorage } from './wsl';
+import { readBackgroundImageBuffer, BACKGROUND_IMAGE_EXT_TO_MIME } from './background-image-read';
 
 /**
  * Check if a resolved path is allowed for reading:
@@ -39,13 +40,21 @@ function isAllowedReadPath(incomingPath: string): boolean {
   }
 
   // Allow known config files/directories used by supported CLIs
-  const home = os.homedir();
-  const allowedPaths = [
-    path.join(home, '.claude.json'),
-    path.join(home, '.mcp.json'),
-    path.join(home, '.claude') + path.sep,
-    path.join(home, '.codex') + path.sep,
-  ];
+  const state = loadState();
+  const nativeHome = os.homedir();
+  const homes =
+    isWin && isWslMode(state.preferences)
+      ? [getEffectiveCliUserHome(), nativeHome]
+      : [nativeHome];
+  const allowedPaths: string[] = [];
+  for (const home of homes) {
+    allowedPaths.push(
+      path.join(home, '.claude.json'),
+      path.join(home, '.mcp.json'),
+      path.join(home, '.claude') + path.sep,
+      path.join(home, '.codex') + path.sep,
+    );
+  }
 
   if (isMac) {
     allowedPaths.push('/Library/Application Support/ClaudeCode/');
@@ -269,6 +278,26 @@ export function registerIpcHandlers(): void {
       return normalizeProjectPathForWslStorage(picked, distro);
     }
     return picked;
+  });
+
+  const MAX_BG_IMAGE_BYTES = 15 * 1024 * 1024;
+  const bgImageExtensions = Object.keys(BACKGROUND_IMAGE_EXT_TO_MIME).map((e) => e.slice(1));
+
+  ipcMain.handle('app:browseImageFile', async () => {
+    const win = BrowserWindow.getAllWindows()[0];
+    if (!win) return null;
+    const result = await dialog.showOpenDialog(win, {
+      properties: ['openFile'],
+      filters: [{ name: 'Images', extensions: bgImageExtensions }],
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return result.filePaths[0];
+  });
+
+  /** Returns `{ mime, data }` with `data` as `Buffer` (renderer receives `ArrayBuffer`/`Uint8Array`). */
+  ipcMain.handle('app:readBackgroundImage', async (_event, filePath: unknown) => {
+    const state = loadState();
+    return readBackgroundImageBuffer(filePath, state.preferences, { maxBytes: MAX_BG_IMAGE_BYTES });
   });
 
   ipcMain.on('app:focus', () => {
@@ -495,7 +524,8 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('stats:getCache', () => {
     try {
-      const statsPath = path.join(os.homedir(), '.claude', 'stats-cache.json');
+      // Match ~/.claude resolution used for settings and session logs (WSL mode → distro home).
+      const statsPath = path.join(getEffectiveCliUserHome(), '.claude', 'stats-cache.json');
       const raw = fs.readFileSync(statsPath, 'utf-8');
       return JSON.parse(raw);
     } catch {

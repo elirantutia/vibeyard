@@ -21,6 +21,30 @@
   flex-shrink: 0;
 }
 
+.pref-slider-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
+}
+
+.pref-slider-field label {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.pref-slider-field input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.pref-image-path {
+  font-size: 11px;
+  color: var(--text-muted);
+  word-break: break-all;
+  margin-top: 4px;
+}
+
 /* Preferences layout */
 #modal.modal-wide {
   width: 750px;
@@ -62,6 +86,14 @@
   padding: 4px 16px;
   min-width: 0;
   overflow-y: auto;
+}
+
+.preferences-wsl-intro {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  margin: 0 0 10px 0;
+  max-width: 52ch;
 }
 
 .about-section {

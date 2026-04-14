@@ -12,10 +12,15 @@
 }
 
 .git-worktree-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 4px 12px 4px;
 }
 
 .git-worktree-select {
+  flex: 1;
+  min-width: 0;
   width: 100%;
   padding: 3px 6px;
   font-size: 11px;

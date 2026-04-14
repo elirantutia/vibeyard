@@ -404,6 +404,14 @@ describe('addSession()', () => {
     expect(s1.gitWorktreePath).toBe('/wt/shared');
     expect(s1.gitWorktreeUserPinned).toBe(true);
   });
+
+  it('sets userRenamed when userChoseDisplayName is true', () => {
+    const project = addProject();
+    const s = appState.addSession(project.id, 'Custom', undefined, undefined, undefined, {
+      userChoseDisplayName: true,
+    })!;
+    expect(s.userRenamed).toBe(true);
+  });
 });
 
 describe('addDiffViewerSession()', () => {
@@ -553,6 +561,27 @@ describe('updateSessionCliId()', () => {
     // Simulate /clear: new cliSessionId
     appState.updateSessionCliId(project.id, session.id, 'claude-xyz');
     expect(appState.activeSession!.userRenamed).toBe(false);
+  });
+});
+
+describe('clearSessionCliResumeId()', () => {
+  it('clears cliSessionId for a CLI tab and persists', () => {
+    const project = addProject();
+    const session = appState.addSession(project.id, 'S1')!;
+    appState.updateSessionCliId(project.id, session.id, 'stale-id');
+    mockSave.mockClear();
+    appState.clearSessionCliResumeId(project.id, session.id);
+    expect(appState.activeSession!.cliSessionId).toBeNull();
+    expect(mockSave).toHaveBeenCalled();
+  });
+
+  it('no-ops for sessions without a cliSessionId', () => {
+    const project = addProject();
+    const session = appState.addSession(project.id, 'S1')!;
+    mockSave.mockClear();
+    appState.clearSessionCliResumeId(project.id, session.id);
+    expect(appState.activeSession!.cliSessionId).toBeNull();
+    expect(mockSave).not.toHaveBeenCalled();
   });
 });
 

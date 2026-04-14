@@ -41,7 +41,9 @@ vi.mock('@xterm/addon-fit', () => ({
 }));
 
 vi.mock('@xterm/addon-webgl', () => ({
-  WebglAddon: class FakeWebglAddon {},
+  WebglAddon: class FakeWebglAddon {
+    dispose(): void {}
+  },
 }));
 
 vi.mock('@xterm/addon-search', () => ({

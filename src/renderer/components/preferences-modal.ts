@@ -3,9 +3,13 @@ import { closeModal } from './modal.js';
 import { createCustomSelect, type CustomSelectInstance } from './custom-select.js';
 import { shortcutManager, displayKeys, eventToAccelerator } from '../shortcuts.js';
 import { loadProviderAvailability, getProviderAvailabilitySnapshot } from '../provider-availability.js';
-import type { CliProviderMeta, ProviderId, SettingsValidationResult } from '../../shared/types.js';
+import type { CliProviderMeta, Preferences, ProviderId, SettingsValidationResult, TerminalBackgroundMode } from '../../shared/types.js';
 import { UI_ZOOM_SIZE_OPTIONS } from '../display-preferences.js';
 import { TERMINAL_FONT_SIZE_OPTIONS } from '../terminal-font-size.js';
+import { TERMINAL_BG_PRESETS } from '../terminal-background-helpers.js';
+import { refreshTerminalBackdropFromPreferences } from '../terminal-backdrop.js';
+import { refreshTerminalSurfacesFromPreferences } from '../refresh-terminal-surfaces.js';
+import { applyDisplayPreferences } from '../display-preferences.js';
 
 
 const overlay = document.getElementById('modal-overlay')!;
@@ -15,7 +19,7 @@ const bodyEl = document.getElementById('modal-body')!;
 const btnCancel = document.getElementById('modal-cancel')!;
 const btnConfirm = document.getElementById('modal-confirm')!;
 
-type Section = 'general' | 'sidebar' | 'shortcuts' | 'setup' | 'about';
+type Section = 'general' | 'appearance' | 'sidebar' | 'shortcuts' | 'setup' | 'about';
 
 export function showPreferencesModal(): void {
   titleEl.textContent = 'Preferences';
@@ -32,6 +36,7 @@ export function showPreferencesModal(): void {
 
   const sections: { id: Section; label: string }[] = [
     { id: 'general', label: 'General' },
+    { id: 'appearance', label: 'Appearance' },
     { id: 'sidebar', label: 'Sidebar' },
     { id: 'shortcuts', label: 'Shortcuts' },
     { id: 'setup', label: 'Setup' },
@@ -71,6 +76,46 @@ export function showPreferencesModal(): void {
   let wslDistroSelect: CustomSelectInstance | null = null;
   let sidebarCheckboxes: { configSections: HTMLInputElement; gitPanel: HTMLInputElement; sessionHistory: HTMLInputElement; costFooter: HTMLInputElement; readinessSection: HTMLInputElement } | null = null;
   let activeRecorder: { cleanup: () => void } | null = null;
+  let appearanceModeSelect: CustomSelectInstance | null = null;
+  let appearancePresetSelect: CustomSelectInstance | null = null;
+  let appearanceDimSlider: HTMLInputElement | null = null;
+  let appearanceSurfaceSlider: HTMLInputElement | null = null;
+  let appearanceImagePathLabel: HTMLDivElement | null = null;
+  let appearanceDraftImagePath: string | null = null;
+  /** Captured when leaving the Appearance section so Done saves from any tab. */
+  let pendingAppearancePatch: Partial<Preferences> | null = null;
+
+  /** Push current Appearance controls into the main column (does not mutate `appState`). */
+  function applyAppearanceBackdropPreview(): void {
+    if (!appearanceModeSelect || !appearancePresetSelect || !appearanceDimSlider || !appearanceSurfaceSlider) return;
+    const dim = Math.min(100, Math.max(0, Number.parseInt(appearanceDimSlider.value, 10))) / 100;
+    const surf = Math.min(100, Math.max(0, Number.parseInt(appearanceSurfaceSlider.value, 10))) / 100;
+    const mode = appearanceModeSelect.getValue() as TerminalBackgroundMode;
+    const merged: Preferences = {
+      ...appState.preferences,
+      terminalBackgroundMode: mode,
+      terminalBackgroundPresetId: appearancePresetSelect.getValue(),
+      terminalBackgroundImagePath: mode === 'custom' ? appearanceDraftImagePath : null,
+      terminalBackgroundDim: dim,
+      terminalBackgroundSurfaceAlpha: surf,
+    };
+    void refreshTerminalBackdropFromPreferences(merged);
+    refreshTerminalSurfacesFromPreferences(merged);
+  }
+
+  function snapshotAppearanceFromControls(): void {
+    if (!appearanceModeSelect || !appearancePresetSelect || !appearanceDimSlider || !appearanceSurfaceSlider) return;
+    const mode = appearanceModeSelect.getValue() as TerminalBackgroundMode;
+    const dim = Math.min(100, Math.max(0, Number.parseInt(appearanceDimSlider.value, 10))) / 100;
+    const surf = Math.min(100, Math.max(0, Number.parseInt(appearanceSurfaceSlider.value, 10))) / 100;
+    pendingAppearancePatch = {
+      terminalBackgroundMode: mode,
+      terminalBackgroundPresetId: appearancePresetSelect.getValue(),
+      terminalBackgroundImagePath: mode === 'custom' ? appearanceDraftImagePath : null,
+      terminalBackgroundDim: dim,
+      terminalBackgroundSurfaceAlpha: surf,
+    };
+  }
 
   function cleanupRecorder() {
     if (activeRecorder) {
@@ -81,6 +126,18 @@ export function showPreferencesModal(): void {
 
   function renderSection(section: Section) {
     cleanupRecorder();
+    snapshotAppearanceFromControls();
+    if (appearanceModeSelect) {
+      appearanceModeSelect.destroy();
+      appearanceModeSelect = null;
+    }
+    if (appearancePresetSelect) {
+      appearancePresetSelect.destroy();
+      appearancePresetSelect = null;
+    }
+    appearanceDimSlider = null;
+    appearanceSurfaceSlider = null;
+    appearanceImagePathLabel = null;
     currentSection = section;
     content.innerHTML = '';
 
@@ -249,67 +306,231 @@ export function showPreferencesModal(): void {
       autoTitleRow.appendChild(autoTitleCheckbox);
       content.appendChild(autoTitleRow);
 
-      // WSL2 section (only relevant on Windows builds)
-      const wslSection = document.createElement('div');
-      wslSection.className = 'preferences-wsl-section';
-      wslSection.style.display = 'none'; // hidden until we confirm WSL is available
+      // WSL2 section: Windows only (no IPC / DOM on macOS or Linux builds)
+      const rendererIsWin = navigator.platform.toUpperCase().includes('WIN');
+      if (rendererIsWin) {
+        const wslSection = document.createElement('div');
+        wslSection.className = 'preferences-wsl-section';
+        wslSection.style.display = 'none'; // hidden until we confirm WSL is available
 
-      const wslHeader = document.createElement('div');
-      wslHeader.className = 'pref-section-header';
-      wslHeader.textContent = 'WSL2 Integration';
-      wslSection.appendChild(wslHeader);
+        const wslHeader = document.createElement('div');
+        wslHeader.className = 'pref-section-header';
+        wslHeader.textContent = 'WSL2 mode';
+        wslSection.appendChild(wslHeader);
 
-      const wslRow = document.createElement('div');
-      wslRow.className = 'modal-toggle-field';
-      const wslLabel = document.createElement('label');
-      wslLabel.htmlFor = 'pref-wsl-enabled';
-      wslLabel.textContent = 'Run CLI tools inside WSL2';
-      wslCheckbox = document.createElement('input');
-      wslCheckbox.type = 'checkbox';
-      wslCheckbox.id = 'pref-wsl-enabled';
-      wslCheckbox.checked = appState.preferences.wslEnabled ?? false;
-      wslRow.appendChild(wslLabel);
-      wslRow.appendChild(wslCheckbox);
-      wslSection.appendChild(wslRow);
+        const wslIntro = document.createElement('p');
+        wslIntro.className = 'preferences-wsl-intro';
+        wslIntro.textContent =
+          'Optional. When off, Vibeyard runs CLI tools on Windows natively and ignores Linux-style project paths from other machines. Turn on only on this PC if you want sessions inside WSL2.';
+        wslSection.appendChild(wslIntro);
 
-      const wslDistroRow = document.createElement('div');
-      wslDistroRow.className = 'modal-toggle-field';
-      const wslDistroLabel = document.createElement('label');
-      wslDistroLabel.textContent = 'WSL Distro';
-      wslDistroRow.appendChild(wslDistroLabel);
+        const wslRow = document.createElement('div');
+        wslRow.className = 'modal-toggle-field';
+        const wslLabel = document.createElement('label');
+        wslLabel.htmlFor = 'pref-wsl-enabled';
+        wslLabel.textContent = 'Run CLI tools inside WSL2';
+        wslCheckbox = document.createElement('input');
+        wslCheckbox.type = 'checkbox';
+        wslCheckbox.id = 'pref-wsl-enabled';
+        wslCheckbox.checked = appState.preferences.wslEnabled ?? false;
+        wslRow.appendChild(wslLabel);
+        wslRow.appendChild(wslCheckbox);
+        wslSection.appendChild(wslRow);
 
-      const distroPlaceholder = document.createElement('span');
-      distroPlaceholder.textContent = 'Detecting…';
-      distroPlaceholder.className = 'pref-wsl-detecting';
-      wslDistroRow.appendChild(distroPlaceholder);
-      wslSection.appendChild(wslDistroRow);
+        const wslDistroRow = document.createElement('div');
+        wslDistroRow.className = 'modal-toggle-field';
+        const wslDistroLabel = document.createElement('label');
+        wslDistroLabel.textContent = 'WSL distro';
+        wslDistroRow.appendChild(wslDistroLabel);
 
-      content.appendChild(wslSection);
+        const distroPlaceholder = document.createElement('span');
+        distroPlaceholder.textContent = 'Detecting…';
+        distroPlaceholder.className = 'pref-wsl-detecting';
+        wslDistroRow.appendChild(distroPlaceholder);
+        wslSection.appendChild(wslDistroRow);
 
-      // Async: check WSL availability and populate distro dropdown
-      window.vibeyard.wsl.isAvailable().then(async (available) => {
-        if (!available || currentSection !== 'general') return;
-        wslSection.style.display = '';
+        content.appendChild(wslSection);
 
-        const distros = await window.vibeyard.wsl.getDistros();
-        const defaultDistro = await window.vibeyard.wsl.getDefaultDistro();
-        const current = appState.preferences.wslDistro ?? defaultDistro ?? distros[0] ?? '';
+        // Async: check WSL availability and populate distro dropdown
+        window.vibeyard.wsl.isAvailable().then(async (available) => {
+          if (!available || currentSection !== 'general') return;
+          wslSection.style.display = '';
 
-        distroPlaceholder.remove();
-        if (distros.length > 0) {
-          wslDistroSelect = createCustomSelect(
-            'pref-wsl-distro',
-            distros.map(d => ({ value: d, label: d === defaultDistro ? `${d} (default)` : d })),
-            current,
-          );
-          wslDistroRow.appendChild(wslDistroSelect.element);
-        } else {
-          const noDistro = document.createElement('span');
-          noDistro.textContent = 'No WSL distros found';
-          noDistro.style.color = 'var(--text-muted)';
-          wslDistroRow.appendChild(noDistro);
+          const distros = await window.vibeyard.wsl.getDistros();
+          const defaultDistro = await window.vibeyard.wsl.getDefaultDistro();
+          const current = appState.preferences.wslDistro ?? defaultDistro ?? distros[0] ?? '';
+
+          distroPlaceholder.remove();
+          if (distros.length > 0) {
+            wslDistroSelect = createCustomSelect(
+              'pref-wsl-distro',
+              distros.map(d => ({ value: d, label: d === defaultDistro ? `${d} (default)` : d })),
+              current,
+            );
+            wslDistroRow.appendChild(wslDistroSelect.element);
+          } else {
+            const noDistro = document.createElement('span');
+            noDistro.textContent = 'No WSL distros found';
+            noDistro.style.color = 'var(--text-muted)';
+            wslDistroRow.appendChild(noDistro);
+          }
+        }).catch(() => {});
+      }
+
+    } else if (section === 'appearance') {
+      const pref: Preferences = { ...appState.preferences, ...(pendingAppearancePatch ?? {}) };
+      appearanceDraftImagePath = pref.terminalBackgroundImagePath ?? null;
+
+      const mode = (pref.terminalBackgroundMode ?? 'none') as TerminalBackgroundMode;
+      const presetId = pref.terminalBackgroundPresetId ?? 'metro';
+      const dimPct = Math.round((pref.terminalBackgroundDim ?? 0.28) * 100);
+      const surfPct = Math.round((pref.terminalBackgroundSurfaceAlpha ?? 0.88) * 100);
+
+      const modeRow = document.createElement('div');
+      modeRow.className = 'modal-toggle-field';
+      const modeLabel = document.createElement('label');
+      modeLabel.textContent = 'Terminal backdrop';
+
+      const presetRow = document.createElement('div');
+      presetRow.className = 'modal-toggle-field';
+      const presetLabel = document.createElement('label');
+      presetLabel.textContent = 'Built-in preset';
+
+      /** Image path + browse — only when mode is Custom image */
+      const imageSectionEl = document.createElement('div');
+      imageSectionEl.className = 'pref-appearance-image-section';
+
+      /** Dim + terminal surface — same controls for preset gradients and custom images */
+      const tuningSectionEl = document.createElement('div');
+      tuningSectionEl.className = 'pref-appearance-tuning-section';
+
+      function syncAppearanceRows(): void {
+        const m = (appearanceModeSelect?.getValue() ?? 'none') as TerminalBackgroundMode;
+        presetRow.style.display = m === 'preset' ? '' : 'none';
+        imageSectionEl.style.display = m === 'custom' ? '' : 'none';
+        tuningSectionEl.style.display = m === 'preset' || m === 'custom' ? '' : 'none';
+      }
+
+      appearanceModeSelect = createCustomSelect(
+        'pref-terminal-bg-mode',
+        [
+          { value: 'none', label: 'Solid (no backdrop)' },
+          { value: 'preset', label: 'Built-in gradient' },
+          { value: 'custom', label: 'Custom image' },
+        ],
+        mode,
+        () => {
+          syncAppearanceRows();
+          applyAppearanceBackdropPreview();
+        },
+      );
+
+      modeRow.appendChild(modeLabel);
+      modeRow.appendChild(appearanceModeSelect.element);
+      content.appendChild(modeRow);
+
+      appearancePresetSelect = createCustomSelect(
+        'pref-terminal-bg-preset',
+        TERMINAL_BG_PRESETS.map((p) => ({ value: p.id, label: p.label })),
+        presetId,
+        () => {
+          applyAppearanceBackdropPreview();
+        },
+      );
+      presetRow.appendChild(presetLabel);
+      presetRow.appendChild(appearancePresetSelect.element);
+      content.appendChild(presetRow);
+
+      const browseRow = document.createElement('div');
+      browseRow.className = 'modal-toggle-field';
+      browseRow.style.alignItems = 'flex-start';
+      const browseLabelCol = document.createElement('div');
+      browseLabelCol.style.display = 'flex';
+      browseLabelCol.style.flexDirection = 'column';
+      browseLabelCol.style.gap = '6px';
+      browseLabelCol.style.flex = '1';
+      browseLabelCol.style.minWidth = '0';
+      const browseLabel = document.createElement('label');
+      browseLabel.textContent = 'Custom image';
+      appearanceImagePathLabel = document.createElement('div');
+      appearanceImagePathLabel.className = 'pref-image-path';
+      appearanceImagePathLabel.textContent = appearanceDraftImagePath ?? '(none)';
+      browseLabelCol.appendChild(browseLabel);
+      browseLabelCol.appendChild(appearanceImagePathLabel);
+
+      const browseActions = document.createElement('div');
+      browseActions.style.display = 'flex';
+      browseActions.style.flexShrink = '0';
+      browseActions.style.gap = '8px';
+      const browseBtn = document.createElement('button');
+      browseBtn.type = 'button';
+      browseBtn.className = 'modal-field-btn';
+      browseBtn.textContent = 'Choose\u2026';
+      const clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.className = 'modal-field-btn';
+      clearBtn.textContent = 'Clear';
+      browseBtn.addEventListener('click', async () => {
+        const p = await window.vibeyard.app.browseImageFile();
+        if (p) {
+          appearanceDraftImagePath = p;
+          appearanceImagePathLabel!.textContent = p;
+          appearanceModeSelect?.setValue('custom');
+          syncAppearanceRows();
+          applyAppearanceBackdropPreview();
         }
-      }).catch(() => {});
+      });
+      clearBtn.addEventListener('click', () => {
+        appearanceDraftImagePath = null;
+        appearanceImagePathLabel!.textContent = '(none)';
+        applyAppearanceBackdropPreview();
+      });
+      browseActions.appendChild(browseBtn);
+      browseActions.appendChild(clearBtn);
+      browseRow.appendChild(browseLabelCol);
+      browseRow.appendChild(browseActions);
+      imageSectionEl.appendChild(browseRow);
+
+      const dimWrap = document.createElement('div');
+      dimWrap.className = 'pref-slider-field';
+      const dimLab = document.createElement('label');
+      dimLab.htmlFor = 'pref-terminal-bg-dim';
+      dimLab.textContent = 'Dim overlay (darkening on top of backdrop)';
+      appearanceDimSlider = document.createElement('input');
+      appearanceDimSlider.type = 'range';
+      appearanceDimSlider.id = 'pref-terminal-bg-dim';
+      appearanceDimSlider.min = '0';
+      appearanceDimSlider.max = '100';
+      appearanceDimSlider.value = String(dimPct);
+      appearanceDimSlider.addEventListener('input', () => {
+        applyAppearanceBackdropPreview();
+      });
+      dimWrap.appendChild(dimLab);
+      dimWrap.appendChild(appearanceDimSlider);
+      tuningSectionEl.appendChild(dimWrap);
+
+      const surfWrap = document.createElement('div');
+      surfWrap.className = 'pref-slider-field';
+      const surfLab = document.createElement('label');
+      surfLab.htmlFor = 'pref-terminal-bg-surface';
+      surfLab.textContent = 'Terminal surface opacity (higher = easier to read)';
+      appearanceSurfaceSlider = document.createElement('input');
+      appearanceSurfaceSlider.type = 'range';
+      appearanceSurfaceSlider.id = 'pref-terminal-bg-surface';
+      appearanceSurfaceSlider.min = '0';
+      appearanceSurfaceSlider.max = '100';
+      appearanceSurfaceSlider.value = String(surfPct);
+      appearanceSurfaceSlider.addEventListener('input', () => {
+        applyAppearanceBackdropPreview();
+      });
+      surfWrap.appendChild(surfLab);
+      surfWrap.appendChild(appearanceSurfaceSlider);
+      tuningSectionEl.appendChild(surfWrap);
+
+      content.appendChild(imageSectionEl);
+      content.appendChild(tuningSectionEl);
+      syncAppearanceRows();
+      applyAppearanceBackdropPreview();
 
     } else if (section === 'sidebar') {
       const views = appState.preferences.sidebarViews ?? { configSections: true, gitPanel: true, sessionHistory: true, costFooter: true, readinessSection: true };
@@ -830,10 +1051,15 @@ export function showPreferencesModal(): void {
     if (wslDistroSelect) {
       appState.setPreference('wslDistro', wslDistroSelect.getValue());
     }
+    if (pendingAppearancePatch) {
+      appState.patchPreferences(pendingAppearancePatch);
+      pendingAppearancePatch = null;
+    }
   };
 
   const handleConfirm = () => {
     cleanupRecorder();
+    snapshotAppearanceFromControls();
     save();
     closeModal();
     modal.classList.remove('modal-wide');
@@ -842,6 +1068,8 @@ export function showPreferencesModal(): void {
 
   const handleCancel = () => {
     cleanupRecorder();
+    pendingAppearancePatch = null;
+    void applyDisplayPreferences();
     closeModal();
     modal.classList.remove('modal-wide');
     btnConfirm.textContent = 'Create';
@@ -865,6 +1093,15 @@ export function showPreferencesModal(): void {
 
   (overlay as any)._cleanup = () => {
     cleanupRecorder();
+    snapshotAppearanceFromControls();
+    if (appearanceModeSelect) {
+      appearanceModeSelect.destroy();
+      appearanceModeSelect = null;
+    }
+    if (appearancePresetSelect) {
+      appearancePresetSelect.destroy();
+      appearancePresetSelect = null;
+    }
     if (defaultProviderSelect) defaultProviderSelect.destroy();
     if (uiZoomSelect) uiZoomSelect.destroy();
     if (terminalFontSelect) terminalFontSelect.destroy();

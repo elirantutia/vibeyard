@@ -1,6 +1,6 @@
 import { appState } from '../state.js';
 import { onChange as onGitStatusChange, getGitStatus, getActiveGitPath, getWorktrees, onWorktreeChange, sessionSupportsGitWorktreePin } from '../git-status.js';
-import { applyWorktreeSelection } from '../worktree-actions.js';
+import { applyWorktreeSelection, promptCreateWorktree } from '../worktree-actions.js';
 import { onChange as onStatusChange } from '../session-activity.js';
 import { showFileViewer } from './file-viewer.js';
 import { areaLabel } from '../dom-utils.js';
@@ -136,7 +136,8 @@ function renderWorktreeSelector(container: HTMLElement, project: { id: string; p
   const existing = container.querySelector('.git-worktree-selector');
   if (existing) existing.remove();
 
-  if (!worktrees || worktrees.length <= 1) return;
+  const pickable = worktrees?.filter((w) => !w.isBare) ?? [];
+  if (pickable.length < 1) return;
 
   const wrapper = document.createElement('div');
   wrapper.className = 'git-worktree-selector';
@@ -151,8 +152,7 @@ function renderWorktreeSelector(container: HTMLElement, project: { id: string; p
   autoOpt.selected = !session?.gitWorktreeUserPinned;
   select.appendChild(autoOpt);
 
-  for (const wt of worktrees) {
-    if (wt.isBare) continue;
+  for (const wt of pickable) {
     const option = document.createElement('option');
     option.value = wt.path;
     const label = wt.branch || `detached (${wt.head.slice(0, 7)})`;
@@ -167,6 +167,17 @@ function renderWorktreeSelector(container: HTMLElement, project: { id: string; p
   });
 
   wrapper.appendChild(select);
+
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'config-section-add-btn';
+  addBtn.title = 'Create new worktree';
+  addBtn.textContent = '+';
+  addBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    promptCreateWorktree(project);
+  });
+  wrapper.appendChild(addBtn);
 
   // Insert after header
   const header = container.querySelector('.config-section-header');
@@ -218,7 +229,9 @@ async function refresh(): Promise<void> {
   const activeGitPath = getActiveGitPath(project.id);
   const worktrees = getWorktrees(project.id);
   const pinWorktreeUi = sessionSupportsGitWorktreePin(appState.activeSession);
-  const hasMultipleWorktrees = pinWorktreeUi && worktrees && worktrees.length > 1;
+  const pickableWtCount = worktrees?.filter((w) => !w.isBare).length ?? 0;
+  const showWorktreeSelector = pinWorktreeUi && pickableWtCount >= 1;
+  const hasMultipleWorktrees = pinWorktreeUi && pickableWtCount > 1;
 
   // Find active worktree branch for header
   let headerSuffix = '';
@@ -241,7 +254,7 @@ async function refresh(): Promise<void> {
     }
 
     // Update worktree selector
-    if (hasMultipleWorktrees) {
+    if (showWorktreeSelector) {
       renderWorktreeSelector(container, project);
     } else {
       const selector = container.querySelector('.git-worktree-selector');
@@ -282,8 +295,8 @@ async function refresh(): Promise<void> {
   container.innerHTML = '';
   container.appendChild(section);
 
-  // Add worktree selector if multiple worktrees
-  if (hasMultipleWorktrees) {
+  // Worktree pin + create (shown whenever the session can pin and the repo has at least one checkout)
+  if (showWorktreeSelector) {
     renderWorktreeSelector(container, project);
   }
 

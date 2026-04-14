@@ -83,6 +83,9 @@ export interface VibeyardApi {
     getBrowserPreloadPath(): Promise<string>;
     /** Chromium page zoom (1 = 100%). Replaces CSS `zoom` for reliable layout on all platforms. */
     setZoomFactor(factor: number): Promise<void>;
+    browseImageFile(): Promise<string | null>;
+    /** Binary image for terminal backdrop (renderer builds a Blob URL). */
+    readBackgroundImage(filePath: string): Promise<{ mime: string; data: ArrayBuffer } | null>;
     onQuitting(callback: () => void): () => void;
   };
   browser: {
@@ -240,6 +243,8 @@ const api: VibeyardApi = {
     openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', url),
     getBrowserPreloadPath: () => ipcRenderer.invoke('app:getBrowserPreloadPath'),
     setZoomFactor: (factor: number) => ipcRenderer.invoke('app:setZoomFactor', factor),
+    browseImageFile: () => ipcRenderer.invoke('app:browseImageFile'),
+    readBackgroundImage: (filePath: string) => ipcRenderer.invoke('app:readBackgroundImage', filePath),
     onQuitting: (cb: () => void) => onChannel('app:quitting', cb),
   },
   browser: {

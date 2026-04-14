@@ -3,9 +3,11 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import type { GitWorktree, GitFileEntry } from '../shared/types';
+import { expandUserPath } from './fs-utils';
 import { isWslMode } from './platform';
 import { loadState } from './store';
 import { joinStoredProjectPath, pathIsWithinStoredProject } from './project-fs-path';
+import { uncWslPathToLinuxPath } from './wsl';
 
 /**
  * Resolve the git binary and cwd for execution.
@@ -311,17 +313,52 @@ export async function createGitBranch(cwd: string, branch: string): Promise<void
   await execGit(cwd, ['checkout', '-b', branch]);
 }
 
+function collapsePosixPathSegments(p: string): string {
+  let s = p.replace(/\/+/g, '/');
+  if (s.length > 1) s = s.replace(/\/$/, '');
+  return s;
+}
+
+/**
+ * Repo root as a Linux absolute path (`/home/...`), or null when the root is a native
+ * Windows tree (`C:\...`) with no WSL UNC mapping.
+ */
+function repoRootAsLinuxForWorktree(repoRoot: string): string | null {
+  const t = repoRoot.trim();
+  const fromUnc = uncWslPathToLinuxPath(t);
+  if (fromUnc !== null) return collapsePosixPathSegments(fromUnc);
+  const slash = t.replace(/\\/g, '/');
+  if (slash.startsWith('/') && !/^[A-Za-z]:\//.test(slash)) {
+    return collapsePosixPathSegments(slash);
+  }
+  return null;
+}
+
 /**
  * Where `git worktree add` should place a new checkout.
  * Relative segments resolve next to the repo's parent directory (sibling of the project
  * folder), not under the repo — avoids nested worktrees inside the main tree.
+ *
+ * Uses `path.posix` when the repo root is Linux-shaped or `\\wsl$\...`, so a user-entered
+ * POSIX absolute path like `/home/me/wt` is never joined with `path.win32` against a UNC
+ * root (which would incorrectly nest under the project and can yield broken destinations).
  */
 export function resolveWorktreeDestination(repoRoot: string, userWorktreePath: string): string {
+  const wtExpanded = expandUserPath(userWorktreePath.trim());
+  if (!wtExpanded) return wtExpanded;
+
+  const linuxRepo = repoRootAsLinuxForWorktree(repoRoot.trim());
+  if (linuxRepo !== null) {
+    const uncDest = uncWslPathToLinuxPath(wtExpanded);
+    if (uncDest !== null) return path.posix.normalize(uncDest);
+    const wt = wtExpanded.replace(/\\/g, '/');
+    if (path.posix.isAbsolute(wt)) return path.posix.normalize(wt);
+    return path.posix.normalize(path.posix.join(path.posix.dirname(linuxRepo), wt));
+  }
+
   const rootNorm = path.normalize(repoRoot.trim());
-  const wt = userWorktreePath.trim();
-  if (!wt) return wt;
-  if (path.isAbsolute(wt)) return path.normalize(wt);
-  return path.normalize(path.join(path.dirname(rootNorm), wt));
+  if (path.isAbsolute(wtExpanded)) return path.normalize(wtExpanded);
+  return path.normalize(path.join(path.dirname(rootNorm), wtExpanded));
 }
 
 /** Add a linked worktree (`git worktree add`). Longer timeout for checkout-heavy trees. */

@@ -255,3 +255,12 @@
   height: 100%;
   padding: 4px;
 }
+
+/*
+ * xterm ships `.xterm-viewport { background-color: #000 }` for scrollbar contrast. That layer sits
+ * behind `.xterm-screen` / the canvas; with allowTransparency, cleared pixels show the viewport
+ * color — so opaque black hid the main-area backdrop. Transparent viewport lets the wallpaper show.
+ */
+#main-area.main-area-has-backdrop .xterm .xterm-viewport {
+  background-color: transparent !important;
+}

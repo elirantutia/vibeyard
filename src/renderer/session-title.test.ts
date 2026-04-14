@@ -108,6 +108,31 @@ describe('parseTitle', () => {
     const updated = project.sessions.find((s) => s.id === session.id)!;
     expect(updated.name).toBe('Session 1');
   });
+
+  it('ignores Claude Code version splash as auto-title', () => {
+    const { project, session } = addProjectAndSession('upload');
+    parseTitle(session.id, '───────────── Claude Code v2.1.108 ──');
+    expect(project.sessions.find((s) => s.id === session.id)!.name).toBe('upload');
+  });
+
+  it('ignores Claude Code version splash without a v prefix', () => {
+    const { project, session } = addProjectAndSession('Session 5');
+    parseTitle(session.id, '───────────── Claude Code 2.1.108 ──');
+    expect(project.sessions.find((s) => s.id === session.id)!.name).toBe('Session 5');
+  });
+
+  it('ignores Claude Code splash wrapped in markdown emphasis', () => {
+    const { project, session } = addProjectAndSession('login');
+    parseTitle(session.id, '───────────── *Claude Code v2.1.108* ──');
+    expect(project.sessions.find((s) => s.id === session.id)!.name).toBe('login');
+  });
+
+  it('still applies a real title after skipping the Claude Code splash', () => {
+    const { project, session } = addProjectAndSession();
+    parseTitle(session.id, '───────────── Claude Code v2.1.108 ──');
+    parseTitle(session.id, '───────────── mp3-upload-feature ──');
+    expect(project.sessions.find((s) => s.id === session.id)!.name).toBe('mp3-upload-feature');
+  });
 });
 
 describe('clearSession', () => {

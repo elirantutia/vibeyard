@@ -66,7 +66,10 @@ export interface VibeyardApi {
     focus(): void;
     getVersion(): Promise<string>;
     openExternal(url: string): Promise<void>;
+    getBrowserPreloadPath(): Promise<string>;
     setZoomFactor(factor: number): Promise<void>;
+    browseImageFile(): Promise<string | null>;
+    readBackgroundImage(filePath: string): Promise<{ mime: string; data: ArrayBuffer } | null>;
     onQuitting(callback: () => void): () => void;
   };
   mcp: {

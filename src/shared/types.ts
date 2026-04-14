@@ -154,6 +154,8 @@ export interface ProjectRecord {
   readiness?: ReadinessResult;
 }
 
+export type TerminalBackgroundMode = 'none' | 'preset' | 'custom';
+
 export interface Preferences {
   soundOnSessionWaiting: boolean;
   notificationsDesktop: boolean;
@@ -172,7 +174,10 @@ export interface Preferences {
     costFooter: boolean;
     readinessSection: boolean;
   };
-  /** When true on Windows, spawn CLI tools inside WSL2 instead of natively. */
+  /**
+   * When true on Windows (and WSL is installed), spawn CLI tools inside WSL2 and resolve
+   * Linux-style paths. Leave false for native Windows or when syncing preferences to macOS/Linux.
+   */
   wslEnabled?: boolean;
   /** WSL distro to use. When unset, the system default distro is used. */
   wslDistro?: string;
@@ -182,6 +187,21 @@ export interface Preferences {
   uiZoom?: number;
   /** xterm.js font size in CSS pixels. Default 14. */
   terminalFontSize?: number;
+  /** Backdrop behind the main column (tab bar + terminals + project shell). */
+  terminalBackgroundMode?: TerminalBackgroundMode;
+  /** Built-in gradient id when `terminalBackgroundMode` is `preset`. */
+  terminalBackgroundPresetId?: string;
+  /** Absolute filesystem path when `terminalBackgroundMode` is `custom`. */
+  terminalBackgroundImagePath?: string | null;
+  /**
+   * Extra darkening on top of the image or preset (0 = none, 1 = heavy).
+   * Defaults in renderer state when missing.
+   */
+  terminalBackgroundDim?: number;
+  /**
+   * Opacity of the xterm cell background black layer (0–1). Higher = more readable, less wallpaper bleed-through.
+   */
+  terminalBackgroundSurfaceAlpha?: number;
 }
 
 // --- Settings Validation ---

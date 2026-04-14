@@ -8,6 +8,7 @@ import {
 import { getAllInstances, fitAllVisible } from './components/terminal-pane.js';
 import { applyShellTerminalsFontSize } from './components/project-terminal.js';
 import { applyRemoteTerminalsFontSize } from './components/remote-terminal-pane.js';
+import { refreshTerminalBackdropFromPreferences } from './terminal-backdrop.js';
 
 export const DEFAULT_UI_ZOOM = 1;
 
@@ -83,6 +84,7 @@ export function applyAllTerminalFontSizes(): void {
 export async function applyDisplayPreferences(): Promise<void> {
   await applyUiZoom();
   applyAllTerminalFontSizes();
+  void refreshTerminalBackdropFromPreferences(appState.preferences);
   window.dispatchEvent(new Event('resize'));
   requestAnimationFrame(() => {
     window.dispatchEvent(new Event('resize'));
