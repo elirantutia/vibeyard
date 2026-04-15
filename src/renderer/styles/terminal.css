@@ -142,7 +142,7 @@
 }
 
 .context-indicator.warning {
-  color: #f4b400;
+  color: var(--color-warning);
 }
 
 .context-indicator.critical {

@@ -2,6 +2,7 @@
 // receiving data from a WebRTC data channel (P2P session sharing).
 
 import { Terminal } from '@xterm/xterm';
+import { darkTerminalTheme, getTerminalTheme } from '../terminal-theme.js';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import type { ShareMode } from '../../shared/sharing-types.js';
@@ -55,20 +56,7 @@ export function createRemoteTerminalPane(
   element.appendChild(statusBar);
 
   const terminal = new Terminal({
-    theme: {
-      background: '#000000',
-      foreground: '#e0e0e0',
-      cursor: '#e94560',
-      selectionBackground: '#ff6b85a6',
-      black: '#000000',
-      red: '#e94560',
-      green: '#0f9b58',
-      yellow: '#f4b400',
-      blue: '#4285f4',
-      magenta: '#ab47bc',
-      cyan: '#00acc1',
-      white: '#e0e0e0',
-    },
+    theme: darkTerminalTheme,
     fontSize: 14,
     fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace",
     cursorBlink: mode === 'readwrite',
@@ -181,6 +169,13 @@ export function showRemoteEndOverlay(sessionId: string): void {
     </div>
   `;
   instance.element.appendChild(overlay);
+}
+
+export function applyThemeToAllRemoteTerminals(theme: 'dark' | 'light'): void {
+  const termTheme = getTerminalTheme(theme);
+  for (const instance of instances.values()) {
+    instance.terminal.options.theme = termTheme;
+  }
 }
 
 export function destroyRemoteTerminal(sessionId: string): void {

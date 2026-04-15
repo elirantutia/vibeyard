@@ -312,8 +312,8 @@
 }
 
 .readiness-check-pass .readiness-check-icon { color: #34a853; }
-.readiness-check-warning .readiness-check-icon { color: #f4b400; }
-.readiness-check-fail .readiness-check-icon { color: #e94560; }
+.readiness-check-warning .readiness-check-icon { color: var(--color-warning); }
+.readiness-check-fail .readiness-check-icon { color: var(--accent); }
 
 .readiness-check-info {
   flex: 1;

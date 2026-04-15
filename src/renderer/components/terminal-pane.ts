@@ -1,4 +1,5 @@
 import { Terminal } from '@xterm/xterm';
+import { darkTerminalTheme, getTerminalTheme } from '../terminal-theme.js';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { SearchAddon } from '@xterm/addon-search';
@@ -72,20 +73,7 @@ export function createTerminalPane(
   element.appendChild(statusBar);
 
   const terminal = new Terminal({
-    theme: {
-      background: '#000000',
-      foreground: '#e0e0e0',
-      cursor: '#e94560',
-      selectionBackground: '#ff6b85a6',
-      black: '#000000',
-      red: '#e94560',
-      green: '#0f9b58',
-      yellow: '#f4b400',
-      blue: '#4285f4',
-      magenta: '#ab47bc',
-      cyan: '#00acc1',
-      white: '#e0e0e0',
-    },
+    theme: darkTerminalTheme,
     fontSize: 14,
     fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace",
     cursorBlink: true,
@@ -178,6 +166,13 @@ export function getTerminalInstance(sessionId: string): TerminalInstance | undef
 
 export function getAllInstances(): Map<string, TerminalInstance> {
   return instances;
+}
+
+export function applyThemeToAllTerminals(theme: 'dark' | 'light'): void {
+  const termTheme = getTerminalTheme(theme);
+  for (const instance of instances.values()) {
+    instance.terminal.options.theme = termTheme;
+  }
 }
 
 export function setPendingPrompt(sessionId: string, prompt: string): void {

@@ -3,7 +3,7 @@ import { initSidebar, promptNewProject } from './components/sidebar.js';
 import { initTabBar } from './components/tab-bar.js';
 import { initSplitLayout } from './components/split-layout.js';
 import { initKeybindings } from './keybindings.js';
-import { handlePtyData, destroyTerminal, updateCostDisplay, updateContextDisplay } from './components/terminal-pane.js';
+import { handlePtyData, destroyTerminal, updateCostDisplay, updateContextDisplay, applyThemeToAllTerminals } from './components/terminal-pane.js';
 import { setIdle, setHookStatus, notifyInterrupt } from './session-activity.js';
 import { parseCost, setCostData, onChange as onCostChange } from './session-cost.js';
 import { parseTitle, clearSession as clearTitleSession } from './session-title.js';
@@ -12,7 +12,7 @@ import { initConfigSections } from './components/config-sections.js';
 import { initNotificationSound } from './notification-sound.js';
 import { initNotificationDesktop } from './notification-desktop.js';
 import { init as initSessionUnread } from './session-unread.js';
-import { initProjectTerminal, handleShellPtyData, handleShellPtyExit, isShellSessionId } from './components/project-terminal.js';
+import { initProjectTerminal, handleShellPtyData, handleShellPtyExit, isShellSessionId, applyThemeToAllShells } from './components/project-terminal.js';
 import { startPolling as startGitPolling } from './git-status.js';
 import { initDebugPanel, logDebugEvent } from './components/debug-panel.js';
 import { initGitPanel } from './components/git-panel.js';
@@ -36,6 +36,7 @@ import { addEvents as addInspectorEvents } from './session-inspector-state.js';
 import type { InspectorEvent } from '../shared/types.js';
 import { getContext } from './session-context.js';
 import { initSessionInspector } from './components/session-inspector.js';
+import { applyThemeToAllRemoteTerminals } from './components/remote-terminal-pane.js';
 import { loadProviderMetas } from './provider-availability.js';
 
 let isQuitting = false;
@@ -196,6 +197,19 @@ async function main(): Promise<void> {
 
   // Load persisted state
   await appState.load();
+
+  // Apply theme from loaded preferences
+  const initialTheme = appState.preferences.theme ?? 'dark';
+  document.documentElement.dataset.theme = initialTheme;
+
+  // Re-apply theme (and re-theme terminals) whenever preferences change
+  appState.on('preferences-changed', () => {
+    const theme = appState.preferences.theme ?? 'dark';
+    document.documentElement.dataset.theme = theme;
+    applyThemeToAllTerminals(theme);
+    applyThemeToAllShells(theme);
+    applyThemeToAllRemoteTerminals(theme);
+  });
 
   // Auto-open new project modal when no projects exist
   if (appState.projects.length === 0) {
