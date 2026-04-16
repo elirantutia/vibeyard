@@ -21,6 +21,13 @@
   flex-shrink: 0;
 }
 
+.modal-field-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 0 0 4px;
+  margin-top: -4px;
+}
+
 /* Preferences layout */
 #modal.modal-wide {
   width: 750px;
