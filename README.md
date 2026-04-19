@@ -40,6 +40,7 @@ Running AI coding agents in a bare terminal gets messy fast. Vibeyard gives you 
 - **Session inspector** — real-time session telemetry with timeline, cost breakdown, tool usage stats, and context window monitoring (`Cmd+Shift+I`)
 - **AI Readiness Score** — see how well-prepared your project is for AI-assisted coding, with one-click fixes
 - **Session resume** — pick up where you left off, even after restarting the app
+- **Light and dark themes** — switch the app appearance from Preferences, including live re-theming of open terminals
 - **Smart alerts** — detects missing tools, context bloat, and session health issues
 - **Session status indicators** — color-coded dots on each tab show real-time session state (working, waiting, input needed, completed), with optional desktop notifications
 - **Embedded browser tab** — open any URL (e.g. `localhost:3000`) in a session tab, toggle element inspection to click any DOM element, and send AI editing instructions with the exact selector, text content, and page URL as context

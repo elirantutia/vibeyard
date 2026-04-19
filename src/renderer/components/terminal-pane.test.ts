@@ -12,8 +12,13 @@ const mockPtyKill = vi.fn();
 class FakeTerminal {
   cols = 120;
   rows = 30;
+  options: Record<string, unknown>;
   private keyHandler: ((e: KeyboardEvent) => boolean) | null = null;
   private _selection = '';
+
+  constructor(options: Record<string, unknown> = {}) {
+    this.options = options;
+  }
 
   loadAddon(): void {}
   attachCustomKeyEventHandler(handler: (e: KeyboardEvent) => boolean): void {
@@ -226,6 +231,32 @@ describe('terminal pending prompt injection', () => {
     handlePtyData('codex-2', 'some output');
     await vi.runAllTimersAsync();
     expect(mockPtyWrite).not.toHaveBeenCalled();
+  });
+});
+
+describe('applyThemeToAllTerminals()', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+
+    vi.stubGlobal('document', new FakeDocument());
+    vi.stubGlobal('window', makeWindowStub());
+    vi.stubGlobal('navigator', { platform: 'MacIntel', clipboard: { writeText: mockClipboardWrite } });
+  });
+
+  it('updates existing terminal instances to the selected theme', async () => {
+    const { createTerminalPane, applyThemeToAllTerminals, getTerminalInstance } = await import('./terminal-pane.js');
+    const { darkTerminalTheme, lightTerminalTheme } = await import('../terminal-theme.js');
+
+    createTerminalPane('claude-theme-1', '/project', null, false, '', 'claude');
+    const instance = getTerminalInstance('claude-theme-1')!;
+
+    expect((instance.terminal as unknown as FakeTerminal).options.theme).toBe(darkTerminalTheme);
+
+    applyThemeToAllTerminals('light');
+
+    expect((instance.terminal as unknown as FakeTerminal).options.theme).toBe(lightTerminalTheme);
   });
 });
 
