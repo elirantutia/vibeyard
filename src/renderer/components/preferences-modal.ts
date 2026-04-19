@@ -62,6 +62,7 @@ export function showPreferencesModal(): void {
   let historyCheckbox: HTMLInputElement | null = null;
   let insightsCheckbox: HTMLInputElement | null = null;
   let autoTitleCheckbox: HTMLInputElement | null = null;
+  let dangerouslySkipPermissionsCheckbox: HTMLInputElement | null = null;
   let defaultProviderSelect: CustomSelectInstance | null = null;
   let debugModeCheckbox: HTMLInputElement | null = null;
   let sidebarCheckboxes: { configSections: HTMLInputElement; gitPanel: HTMLInputElement; sessionHistory: HTMLInputElement; costFooter: HTMLInputElement; readinessSection: HTMLInputElement; discussions: HTMLInputElement } | null = null;
@@ -197,6 +198,27 @@ export function showPreferencesModal(): void {
       autoTitleRow.appendChild(autoTitleLabel);
       autoTitleRow.appendChild(autoTitleCheckbox);
       content.appendChild(autoTitleRow);
+
+      const skipPermRow = document.createElement('div');
+      skipPermRow.className = 'modal-toggle-field';
+
+      const skipPermLabel = document.createElement('label');
+      skipPermLabel.htmlFor = 'pref-dangerously-skip-permissions';
+      skipPermLabel.textContent = 'Dangerously skip permissions (Claude Code)';
+
+      dangerouslySkipPermissionsCheckbox = document.createElement('input');
+      dangerouslySkipPermissionsCheckbox.type = 'checkbox';
+      dangerouslySkipPermissionsCheckbox.id = 'pref-dangerously-skip-permissions';
+      dangerouslySkipPermissionsCheckbox.checked = appState.preferences.dangerouslySkipPermissions;
+
+      skipPermRow.appendChild(skipPermLabel);
+      skipPermRow.appendChild(dangerouslySkipPermissionsCheckbox);
+      content.appendChild(skipPermRow);
+
+      const skipPermHint = document.createElement('div');
+      skipPermHint.className = 'modal-field-hint';
+      skipPermHint.textContent = 'New Claude Code sessions will start with --dangerously-skip-permissions. Use with caution.';
+      content.appendChild(skipPermHint);
 
     } else if (section === 'sidebar') {
       const views = appState.preferences.sidebarViews ?? { configSections: true, gitPanel: true, sessionHistory: true, costFooter: true, readinessSection: true, discussions: true };
@@ -670,6 +692,9 @@ export function showPreferencesModal(): void {
     }
     if (autoTitleCheckbox) {
       appState.setPreference('autoTitleEnabled', autoTitleCheckbox.checked);
+    }
+    if (dangerouslySkipPermissionsCheckbox) {
+      appState.setPreference('dangerouslySkipPermissions', dangerouslySkipPermissionsCheckbox.checked);
     }
     if (defaultProviderSelect) {
       appState.setPreference('defaultProvider', defaultProviderSelect.getValue() as ProviderId);

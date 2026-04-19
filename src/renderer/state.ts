@@ -41,6 +41,7 @@ const defaultPreferences: Preferences = {
   sessionHistoryEnabled: true,
   insightsEnabled: true,
   autoTitleEnabled: true,
+  dangerouslySkipPermissions: false,
   readinessExcludedProviders: [],
   sidebarViews: { configSections: true, gitPanel: true, sessionHistory: true, costFooter: true, readinessSection: true, discussions: true },
 };
@@ -328,11 +329,19 @@ class AppState {
     const project = this.state.projects.find((p) => p.id === projectId);
     if (!project) return undefined;
 
-    const effectiveArgs = args ?? project.defaultArgs;
+    let effectiveArgs = args ?? project.defaultArgs;
+    const resolvedProvider = providerId ?? this.state.preferences.defaultProvider ?? 'claude';
+    // Append --dangerously-skip-permissions for Claude when the preference is enabled
+    if (resolvedProvider === 'claude' && this.state.preferences.dangerouslySkipPermissions) {
+      const flag = '--dangerously-skip-permissions';
+      if (!effectiveArgs?.includes(flag)) {
+        effectiveArgs = [effectiveArgs, flag].filter(Boolean).join(' ');
+      }
+    }
     const session: SessionRecord = {
       id: crypto.randomUUID(),
       name,
-      providerId: providerId ?? this.state.preferences.defaultProvider ?? 'claude',
+      providerId: resolvedProvider,
       ...(effectiveArgs ? { args: effectiveArgs } : {}),
       cliSessionId: null,
       createdAt: new Date().toISOString(),
