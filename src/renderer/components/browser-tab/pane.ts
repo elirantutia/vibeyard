@@ -187,6 +187,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   const webview = document.createElement('webview') as unknown as WebviewElement;
   webview.className = 'browser-webview';
   webview.setAttribute('allowpopups', '');
+  webview.setAttribute('webpreferences', 'backgroundThrottling=false');
   viewportContainer.appendChild(webview);
   el.appendChild(viewportContainer);
 
