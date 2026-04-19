@@ -69,6 +69,7 @@
 #sidebar-content {
   flex: 1;
   overflow-y: auto;
+  min-height: 0;
 }
 
 #sidebar-footer {
@@ -95,11 +96,31 @@
   background: var(--bg-hover);
 }
 
+#sidebar-discussions.hidden {
+  display: none;
+}
+
 #sidebar-discussions .discussions-title {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 2px;
+}
+
+#sidebar-discussions .discussions-badge {
+  display: inline-block;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 8px;
+  padding: 0 4px;
+  margin-left: 4px;
+  vertical-align: middle;
 }
 
 #sidebar-discussions .discussions-desc {

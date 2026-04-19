@@ -46,6 +46,9 @@ export const SHORTCUT_DEFAULTS: ShortcutDefault[] = [
   { id: 'close-session', label: 'Close Session', category: 'Sessions', defaultKeys: 'CmdOrCtrl+W' },
   { id: 'usage-stats', label: 'Usage Stats', category: 'Panels', defaultKeys: 'CmdOrCtrl+Shift+U' },
   { id: 'toggle-inspector', label: 'Toggle Session Inspector', category: 'Panels', defaultKeys: 'CmdOrCtrl+Shift+I' },
+  { id: 'zoom-in', label: 'Zoom In', category: 'View', defaultKeys: 'CmdOrCtrl+=' },
+  { id: 'zoom-out', label: 'Zoom Out', category: 'View', defaultKeys: 'CmdOrCtrl+-' },
+  { id: 'zoom-reset', label: 'Reset Zoom', category: 'View', defaultKeys: 'CmdOrCtrl+0' },
 ];
 
 /** Convert accelerator string to platform-specific display string */

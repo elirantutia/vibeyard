@@ -38,6 +38,7 @@ import { getContext } from './session-context.js';
 import { initSessionInspector } from './components/session-inspector.js';
 import { applyThemeToAllRemoteTerminals } from './components/remote-terminal-pane.js';
 import { loadProviderMetas } from './provider-availability.js';
+import { getZoomFactor } from './zoom.js';
 
 let isQuitting = false;
 window.vibeyard.app.onQuitting(() => {
@@ -210,6 +211,8 @@ async function main(): Promise<void> {
     applyThemeToAllShells(theme);
     applyThemeToAllRemoteTerminals(theme);
   });
+  const savedZoom = getZoomFactor();
+  if (savedZoom !== 1.0) window.vibeyard.zoom.set(savedZoom);
 
   // Auto-open new project modal when no projects exist
   if (appState.projects.length === 0) {

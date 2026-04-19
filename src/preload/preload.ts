@@ -1,5 +1,6 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webFrame } from 'electron';
 import type { CostData, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, ToolFailureData, SettingsWarningData, SettingsValidationResult, StatusLineConflictData, InspectorEvent, ProviderConfig } from '../shared/types';
+import { ZOOM_MIN, ZOOM_MAX } from '../shared/types';
 
 export type { CostData } from '../shared/types';
 
@@ -110,6 +111,9 @@ export interface VibeyardApi {
     respondConflictDialog(choice: 'replace' | 'keep'): void;
     reinstall(providerId?: ProviderId): Promise<{ success: boolean }>;
     validate(providerId?: ProviderId): Promise<SettingsValidationResult>;
+  };
+  zoom: {
+    set(factor: number): void;
   };
   menu: {
     onNewProject(callback: () => void): () => void;
@@ -260,6 +264,11 @@ const api: VibeyardApi = {
     respondConflictDialog: (choice) => ipcRenderer.send('settings:conflictDialogResponse', choice),
     reinstall: (providerId) => ipcRenderer.invoke('settings:reinstall', providerId || 'claude'),
     validate: (providerId) => ipcRenderer.invoke('settings:validate', providerId || 'claude'),
+  },
+  zoom: {
+    set: (factor: number) => {
+      webFrame.setZoomFactor(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, factor)));
+    },
   },
   menu: {
     onNewProject: (cb) => onChannel('menu:new-project', cb),

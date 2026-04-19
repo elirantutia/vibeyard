@@ -1,5 +1,8 @@
 // Shared type definitions used across main, preload, and renderer processes.
 
+export const ZOOM_MIN = 0.75;
+export const ZOOM_MAX = 2.0;
+
 // --- Provider ---
 
 export type ProviderId = 'claude' | 'codex' | 'copilot' | 'gemini';
@@ -151,6 +154,7 @@ export interface Preferences {
   sessionHistoryEnabled: boolean;
   insightsEnabled: boolean;
   autoTitleEnabled: boolean;
+  zoomFactor?: number;
   defaultProvider?: ProviderId;
   statusLineConsent?: 'granted' | 'declined' | null;
   keybindings?: Record<string, string>;
@@ -163,6 +167,7 @@ export interface Preferences {
     sessionHistory: boolean;
     costFooter: boolean;
     readinessSection: boolean;
+    discussions: boolean;
   };
 }
 
@@ -195,6 +200,7 @@ export interface PersistedState {
   lastSeenVersion?: string;
   appLaunchCount?: number;
   starPromptDismissed?: boolean;
+  discussionsLastSeen?: string;
 }
 
 // --- AI Readiness ---

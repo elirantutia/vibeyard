@@ -1,6 +1,7 @@
 import { appState } from '../state.js';
 import { closeModal } from './modal.js';
 import { createCustomSelect, type CustomSelectInstance } from './custom-select.js';
+import { applyZoom, getZoomFactor, ZOOM_STEPS } from '../zoom.js';
 import { shortcutManager, displayKeys, eventToAccelerator } from '../shortcuts.js';
 import { loadProviderAvailability, getProviderAvailabilitySnapshot, getProviderCapabilities } from '../provider-availability.js';
 import type { CliProviderMeta, ProviderId, SettingsValidationResult } from '../../shared/types.js';
@@ -64,9 +65,11 @@ export function showPreferencesModal(): void {
   let autoTitleCheckbox: HTMLInputElement | null = null;
   let defaultProviderSelect: CustomSelectInstance | null = null;
   let themeSelect: CustomSelectInstance | null = null;
-  let debugModeCheckbox: HTMLInputElement | null = null;
   let bypassPermissionsCheckbox: HTMLInputElement | null = null;
-  let sidebarCheckboxes: { configSections: HTMLInputElement; gitPanel: HTMLInputElement; sessionHistory: HTMLInputElement; costFooter: HTMLInputElement; readinessSection: HTMLInputElement } | null = null;
+  let zoomSelect: CustomSelectInstance | null = null;
+  let zoomPrefUnsub: (() => void) | null = null;
+  let debugModeCheckbox: HTMLInputElement | null = null;
+  let sidebarCheckboxes: { configSections: HTMLInputElement; gitPanel: HTMLInputElement; sessionHistory: HTMLInputElement; costFooter: HTMLInputElement; readinessSection: HTMLInputElement; discussions: HTMLInputElement } | null = null;
   let activeRecorder: { cleanup: () => void } | null = null;
 
   function cleanupRecorder() {
@@ -78,6 +81,8 @@ export function showPreferencesModal(): void {
 
   function renderSection(section: Section) {
     cleanupRecorder();
+    zoomPrefUnsub?.();
+    zoomPrefUnsub = null;
     currentSection = section;
     content.innerHTML = '';
 
@@ -248,14 +253,36 @@ export function showPreferencesModal(): void {
         content.appendChild(bypassRow);
       }
 
+      const zoomRow = document.createElement('div');
+      zoomRow.className = 'modal-toggle-field';
+
+      const zoomLabel = document.createElement('label');
+      zoomLabel.textContent = 'Zoom';
+
+      const zoomOptions = ZOOM_STEPS.map((v) => ({ value: String(v), label: `${Math.round(v * 100)}%` }));
+      zoomSelect = createCustomSelect('pref-zoom', zoomOptions, String(getZoomFactor()), (value) => {
+        const n = parseFloat(value);
+        if (!Number.isNaN(n)) applyZoom(n);
+      });
+
+      zoomRow.appendChild(zoomLabel);
+      zoomRow.appendChild(zoomSelect.element);
+      content.appendChild(zoomRow);
+
+      zoomPrefUnsub?.();
+      zoomPrefUnsub = appState.on('preferences-changed', () => {
+        zoomSelect?.setValue(String(getZoomFactor()));
+      });
+
     } else if (section === 'sidebar') {
-      const views = appState.preferences.sidebarViews ?? { configSections: true, gitPanel: true, sessionHistory: true, costFooter: true, readinessSection: true };
+      const views = appState.preferences.sidebarViews ?? { configSections: true, gitPanel: true, sessionHistory: true, costFooter: true, readinessSection: true, discussions: true };
       const toggles: { key: keyof typeof views; label: string }[] = [
         { key: 'configSections', label: 'Provider Tools (MCP Servers, Agents, Skills, Commands)' },
         { key: 'readinessSection', label: 'AI Readiness' },
         { key: 'gitPanel', label: 'Git Panel' },
         { key: 'sessionHistory', label: 'Session History' },
         { key: 'costFooter', label: 'Cost Footer' },
+        { key: 'discussions', label: 'Discussions' },
       ];
 
       const checkboxes: Record<string, HTMLInputElement> = {};
@@ -270,7 +297,7 @@ export function showPreferencesModal(): void {
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.id = `pref-sidebar-${toggle.key}`;
-        cb.checked = views[toggle.key];
+        cb.checked = views[toggle.key] ?? true;
 
         row.appendChild(label);
         row.appendChild(cb);
@@ -740,6 +767,7 @@ export function showPreferencesModal(): void {
         sessionHistory: sidebarCheckboxes.sessionHistory.checked,
         costFooter: sidebarCheckboxes.costFooter.checked,
         readinessSection: sidebarCheckboxes.readinessSection.checked,
+        discussions: sidebarCheckboxes.discussions.checked,
       });
     }
   };
@@ -777,7 +805,11 @@ export function showPreferencesModal(): void {
 
   (overlay as any)._cleanup = () => {
     cleanupRecorder();
+    zoomPrefUnsub?.();
+    zoomPrefUnsub = null;
     if (defaultProviderSelect) defaultProviderSelect.destroy();
+    if (themeSelect) themeSelect.destroy();
+    if (zoomSelect) zoomSelect.destroy();
     if (themeSelect) themeSelect.destroy();
     btnConfirm.removeEventListener('click', handleConfirm);
     btnCancel.removeEventListener('click', handleCancel);

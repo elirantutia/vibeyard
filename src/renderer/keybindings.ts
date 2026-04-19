@@ -15,6 +15,7 @@ import { getFileViewerInstance } from './components/file-viewer.js';
 import { DomSearchBackend } from './components/dom-search-backend.js';
 import { toggleInspector } from './components/session-inspector.js';
 import { showUsageModal } from './components/usage-modal.js';
+import { zoomIn, zoomOut, zoomReset } from './zoom.js';
 
 export function initKeybindings(): void {
   const handleCloseSession = () => {
@@ -96,6 +97,9 @@ export function initKeybindings(): void {
   shortcutManager.registerHandler('close-session', handleCloseSession);
   shortcutManager.registerHandler('usage-stats', showUsageModal);
   shortcutManager.registerHandler('toggle-inspector', toggleInspector);
+  shortcutManager.registerHandler('zoom-in', zoomIn);
+  shortcutManager.registerHandler('zoom-out', zoomOut);
+  shortcutManager.registerHandler('zoom-reset', zoomReset);
 
   document.addEventListener('keydown', (e) => {
     shortcutManager.matchEvent(e);

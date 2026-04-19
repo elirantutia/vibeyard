@@ -834,6 +834,16 @@ describe('preferences', () => {
     appState.setPreference('soundOnSessionWaiting', true);
     expect(cb).toHaveBeenCalledTimes(1);
   });
+
+  it('zoomFactor defaults to 1.0', () => {
+    expect(appState.preferences.zoomFactor).toBe(1.0);
+  });
+
+  it('setPreference stores zoomFactor', () => {
+    appState.setPreference('zoomFactor', 1.5);
+    expect(appState.preferences.zoomFactor).toBe(1.5);
+    expect(mockSave).toHaveBeenCalled();
+  });
 });
 
 describe('setSidebarWidth()', () => {

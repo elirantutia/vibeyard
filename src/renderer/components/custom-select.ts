@@ -7,6 +7,7 @@ export interface SelectOption {
 export interface CustomSelectInstance {
   element: HTMLElement;
   getValue(): string;
+  setValue(value: string): void;
   destroy(): void;
 }
 
@@ -145,6 +146,13 @@ export function createCustomSelect(
   return {
     element: wrapper,
     getValue() { return hidden.value; },
+    setValue(value: string) {
+      const index = options.findIndex(o => o.value === value);
+      if (index < 0 || options[index].disabled) return;
+      hidden.value = options[index].value;
+      trigger.textContent = options[index].label;
+      items.forEach((el, i) => el.classList.toggle('selected', i === index));
+    },
     destroy() { document.removeEventListener('mousedown', onOutsideClick); },
   };
 }
