@@ -3,7 +3,7 @@ import { closeModal } from './modal.js';
 import { createCustomSelect, type CustomSelectInstance } from './custom-select.js';
 import { applyZoom, getZoomFactor, ZOOM_STEPS } from '../zoom.js';
 import { shortcutManager, displayKeys, eventToAccelerator } from '../shortcuts.js';
-import { loadProviderAvailability, getProviderAvailabilitySnapshot, getProviderCapabilities } from '../provider-availability.js';
+import { loadProviderAvailability, getProviderAvailabilitySnapshot } from '../provider-availability.js';
 import type { CliProviderMeta, ProviderId, SettingsValidationResult } from '../../shared/types.js';
 import { hasProviderIssue, type ProviderStatus } from './setup-checks.js';
 
@@ -65,7 +65,6 @@ export function showPreferencesModal(): void {
   let autoTitleCheckbox: HTMLInputElement | null = null;
   let defaultProviderSelect: CustomSelectInstance | null = null;
   let themeSelect: CustomSelectInstance | null = null;
-  let bypassPermissionsCheckbox: HTMLInputElement | null = null;
   let zoomSelect: CustomSelectInstance | null = null;
   let zoomPrefUnsub: (() => void) | null = null;
   let debugModeCheckbox: HTMLInputElement | null = null;
@@ -222,36 +221,6 @@ export function showPreferencesModal(): void {
       themeRow.appendChild(themeLabel);
       themeRow.appendChild(themeSelect.element);
       content.appendChild(themeRow);
-
-      const defaultProvider = appState.preferences.defaultProvider ?? 'claude';
-      const providerCaps = getProviderCapabilities(defaultProvider);
-      if (providerCaps?.permissionBypass) {
-        const bypassRow = document.createElement('div');
-        bypassRow.className = 'modal-toggle-field';
-
-        const bypassLabelWrap = document.createElement('div');
-
-        const bypassLabel = document.createElement('label');
-        bypassLabel.htmlFor = 'pref-bypass-permissions';
-        bypassLabel.textContent = 'Bypass permission checks';
-
-        const bypassDesc = document.createElement('div');
-        bypassDesc.style.color = 'var(--text-secondary)';
-        bypassDesc.style.fontSize = '0.85em';
-        bypassDesc.textContent = 'Passes --dangerously-skip-permissions to Claude CLI. Use with caution.';
-
-        bypassLabelWrap.appendChild(bypassLabel);
-        bypassLabelWrap.appendChild(bypassDesc);
-
-        bypassPermissionsCheckbox = document.createElement('input');
-        bypassPermissionsCheckbox.type = 'checkbox';
-        bypassPermissionsCheckbox.id = 'pref-bypass-permissions';
-        bypassPermissionsCheckbox.checked = appState.preferences.bypassPermissions ?? false;
-
-        bypassRow.appendChild(bypassLabelWrap);
-        bypassRow.appendChild(bypassPermissionsCheckbox);
-        content.appendChild(bypassRow);
-      }
 
       const zoomRow = document.createElement('div');
       zoomRow.className = 'modal-toggle-field';
@@ -752,9 +721,6 @@ export function showPreferencesModal(): void {
     }
     if (themeSelect) {
       appState.setPreference('theme', themeSelect.getValue() as 'dark' | 'light');
-    }
-    if (bypassPermissionsCheckbox) {
-      appState.setPreference('bypassPermissions', bypassPermissionsCheckbox.checked);
     }
     if (debugModeCheckbox && debugModeCheckbox.checked !== appState.preferences.debugMode) {
       appState.setPreference('debugMode', debugModeCheckbox.checked);

@@ -27,7 +27,6 @@ export class ClaudeProvider implements CliProvider {
       shiftEnterNewline: true,
       pendingPromptTrigger: 'startup-arg',
       planModeArg: '--permission-mode plan',
-      permissionBypass: '--dangerously-skip-permissions',
     },
     defaultContextWindowSize: 200_000,
   };

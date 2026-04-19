@@ -330,14 +330,7 @@ class AppState {
     if (!project) return undefined;
 
     const effectiveProvider = providerId ?? this.state.preferences.defaultProvider ?? 'claude';
-    let effectiveArgs = args ?? project.defaultArgs;
-
-    if (this.state.preferences.bypassPermissions && effectiveProvider === 'claude') {
-      const bypassFlag = '--dangerously-skip-permissions';
-      if (!effectiveArgs?.includes(bypassFlag)) {
-        effectiveArgs = effectiveArgs ? `${bypassFlag} ${effectiveArgs}` : bypassFlag;
-      }
-    }
+    const effectiveArgs = args ?? project.defaultArgs;
 
     const session: SessionRecord = {
       id: crypto.randomUUID(),

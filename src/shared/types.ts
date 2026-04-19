@@ -17,7 +17,6 @@ export interface CliProviderCapabilities {
   shiftEnterNewline: boolean;
   pendingPromptTrigger: PendingPromptTrigger;
   planModeArg?: string;
-  permissionBypass?: string;
 }
 
 export interface CliProviderMeta {
@@ -159,7 +158,6 @@ export interface Preferences {
   statusLineConsent?: 'granted' | 'declined' | null;
   keybindings?: Record<string, string>;
   theme?: 'dark' | 'light';
-  bypassPermissions?: boolean;
   readinessExcludedProviders?: ProviderId[];
   sidebarViews?: {
     configSections: boolean;

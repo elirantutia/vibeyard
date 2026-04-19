@@ -372,43 +372,6 @@ describe('addSession()', () => {
     const session = appState.addSession(project.id, 'S1')!;
     expect(session.args).toBeUndefined();
   });
-
-  describe('bypassPermissions flag injection', () => {
-    it('does not prefix args when bypassPermissions is false', () => {
-      appState.setPreference('bypassPermissions', false);
-      const project = addProject();
-      const session = appState.addSession(project.id, 'S1', '--verbose')!;
-      expect(session.args).toBe('--verbose');
-    });
-
-    it('prefixes --dangerously-skip-permissions when bypassPermissions is true and provider is claude', () => {
-      appState.setPreference('bypassPermissions', true);
-      const project = addProject();
-      const session = appState.addSession(project.id, 'S1', '--verbose', 'claude')!;
-      expect(session.args).toBe('--dangerously-skip-permissions --verbose');
-    });
-
-    it('adds flag as sole arg when bypassPermissions is true and no other args', () => {
-      appState.setPreference('bypassPermissions', true);
-      const project = addProject();
-      const session = appState.addSession(project.id, 'S1', undefined, 'claude')!;
-      expect(session.args).toBe('--dangerously-skip-permissions');
-    });
-
-    it('does not prefix args when bypassPermissions is true but provider is not claude', () => {
-      appState.setPreference('bypassPermissions', true);
-      const project = addProject();
-      const session = appState.addSession(project.id, 'S1', '--verbose', 'copilot')!;
-      expect(session.args).toBe('--verbose');
-    });
-
-    it('does not duplicate flag if already present in args', () => {
-      appState.setPreference('bypassPermissions', true);
-      const project = addProject();
-      const session = appState.addSession(project.id, 'S1', '--dangerously-skip-permissions --verbose', 'claude')!;
-      expect(session.args).toBe('--dangerously-skip-permissions --verbose');
-    });
-  });
 });
 
 describe('addDiffViewerSession()', () => {
