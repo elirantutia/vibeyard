@@ -29,6 +29,7 @@ const selectState = vi.hoisted(() => {
     element: Record<string, unknown>;
     setValue: (value: string) => void;
     getValue: () => string;
+    destroyCount: number;
     destroy: () => void;
   }>();
   return {
@@ -73,22 +74,25 @@ vi.mock('./custom-select.js', () => ({
     element.className = 'custom-select';
     element.dataset.selectId = id;
     let value = initialValue;
-    const instance = {
-      value,
-      element,
-      setValue(nextValue: string) {
-        value = nextValue;
+      const instance = {
+        value,
+        element,
+        setValue(nextValue: string) {
+          value = nextValue;
         instance.value = nextValue;
         onChange?.(nextValue);
       },
-      getValue() {
-        return value;
-      },
-      destroy() {},
-    };
-    selectState.instances.set(id, instance);
-    return instance;
-  }),
+        getValue() {
+          return value;
+        },
+        destroyCount: 0,
+        destroy() {
+          instance.destroyCount += 1;
+        },
+      };
+      selectState.instances.set(id, instance);
+      return instance;
+    }),
 }));
 
 type ListenerMap = Record<string, Array<(...args: unknown[]) => void>>;
@@ -239,5 +243,30 @@ describe('showPreferencesModal theme preference', () => {
     click(getOrCreateElement('modal-confirm'));
 
     expect(mockState.setPreference).toHaveBeenCalledWith('theme', 'light');
+  });
+
+  it('restores the original theme on cancel', async () => {
+    const { showPreferencesModal } = await import('./preferences-modal.js');
+
+    (document as any).documentElement.dataset.theme = 'dark';
+    showPreferencesModal();
+
+    const themeSelect = selectState.instances.get('pref-theme')!;
+    themeSelect.setValue('light');
+    click(getOrCreateElement('modal-cancel'));
+
+    expect((document as any).documentElement.dataset.theme).toBe('dark');
+    expect(mockState.setPreference).not.toHaveBeenCalledWith('theme', 'light');
+  });
+
+  it('destroys each select once during cleanup', async () => {
+    const { showPreferencesModal } = await import('./preferences-modal.js');
+
+    showPreferencesModal();
+
+    (getOrCreateElement('modal-overlay') as any)._cleanup();
+
+    expect(selectState.instances.get('pref-theme')?.destroyCount).toBe(1);
+    expect(selectState.instances.get('pref-zoom')?.destroyCount).toBe(1);
   });
 });

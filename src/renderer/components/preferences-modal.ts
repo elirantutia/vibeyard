@@ -70,6 +70,7 @@ export function showPreferencesModal(): void {
   let debugModeCheckbox: HTMLInputElement | null = null;
   let sidebarCheckboxes: { configSections: HTMLInputElement; gitPanel: HTMLInputElement; sessionHistory: HTMLInputElement; costFooter: HTMLInputElement; readinessSection: HTMLInputElement; discussions: HTMLInputElement } | null = null;
   let activeRecorder: { cleanup: () => void } | null = null;
+  const originalTheme = appState.preferences.theme ?? 'dark';
 
   function cleanupRecorder() {
     if (activeRecorder) {
@@ -210,11 +211,10 @@ export function showPreferencesModal(): void {
       const themeLabel = document.createElement('label');
       themeLabel.textContent = 'Theme';
 
-      const currentTheme = appState.preferences.theme ?? 'dark';
       themeSelect = createCustomSelect(
         'pref-theme',
         [{ value: 'dark', label: 'Dark' }, { value: 'light', label: 'Light' }],
-        currentTheme,
+        originalTheme,
         (value) => { document.documentElement.dataset.theme = value; },
       );
 
@@ -748,6 +748,7 @@ export function showPreferencesModal(): void {
 
   const handleCancel = () => {
     cleanupRecorder();
+    document.documentElement.dataset.theme = originalTheme;
     closeModal();
     modal.classList.remove('modal-wide');
     btnConfirm.textContent = 'Create';
@@ -776,7 +777,6 @@ export function showPreferencesModal(): void {
     if (defaultProviderSelect) defaultProviderSelect.destroy();
     if (themeSelect) themeSelect.destroy();
     if (zoomSelect) zoomSelect.destroy();
-    if (themeSelect) themeSelect.destroy();
     btnConfirm.removeEventListener('click', handleConfirm);
     btnCancel.removeEventListener('click', handleCancel);
     document.removeEventListener('keydown', handleKeydown);
