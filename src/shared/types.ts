@@ -100,6 +100,7 @@ export interface SessionRecord {
   contextWindow?: ContextWindowInfo;
   remoteHostName?: string;
   shareMode?: 'readonly' | 'readwrite';
+  commandOverride?: string;
   browserTabUrl?: string;
   /** Transient: initial prompt to inject on first spawn. Not persisted. */
   pendingInitialPrompt?: string;
