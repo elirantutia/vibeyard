@@ -19,6 +19,12 @@ describe('lightTerminalTheme', () => {
   it('has the correct foreground', () => {
     expect(lightTerminalTheme.foreground).toBe('#2c2c2c');
   });
+
+  it('keeps ansi white visible against the background', () => {
+    expect(lightTerminalTheme.white).toBe('#6b7280');
+    expect(lightTerminalTheme.white).not.toBe(lightTerminalTheme.background);
+    expect(lightTerminalTheme.brightWhite).toBe('#2c2c2c');
+  });
 });
 
 describe('getTerminalTheme()', () => {

@@ -258,6 +258,19 @@ describe('applyThemeToAllTerminals()', () => {
 
     expect((instance.terminal as unknown as FakeTerminal).options.theme).toBe(lightTerminalTheme);
   });
+
+  it('uses the current light theme for newly created terminal instances', async () => {
+    const { appState } = await import('../state.js');
+    const { createTerminalPane, getTerminalInstance } = await import('./terminal-pane.js');
+    const { lightTerminalTheme } = await import('../terminal-theme.js');
+
+    appState.preferences.theme = 'light';
+
+    createTerminalPane('claude-theme-2', '/project', null, false, '', 'claude');
+    const instance = getTerminalInstance('claude-theme-2')!;
+
+    expect((instance.terminal as unknown as FakeTerminal).options.theme).toBe(lightTerminalTheme);
+  });
 });
 
 describe('terminal Ctrl+Shift+C clipboard copy', () => {

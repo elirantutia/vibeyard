@@ -41,6 +41,7 @@ vi.mock('../state.js', () => ({
   appState: {
     projects: [],
     activeProject: null,
+    preferences: { theme: 'dark' },
     on: (...args: unknown[]) => mockStateOn(...args),
     setTerminalPanelOpen: vi.fn(),
     setTerminalPanelHeight: vi.fn(),
@@ -203,6 +204,25 @@ describe('applyThemeToAllShells()', () => {
     expect((instance.terminal as unknown as FakeTerminal).options.theme).toBe(darkTerminalTheme);
 
     applyThemeToAllShells('light');
+
+    expect((instance.terminal as unknown as FakeTerminal).options.theme).toBe(lightTerminalTheme);
+  });
+
+  it('uses the current light theme for newly created shell terminals', async () => {
+    const { lightTerminalTheme } = await import('../terminal-theme.js');
+    const { appState } = await import('../state.js');
+    const { initProjectTerminal, getShellTerminalInstance, getActiveShellSessionId } = await import('./project-terminal.js');
+
+    const project = { id: 'proj1', path: '/project', terminalPanelOpen: true, terminalPanelHeight: 200, sessions: [] };
+    (appState as any).activeProject = project;
+    (appState as any).projects = [project];
+    (appState as any).preferences.theme = 'light';
+
+    initProjectTerminal();
+    stateHandlers['state-loaded']?.forEach(cb => cb());
+
+    const sessionId = getActiveShellSessionId()!;
+    const instance = getShellTerminalInstance(sessionId)!;
 
     expect((instance.terminal as unknown as FakeTerminal).options.theme).toBe(lightTerminalTheme);
   });

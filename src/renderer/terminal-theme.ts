@@ -13,6 +13,14 @@ export const darkTerminalTheme: ITheme = {
   magenta: '#ab47bc',
   cyan: '#00acc1',
   white: '#e0e0e0',
+  brightBlack: '#606070',
+  brightRed: '#ff6b85',
+  brightGreen: '#2dbf73',
+  brightYellow: '#f6c453',
+  brightBlue: '#6ea8ff',
+  brightMagenta: '#c36be0',
+  brightCyan: '#39d3e3',
+  brightWhite: '#ffffff',
 };
 
 export const lightTerminalTheme: ITheme = {
@@ -27,7 +35,15 @@ export const lightTerminalTheme: ITheme = {
   blue: '#1a5cbf',
   magenta: '#7b27a0',
   cyan: '#0080a0',
-  white: '#fafaf8',
+  white: '#6b7280',
+  brightBlack: '#8b8b99',
+  brightRed: '#c83f56',
+  brightGreen: '#0b6a3d',
+  brightYellow: '#8d6200',
+  brightBlue: '#144c9f',
+  brightMagenta: '#67208a',
+  brightCyan: '#006c88',
+  brightWhite: '#2c2c2c',
 };
 
 export function getTerminalTheme(theme: 'dark' | 'light'): ITheme {

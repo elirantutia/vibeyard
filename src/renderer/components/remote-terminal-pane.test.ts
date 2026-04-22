@@ -17,6 +17,11 @@ class FakeTerminal {
 vi.mock('@xterm/xterm', () => ({ Terminal: FakeTerminal }));
 vi.mock('@xterm/addon-fit', () => ({ FitAddon: class { fit(): void {} } }));
 vi.mock('@xterm/addon-webgl', () => ({ WebglAddon: class {} }));
+vi.mock('../state.js', () => ({
+  appState: {
+    preferences: { theme: 'dark' },
+  },
+}));
 
 class FakeClassList {
   private values = new Set<string>();
@@ -97,6 +102,20 @@ describe('applyThemeToAllRemoteTerminals()', () => {
     expect((instance.terminal as unknown as FakeTerminal).options.theme).toBe(darkTerminalTheme);
 
     applyThemeToAllRemoteTerminals('light');
+
+    expect((instance.terminal as unknown as FakeTerminal).options.theme).toBe(lightTerminalTheme);
+  });
+
+  it('uses the current light theme for newly created remote terminals', async () => {
+    const { lightTerminalTheme } = await import('../terminal-theme.js');
+    const { appState } = await import('../state.js');
+    const { createRemoteTerminalPane, getRemoteTerminalInstance, _resetForTesting } = await import('./remote-terminal-pane.js');
+
+    appState.preferences.theme = 'light';
+
+    _resetForTesting();
+    createRemoteTerminalPane('remote-2', 'readonly', 80, 24, () => {});
+    const instance = getRemoteTerminalInstance('remote-2')!;
 
     expect((instance.terminal as unknown as FakeTerminal).options.theme).toBe(lightTerminalTheme);
   });

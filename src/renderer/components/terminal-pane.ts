@@ -1,5 +1,5 @@
 import { Terminal } from '@xterm/xterm';
-import { darkTerminalTheme, getTerminalTheme } from '../terminal-theme.js';
+import { getTerminalTheme } from '../terminal-theme.js';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { SearchAddon } from '@xterm/addon-search';
@@ -10,6 +10,7 @@ import { removeSession as removeCostSession, type CostInfo } from '../session-co
 import { removeSession as removeContextSession, type ContextWindowInfo } from '../session-context.js';
 import type { ProviderId } from '../types.js';
 import { getProviderCapabilities } from '../provider-availability.js';
+import { appState } from '../state.js';
 import { FilePathLinkProvider, GithubLinkProvider } from './terminal-link-provider.js';
 import { attachClipboardCopyHandler } from './terminal-utils.js';
 
@@ -73,7 +74,7 @@ export function createTerminalPane(
   element.appendChild(statusBar);
 
   const terminal = new Terminal({
-    theme: darkTerminalTheme,
+    theme: getTerminalTheme(appState.preferences.theme ?? 'dark'),
     fontSize: 14,
     fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace",
     cursorBlink: true,
