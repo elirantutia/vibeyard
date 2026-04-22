@@ -148,6 +148,8 @@ export function createFileViewerPane(sessionId: string, filePath: string, area: 
 
   const el = document.createElement('div');
   el.className = 'file-viewer-pane';
+  el.dataset.sessionId = sessionId;
+  el.dataset.paneKind = 'file-viewer';
   el.style.display = 'none';
 
   // Header

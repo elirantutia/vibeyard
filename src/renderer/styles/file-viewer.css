@@ -557,3 +557,28 @@
   color: #4a90d9;
   vertical-align: middle;
 }
+
+/* Ask-AI bubble shown near a text selection inside file panes */
+.file-prompt-bubble {
+  position: absolute;
+  z-index: 102;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: var(--accent);
+  color: #fff;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.file-prompt-bubble:hover {
+  opacity: 0.9;
+}
+

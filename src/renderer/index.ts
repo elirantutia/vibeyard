@@ -36,6 +36,7 @@ import { addEvents as addInspectorEvents } from './session-inspector-state.js';
 import type { InspectorEvent } from '../shared/types.js';
 import { getContext } from './session-context.js';
 import { initSessionInspector } from './components/session-inspector.js';
+import { initFilePrompt } from './components/file-prompt.js';
 import { loadProviderMetas } from './provider-availability.js';
 import { getZoomFactor } from './zoom.js';
 
@@ -171,6 +172,7 @@ async function main(): Promise<void> {
   initReadinessSection();
   initShareManager();
   initSessionInspector();
+  initFilePrompt();
   startGitPolling();
 
   document.getElementById('btn-usage-stats')!.addEventListener('click', () => showUsageModal());
