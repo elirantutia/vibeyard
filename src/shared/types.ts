@@ -156,6 +156,10 @@ export interface Preferences {
   zoomFactor?: number;
   defaultProvider?: ProviderId;
   statusLineConsent?: 'granted' | 'declined' | null;
+  // The foreign statusLine command the user was asked about when they made
+  // the consent decision. Used to detect new conflicts (different command)
+  // vs the previously-acknowledged one.
+  statusLineConsentCommand?: string | null;
   keybindings?: Record<string, string>;
   theme?: 'dark' | 'light';
   readinessExcludedProviders?: ProviderId[];

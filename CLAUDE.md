@@ -98,6 +98,8 @@ After completing an implementation task, always:
 
 Always use the `/commit` command when committing changes to this project. Do not create commits manually.
 
+Never commit, push, or create pull requests unless the user explicitly asks for it.
+
 ## Maintaining This File
 
 When your changes affect the architecture, build process, key components, data flow, or any other information documented above, update this CLAUDE.md to reflect the new state. This includes adding/removing/renaming files, changing IPC namespaces, modifying the build pipeline, or introducing new patterns. Keep this file accurate so future sessions start with correct context.

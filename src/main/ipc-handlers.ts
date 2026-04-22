@@ -21,6 +21,7 @@ import type { ProviderId, GitFileEntry, SettingsValidationResult } from '../shar
 import { analyzeReadiness } from './readiness/analyzer';
 import { expandUserPath } from './fs-utils';
 import { isMac, isWin } from './platform';
+import { shouldWarnStatusLine } from './settings-guard';
 
 /**
  * Check if a resolved path is within one of the known project directories.
@@ -114,10 +115,18 @@ export function registerIpcHandlers(): void {
     // validating earlier would see an empty config on a project's first spawn.
     if (provider.meta.capabilities.hookStatus) {
       const validation = provider.validateSettings(cwd);
-      if (validation.statusLine !== 'vibeyard' || validation.hooks !== 'complete') {
+      const prefs = loadState().preferences;
+      const statusLineIssue = shouldWarnStatusLine(
+        validation.statusLine,
+        prefs.statusLineConsent,
+        prefs.statusLineConsentCommand,
+        validation.foreignStatusLineCommand,
+      );
+      const hooksIssue = validation.hooks !== 'complete';
+      if (statusLineIssue || hooksIssue) {
         win.webContents.send('settings:warning', {
           sessionId,
-          statusLine: validation.statusLine,
+          statusLine: statusLineIssue ? validation.statusLine : 'vibeyard',
           hooks: validation.hooks,
         });
       }
