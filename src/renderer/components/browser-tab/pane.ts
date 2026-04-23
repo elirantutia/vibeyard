@@ -647,6 +647,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   const unsubs = [
     appState.on('session-added', updateSubmitLabels),
     appState.on('session-removed', updateSubmitLabels),
+    appState.on('session-changed', updateSubmitLabels),
     appState.on('project-changed', updateSubmitLabels),
     appState.on('state-loaded', updateSubmitLabels),
   ];
