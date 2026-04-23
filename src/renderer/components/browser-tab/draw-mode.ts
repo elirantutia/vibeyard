@@ -40,18 +40,21 @@ export function dismissDraw(instance: BrowserTabInstance): void {
   if (instance.drawMode) toggleDrawMode(instance);
 }
 
-function hideDrawError(instance: BrowserTabInstance): void {
+/** @internal Exported for testing */
+export function hideDrawError(instance: BrowserTabInstance): void {
   instance.drawErrorEl.style.display = 'none';
   instance.drawErrorEl.textContent = '';
 }
 
-function showDrawError(instance: BrowserTabInstance, message: string): void {
+/** @internal Exported for testing */
+export function showDrawError(instance: BrowserTabInstance, message: string): void {
   instance.drawErrorEl.textContent = message;
   instance.drawErrorEl.style.display = 'block';
   setTimeout(() => hideDrawError(instance), 4000);
 }
 
-async function captureScreenshotPath(instance: BrowserTabInstance): Promise<string | null> {
+/** @internal Exported for testing */
+export async function captureScreenshotPath(instance: BrowserTabInstance): Promise<string | null> {
   try {
     const image = await instance.webview.capturePage();
     return await window.vibeyard.browser.saveScreenshot(instance.sessionId, image.toDataURL());

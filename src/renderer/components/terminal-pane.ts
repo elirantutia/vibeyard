@@ -187,6 +187,17 @@ export function setPendingPrompt(sessionId: string, prompt: string): void {
   }
 }
 
+export function injectPromptIntoRunningSession(sessionId: string, prompt: string): boolean {
+  const instance = instances.get(sessionId);
+  if (!instance || !instance.spawned || instance.exited) return false;
+  const modes = (instance.terminal as unknown as { modes?: { bracketedPasteMode?: boolean } }).modes;
+  const bp = modes?.bracketedPasteMode;
+  const payload = bp ? `\x1b[200~${prompt}\x1b[201~` : prompt;
+  window.vibeyard.pty.write(sessionId, payload);
+  window.vibeyard.pty.write(sessionId, '\r');
+  return true;
+}
+
 function clearPendingPromptTimer(instance: TerminalInstance): void {
   if (instance.pendingPromptTimer) {
     clearTimeout(instance.pendingPromptTimer);

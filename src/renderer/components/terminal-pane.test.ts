@@ -283,3 +283,62 @@ describe('terminal Ctrl+Shift+C clipboard copy', () => {
     expect(result).toBe(false);
   });
 });
+
+describe('injectPromptIntoRunningSession', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+
+    vi.stubGlobal('document', new FakeDocument());
+    vi.stubGlobal('window', makeWindowStub());
+    vi.stubGlobal('navigator', { platform: 'MacIntel', clipboard: { writeText: mockClipboardWrite } });
+  });
+
+  it('returns false and writes nothing when the session is not spawned', async () => {
+    const { createTerminalPane, injectPromptIntoRunningSession } = await import('./terminal-pane.js');
+    createTerminalPane('inj-1', '/project', null, false, '', 'claude');
+
+    const result = injectPromptIntoRunningSession('inj-1', 'fix the bug');
+
+    expect(result).toBe(false);
+    expect(mockPtyWrite).not.toHaveBeenCalled();
+  });
+
+  it('returns false when no instance exists for the session id', async () => {
+    const { injectPromptIntoRunningSession } = await import('./terminal-pane.js');
+
+    const result = injectPromptIntoRunningSession('does-not-exist', 'hello');
+
+    expect(result).toBe(false);
+    expect(mockPtyWrite).not.toHaveBeenCalled();
+  });
+
+  it('wraps payload in bracketed-paste escapes when bracketedPasteMode is on, then sends Enter', async () => {
+    const { createTerminalPane, spawnTerminal, injectPromptIntoRunningSession } = await import('./terminal-pane.js');
+    const instance = createTerminalPane('inj-2', '/project', null, false, '', 'claude');
+    await spawnTerminal('inj-2');
+    (instance.terminal as unknown as { modes: { bracketedPasteMode: boolean } }).modes = { bracketedPasteMode: true };
+    mockPtyWrite.mockClear();
+
+    const result = injectPromptIntoRunningSession('inj-2', 'fix the bug');
+
+    expect(result).toBe(true);
+    expect(mockPtyWrite).toHaveBeenNthCalledWith(1, 'inj-2', '\x1b[200~fix the bug\x1b[201~');
+    expect(mockPtyWrite).toHaveBeenNthCalledWith(2, 'inj-2', '\r');
+  });
+
+  it('writes the raw payload and Enter when bracketedPasteMode is off', async () => {
+    const { createTerminalPane, spawnTerminal, injectPromptIntoRunningSession } = await import('./terminal-pane.js');
+    const instance = createTerminalPane('inj-3', '/project', null, false, '', 'claude');
+    await spawnTerminal('inj-3');
+    (instance.terminal as unknown as { modes: { bracketedPasteMode: boolean } }).modes = { bracketedPasteMode: false };
+    mockPtyWrite.mockClear();
+
+    const result = injectPromptIntoRunningSession('inj-3', 'fix the bug');
+
+    expect(result).toBe(true);
+    expect(mockPtyWrite).toHaveBeenNthCalledWith(1, 'inj-3', 'fix the bug');
+    expect(mockPtyWrite).toHaveBeenNthCalledWith(2, 'inj-3', '\r');
+  });
+});

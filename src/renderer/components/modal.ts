@@ -39,12 +39,20 @@ export function closeModal(): void {
   cleanup();
 }
 
+const DEFAULT_CONFIRM_LABEL = 'Create';
+
+export interface ModalOptions {
+  confirmLabel?: string;
+}
+
 export function showModal(
   title: string,
   fields: FieldDef[],
-  onConfirm: (values: Record<string, string>) => void | Promise<void>
+  onConfirm: (values: Record<string, string>) => void | Promise<void>,
+  options?: ModalOptions,
 ): void {
   titleEl.textContent = title;
+  btnConfirm.textContent = options?.confirmLabel ?? DEFAULT_CONFIRM_LABEL;
   bodyEl.innerHTML = '';
 
   for (const field of fields) {
