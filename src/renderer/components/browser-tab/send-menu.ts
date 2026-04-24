@@ -1,6 +1,20 @@
-import { appState, type SessionRecord } from '../../state.js';
+import { appState, type SessionRecord, type ProjectRecord } from '../../state.js';
 import { getTerminalInstance } from '../terminal-pane.js';
 import type { BrowserTabInstance } from './types.js';
+
+function isCliBacked(s: SessionRecord): boolean {
+  return !s.type || s.type === 'claude';
+}
+
+// The row we highlight matches what the user sees as "active" in the tab bar
+// and swarm layout: `activeSessionId` when it points at a CLI session. When
+// the user is sending from the browser tab itself, `activeSessionId` is the
+// browser tab, so fall back to the most recently active CLI in nav history.
+function resolveHighlightSession(project: ProjectRecord): SessionRecord | null {
+  const active = project.sessions.find((s) => s.id === project.activeSessionId);
+  if (active && isCliBacked(active)) return active;
+  return appState.getLastActiveCliSessionInProject(project.id);
+}
 
 export interface SendMenuActions {
   deliverTo: (session: SessionRecord) => void | Promise<void>;
@@ -17,14 +31,34 @@ function sessionStatus(sessionId: string): SessionStatus {
   return inst.spawned ? 'running' : 'dormant';
 }
 
-function makeSessionItem(session: SessionRecord, onClick: () => void): HTMLButtonElement {
+function refreshHighlight(instance: BrowserTabInstance): void {
+  const project = appState.activeProject;
+  const highlight = project ? resolveHighlightSession(project) : null;
+  const rows = instance.sendMenuEl.querySelectorAll<HTMLButtonElement>(
+    '.send-menu-item[data-session-id]',
+  );
+  rows.forEach((row) => {
+    row.classList.toggle(
+      'send-menu-item-last-active',
+      row.dataset['sessionId'] === highlight?.id,
+    );
+  });
+}
+
+function makeSessionItem(
+  session: SessionRecord,
+  isLastActive: boolean,
+  onClick: () => void,
+): HTMLButtonElement {
+  const status = sessionStatus(session.id);
   const btn = document.createElement('button');
   btn.className = 'send-menu-item';
+  if (isLastActive) btn.classList.add('send-menu-item-last-active');
   btn.dataset['sessionId'] = session.id;
-  btn.title = `${session.name} — ${sessionStatus(session.id)}`;
+  btn.title = `${session.name} — ${status}`;
 
   const dot = document.createElement('span');
-  dot.className = `send-menu-dot send-menu-dot-${sessionStatus(session.id)}`;
+  dot.className = `send-menu-dot send-menu-dot-${status}`;
 
   const label = document.createElement('span');
   label.className = 'send-menu-label';
@@ -53,11 +87,12 @@ export function showSendMenu(
   menu.innerHTML = '';
 
   const project = appState.activeProject;
-  const sessions = (project?.sessions ?? []).filter((s) => !s.type || s.type === 'claude');
+  const sessions = (project?.sessions ?? []).filter(isCliBacked);
+  const highlight = project ? resolveHighlightSession(project) : null;
 
   for (const s of sessions) {
     menu.appendChild(
-      makeSessionItem(s, () => {
+      makeSessionItem(s, s.id === highlight?.id, () => {
         dismissSendMenu(instance);
         void actions.deliverTo(s);
       }),
@@ -99,12 +134,15 @@ export function showSendMenu(
   menu.style.left = `${left}px`;
   menu.style.top = `${top}px`;
 
-  // Focus the first item so keyboard users can Enter immediately
-  const firstItem = menu.querySelector<HTMLButtonElement>('.send-menu-item');
-  firstItem?.focus();
+  // Keep the highlight in sync if the user switches sessions via tab bar or
+  // sidebar while the menu is open.
+  instance.sendMenuCleanup?.();
+  instance.sendMenuCleanup = appState.on('session-changed', () => refreshHighlight(instance));
 }
 
 export function dismissSendMenu(instance: BrowserTabInstance): void {
+  instance.sendMenuCleanup?.();
+  instance.sendMenuCleanup = undefined;
   instance.sendMenuOverlay.style.display = 'none';
   instance.sendMenuEl.innerHTML = '';
 }

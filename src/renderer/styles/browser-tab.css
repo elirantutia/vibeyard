@@ -864,10 +864,13 @@ body.sidebar-resizing .browser-webview {
   font-size: 12px;
 }
 
-.send-menu-item:hover,
-.send-menu-item:focus {
+.send-menu-item:hover {
   background: var(--bg-hover);
-  outline: none;
+}
+
+.send-menu-item:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
 }
 
 .send-menu-item-action {
@@ -877,6 +880,16 @@ body.sidebar-resizing .browser-webview {
 
 .send-menu-item-action:hover {
   color: var(--text-primary);
+}
+
+.send-menu-item-last-active {
+  background: rgba(233, 69, 96, 0.1);
+  box-shadow: inset 2px 0 0 var(--accent);
+  font-weight: 600;
+}
+
+.send-menu-item-last-active:hover {
+  background: rgba(233, 69, 96, 0.18);
 }
 
 .send-menu-dot {

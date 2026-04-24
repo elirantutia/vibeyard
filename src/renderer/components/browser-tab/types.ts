@@ -102,7 +102,7 @@ export interface BrowserTabInstance {
   drawPlanModeCheckbox: HTMLInputElement;
   drawErrorEl: HTMLDivElement;
   drawMode: boolean;
-  submitLabelCleanup: () => void;
   sendMenuOverlay: HTMLDivElement;
   sendMenuEl: HTMLDivElement;
+  sendMenuCleanup?: () => void;
 }

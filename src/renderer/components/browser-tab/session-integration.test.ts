@@ -4,12 +4,9 @@ import type { SessionRecord } from '../../state.js';
 
 const setActiveSession = vi.fn();
 const promptNewSession = vi.fn();
-const pickExistingSession = vi.fn();
 const setPendingPrompt = vi.fn();
 const injectPromptIntoRunningSession = vi.fn();
 const addPlanSession = vi.fn();
-const getTerminalInstance = vi.fn<[string], { spawned: boolean; exited: boolean } | undefined>();
-const getLastActiveCliSessionInProject = vi.fn<[string], unknown>();
 const dismissInspect = vi.fn();
 const dismissFlow = vi.fn();
 const dismissDraw = vi.fn();
@@ -25,17 +22,14 @@ vi.mock('../../state.js', () => ({
     get activeProject() { return activeProjectValue; },
     setActiveSession,
     addPlanSession,
-    getLastActiveCliSessionInProject,
   },
 }));
 
 vi.mock('../tab-bar.js', () => ({
   promptNewSession,
-  pickExistingSession,
 }));
 
 vi.mock('../terminal-pane.js', () => ({
-  getTerminalInstance,
   setPendingPrompt,
   injectPromptIntoRunningSession,
 }));
@@ -204,234 +198,3 @@ describe('deliverDraw', () => {
   });
 });
 
-describe('getDefaultTarget', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    setProject([]);
-    getTerminalInstance.mockReset();
-    getLastActiveCliSessionInProject.mockReset();
-    // Default: no history match — tests that don't care about history fall through to running/dormant logic
-    getLastActiveCliSessionInProject.mockReturnValue(null);
-  });
-
-  it('returns null when the project has no CLI sessions', async () => {
-    setProject([
-      { id: 'b1', name: 'Browser', type: 'browser-tab' },
-      { id: 'm1', name: 'MCP', type: 'mcp-inspector' },
-    ]);
-    const { getDefaultTarget } = await import('./session-integration.js');
-
-    expect(getDefaultTarget()).toBeNull();
-  });
-
-  it('returns null when there is no active project', async () => {
-    activeProjectValue = null;
-    const { getDefaultTarget } = await import('./session-integration.js');
-
-    expect(getDefaultTarget()).toBeNull();
-    // Restore so other tests keep working
-    activeProjectValue = { id: 'proj-1', sessions: projectSessions };
-  });
-
-  it('prefers the most recently active CLI session (from nav history) over running/dormant order', async () => {
-    setProject([
-      { id: 's-run', name: 'Running' },
-      { id: 's-last', name: 'LastActive' },
-    ]);
-    getTerminalInstance.mockImplementation((id) =>
-      id === 's-run' ? { spawned: true, exited: false } : undefined,
-    );
-    getLastActiveCliSessionInProject.mockReturnValue({ id: 's-last', name: 'LastActive' });
-    const { getDefaultTarget } = await import('./session-integration.js');
-
-    // History wins even though s-run is the only running session
-    expect(getDefaultTarget()?.id).toBe('s-last');
-  });
-
-  it('ignores last-active when it has exited; falls through to first running', async () => {
-    setProject([
-      { id: 's-run', name: 'Running' },
-      { id: 's-last', name: 'LastActiveExited' },
-    ]);
-    getTerminalInstance.mockImplementation((id) => {
-      if (id === 's-run') return { spawned: true, exited: false };
-      if (id === 's-last') return { spawned: true, exited: true };
-      return undefined;
-    });
-    getLastActiveCliSessionInProject.mockReturnValue({ id: 's-last', name: 'LastActiveExited' });
-    const { getDefaultTarget } = await import('./session-integration.js');
-
-    expect(getDefaultTarget()?.id).toBe('s-run');
-  });
-
-  it('prefers a running CLI session over a dormant one when there is no history match', async () => {
-    setProject([
-      { id: 's-dorm', name: 'Dormant' },
-      { id: 's-run', name: 'Running' },
-    ]);
-    getTerminalInstance.mockImplementation((id) =>
-      id === 's-run' ? { spawned: true, exited: false } : undefined,
-    );
-    const { getDefaultTarget } = await import('./session-integration.js');
-
-    expect(getDefaultTarget()?.id).toBe('s-run');
-  });
-
-  it('falls back to first dormant CLI session when none are running', async () => {
-    setProject([
-      { id: 's-a', name: 'A' },
-      { id: 's-b', name: 'B' },
-    ]);
-    getTerminalInstance.mockReturnValue(undefined);
-    const { getDefaultTarget } = await import('./session-integration.js');
-
-    expect(getDefaultTarget()?.id).toBe('s-a');
-  });
-
-  it('skips exited sessions entirely when picking a dormant fallback', async () => {
-    setProject([
-      { id: 's-exited', name: 'Exited' },
-      { id: 's-dorm', name: 'Dormant' },
-    ]);
-    getTerminalInstance.mockImplementation((id) =>
-      id === 's-exited' ? { spawned: true, exited: true } : undefined,
-    );
-    const { getDefaultTarget } = await import('./session-integration.js');
-
-    // Exited is filtered out; falls through to s-dorm.
-    expect(getDefaultTarget()?.id).toBe('s-dorm');
-  });
-});
-
-describe('sendToDefault', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    setProject([]);
-    getTerminalInstance.mockReset();
-  });
-
-  it('delivers to the default target when one exists', async () => {
-    setProject([{ id: 's-run', name: 'Running' }]);
-    getTerminalInstance.mockReturnValue({ spawned: true, exited: false });
-    injectPromptIntoRunningSession.mockReturnValueOnce(true);
-    const { sendToDefault } = await import('./session-integration.js');
-
-    sendToDefault(makeInstance());
-
-    expect(injectPromptIntoRunningSession).toHaveBeenCalledWith('s-run', 'inspect me');
-    expect(setActiveSession).toHaveBeenCalledWith('proj-1', 's-run');
-    expect(dismissInspect).toHaveBeenCalledTimes(1);
-  });
-
-  it('uses the pending-prompt fallback when the default target is dormant', async () => {
-    setProject([{ id: 's-dorm', name: 'Dormant' }]);
-    getTerminalInstance.mockReturnValue(undefined);
-    injectPromptIntoRunningSession.mockReturnValueOnce(false);
-    const { sendToDefault } = await import('./session-integration.js');
-
-    sendToDefault(makeInstance());
-
-    expect(setPendingPrompt).toHaveBeenCalledWith('s-dorm', 'inspect me');
-  });
-
-  it('falls through to new-session creation when no CLI sessions exist', async () => {
-    setProject([{ id: 'b1', name: 'Browser', type: 'browser-tab' }]);
-    addPlanSession.mockReturnValueOnce({ id: 'new-1', name: 'Session 1' });
-    const { sendToDefault } = await import('./session-integration.js');
-
-    sendToDefault(makeInstance());
-
-    expect(addPlanSession).toHaveBeenCalledTimes(1);
-    expect(setPendingPrompt).toHaveBeenCalledWith('new-1', 'inspect me');
-    expect(injectPromptIntoRunningSession).not.toHaveBeenCalled();
-  });
-
-  it('bails when the instruction is empty', async () => {
-    setProject([{ id: 's-run', name: 'Running' }]);
-    const { sendToDefault } = await import('./session-integration.js');
-
-    sendToDefault(makeInstance({ instructionInput: { value: '' } as HTMLTextAreaElement }));
-
-    expect(injectPromptIntoRunningSession).not.toHaveBeenCalled();
-    expect(addPlanSession).not.toHaveBeenCalled();
-  });
-});
-
-describe('sendFlowToDefault', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    setProject([]);
-    getTerminalInstance.mockReset();
-  });
-
-  it('delivers the flow prompt to the default target', async () => {
-    setProject([{ id: 's-run', name: 'Running' }]);
-    getTerminalInstance.mockReturnValue({ spawned: true, exited: false });
-    injectPromptIntoRunningSession.mockReturnValueOnce(true);
-    const { sendFlowToDefault } = await import('./session-integration.js');
-
-    sendFlowToDefault(makeInstance());
-
-    expect(injectPromptIntoRunningSession).toHaveBeenCalledWith('s-run', 'replay flow');
-    expect(dismissFlow).toHaveBeenCalledTimes(1);
-  });
-
-  it('falls through to new-session creation when no CLI sessions exist', async () => {
-    setProject([]);
-    addPlanSession.mockReturnValueOnce({ id: 'new-f', name: 'flow-new' });
-    const { sendFlowToDefault } = await import('./session-integration.js');
-
-    sendFlowToDefault(makeInstance());
-
-    expect(addPlanSession).toHaveBeenCalledTimes(1);
-    expect(setPendingPrompt).toHaveBeenCalledWith('new-f', 'replay flow');
-  });
-});
-
-describe('sendDrawToDefault', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    setProject([]);
-    getTerminalInstance.mockReset();
-    captureScreenshotPath.mockReset();
-    injectPromptIntoRunningSession.mockReset();
-    addPlanSession.mockReset();
-  });
-
-  it('captures a screenshot and delivers the prompt to the default target', async () => {
-    setProject([{ id: 's-run', name: 'Running' }]);
-    getTerminalInstance.mockReturnValue({ spawned: true, exited: false });
-    captureScreenshotPath.mockResolvedValueOnce('/tmp/shot.png');
-    injectPromptIntoRunningSession.mockReturnValueOnce(true);
-    const { sendDrawToDefault } = await import('./session-integration.js');
-
-    await sendDrawToDefault(makeInstance());
-
-    expect(captureScreenshotPath).toHaveBeenCalledTimes(1);
-    expect(injectPromptIntoRunningSession).toHaveBeenCalledWith('s-run', 'draw:/tmp/shot.png');
-    expect(dismissDraw).toHaveBeenCalledTimes(1);
-  });
-
-  it('delegates to sendDrawToNewSession when no CLI sessions exist', async () => {
-    setProject([]);
-    const { sendDrawToDefault } = await import('./session-integration.js');
-
-    await sendDrawToDefault(makeInstance());
-
-    expect(sendDrawToNewSession).toHaveBeenCalledTimes(1);
-    // The fallthrough happens BEFORE screenshot capture, so captureScreenshotPath is not reached.
-    expect(captureScreenshotPath).not.toHaveBeenCalled();
-  });
-
-  it('shows an error and does not fall through when screenshot capture fails', async () => {
-    setProject([{ id: 's-run', name: 'Running' }]);
-    getTerminalInstance.mockReturnValue({ spawned: true, exited: false });
-    captureScreenshotPath.mockResolvedValueOnce(null);
-    const { sendDrawToDefault } = await import('./session-integration.js');
-
-    await sendDrawToDefault(makeInstance());
-
-    expect(showDrawError).toHaveBeenCalledTimes(1);
-    expect(injectPromptIntoRunningSession).not.toHaveBeenCalled();
-  });
-});

@@ -27,14 +27,10 @@ import {
   deliverDraw,
   deliverFlow,
   deliverInspect,
-  getDefaultTarget,
   sendFlowToCustomSession,
-  sendFlowToDefault,
   sendFlowToNewSession,
   sendToCustomSession,
-  sendToDefault,
   sendToNewSession,
-  sendDrawToDefault,
 } from './session-integration.js';
 import { showSendMenu, dismissSendMenu } from './send-menu.js';
 import { wireSubmitDisabled } from '../submit-disabled.js';
@@ -453,7 +449,6 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
     drawPlanModeCheckbox,
     drawErrorEl,
     drawMode: false,
-    submitLabelCleanup: () => {},
     sendMenuOverlay,
     sendMenuEl,
   };
@@ -530,7 +525,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   recordBtn.addEventListener('click', () => toggleFlowMode(instance));
   drawBtn.addEventListener('click', () => toggleDrawMode(instance));
   drawClearBtn.addEventListener('click', () => clearDrawing(instance));
-  drawSubmitBtn.addEventListener('click', () => { void sendDrawToDefault(instance); });
+  drawSubmitBtn.addEventListener('click', () => { void sendDrawToNewSession(instance); });
   drawCustomBtn.addEventListener('click', () => {
     showSendMenu(instance, drawCustomBtn, {
       deliverTo: (session) => deliverDraw(instance, session),
@@ -541,11 +536,11 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   drawInstructionInput.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      void sendDrawToDefault(instance);
+      void sendDrawToNewSession(instance);
     } else if (e.key === 'Escape') { dismissDraw(instance); }
   });
   flowClearBtn.addEventListener('click', () => clearFlow(instance));
-  flowSubmitBtn.addEventListener('click', () => sendFlowToDefault(instance));
+  flowSubmitBtn.addEventListener('click', () => sendFlowToNewSession(instance));
   flowCustomBtn.addEventListener('click', () => {
     showSendMenu(instance, flowCustomBtn, {
       deliverTo: (session) => deliverFlow(instance, session),
@@ -583,7 +578,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
     if (e.target === sendMenuOverlay) dismissSendMenu(instance);
   });
 
-  submitBtn.addEventListener('click', () => sendToDefault(instance));
+  submitBtn.addEventListener('click', () => sendToNewSession(instance));
   customBtn.addEventListener('click', () => {
     showSendMenu(instance, customBtn, {
       deliverTo: (session) => deliverInspect(instance, session),
@@ -594,7 +589,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   instructionInput.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      sendToDefault(instance);
+      sendToNewSession(instance);
     } else if (e.key === 'Escape') dismissInspect(instance);
   });
 
@@ -630,28 +625,6 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
     }
   }) as EventListener);
 
-  function updateSubmitLabels(): void {
-    const target = getDefaultTarget();
-    const label = target ? `Send to ${target.name}` : 'Send to New Session';
-    const title = target
-      ? `Send to ${target.name} — injects if running, queues if dormant`
-      : 'No CLI sessions yet — will create a new one';
-    submitBtn.textContent = label;
-    submitBtn.title = title;
-    drawSubmitBtn.textContent = label;
-    drawSubmitBtn.title = title;
-    flowSubmitBtn.textContent = label;
-    flowSubmitBtn.title = title;
-  }
-  updateSubmitLabels();
-  const unsubs = [
-    appState.on('session-added', updateSubmitLabels),
-    appState.on('session-removed', updateSubmitLabels),
-    appState.on('session-changed', updateSubmitLabels),
-    appState.on('project-changed', updateSubmitLabels),
-    appState.on('state-loaded', updateSubmitLabels),
-  ];
-  instance.submitLabelCleanup = () => { for (const u of unsubs) u(); };
 }
 
 export function attachBrowserTabToContainer(sessionId: string, container: HTMLElement): void {
@@ -682,7 +655,6 @@ export function destroyBrowserTabPane(sessionId: string): void {
   instances.delete(sessionId);
 
   document.removeEventListener('mousedown', instance.viewportOutsideClickHandler);
-  try { instance.submitLabelCleanup(); } catch {}
   try { dismissSendMenu(instance); } catch {}
 
   // <webview> calls throw if it isn't attached + dom-ready yet. Guard each
