@@ -1,5 +1,6 @@
 import { appState } from '../state.js';
 import { areaLabel } from '../dom-utils.js';
+import { isAbsolutePath, joinPath } from '../../shared/platform.js';
 import { destroySearchBar } from './search-bar.js';
 
 interface FileViewerInstance {
@@ -91,9 +92,9 @@ function parseDiffLines(diff: string): HTMLElement {
 function resolveFilePath(instance: FileViewerInstance): string {
   const project = appState.activeProject;
   const basePath = instance.worktreePath ?? project?.path ?? '';
-  return instance.filePath.startsWith('/')
+  return isAbsolutePath(instance.filePath)
     ? instance.filePath
-    : `${basePath}/${instance.filePath}`;
+    : joinPath(basePath, instance.filePath);
 }
 
 let loadGeneration = 0;

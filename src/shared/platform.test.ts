@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { basename, lastSeparatorIndex } from './platform';
+import { basename, isAbsolutePath, joinPath, lastSeparatorIndex } from './platform';
 
 describe('basename', () => {
   it('extracts last segment from POSIX paths', () => {
@@ -53,5 +53,33 @@ describe('lastSeparatorIndex', () => {
   it('returns -1 when no separator present', () => {
     expect(lastSeparatorIndex('project')).toBe(-1);
     expect(lastSeparatorIndex('')).toBe(-1);
+  });
+});
+
+describe('isAbsolutePath', () => {
+  it('detects POSIX absolute paths', () => {
+    expect(isAbsolutePath('/home/user/project')).toBe(true);
+  });
+
+  it('detects Windows absolute and UNC paths', () => {
+    expect(isAbsolutePath('C:\\Users\\me\\project')).toBe(true);
+    expect(isAbsolutePath('\\\\server\\share\\file.txt')).toBe(true);
+  });
+
+  it('does not treat relative paths as absolute', () => {
+    expect(isAbsolutePath('src/renderer/index.ts')).toBe(false);
+    expect(isAbsolutePath('.claude\\skills\\my-skill\\SKILL.md')).toBe(false);
+  });
+});
+
+describe('joinPath', () => {
+  it('joins POSIX paths without duplicating separators', () => {
+    expect(joinPath('/home/user/project', 'docs/readme.md')).toBe('/home/user/project/docs/readme.md');
+    expect(joinPath('/home/user/project/', '/docs/readme.md')).toBe('/home/user/project/docs/readme.md');
+  });
+
+  it('joins Windows paths with backslashes', () => {
+    expect(joinPath('C:\\Users\\me\\project', '.claude\\skills\\my-skill\\SKILL.md'))
+      .toBe('C:\\Users\\me\\project\\.claude\\skills\\my-skill\\SKILL.md');
   });
 });
