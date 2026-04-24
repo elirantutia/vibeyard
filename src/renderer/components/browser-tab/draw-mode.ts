@@ -14,6 +14,7 @@ export function toggleDrawMode(instance: BrowserTabInstance): void {
   if (instance.drawMode) {
     instance.webview.send('enter-draw-mode');
     instance.drawInstructionInput.value = '';
+    instance.drawInstructionInput.dispatchEvent(new Event('input'));
   } else {
     instance.webview.send('exit-draw-mode');
     instance.drawPanel.style.display = 'none';
@@ -34,6 +35,7 @@ export function clearDrawing(instance: BrowserTabInstance): void {
 
 export function dismissDraw(instance: BrowserTabInstance): void {
   instance.drawInstructionInput.value = '';
+  instance.drawInstructionInput.dispatchEvent(new Event('input'));
   hideDrawError(instance);
   if (instance.drawMode) toggleDrawMode(instance);
 }
@@ -87,7 +89,7 @@ export async function sendDrawToNewSession(instance: BrowserTabInstance): Promis
   }
 
   const prompt = buildDrawPrompt(instance, imagePath);
-  const newSession = appState.addPlanSession(project.id, `Draw: ${instruction.slice(0, 30)}`);
+  const newSession = appState.addPlanSession(project.id, `Draw: ${instruction.slice(0, 30)}`, instance.drawPlanModeCheckbox.checked);
   if (newSession) {
     setPendingPrompt(newSession.id, prompt);
   }

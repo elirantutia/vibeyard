@@ -211,6 +211,24 @@
   border-color: var(--border);
 }
 
+.split-btn-group {
+  display: inline-flex;
+  align-items: center;
+}
+
+.split-btn-group .split-btn-main {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.split-btn-group .split-btn-caret {
+  width: 16px;
+  font-size: 10px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  margin-left: -1px;
+}
+
 /* Tab context menu */
 .tab-context-menu {
   position: fixed;

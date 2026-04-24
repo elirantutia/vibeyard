@@ -138,9 +138,15 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  background: var(--bg-tertiary);
   color: var(--text-secondary);
   font-size: 13px;
+  border-top: 1px solid var(--border);
   border-left: 3px solid transparent;
+}
+
+.project-row:first-child .project-item {
+  border-top: none;
 }
 
 .project-item:hover {
@@ -148,7 +154,6 @@
 }
 
 .project-item.active {
-  background: var(--bg-primary);
   color: var(--text-primary);
   border-left-color: var(--accent);
 }
@@ -158,6 +163,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 600;
 }
 
 .project-item .project-name.unread {
@@ -170,6 +176,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  opacity: 0.85;
+  font-weight: 400;
 }
 
 .project-session-count {
@@ -191,6 +199,53 @@
 
 .project-item .project-delete:hover {
   color: var(--accent);
+}
+
+.project-actions {
+  display: flex;
+  gap: 4px;
+  padding: 4px 12px 6px;
+}
+
+.project-action-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  font-size: 11px;
+  font-family: inherit;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-action-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong, var(--border));
+  background: var(--bg-hover);
+}
+
+.project-action-btn.active {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+  background: var(--bg-hover);
+}
+
+.project-panel {
+  background: var(--bg-secondary);
+  border-left: 3px solid transparent;
+}
+
+.project-panel.hidden {
+  display: none;
+}
+
+.project-panel-history {
+  padding-bottom: 4px;
 }
 
 /* Update banner */

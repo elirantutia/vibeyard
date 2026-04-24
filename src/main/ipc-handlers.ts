@@ -194,6 +194,22 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle('fs:listDir', (_event, dirPath: string) => {
+    try {
+      const expanded = expandUserPath(dirPath);
+      if (!isAllowedReadPath(expanded)) return [];
+      const entries = fs.readdirSync(expanded, { withFileTypes: true });
+      // Renderer sorts via sortEntries(); keep main process cheap.
+      return entries.map(e => ({
+        name: e.name,
+        path: path.join(expanded, e.name),
+        isDirectory: e.isDirectory(),
+      }));
+    } catch {
+      return [];
+    }
+  });
+
   ipcMain.handle('store:load', () => {
     return loadState();
   });

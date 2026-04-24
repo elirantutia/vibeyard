@@ -158,6 +158,8 @@ export function createFileReaderPane(sessionId: string, filePath: string, target
 
   const el = document.createElement('div');
   el.className = 'file-reader-pane';
+  el.dataset.sessionId = sessionId;
+  el.dataset.paneKind = 'file-reader';
   el.style.display = 'none';
 
   // Header

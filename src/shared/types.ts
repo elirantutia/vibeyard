@@ -75,7 +75,7 @@ export interface ContextWindowInfo {
 export interface SessionRecord {
   id: string;
   name: string;
-  type?: 'claude' | 'mcp-inspector' | 'diff-viewer' | 'file-reader' | 'remote-terminal' | 'browser-tab';
+  type?: 'claude' | 'mcp-inspector' | 'diff-viewer' | 'file-reader' | 'remote-terminal' | 'browser-tab' | 'project-tab';
   providerId?: ProviderId;
   args?: string;
   cliSessionId: string | null;
@@ -164,12 +164,11 @@ export interface Preferences {
   theme?: 'dark' | 'light';
   readinessExcludedProviders?: ProviderId[];
   sidebarViews?: {
-    configSections: boolean;
     gitPanel: boolean;
     sessionHistory: boolean;
     costFooter: boolean;
-    readinessSection: boolean;
     discussions: boolean;
+    fileTree: boolean;
   };
 }
 

@@ -12,7 +12,7 @@ export function sendFlowToNewSession(instance: BrowserTabInstance): void {
   const project = appState.activeProject;
   if (!project) return;
 
-  const newSession = appState.addPlanSession(project.id, `Flow: ${instruction.slice(0, 30)}`);
+  const newSession = appState.addPlanSession(project.id, `Flow: ${instruction.slice(0, 30)}`, instance.flowPlanModeCheckbox.checked);
   if (newSession) {
     setPendingPrompt(newSession.id, prompt);
   }
@@ -37,7 +37,7 @@ export function sendToNewSession(instance: BrowserTabInstance): void {
   if (!project) return;
 
   const sessionName = `${info.tagName}: ${instance.instructionInput.value.trim().slice(0, 30)}`;
-  const newSession = appState.addPlanSession(project.id, sessionName);
+  const newSession = appState.addPlanSession(project.id, sessionName, instance.inspectPlanModeCheckbox.checked);
   if (newSession) {
     setPendingPrompt(newSession.id, prompt);
   }

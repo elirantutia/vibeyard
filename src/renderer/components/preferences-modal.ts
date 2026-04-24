@@ -68,7 +68,7 @@ export function showPreferencesModal(): void {
   let zoomSelect: CustomSelectInstance | null = null;
   let zoomPrefUnsub: (() => void) | null = null;
   let debugModeCheckbox: HTMLInputElement | null = null;
-  let sidebarCheckboxes: { configSections: HTMLInputElement; gitPanel: HTMLInputElement; sessionHistory: HTMLInputElement; costFooter: HTMLInputElement; readinessSection: HTMLInputElement; discussions: HTMLInputElement } | null = null;
+  let sidebarCheckboxes: { gitPanel: HTMLInputElement; sessionHistory: HTMLInputElement; costFooter: HTMLInputElement; discussions: HTMLInputElement; fileTree: HTMLInputElement } | null = null;
   let activeRecorder: { cleanup: () => void } | null = null;
   const originalTheme = appState.preferences.theme ?? 'dark';
 
@@ -244,10 +244,9 @@ export function showPreferencesModal(): void {
       });
 
     } else if (section === 'sidebar') {
-      const views = appState.preferences.sidebarViews ?? { configSections: true, gitPanel: true, sessionHistory: true, costFooter: true, readinessSection: true, discussions: true };
+      const views = appState.preferences.sidebarViews ?? { gitPanel: true, sessionHistory: true, costFooter: true, discussions: true, fileTree: true };
       const toggles: { key: keyof typeof views; label: string }[] = [
-        { key: 'configSections', label: 'Provider Tools (MCP Servers, Agents, Skills, Commands)' },
-        { key: 'readinessSection', label: 'AI Readiness' },
+        { key: 'fileTree', label: 'Project File Tree' },
         { key: 'gitPanel', label: 'Git Panel' },
         { key: 'sessionHistory', label: 'Session History' },
         { key: 'costFooter', label: 'Cost Footer' },
@@ -728,12 +727,11 @@ export function showPreferencesModal(): void {
     }
     if (sidebarCheckboxes) {
       appState.setPreference('sidebarViews', {
-        configSections: sidebarCheckboxes.configSections.checked,
         gitPanel: sidebarCheckboxes.gitPanel.checked,
         sessionHistory: sidebarCheckboxes.sessionHistory.checked,
         costFooter: sidebarCheckboxes.costFooter.checked,
-        readinessSection: sidebarCheckboxes.readinessSection.checked,
         discussions: sidebarCheckboxes.discussions.checked,
+        fileTree: sidebarCheckboxes.fileTree.checked,
       });
     }
   };

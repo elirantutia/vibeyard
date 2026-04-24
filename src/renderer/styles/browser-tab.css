@@ -548,6 +548,15 @@ body.sidebar-resizing .browser-webview {
   opacity: 0.9;
 }
 
+.inspect-submit-btn:disabled,
+.inspect-submit-btn:disabled:hover,
+.inspect-dropdown-btn:disabled,
+.inspect-dropdown-btn:disabled:hover {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .inspect-draw-actions {
   display: flex;
   gap: 8px;

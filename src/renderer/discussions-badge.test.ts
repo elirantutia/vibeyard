@@ -26,16 +26,15 @@ const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 vi.stubGlobal('DOMParser', class {
   parseFromString(text: string, _type: string) {
-    // Minimal XML parsing for tests — extract <entry><updated> values
     const entries: Array<{ querySelector: (sel: string) => { textContent: string } | null }> = [];
     const entryRegex = /<entry>([\s\S]*?)<\/entry>/g;
     let match;
     while ((match = entryRegex.exec(text)) !== null) {
       const content = match[1];
-      const updatedMatch = /<updated>(.*?)<\/updated>/.exec(content);
+      const publishedMatch = /<published>(.*?)<\/published>/.exec(content);
       entries.push({
         querySelector: (sel: string) => {
-          if (sel === 'updated' && updatedMatch) return { textContent: updatedMatch[1] };
+          if (sel === 'published' && publishedMatch) return { textContent: publishedMatch[1] };
           return null;
         },
       });
@@ -55,7 +54,7 @@ import {
 } from './discussions-badge';
 
 function buildAtomFeed(timestamps: string[]): string {
-  const entries = timestamps.map(t => `<entry><updated>${t}</updated></entry>`).join('');
+  const entries = timestamps.map(t => `<entry><published>${t}</published><updated>${t}</updated></entry>`).join('');
   return `<?xml version="1.0"?><feed>${entries}</feed>`;
 }
 
@@ -76,6 +75,17 @@ afterEach(() => {
 describe('discussions-badge', () => {
   it('starts with count 0', () => {
     expect(getNewCount()).toBe(0);
+  });
+
+  it('requests the feed sorted by creation date', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('<feed></feed>') });
+
+    init();
+    for (const cb of appStateListeners.get('state-loaded') ?? []) cb();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch.mock.calls[0][0]).toContain('discussions_q=sort:date_created');
   });
 
   it('counts all entries as new when no lastSeen is set', async () => {

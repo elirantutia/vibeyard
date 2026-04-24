@@ -19,6 +19,20 @@ export function scoreColor(score: number): string {
   return '#e94560';
 }
 
+/** Create a labeled checkbox row using the `inspect-attach-dims-row` class. */
+export function createPlanModeRow(labelText: string = 'Plan mode', checked = true): { row: HTMLLabelElement; checkbox: HTMLInputElement } {
+  const row = document.createElement('label');
+  row.className = 'inspect-attach-dims-row';
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.checked = checked;
+  const text = document.createElement('span');
+  text.textContent = labelText;
+  row.appendChild(checkbox);
+  row.appendChild(text);
+  return { row, checkbox };
+}
+
 /** Create a numeric PIN input field (4–8 digits). */
 export function createPinInput(): HTMLInputElement {
   const input = document.createElement('input');

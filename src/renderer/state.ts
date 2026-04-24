@@ -43,7 +43,7 @@ const defaultPreferences: Preferences = {
   autoTitleEnabled: true,
   zoomFactor: 1.0,
   readinessExcludedProviders: [],
-  sidebarViews: { configSections: true, gitPanel: true, sessionHistory: true, costFooter: true, readinessSection: true, discussions: true },
+  sidebarViews: { gitPanel: true, sessionHistory: true, costFooter: true, discussions: true, fileTree: true },
 };
 
 const NAV_HISTORY_MAX = 50;
@@ -313,13 +313,13 @@ class AppState {
     this.emit('project-changed');
   }
 
-  addPlanSession(projectId: string, name: string): SessionRecord | undefined {
+  addPlanSession(projectId: string, name: string, planMode: boolean = true): SessionRecord | undefined {
     const project = this.state.projects.find((p) => p.id === projectId);
     if (!project) return undefined;
     const activeSession = project.sessions.find((s) => s.id === project.activeSessionId);
     const providerId = activeSession?.providerId ?? this.state.preferences.defaultProvider ?? 'claude';
     const caps = getProviderCapabilities(providerId);
-    const planArg = caps?.planModeArg ?? '';
+    const planArg = planMode ? (caps?.planModeArg ?? '') : '';
     const base = project.defaultArgs ?? '';
     const args = [base, planArg].filter(Boolean).join(' ').trim() || undefined;
     return this.addSession(projectId, name, args, providerId);
@@ -438,6 +438,41 @@ class AppState {
       name,
       type: 'browser-tab',
       browserTabUrl: url,
+      cliSessionId: null,
+      createdAt: new Date().toISOString(),
+    };
+    project.sessions.push(session);
+    project.activeSessionId = session.id;
+    this.pushNav(session.id);
+    this.persist();
+    this.emit('session-added', { projectId, session });
+    this.emit('session-changed');
+    return session;
+  }
+
+  openProjectTab(projectId: string): SessionRecord | undefined {
+    const project = this.state.projects.find((p) => p.id === projectId);
+    if (!project) return undefined;
+
+    if (this.state.activeProjectId !== projectId) {
+      this.setActiveProject(projectId);
+    }
+
+    const existing = project.sessions.find((s) => s.type === 'project-tab');
+    if (existing) {
+      if (project.activeSessionId !== existing.id) {
+        project.activeSessionId = existing.id;
+        this.pushNav(existing.id);
+        this.persist();
+        this.emit('session-changed');
+      }
+      return existing;
+    }
+
+    const session: SessionRecord = {
+      id: crypto.randomUUID(),
+      name: project.name,
+      type: 'project-tab',
       cliSessionId: null,
       createdAt: new Date().toISOString(),
     };

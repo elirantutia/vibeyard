@@ -22,10 +22,7 @@
       </div>
       <div id="sidebar-content">
         <div id="project-list"></div>
-        <div id="readiness-section"></div>
         <div id="git-panel"></div>
-        <div id="session-history"></div>
-        <div id="config-sections"></div>
       </div>
       <div id="sidebar-discussions"></div>
       <div id="sidebar-footer"></div>
@@ -41,7 +38,10 @@
           <button id="btn-toggle-terminal" class="icon-btn" title="Toggle Terminal (Ctrl+`)" style="font-size:13px;">&#x2588;</button>
           <button id="btn-add-mcp-inspector" class="icon-btn" title="MCP Inspector" style="font-size:11px;font-weight:600;">MCP</button>
           <button id="btn-toggle-swarm" class="icon-btn" title="Toggle Swarm Mode (Ctrl+\)">&#x229E;</button>
-          <button id="btn-add-session" class="icon-btn" title="New Session (Ctrl+Shift+N)">+</button>
+          <div class="split-btn-group">
+            <button id="btn-add-session" class="icon-btn split-btn-main" title="New Session (Ctrl+Shift+N)">+</button>
+            <button id="btn-add-session-menu" class="icon-btn split-btn-caret" title="More session options" aria-haspopup="menu">&#x25BE;</button>
+          </div>
         </div>
       </div>
       <div id="terminal-container"></div>

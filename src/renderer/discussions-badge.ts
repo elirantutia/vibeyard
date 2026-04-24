@@ -1,7 +1,9 @@
 import { appState } from './state.js';
 
-export const DISCUSSIONS_URL = 'https://github.com/elirantutia/vibeyard/discussions';
-const FEED_URL = DISCUSSIONS_URL + '.atom';
+const DISCUSSIONS_BASE = 'https://github.com/elirantutia/vibeyard/discussions';
+const SORT_QUERY = '?discussions_q=sort:date_created';
+export const DISCUSSIONS_URL = DISCUSSIONS_BASE + SORT_QUERY;
+const FEED_URL = DISCUSSIONS_BASE + '.atom' + SORT_QUERY;
 const POLL_INTERVAL = 3_600_000;
 
 type ChangeCallback = () => void;
@@ -24,14 +26,13 @@ async function poll(): Promise<void> {
     const entries = doc.querySelectorAll('entry');
     if (entries.length === 0) return;
 
-    // Find the latest timestamp across all entries
     let newest: string | null = null;
     const timestamps: string[] = [];
     for (const entry of entries) {
-      const updated = entry.querySelector('updated')?.textContent?.trim();
-      if (updated) {
-        timestamps.push(updated);
-        if (!newest || updated > newest) newest = updated;
+      const published = entry.querySelector('published')?.textContent?.trim();
+      if (published) {
+        timestamps.push(published);
+        if (!newest || published > newest) newest = published;
       }
     }
     latestTimestamp = newest;
