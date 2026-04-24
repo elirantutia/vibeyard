@@ -24,13 +24,26 @@ function deliver(session: SessionRecord, prompt: string): void {
 export function getDefaultTarget(): SessionRecord | null {
   const project = appState.activeProject;
   if (!project) return null;
+
+  const isExited = (id: string): boolean => getTerminalInstance(id)?.exited === true;
+
+  // 1. Prefer the session the user was most recently in (matches the sidebar's
+  //    highlighted tab). Works even when the active session is a browser tab —
+  //    we walk back through the nav history to find the last CLI-backed entry.
+  const lastActive = appState.getLastActiveCliSessionInProject(project.id);
+  if (lastActive && !isExited(lastActive.id)) return lastActive;
+
+  // 2. Fall back to the first running CLI session in the project.
   const candidates = project.sessions.filter((s) => !s.type || s.type === 'claude');
   if (candidates.length === 0) return null;
   const running = candidates.find((s) => {
     const inst = getTerminalInstance(s.id);
     return inst?.spawned === true && !inst.exited;
   });
-  return running ?? candidates[0];
+  if (running) return running;
+
+  // 3. Fall back to the first non-exited candidate (dormant or never-spawned).
+  return candidates.find((s) => !isExited(s.id)) ?? null;
 }
 
 export function sendFlowToNewSession(instance: BrowserTabInstance): void {

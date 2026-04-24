@@ -9,6 +9,7 @@ const setPendingPrompt = vi.fn();
 const injectPromptIntoRunningSession = vi.fn();
 const addPlanSession = vi.fn();
 const getTerminalInstance = vi.fn<[string], { spawned: boolean; exited: boolean } | undefined>();
+const getLastActiveCliSessionInProject = vi.fn<[string], unknown>();
 const dismissInspect = vi.fn();
 const dismissFlow = vi.fn();
 const dismissDraw = vi.fn();
@@ -24,6 +25,7 @@ vi.mock('../../state.js', () => ({
     get activeProject() { return activeProjectValue; },
     setActiveSession,
     addPlanSession,
+    getLastActiveCliSessionInProject,
   },
 }));
 
@@ -207,6 +209,9 @@ describe('getDefaultTarget', () => {
     vi.clearAllMocks();
     setProject([]);
     getTerminalInstance.mockReset();
+    getLastActiveCliSessionInProject.mockReset();
+    // Default: no history match — tests that don't care about history fall through to running/dormant logic
+    getLastActiveCliSessionInProject.mockReturnValue(null);
   });
 
   it('returns null when the project has no CLI sessions', async () => {
@@ -228,7 +233,38 @@ describe('getDefaultTarget', () => {
     activeProjectValue = { id: 'proj-1', sessions: projectSessions };
   });
 
-  it('prefers a running CLI session over a dormant one', async () => {
+  it('prefers the most recently active CLI session (from nav history) over running/dormant order', async () => {
+    setProject([
+      { id: 's-run', name: 'Running' },
+      { id: 's-last', name: 'LastActive' },
+    ]);
+    getTerminalInstance.mockImplementation((id) =>
+      id === 's-run' ? { spawned: true, exited: false } : undefined,
+    );
+    getLastActiveCliSessionInProject.mockReturnValue({ id: 's-last', name: 'LastActive' });
+    const { getDefaultTarget } = await import('./session-integration.js');
+
+    // History wins even though s-run is the only running session
+    expect(getDefaultTarget()?.id).toBe('s-last');
+  });
+
+  it('ignores last-active when it has exited; falls through to first running', async () => {
+    setProject([
+      { id: 's-run', name: 'Running' },
+      { id: 's-last', name: 'LastActiveExited' },
+    ]);
+    getTerminalInstance.mockImplementation((id) => {
+      if (id === 's-run') return { spawned: true, exited: false };
+      if (id === 's-last') return { spawned: true, exited: true };
+      return undefined;
+    });
+    getLastActiveCliSessionInProject.mockReturnValue({ id: 's-last', name: 'LastActiveExited' });
+    const { getDefaultTarget } = await import('./session-integration.js');
+
+    expect(getDefaultTarget()?.id).toBe('s-run');
+  });
+
+  it('prefers a running CLI session over a dormant one when there is no history match', async () => {
     setProject([
       { id: 's-dorm', name: 'Dormant' },
       { id: 's-run', name: 'Running' },
@@ -252,7 +288,7 @@ describe('getDefaultTarget', () => {
     expect(getDefaultTarget()?.id).toBe('s-a');
   });
 
-  it('treats an exited terminal instance as not running', async () => {
+  it('skips exited sessions entirely when picking a dormant fallback', async () => {
     setProject([
       { id: 's-exited', name: 'Exited' },
       { id: 's-dorm', name: 'Dormant' },
@@ -262,8 +298,8 @@ describe('getDefaultTarget', () => {
     );
     const { getDefaultTarget } = await import('./session-integration.js');
 
-    // Neither is running, so it falls back to the first candidate.
-    expect(getDefaultTarget()?.id).toBe('s-exited');
+    // Exited is filtered out; falls through to s-dorm.
+    expect(getDefaultTarget()?.id).toBe('s-dorm');
   });
 });
 
