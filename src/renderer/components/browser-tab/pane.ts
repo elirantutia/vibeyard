@@ -226,7 +226,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
 
   const customBtn = document.createElement('button');
   customBtn.className = 'inspect-dropdown-btn';
-  customBtn.textContent = '⋯';
+  customBtn.textContent = '▼';
   customBtn.title = 'More options — pick a session or create new';
 
   submitGroup.appendChild(submitBtn);
@@ -283,7 +283,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
 
   const drawCustomBtn = document.createElement('button');
   drawCustomBtn.className = 'inspect-dropdown-btn';
-  drawCustomBtn.textContent = '⋯';
+  drawCustomBtn.textContent = '▼';
   drawCustomBtn.title = 'More options — pick a session or create new';
 
   drawSubmitGroup.appendChild(drawSubmitBtn);
@@ -360,7 +360,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
 
   const flowCustomBtn = document.createElement('button');
   flowCustomBtn.className = 'inspect-dropdown-btn';
-  flowCustomBtn.textContent = '⋯';
+  flowCustomBtn.textContent = '▼';
   flowCustomBtn.title = 'More options — pick a session or create new';
 
   flowSubmitGroup.appendChild(flowSubmitBtn);

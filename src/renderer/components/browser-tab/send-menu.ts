@@ -21,22 +21,17 @@ function makeSessionItem(session: SessionRecord, onClick: () => void): HTMLButto
   const btn = document.createElement('button');
   btn.className = 'send-menu-item';
   btn.dataset['sessionId'] = session.id;
+  btn.title = `${session.name} — ${sessionStatus(session.id)}`;
 
-  const status = sessionStatus(session.id);
   const dot = document.createElement('span');
-  dot.className = `send-menu-dot send-menu-dot-${status}`;
+  dot.className = `send-menu-dot send-menu-dot-${sessionStatus(session.id)}`;
 
   const label = document.createElement('span');
   label.className = 'send-menu-label';
   label.textContent = session.name;
 
-  const hint = document.createElement('span');
-  hint.className = 'send-menu-hint';
-  hint.textContent = status === 'running' ? 'running' : status === 'exited' ? 'exited' : 'not started';
-
   btn.appendChild(dot);
   btn.appendChild(label);
-  btn.appendChild(hint);
   btn.addEventListener('click', onClick);
   return btn;
 }

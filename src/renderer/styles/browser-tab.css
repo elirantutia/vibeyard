@@ -909,13 +909,6 @@ body.sidebar-resizing .browser-webview {
   white-space: nowrap;
 }
 
-.send-menu-hint {
-  font-size: 10px;
-  color: var(--text-secondary);
-  font-style: italic;
-  flex-shrink: 0;
-}
-
 .send-menu-divider {
   height: 1px;
   background: var(--border);
