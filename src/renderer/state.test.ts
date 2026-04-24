@@ -916,6 +916,18 @@ describe('archiveSession via removeSession()', () => {
     expect(history[0].providerId).toBe('claude');
   });
 
+  it('archives Copilot sessions once a cliSessionId is available', () => {
+    const project = addProject();
+    const session = appState.addSession(project.id, 'Copilot Session', undefined, 'copilot')!;
+    appState.updateSessionCliId(project.id, session.id, 'copilot-cli-123');
+    appState.removeSession(project.id, session.id);
+    const history = appState.getSessionHistory(project.id);
+    expect(history).toHaveLength(1);
+    expect(history[0].name).toBe('Copilot Session');
+    expect(history[0].providerId).toBe('copilot');
+    expect(history[0].cliSessionId).toBe('copilot-cli-123');
+  });
+
   it('captures cost data when available', () => {
     mockCostData();
     const project = addProject();
