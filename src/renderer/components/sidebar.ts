@@ -1,5 +1,5 @@
 import { appState, ProjectRecord } from '../state.js';
-import { showModal, setModalError, closeModal } from './modal.js';
+import { showModal, setModalError, closeModal, showConfirmDialog } from './modal.js';
 import { showPreferencesModal } from './preferences-modal.js';
 import { onChange as onCostChange, getAggregateCost } from '../session-cost.js';
 import { hasUnreadInProject, onChange as onUnreadChange } from '../session-unread.js';
@@ -413,8 +413,10 @@ function confirmRemoveProject(project: ProjectRecord): void {
   const message = historyCount > 0
     ? `Remove project "${project.name}"? This will delete all sessions and history (${historyCount} entries) from Vibeyard. No files on disk will be affected.`
     : `Remove project "${project.name}"? No files on disk will be affected.`;
-  if (!confirm(message)) return;
-  appState.removeProject(project.id);
+  showConfirmDialog('Remove project', message, {
+    confirmLabel: 'Remove',
+    onConfirm: () => appState.removeProject(project.id),
+  });
 }
 
 function showProjectContextMenu(x: number, y: number, project: ProjectRecord): void {
