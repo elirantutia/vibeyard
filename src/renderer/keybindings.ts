@@ -1,4 +1,5 @@
 import { appState } from './state.js';
+import { closeSessionWithConfirm } from './session-close.js';
 import { promptNewProject, toggleSidebar } from './components/sidebar.js';
 import { quickNewSession } from './components/tab-bar.js';
 import { toggleProjectTerminal } from './components/project-terminal.js';
@@ -21,7 +22,7 @@ export function initKeybindings(): void {
   const handleCloseSession = () => {
     const project = appState.activeProject;
     const session = appState.activeSession;
-    if (project && session) appState.removeSession(project.id, session.id);
+    if (project && session) closeSessionWithConfirm(project.id, session.id);
   };
 
   // Menu IPC listeners — handle clicks on Electron menu items.

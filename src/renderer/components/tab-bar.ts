@@ -13,6 +13,13 @@ import { endShare, onShareChange } from '../sharing/share-manager.js';
 import { openInspector, isInspectorOpen, getInspectedSessionId, closeInspector } from './session-inspector.js';
 import { loadProviderAvailability, hasMultipleAvailableProviders, getProviderAvailabilitySnapshot, getProviderCapabilities } from '../provider-availability.js';
 import { buildResumeWithProviderItems } from './resume-with-provider-menu.js';
+import {
+  closeSessionWithConfirm,
+  closeAllSessionsWithConfirm,
+  closeOtherSessionsWithConfirm,
+  closeSessionsFromRightWithConfirm,
+  closeSessionsFromLeftWithConfirm,
+} from '../session-close.js';
 
 const tabListEl = document.getElementById('tab-list')!;
 const gitStatusEl = document.getElementById('git-status')!;
@@ -156,7 +163,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
   closeItem.addEventListener('click', (e) => {
     e.stopPropagation();
     hideTabContextMenu();
-    appState.removeSession(project.id, session.id);
+    closeSessionWithConfirm(project.id, session.id);
   });
 
   const sessionIdx = project.sessions.findIndex((s) => s.id === session.id);
@@ -171,7 +178,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
   closeAllItem.addEventListener('click', (e) => {
     e.stopPropagation();
     hideTabContextMenu();
-    appState.removeAllSessions(project.id);
+    closeAllSessionsWithConfirm(project.id);
   });
 
   const closeOthersItem = document.createElement('div');
@@ -181,7 +188,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
     closeOthersItem.addEventListener('click', (e) => {
       e.stopPropagation();
       hideTabContextMenu();
-      appState.removeOtherSessions(project.id, session.id);
+      closeOtherSessionsWithConfirm(project.id, session.id);
     });
   }
 
@@ -192,7 +199,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
     closeRightItem.addEventListener('click', (e) => {
       e.stopPropagation();
       hideTabContextMenu();
-      appState.removeSessionsFromRight(project.id, session.id);
+      closeSessionsFromRightWithConfirm(project.id, session.id);
     });
   }
 
@@ -203,7 +210,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
     closeLeftItem.addEventListener('click', (e) => {
       e.stopPropagation();
       hideTabContextMenu();
-      appState.removeSessionsFromLeft(project.id, session.id);
+      closeSessionsFromLeftWithConfirm(project.id, session.id);
     });
   }
 
@@ -410,7 +417,7 @@ function render(): void {
     tab.addEventListener('auxclick', (e) => {
       if (e.button === 1) {
         e.preventDefault();
-        appState.removeSession(project.id, session.id);
+        closeSessionWithConfirm(project.id, session.id);
       }
     });
 
@@ -425,7 +432,7 @@ function render(): void {
 
     // Close button
     tab.querySelector('.tab-close')!.addEventListener('click', () => {
-      appState.removeSession(project.id, session.id);
+      closeSessionWithConfirm(project.id, session.id);
     });
 
     tab.addEventListener('dragstart', (e) => {

@@ -1,33 +1,44 @@
 name: PR Review Collect
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'Pull request number to review'
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: pr-review-collect-${{ github.event.pull_request.number }}
+  group: pr-review-collect-${{ inputs.pr_number }}
   cancel-in-progress: true
 
 jobs:
   prepare:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-          persist-credentials: false
+      - name: Validate PR number
+        id: pr
+        env:
+          PR_NUMBER_INPUT: ${{ inputs.pr_number }}
+        run: |
+          [[ "$PR_NUMBER_INPUT" =~ ^[0-9]+$ ]] || { echo "Invalid PR number"; exit 1; }
+          echo "number=$PR_NUMBER_INPUT" >> "$GITHUB_OUTPUT"
 
-      - name: Save PR metadata
+      - name: Collect PR context
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
         run: |
           mkdir -p ./pr-context
-          echo "${{ github.event.pull_request.number }}" > ./pr-context/pr-number
-          echo "${{ github.event.pull_request.head.sha }}" > ./pr-context/head-sha
-          echo "${{ github.event.pull_request.base.sha }}" > ./pr-context/base-sha
-          git diff ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} > ./pr-context/diff.patch
+          read -r HEAD_SHA BASE_SHA < <(gh pr view "$PR_NUMBER" --json headRefOid,baseRefOid --jq '"\(.headRefOid) \(.baseRefOid)"')
+          echo "$PR_NUMBER" > ./pr-context/pr-number
+          echo "$HEAD_SHA" > ./pr-context/head-sha
+          echo "$BASE_SHA" > ./pr-context/base-sha
+          gh pr diff "$PR_NUMBER" > ./pr-context/diff.patch
 
       - uses: actions/upload-artifact@v4
         with:

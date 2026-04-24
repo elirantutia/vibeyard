@@ -63,6 +63,7 @@ export function showPreferencesModal(): void {
   let historyCheckbox: HTMLInputElement | null = null;
   let insightsCheckbox: HTMLInputElement | null = null;
   let autoTitleCheckbox: HTMLInputElement | null = null;
+  let confirmCloseCheckbox: HTMLInputElement | null = null;
   let defaultProviderSelect: CustomSelectInstance | null = null;
   let themeSelect: CustomSelectInstance | null = null;
   let zoomSelect: CustomSelectInstance | null = null;
@@ -204,6 +205,22 @@ export function showPreferencesModal(): void {
       autoTitleRow.appendChild(autoTitleLabel);
       autoTitleRow.appendChild(autoTitleCheckbox);
       content.appendChild(autoTitleRow);
+
+      const confirmCloseRow = document.createElement('div');
+      confirmCloseRow.className = 'modal-toggle-field';
+
+      const confirmCloseLabel = document.createElement('label');
+      confirmCloseLabel.htmlFor = 'pref-confirm-close-working';
+      confirmCloseLabel.textContent = 'Confirm closing a working session';
+
+      confirmCloseCheckbox = document.createElement('input');
+      confirmCloseCheckbox.type = 'checkbox';
+      confirmCloseCheckbox.id = 'pref-confirm-close-working';
+      confirmCloseCheckbox.checked = appState.preferences.confirmCloseWorkingSession;
+
+      confirmCloseRow.appendChild(confirmCloseLabel);
+      confirmCloseRow.appendChild(confirmCloseCheckbox);
+      content.appendChild(confirmCloseRow);
 
       const themeRow = document.createElement('div');
       themeRow.className = 'modal-toggle-field';
@@ -714,6 +731,9 @@ export function showPreferencesModal(): void {
     }
     if (autoTitleCheckbox) {
       appState.setPreference('autoTitleEnabled', autoTitleCheckbox.checked);
+    }
+    if (confirmCloseCheckbox) {
+      appState.setPreference('confirmCloseWorkingSession', confirmCloseCheckbox.checked);
     }
     if (defaultProviderSelect) {
       appState.setPreference('defaultProvider', defaultProviderSelect.getValue() as ProviderId);

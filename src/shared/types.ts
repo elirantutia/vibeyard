@@ -153,6 +153,7 @@ export interface Preferences {
   sessionHistoryEnabled: boolean;
   insightsEnabled: boolean;
   autoTitleEnabled: boolean;
+  confirmCloseWorkingSession: boolean;
   zoomFactor?: number;
   defaultProvider?: ProviderId;
   statusLineConsent?: 'granted' | 'declined' | null;
