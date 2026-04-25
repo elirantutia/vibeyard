@@ -96,6 +96,31 @@ describe('load()', () => {
     // debugMode should be filled in from defaults
     expect(appState.preferences.debugMode).toBe(false);
     expect(appState.preferences.soundOnSessionWaiting).toBe(true);
+    expect(appState.preferences.availableActions?.remoteSession).toBe(true);
+  });
+
+  it('merges nested available action defaults for forward compatibility', async () => {
+    const persisted = {
+      version: 1,
+      projects: [],
+      activeProjectId: null,
+      preferences: {
+        soundOnSessionWaiting: true,
+        availableActions: { usageStats: false },
+      },
+    };
+    mockLoad.mockResolvedValue(persisted);
+    await appState.load();
+    expect(appState.preferences.availableActions).toEqual({
+      sessionIndicators: true,
+      usageStats: false,
+      terminal: true,
+      mcp: true,
+      swarmMode: true,
+      newSession: true,
+      browserTab: true,
+      remoteSession: true,
+    });
   });
 
   it('emits state-loaded event', async () => {

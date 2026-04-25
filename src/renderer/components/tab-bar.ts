@@ -20,14 +20,19 @@ import {
   closeSessionsFromRightWithConfirm,
   closeSessionsFromLeftWithConfirm,
 } from '../session-close.js';
+import { getAvailableActions } from '../toolbar-actions.js';
 
 const tabListEl = document.getElementById('tab-list')!;
 const gitStatusEl = document.getElementById('git-status')!;
 const btnAddSession = document.getElementById('btn-add-session')!;
-const btnAddSessionMenu = document.getElementById('btn-add-session-menu')!;
+const btnUsageStats = document.getElementById('btn-usage-stats')!;
+const btnToggleTerminal = document.getElementById('btn-toggle-terminal')!;
 const btnAddMcpInspector = document.getElementById('btn-add-mcp-inspector')!;
 const btnToggleSwarm = document.getElementById('btn-toggle-swarm')!;
+const btnAddBrowserTab = document.getElementById('btn-add-browser-tab')!;
+const btnJoinRemoteSession = document.getElementById('btn-join-remote-session')!;
 const btnHelp = document.getElementById('btn-help')!;
+const addSessionGroup = btnAddSession.parentElement as HTMLElement;
 
 let activeContextMenu: HTMLElement | null = null;
 const prevStatus = new Map<string, SessionStatus>();
@@ -43,13 +48,13 @@ export function initTabBar(): void {
     e.preventDefault();
     showAddSessionContextMenu(e.clientX, e.clientY);
   });
-  btnAddSessionMenu.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const rect = btnAddSessionMenu.getBoundingClientRect();
-    showAddSessionContextMenu(rect.right, rect.bottom + 2);
-  });
   btnAddMcpInspector.addEventListener('click', promptNewMcpInspector);
   btnToggleSwarm.addEventListener('click', () => appState.toggleSwarm());
+  btnAddBrowserTab.addEventListener('click', () => {
+    const project = appState.activeProject;
+    if (project) appState.addBrowserTabSession(project.id);
+  });
+  btnJoinRemoteSession.addEventListener('click', () => showJoinDialog());
   btnHelp.addEventListener('click', () => showHelpDialog());
   gitStatusEl.addEventListener('click', (e) => showBranchContextMenu(e));
 
@@ -70,6 +75,7 @@ export function initTabBar(): void {
   });
   appState.on('session-changed', render);
   appState.on('layout-changed', render);
+  appState.on('preferences-changed', render);
   onShareChange(render);
 
   onStatusChange((sessionId, status) => {
@@ -370,7 +376,35 @@ function hideTabContextMenu(): void {
   }
 }
 
+function createContextMenuItem(label: string, onClick: (e: MouseEvent) => void, className = 'tab-context-menu-item'): HTMLDivElement {
+  const item = document.createElement('div');
+  item.className = className;
+  item.textContent = label;
+  item.addEventListener('click', onClick);
+  return item;
+}
+
+function createMenuSeparator(): HTMLDivElement {
+  const separator = document.createElement('div');
+  separator.className = 'tab-context-menu-separator';
+  return separator;
+}
+
+function renderToolbarActions(): void {
+  const availableActions = getAvailableActions(appState.preferences);
+  btnHelp.style.display = availableActions.sessionIndicators ? '' : 'none';
+  btnUsageStats.style.display = availableActions.usageStats ? '' : 'none';
+  btnToggleTerminal.style.display = availableActions.terminal ? '' : 'none';
+  btnAddMcpInspector.style.display = availableActions.mcp ? '' : 'none';
+  btnToggleSwarm.style.display = availableActions.swarmMode ? '' : 'none';
+  btnAddBrowserTab.style.display = availableActions.browserTab ? '' : 'none';
+  btnJoinRemoteSession.style.display = availableActions.remoteSession ? '' : 'none';
+  btnAddSession.style.display = availableActions.newSession ? '' : 'none';
+  addSessionGroup.classList.toggle('hidden', !availableActions.newSession);
+}
+
 function render(): void {
+  renderToolbarActions();
   if (tabListEl.querySelector('.tab-name input')) return;
   tabListEl.innerHTML = '';
   const project = appState.activeProject;
@@ -754,51 +788,32 @@ function showAddSessionContextMenu(x: number, y: number): void {
   menu.style.left = `${x}px`;
   menu.style.top = `${y}px`;
 
-  const quickItem = document.createElement('div');
-  quickItem.className = 'tab-context-menu-item';
-  quickItem.textContent = 'New Session';
-  quickItem.addEventListener('click', (e) => {
+  menu.appendChild(createContextMenuItem('New Session', (e) => {
     e.stopPropagation();
     hideTabContextMenu();
     quickNewSession();
-  });
+  }));
 
-  const customItem = document.createElement('div');
-  customItem.className = 'tab-context-menu-item';
-  customItem.textContent = 'New Custom Session\u2026';
-  customItem.addEventListener('click', (e) => {
+  menu.appendChild(createContextMenuItem('New Custom Session\u2026', (e) => {
     e.stopPropagation();
     hideTabContextMenu();
     promptNewSession();
-  });
+  }));
 
-  const joinSeparator = document.createElement('div');
-  joinSeparator.className = 'tab-context-menu-separator';
-
-  const joinItem = document.createElement('div');
-  joinItem.className = 'tab-context-menu-item';
-  joinItem.textContent = 'Join Remote Session\u2026';
-  joinItem.addEventListener('click', (e) => {
-    e.stopPropagation();
-    hideTabContextMenu();
-    showJoinDialog();
-  });
-
-  const browserItem = document.createElement('div');
-  browserItem.className = 'tab-context-menu-item';
-  browserItem.textContent = 'New Browser Tab';
-  browserItem.addEventListener('click', (e) => {
+  menu.appendChild(createContextMenuItem('New Browser Tab', (e) => {
     e.stopPropagation();
     hideTabContextMenu();
     const project = appState.activeProject;
     if (project) appState.addBrowserTabSession(project.id);
-  });
+  }));
 
-  menu.appendChild(quickItem);
-  menu.appendChild(customItem);
-  menu.appendChild(browserItem);
-  menu.appendChild(joinSeparator);
-  menu.appendChild(joinItem);
+  menu.appendChild(createMenuSeparator());
+  menu.appendChild(createContextMenuItem('Join Remote Session\u2026', (e) => {
+    e.stopPropagation();
+    hideTabContextMenu();
+    showJoinDialog();
+  }));
+
   document.body.appendChild(menu);
   activeContextMenu = menu;
 
@@ -807,6 +822,11 @@ function showAddSessionContextMenu(x: number, y: number): void {
   if (rect.bottom > window.innerHeight) menu.style.top = `${window.innerHeight - rect.height - 4}px`;
 }
 
+function esc(s: string): string {
+  const el = document.createElement('span');
+  el.textContent = s;
+  return el.innerHTML;
+}
 export async function promptNewSession(onCreated?: (session: SessionRecord) => void): Promise<void> {
   const project = appState.activeProject;
   if (!project) return;
@@ -877,8 +897,3 @@ function promptNewMcpInspector(): void {
   });
 }
 
-function esc(s: string): string {
-  const el = document.createElement('span');
-  el.textContent = s;
-  return el.innerHTML;
-}

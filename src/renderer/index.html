@@ -33,14 +33,27 @@
         <div id="tab-list"></div>
         <div id="git-status"></div>
         <div id="tab-actions">
-          <button id="btn-help" class="icon-btn" title="Session Indicators Help (F1)" style="font-size:13px;">?</button>
-          <button id="btn-usage-stats" class="icon-btn" title="Usage Stats (Ctrl+Shift+U)" style="font-size:12px;">&#x2261;</button>
-          <button id="btn-toggle-terminal" class="icon-btn" title="Toggle Terminal (Ctrl+`)" style="font-size:13px;">&#x2588;</button>
-          <button id="btn-add-mcp-inspector" class="icon-btn" title="MCP Inspector" style="font-size:11px;font-weight:600;">MCP</button>
-          <button id="btn-toggle-swarm" class="icon-btn" title="Toggle Swarm Mode (Ctrl+\)">&#x229E;</button>
-          <div class="split-btn-group">
-            <button id="btn-add-session" class="icon-btn split-btn-main" title="New Session (Ctrl+Shift+N)">+</button>
-            <button id="btn-add-session-menu" class="icon-btn split-btn-caret" title="More session options" aria-haspopup="menu">&#x25BE;</button>
+          <div class="tab-actions-section">
+            <button id="btn-help" class="icon-btn" title="Session Indicators Help (F1)" style="font-size:13px;">?</button>
+            <button id="btn-usage-stats" class="icon-btn" title="Usage Stats (Ctrl+Shift+U)" style="font-size:12px;">&#x2261;</button>
+            <button id="btn-toggle-terminal" class="icon-btn" title="Toggle Terminal (Ctrl+`)" style="font-size:13px;">&#x2588;</button>
+            <button id="btn-add-mcp-inspector" class="icon-btn" title="MCP Inspector" style="font-size:11px;font-weight:600;">MCP</button>
+            <button id="btn-toggle-swarm" class="icon-btn" title="Toggle Swarm Mode (Ctrl+\)">&#x229E;</button>
+            <button id="btn-add-browser-tab" class="icon-btn" title="New Browser Tab" aria-label="New Browser Tab">
+              <span class="toolbar-icon toolbar-icon-browser" aria-hidden="true">
+                <span class="toolbar-icon-browser-dot"></span>
+              </span>
+            </button>
+            <button id="btn-join-remote-session" class="icon-btn" title="Join Remote Session" aria-label="Join Remote Session">
+              <span class="toolbar-icon toolbar-icon-remote" aria-hidden="true">
+                <span class="toolbar-icon-remote-node toolbar-icon-remote-node-start"></span>
+                <span class="toolbar-icon-remote-link"></span>
+                <span class="toolbar-icon-remote-node toolbar-icon-remote-node-end"></span>
+              </span>
+            </button>
+          </div>
+          <div class="tab-actions-section" id="tab-actions-sessions">
+            <button id="btn-add-session" class="icon-btn" title="New Session (Ctrl+Shift+N)">+</button>
           </div>
         </div>
       </div>

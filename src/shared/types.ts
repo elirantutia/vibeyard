@@ -171,6 +171,16 @@ export interface Preferences {
     discussions: boolean;
     fileTree: boolean;
   };
+  availableActions?: {
+    sessionIndicators: boolean;
+    usageStats: boolean;
+    terminal: boolean;
+    mcp: boolean;
+    swarmMode: boolean;
+    newSession: boolean;
+    browserTab: boolean;
+    remoteSession: boolean;
+  };
 }
 
 // --- Settings Validation ---

@@ -6,6 +6,7 @@ import { shortcutManager, displayKeys, eventToAccelerator } from '../shortcuts.j
 import { loadProviderAvailability, getProviderAvailabilitySnapshot } from '../provider-availability.js';
 import type { CliProviderMeta, ProviderId, SettingsValidationResult } from '../../shared/types.js';
 import { hasProviderIssue, type ProviderStatus } from './setup-checks.js';
+import { AVAILABLE_ACTION_OPTIONS, getAvailableActions, type AvailableActions } from '../toolbar-actions.js';
 
 
 const overlay = document.getElementById('modal-overlay')!;
@@ -70,6 +71,7 @@ export function showPreferencesModal(): void {
   let zoomPrefUnsub: (() => void) | null = null;
   let debugModeCheckbox: HTMLInputElement | null = null;
   let sidebarCheckboxes: { gitPanel: HTMLInputElement; sessionHistory: HTMLInputElement; costFooter: HTMLInputElement; discussions: HTMLInputElement; fileTree: HTMLInputElement } | null = null;
+  let availableActionCheckboxes: Record<keyof AvailableActions, HTMLInputElement> | null = null;
   let activeRecorder: { cleanup: () => void } | null = null;
   const originalTheme = appState.preferences.theme ?? 'dark';
 
@@ -295,6 +297,33 @@ export function showPreferencesModal(): void {
         checkboxes[toggle.key] = cb;
       }
       sidebarCheckboxes = checkboxes as typeof sidebarCheckboxes;
+
+      const availableActionsHeading = document.createElement('div');
+      availableActionsHeading.className = 'preferences-subheading';
+      availableActionsHeading.textContent = 'Available Actions';
+      content.appendChild(availableActionsHeading);
+
+      const availableActions = getAvailableActions(appState.preferences);
+      const actionCheckboxes = {} as Record<keyof AvailableActions, HTMLInputElement>;
+      for (const action of AVAILABLE_ACTION_OPTIONS) {
+        const row = document.createElement('div');
+        row.className = 'modal-toggle-field';
+
+        const label = document.createElement('label');
+        label.htmlFor = `pref-available-action-${action.key}`;
+        label.textContent = action.label;
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.id = `pref-available-action-${action.key}`;
+        cb.checked = availableActions[action.key];
+
+        row.appendChild(label);
+        row.appendChild(cb);
+        content.appendChild(row);
+        actionCheckboxes[action.key] = cb;
+      }
+      availableActionCheckboxes = actionCheckboxes;
 
     } else if (section === 'shortcuts') {
       renderShortcutsSection(content);
@@ -757,6 +786,18 @@ export function showPreferencesModal(): void {
         costFooter: sidebarCheckboxes.costFooter.checked,
         discussions: sidebarCheckboxes.discussions.checked,
         fileTree: sidebarCheckboxes.fileTree.checked,
+      });
+    }
+    if (availableActionCheckboxes) {
+      appState.setPreference('availableActions', {
+        sessionIndicators: availableActionCheckboxes.sessionIndicators.checked,
+        usageStats: availableActionCheckboxes.usageStats.checked,
+        terminal: availableActionCheckboxes.terminal.checked,
+        mcp: availableActionCheckboxes.mcp.checked,
+        swarmMode: availableActionCheckboxes.swarmMode.checked,
+        newSession: availableActionCheckboxes.newSession.checked,
+        browserTab: availableActionCheckboxes.browserTab.checked,
+        remoteSession: availableActionCheckboxes.remoteSession.checked,
       });
     }
   };

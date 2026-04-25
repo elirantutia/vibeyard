@@ -1,24 +1,34 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockState = vi.hoisted(() => ({
-  preferences: {
-    soundOnSessionWaiting: true,
-    notificationsDesktop: true,
-    debugMode: false,
-    sessionHistoryEnabled: true,
-    insightsEnabled: true,
-    autoTitleEnabled: true,
-    theme: 'dark' as 'dark' | 'light',
-    defaultProvider: 'claude',
-    sidebarViews: {
-      configSections: true,
-      gitPanel: true,
-      sessionHistory: true,
-      costFooter: true,
-      readinessSection: true,
-      discussions: true,
+    preferences: {
+      soundOnSessionWaiting: true,
+      notificationsDesktop: true,
+      debugMode: false,
+      sessionHistoryEnabled: true,
+      insightsEnabled: true,
+      autoTitleEnabled: true,
+      confirmCloseWorkingSession: true,
+      theme: 'dark' as 'dark' | 'light',
+      defaultProvider: 'claude',
+      sidebarViews: {
+        gitPanel: true,
+        sessionHistory: true,
+        costFooter: true,
+        discussions: true,
+        fileTree: true,
+      },
+      availableActions: {
+        sessionIndicators: true,
+        usageStats: true,
+        terminal: true,
+        mcp: true,
+        swarmMode: true,
+        newSession: true,
+        browserTab: true,
+        remoteSession: true,
+      },
     },
-  },
   on: vi.fn(() => () => {}),
   setPreference: vi.fn(),
 }));
@@ -291,5 +301,32 @@ describe('showPreferencesModal theme preference', () => {
 
     expect(selectState.instances.get('pref-theme')?.destroyCount).toBe(1);
     expect(selectState.instances.get('pref-zoom')?.destroyCount).toBe(1);
+  });
+
+  it('saves available action visibility toggles', async () => {
+    const { showPreferencesModal } = await import('./preferences-modal.js');
+
+    showPreferencesModal();
+    selectPreferencesSection('appearance');
+
+    const body = getOrCreateElement('modal-body');
+    const usageCheckbox = findInTree(body, (node) => node.id === 'pref-available-action-usageStats');
+    const remoteCheckbox = findInTree(body, (node) => node.id === 'pref-available-action-remoteSession');
+
+    usageCheckbox.checked = false;
+    remoteCheckbox.checked = false;
+
+    click(getOrCreateElement('modal-confirm'));
+
+    expect(mockState.setPreference).toHaveBeenCalledWith('availableActions', {
+      sessionIndicators: true,
+      usageStats: false,
+      terminal: true,
+      mcp: true,
+      swarmMode: true,
+      newSession: true,
+      browserTab: true,
+      remoteSession: false,
+    });
   });
 });

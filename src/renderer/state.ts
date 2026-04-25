@@ -4,6 +4,7 @@ import { getCost, restoreCost } from './session-cost.js';
 import { restoreContext } from './session-context.js';
 import { getProviderCapabilities, getProviderAvailabilitySnapshot } from './provider-availability.js';
 import { basename } from '../shared/platform.js';
+import { DEFAULT_AVAILABLE_ACTIONS } from './toolbar-actions.js';
 
 export type { SessionRecord, ProjectRecord, Preferences, PersistedState, ArchivedSession } from '../shared/types.js';
 
@@ -45,12 +46,28 @@ const defaultPreferences: Preferences = {
   zoomFactor: 1.0,
   readinessExcludedProviders: [],
   sidebarViews: { gitPanel: true, sessionHistory: true, costFooter: true, discussions: true, fileTree: true },
+  availableActions: { ...DEFAULT_AVAILABLE_ACTIONS },
 };
 
 const NAV_HISTORY_MAX = 50;
 
+function normalizePreferences(preferences?: Partial<Preferences>): Preferences {
+  return {
+    ...defaultPreferences,
+    ...preferences,
+    sidebarViews: {
+      ...defaultPreferences.sidebarViews,
+      ...(preferences?.sidebarViews ?? {}),
+    },
+    availableActions: {
+      ...defaultPreferences.availableActions,
+      ...(preferences?.availableActions ?? {}),
+    },
+  };
+}
+
 class AppState {
-  private state: PersistedState = { version: 1, projects: [], activeProjectId: null, preferences: { ...defaultPreferences } };
+  private state: PersistedState = { version: 1, projects: [], activeProjectId: null, preferences: normalizePreferences() };
   private listeners = new Map<EventType, Set<EventCallback>>();
   private navHistory: string[] = [];
   private navIndex = -1;
@@ -137,7 +154,7 @@ class AppState {
     if (loaded && loaded.version === 1) {
       this.state = loaded;
       // Merge defaults for forward compatibility with old state files
-      this.state.preferences = { ...defaultPreferences, ...this.state.preferences };
+      this.state.preferences = normalizePreferences(this.state.preferences);
       // Restore persisted cost data into the in-memory cost tracker
       for (const project of this.state.projects) {
         for (const session of project.sessions) {
