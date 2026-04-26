@@ -15,6 +15,10 @@ interface CacheEntry {
 
 const textCache = new Map<string, CacheEntry>();
 
+export function _resetForTesting(): void {
+  textCache.clear();
+}
+
 async function extractSessionText(jsonlPath: string): Promise<{ text: string; cwd: string }> {
   const content = await fs.promises.readFile(jsonlPath, 'utf8');
   const texts: string[] = [];
