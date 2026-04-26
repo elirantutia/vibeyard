@@ -29,8 +29,10 @@ export interface VibeyardApi {
     isDirectory(path: string): Promise<boolean>;
     expandPath(path: string): Promise<string>;
     listDirs(dirPath: string, prefix?: string): Promise<string[]>;
+    listDir(dirPath: string): Promise<Array<{ name: string; path: string; isDirectory: boolean }>>;
     browseDirectory(): Promise<string | null>;
     listFiles(cwd: string, query: string): Promise<string[]>;
+    exists(filePath: string): Promise<boolean>;
     readFile(filePath: string): Promise<string>;
     readImage(filePath: string): Promise<{ dataUrl: string } | null>;
     watchFile(filePath: string): void;
@@ -83,6 +85,8 @@ export interface VibeyardApi {
     openExternal(url: string): Promise<void>;
     getBrowserPreloadPath(): Promise<string>;
     onQuitting(callback: () => void): () => void;
+    onConfirmClose(callback: () => void): () => void;
+    closeConfirmed(): void;
   };
   browser: {
     saveScreenshot(sessionId: string, dataUrl: string): Promise<string>;
@@ -182,8 +186,10 @@ const api: VibeyardApi = {
     isDirectory: (path) => ipcRenderer.invoke('fs:isDirectory', path),
     expandPath: (path: string) => ipcRenderer.invoke('fs:expandPath', path),
     listDirs: (dirPath: string, prefix?: string) => ipcRenderer.invoke('fs:listDirs', dirPath, prefix),
+    listDir: (dirPath: string) => ipcRenderer.invoke('fs:listDir', dirPath),
     browseDirectory: () => ipcRenderer.invoke('fs:browseDirectory'),
     listFiles: (cwd: string, query: string) => ipcRenderer.invoke('fs:listFiles', cwd, query),
+    exists: (filePath: string) => ipcRenderer.invoke('fs:exists', filePath),
     readFile: (filePath: string) => ipcRenderer.invoke('fs:readFile', filePath),
     readImage: (filePath: string) => ipcRenderer.invoke('fs:readImage', filePath),
     watchFile: (filePath: string) => ipcRenderer.send('fs:watchFile', filePath),
@@ -235,6 +241,8 @@ const api: VibeyardApi = {
     openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', url),
     getBrowserPreloadPath: () => ipcRenderer.invoke('app:getBrowserPreloadPath'),
     onQuitting: (cb: () => void) => onChannel('app:quitting', cb),
+    onConfirmClose: (cb: () => void) => onChannel('app:confirmClose', cb),
+    closeConfirmed: () => { ipcRenderer.send('app:closeConfirmed'); },
   },
   browser: {
     saveScreenshot: (sessionId: string, dataUrl: string) =>

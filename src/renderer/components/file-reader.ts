@@ -1,6 +1,7 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { appState } from '../state.js';
+import { closeSessionIfFileMissing } from '../session-close.js';
 import { destroySearchBar } from './search-bar.js';
 import { escapeHtml } from './dom-search-backend.js';
 
@@ -101,7 +102,7 @@ function showFileReaderMessage(body: Element, message: string): void {
   body.innerHTML = `<div class="file-reader-content"><div class="file-reader-line"><span class="file-reader-line-text">${message}</span></div></div>`;
 }
 
-async function loadFile(instance: FileReaderInstance): Promise<void> {
+async function loadFile(instance: FileReaderInstance, sessionId: string): Promise<void> {
   if (instance.loaded) return;
 
   const project = appState.activeProject;
@@ -112,6 +113,7 @@ async function loadFile(instance: FileReaderInstance): Promise<void> {
 
   try {
     const fullPath = resolveFilePath(instance);
+    if (await closeSessionIfFileMissing(sessionId, fullPath)) return;
     if (instance.kind === 'image') {
       const result = await window.vibeyard.fs.readImage(fullPath);
       if (!result) {
@@ -150,7 +152,7 @@ export function reloadFileReader(sessionId: string): void {
   const instance = instances.get(sessionId);
   if (!instance) return;
   instance.loaded = false;
-  loadFile(instance);
+  loadFile(instance, sessionId);
 }
 
 export function createFileReaderPane(sessionId: string, filePath: string, targetLine?: number): void {
@@ -253,7 +255,7 @@ export function showFileReaderPane(sessionId: string, isSplit: boolean): void {
     window.vibeyard.fs.watchFile(fullPath);
   }
 
-  loadFile(instance);
+  loadFile(instance, sessionId);
   if (instance.loaded && instance.targetLine) {
     scrollToLine(instance);
   }

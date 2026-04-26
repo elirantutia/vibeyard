@@ -25,6 +25,7 @@ vi.mock('./platform', () => ({
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { installEventScript } from './hook-commands';
 import {
   installCopilotHooks,
   validateCopilotHooks,
@@ -36,6 +37,7 @@ import {
 const mockReadFileSync = vi.mocked(fs.readFileSync);
 const mockWriteFileSync = vi.mocked(fs.writeFileSync);
 const mockUnlinkSync = vi.mocked(fs.unlinkSync);
+const mockInstallEventScript = vi.mocked(installEventScript);
 
 const n = (p: string) => p.replace(/\\/g, '/');
 
@@ -160,6 +162,20 @@ describe('installCopilotHooks', () => {
     expect(end).toContain('"sessionEnd"');
     expect(end).toContain('"session_end"');
     expect(end).toContain('"completed"');
+  });
+
+  it('installs an event capture script that writes the Copilot session ID to .sessionid when present', () => {
+    mockFiles({});
+    installCopilotHooks(PROJECT);
+
+    const eventScriptCall = mockInstallEventScript.mock.calls.find(([name]) => name === 'copilot_event_capture.py');
+    expect(eventScriptCall).toBeDefined();
+    const scriptBody = String(eventScriptCall![1]);
+    expect(scriptBody).toContain(".sessionid");
+    expect(scriptBody).toContain("sessionId");
+    expect(scriptBody).toContain("session_id");
+    expect(scriptBody).toContain("d.get('input')");
+    expect(scriptBody).toContain("d.get('data')");
   });
 
   it('skips the write when existing content is byte-identical', () => {

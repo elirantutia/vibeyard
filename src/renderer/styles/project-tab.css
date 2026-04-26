@@ -1,0 +1,249 @@
+.project-tab-pane {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: 2px solid var(--pane-unfocus);
+  border-radius: 2px;
+  background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.project-tab-pane.split {
+  position: relative;
+}
+
+.project-tab-pane.hidden {
+  display: none;
+}
+
+.project-tab-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.project-tab-header-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.project-tab-header-path {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-tab-columns {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.project-tab-column {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.project-tab-column + .project-tab-column {
+  border-left: 1px solid var(--border);
+}
+
+.project-tab-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.project-tab-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.project-tab-section-header .readiness-scan-btn {
+  font-size: 11px;
+  padding: 3px 10px;
+}
+
+.project-tab-empty {
+  padding: 16px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-style: italic;
+  text-align: center;
+}
+
+/* Readiness column */
+
+.project-tab-readiness-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.project-tab-readiness-score-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 4px;
+}
+
+.project-tab-readiness-score {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 10px;
+  min-width: 72px;
+  text-align: center;
+}
+
+.project-tab-readiness-score-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.project-tab-readiness-score-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.project-tab-readiness-scanned-at {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.project-tab-readiness-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.project-tab-readiness-category-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.project-tab-readiness-category {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.15s ease;
+}
+
+.project-tab-readiness-category:hover {
+  background: var(--bg-hover);
+}
+
+.project-tab-readiness-category .config-section-toggle {
+  flex: 0 0 auto;
+  width: 10px;
+}
+
+.project-tab-readiness-cat-name {
+  flex: 0 0 130px;
+  color: var(--text-secondary);
+}
+
+.project-tab-readiness-cat-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 0 10px 28px;
+}
+
+.project-tab-readiness-cat-body.hidden {
+  display: none;
+}
+
+.project-tab-readiness-progress {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.project-tab-readiness-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.project-tab-readiness-cat-score {
+  flex: 0 0 40px;
+  text-align: right;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+/* Provider Tools column */
+
+.project-tab-tools-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.project-tab-tools-section .config-section-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 6px 4px;
+  cursor: default;
+}
+
+.project-tab-tools-section .config-section-header:hover {
+  background: transparent;
+}
+
+.project-tab-tools-section .config-section-body {
+  padding: 2px 0;
+}
+
+.project-tab-tools-section .config-item {
+  padding: 6px 10px;
+}
+
+.project-tab-provider-tools .project-tab-section-header .custom-select {
+  margin-left: auto;
+}
+
+/* Tab-bar badge for project-tab sessions */
+.tab-project-badge {
+  font-size: 10px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  vertical-align: middle;
+  margin-right: 4px;
+  line-height: 1;
+}

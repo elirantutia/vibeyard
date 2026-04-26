@@ -1,12 +1,12 @@
 import { Terminal } from '@xterm/xterm';
+import { getTerminalTheme } from '../terminal-theme.js';
 import { FitAddon } from '@xterm/addon-fit';
-import { WebglAddon } from '@xterm/addon-webgl';
 import { SearchAddon } from '@xterm/addon-search';
 import { appState } from '../state.js';
 import { fitAllVisible } from './terminal-pane.js';
 import { destroySearchBar, hideSearchBar } from './search-bar.js';
 import { shortcutManager, displayKeys } from '../shortcuts.js';
-import { attachClipboardCopyHandler } from './terminal-utils.js';
+import { attachClipboardCopyHandler, loadWebglWithFallback } from './terminal-utils.js';
 import { esc } from '../dom-utils.js';
 
 interface ShellTerminalInstance {
@@ -68,20 +68,7 @@ function createShell(projectId: string): ShellTerminalInstance {
   element.style.position = 'relative';
 
   const terminal = new Terminal({
-    theme: {
-      background: '#000000',
-      foreground: '#e0e0e0',
-      cursor: '#e94560',
-      selectionBackground: '#ff6b85a6',
-      black: '#000000',
-      red: '#e94560',
-      green: '#0f9b58',
-      yellow: '#f4b400',
-      blue: '#4285f4',
-      magenta: '#ab47bc',
-      cyan: '#00acc1',
-      white: '#e0e0e0',
-    },
+    theme: getTerminalTheme(appState.preferences.theme ?? 'dark'),
     fontSize: 14,
     fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace",
     cursorBlink: true,
@@ -141,11 +128,7 @@ function activateShellInstance(instance: ShellTerminalInstance): void {
   if (!containerEl.contains(instance.element)) {
     containerEl.appendChild(instance.element);
     instance.terminal.open(instance.element);
-    try {
-      instance.terminal.loadAddon(new WebglAddon());
-    } catch {
-      // Software fallback
-    }
+    loadWebglWithFallback(instance.terminal);
   }
   instance.element.style.display = '';
 
@@ -480,3 +463,12 @@ export function getActiveShellSessionId(): string | null {
 }
 
 export { isShellSessionId };
+
+export function applyThemeToAllShells(theme: 'dark' | 'light'): void {
+  const termTheme = getTerminalTheme(theme);
+  for (const list of shells.values()) {
+    for (const instance of list) {
+      instance.terminal.options.theme = termTheme;
+    }
+  }
+}

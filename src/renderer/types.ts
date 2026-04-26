@@ -25,6 +25,7 @@ export interface VibeyardApi {
     listDirs(dirPath: string, prefix?: string): Promise<string[]>;
     browseDirectory(): Promise<string | null>;
     listFiles(cwd: string, query: string): Promise<string[]>;
+    exists(filePath: string): Promise<boolean>;
     readFile(filePath: string): Promise<string>;
     readImage(filePath: string): Promise<{ dataUrl: string } | null>;
     watchFile(filePath: string): void;

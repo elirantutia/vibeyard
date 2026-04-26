@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.29] - 2026-04-24
+
+### Features
+
+- Appearance section to preferences modal
+- Light theme support
+- Confirmation dialog when closing a working session
+- Project file tree and dedicated project tab layout
+- Dropdown caret next to new-session button for discoverable options
+- Disabled styling for empty-prompt send-to-ai buttons
+- Plan-mode toggle to ask-ai send surfaces
+- Ask AI prompt for text selections in file panes
+- Whole-app zoom preference with keyboard shortcuts
+
+### Fixes
+
+- Archive copilot sessions in history
+- Selectionchange listener leak when file viewers destroyed mid-reload
+- Sidebar resize sticking when mouse released outside window
+- Modal z-index rendering below tab context menus
+- Inspect popover clipping at pane edges
+- Statusline conflict alerts ignoring user consent
+
+### Changes
+
+- Delete-project confirmation to use themed modal
+- Discussions badge to sort and count by post creation date
+
 ## [0.2.28] - 2026-04-19
 
 ### Features

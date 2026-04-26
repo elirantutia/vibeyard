@@ -72,15 +72,21 @@ export interface ContextWindowInfo {
 
 // --- Session / State ---
 
+export type SessionType =
+  | 'mcp-inspector'
+  | 'diff-viewer'
+  | 'file-reader'
+  | 'remote-terminal'
+  | 'browser-tab'
+  | 'project-tab';
+
 export interface SessionRecord {
   id: string;
   name: string;
-  type?: 'claude' | 'mcp-inspector' | 'diff-viewer' | 'file-reader' | 'remote-terminal' | 'browser-tab';
+  type?: SessionType;
   providerId?: ProviderId;
   args?: string;
   cliSessionId: string | null;
-  /** @deprecated Use cliSessionId instead. Kept for state migration compatibility. */
-  claudeSessionId?: string | null;
   mcpServerUrl?: string;
   diffFilePath?: string;
   diffArea?: string;
@@ -153,6 +159,7 @@ export interface Preferences {
   sessionHistoryEnabled: boolean;
   insightsEnabled: boolean;
   autoTitleEnabled: boolean;
+  confirmCloseWorkingSession: boolean;
   zoomFactor?: number;
   defaultProvider?: ProviderId;
   statusLineConsent?: 'granted' | 'declined' | null;
@@ -161,14 +168,14 @@ export interface Preferences {
   // vs the previously-acknowledged one.
   statusLineConsentCommand?: string | null;
   keybindings?: Record<string, string>;
+  theme?: 'dark' | 'light';
   readinessExcludedProviders?: ProviderId[];
   sidebarViews?: {
-    configSections: boolean;
     gitPanel: boolean;
     sessionHistory: boolean;
     costFooter: boolean;
-    readinessSection: boolean;
     discussions: boolean;
+    fileTree: boolean;
   };
 }
 

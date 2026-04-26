@@ -54,6 +54,8 @@ export function showModal(
   titleEl.textContent = title;
   btnConfirm.textContent = options?.confirmLabel ?? DEFAULT_CONFIRM_LABEL;
   bodyEl.innerHTML = '';
+  btnConfirm.textContent = 'Create';
+  btnCancel.textContent = 'Cancel';
 
   for (const field of fields) {
     const div = document.createElement('div');
@@ -151,6 +153,63 @@ export function showModal(
   overlay.addEventListener('keydown', handleKeydown);
 
   // Store for cleanup
+  (overlay as any)._cleanup = () => {
+    btnConfirm.removeEventListener('click', handleConfirm);
+    btnCancel.removeEventListener('click', handleCancel);
+    overlay.removeEventListener('keydown', handleKeydown);
+  };
+}
+
+export function showConfirmDialog(
+  title: string,
+  message: string,
+  options: {
+    confirmLabel?: string;
+    cancelLabel?: string;
+    onConfirm: () => void;
+  }
+): void {
+  titleEl.textContent = title;
+  bodyEl.innerHTML = '';
+  btnConfirm.textContent = options.confirmLabel ?? 'Confirm';
+  btnCancel.textContent = options.cancelLabel ?? 'Cancel';
+
+  const messageEl = document.createElement('div');
+  messageEl.className = 'modal-message';
+  messageEl.textContent = message;
+  bodyEl.appendChild(messageEl);
+
+  overlay.classList.remove('hidden');
+
+  requestAnimationFrame(() => {
+    btnCancel.focus();
+  });
+
+  cleanup();
+
+  const handleConfirm = () => {
+    options.onConfirm();
+    closeModal();
+  };
+
+  const handleCancel = () => {
+    closeModal();
+  };
+
+  const handleKeydown = (e: KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleConfirm();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancel();
+    }
+  };
+
+  btnConfirm.addEventListener('click', handleConfirm);
+  btnCancel.addEventListener('click', handleCancel);
+  overlay.addEventListener('keydown', handleKeydown);
+
   (overlay as any)._cleanup = () => {
     btnConfirm.removeEventListener('click', handleConfirm);
     btnCancel.removeEventListener('click', handleCancel);

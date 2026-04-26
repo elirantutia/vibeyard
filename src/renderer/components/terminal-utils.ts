@@ -1,4 +1,5 @@
 import type { Terminal } from '@xterm/xterm';
+import { WebglAddon } from '@xterm/addon-webgl';
 import { shortcutManager } from '../shortcuts.js';
 import { isWin } from '../platform.js';
 
@@ -65,4 +66,14 @@ export function attachClipboardCopyHandler(
 
     return extend?.(e) ?? true;
   });
+}
+
+// Disposing the addon on context loss lets xterm.js fall back to the DOM renderer
+// instead of keeping a dead GPU texture atlas (black-box glyphs).
+export function loadWebglWithFallback(terminal: Terminal): void {
+  try {
+    const addon = new WebglAddon();
+    terminal.loadAddon(addon);
+    addon.onContextLoss(() => addon.dispose());
+  } catch {}
 }

@@ -53,19 +53,23 @@ function isIdeHook(h: HookEntry): boolean {
 
 // The Python dispatcher script handles all six events. Dispatched by argv[1].
 // Reads stdin JSON (Copilot hook payload), writes .status + .events keyed off
-// $VIBEYARD_SESSION_ID, and for postToolUse failures / errorOccurred also
-// writes a .toolfailure record.
+// $VIBEYARD_SESSION_ID, opportunistically captures the Copilot session ID into
+// .sessionid, and for postToolUse failures / errorOccurred also writes a
+// .toolfailure record.
 //
 // Payload shapes per https://docs.github.com/en/copilot/reference/hooks-configuration:
-//   sessionStart        {timestamp, cwd, source, initialPrompt}
-//   userPromptSubmitted {timestamp, cwd, prompt}
-//   preToolUse          {timestamp, cwd, toolName, toolArgs}
-//   postToolUse         {timestamp, cwd, toolName, toolArgs, toolResult}
-//   errorOccurred       {timestamp, cwd, error:{message,name,stack}}
-//   sessionEnd          {timestamp, cwd, reason}
+//   sessionStart        {timestamp, cwd, source, initialPrompt, sessionId?}
+//   userPromptSubmitted {timestamp, cwd, prompt, sessionId?}
+//   preToolUse          {timestamp, cwd, toolName, toolArgs, sessionId?}
+//   postToolUse         {timestamp, cwd, toolName, toolArgs, toolResult, sessionId?}
+//   errorOccurred       {timestamp, cwd, error:{message,name,stack}, sessionId?}
+//   sessionEnd          {timestamp, cwd, reason, sessionId?}
+// Some Copilot builds nest the payload under `input` / `data`, so the script
+// checks all three shapes before deciding whether it can emit .sessionid.
 //
-// None include a sessionId — we key entirely off the VIBEYARD_SESSION_ID env
-// var set on the PTY in CopilotProvider.buildEnv().
+// The hook subprocess still keys its sidecar files off the Vibeyard session ID
+// from CopilotProvider.buildEnv(), but when Copilot also includes its own
+// session ID we persist that separately for resume/history support.
 const EVENT_CAPTURE_SCRIPT_BODY = `import sys,json,os,time,random,string
 try:
     d=json.load(sys.stdin)
@@ -81,6 +85,16 @@ try:
     if not sid:
         sys.exit(0)
     os.makedirs(status_dir,exist_ok=True)
+    session_id = ''
+    if isinstance(d.get('input'), dict):
+        session_id = d['input'].get('sessionId','') or d['input'].get('session_id','')
+    if (not session_id) and isinstance(d.get('data'), dict):
+        session_id = d['data'].get('sessionId','') or d['data'].get('session_id','')
+    if not session_id:
+        session_id = d.get('sessionId','') or d.get('session_id','')
+    if session_id:
+        with open(os.path.join(status_dir,sid+'.sessionid'),'w') as f:
+            f.write(session_id)
     if status != 'none':
         with open(os.path.join(status_dir,sid+'.status'),'w') as f:
             f.write(event+':'+status)

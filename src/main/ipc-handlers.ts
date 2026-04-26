@@ -22,6 +22,7 @@ import { analyzeReadiness } from './readiness/analyzer';
 import { expandUserPath } from './fs-utils';
 import { isMac, isWin } from './platform';
 import { shouldWarnStatusLine } from './settings-guard';
+import { setCloseConfirmed } from './close-state';
 
 /**
  * Check if a resolved path is within one of the known project directories.
@@ -194,6 +195,22 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle('fs:listDir', (_event, dirPath: string) => {
+    try {
+      const expanded = expandUserPath(dirPath);
+      if (!isAllowedReadPath(expanded)) return [];
+      const entries = fs.readdirSync(expanded, { withFileTypes: true });
+      // Renderer sorts via sortEntries(); keep main process cheap.
+      return entries.map(e => ({
+        name: e.name,
+        path: path.join(expanded, e.name),
+        isDirectory: e.isDirectory(),
+      }));
+    } catch {
+      return [];
+    }
+  });
+
   ipcMain.handle('store:load', () => {
     return loadState();
   });
@@ -272,6 +289,11 @@ export function registerIpcHandlers(): void {
       if (win.isMinimized()) win.restore();
       win.focus();
     }
+  });
+
+  ipcMain.on('app:closeConfirmed', () => {
+    setCloseConfirmed(true);
+    app.quit();
   });
 
   ipcMain.handle('app:getVersion', () => app.getVersion());
@@ -438,6 +460,16 @@ export function registerIpcHandlers(): void {
     } catch (err) {
       console.warn('fs:listFiles failed:', err);
       return [];
+    }
+  });
+
+  ipcMain.handle('fs:exists', (_event, filePath: string): boolean => {
+    try {
+      const resolved = path.resolve(filePath);
+      if (!isAllowedReadPath(resolved)) return false;
+      return fs.existsSync(resolved);
+    } catch {
+      return false;
     }
   });
 

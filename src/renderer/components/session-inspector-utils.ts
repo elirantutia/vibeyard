@@ -3,6 +3,7 @@ import { getProviderCapabilities, getProviderDisplayName } from '../provider-ava
 import type { ProviderId, CliProviderCapabilities, InspectorEvent } from '../../shared/types.js';
 import { getTerminalInstance } from './terminal-pane.js';
 import { inspectorState } from './session-inspector-state-ui.js';
+import { isCliSession } from '../session-utils.js';
 
 export function resetUIState(): void {
   inspectorState.expandedRows.clear();
@@ -11,7 +12,7 @@ export function resetUIState(): void {
 }
 
 export function canInspectSession(session: Pick<SessionRecord, 'type' | 'providerId'>): boolean {
-  if (session.type && session.type !== 'claude') return false;
+  if (!isCliSession(session)) return false;
   return getProviderCapabilities(session.providerId || 'claude')?.hookStatus !== false;
 }
 

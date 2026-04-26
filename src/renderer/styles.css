@@ -1,5 +1,6 @@
 @import url('./styles/base.css');
 @import url('./styles/sidebar.css');
+@import url('./styles/file-tree.css');
 @import url('./styles/tabs.css');
 @import url('./styles/terminal.css');
 @import url('./styles/search.css');
@@ -16,3 +17,4 @@
 @import url('./styles/p2p-sharing.css');
 @import url('./styles/session-inspector.css');
 @import url('./styles/browser-tab.css');
+@import url('./styles/project-tab.css');

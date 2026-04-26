@@ -10,8 +10,19 @@ import { initAutoUpdater } from './auto-updater';
 import { stopGitWatcher } from './git-watcher';
 import { checkPythonAvailable } from './prerequisites';
 import { isMac } from './platform';
+import { isCloseConfirmed, setCloseConfirmed } from './close-state';
 
 let mainWindow: BrowserWindow | null = null;
+
+function requestConfirmClose(): void {
+  const win = BrowserWindow.getAllWindows()[0];
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('app:confirmClose');
+  } else {
+    setCloseConfirmed(true);
+    app.quit();
+  }
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -48,7 +59,12 @@ function createWindow(): void {
     }
   });
 
-  mainWindow.on('close', () => {
+  mainWindow.on('close', (event) => {
+    if (!isCloseConfirmed()) {
+      event.preventDefault();
+      requestConfirmClose();
+      return;
+    }
     flushState();
   });
 
@@ -123,7 +139,12 @@ app.whenReady().then(async () => {
   });
 });
 
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
+  if (!isCloseConfirmed()) {
+    event.preventDefault();
+    requestConfirmClose();
+    return;
+  }
   flushState();
   const win = BrowserWindow.getAllWindows()[0];
   if (win && !win.isDestroyed()) {

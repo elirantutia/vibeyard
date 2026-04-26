@@ -38,6 +38,12 @@
   gap: 12px;
 }
 
+.modal-message {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
 .modal-field {
   display: flex;
   flex-direction: column;

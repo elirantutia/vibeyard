@@ -15,7 +15,7 @@ function defaultState(): PersistedState {
     version: 1,
     projects: [],
     activeProjectId: null,
-    preferences: { soundOnSessionWaiting: true, notificationsDesktop: true, debugMode: false, sessionHistoryEnabled: true, insightsEnabled: true, autoTitleEnabled: true },
+    preferences: { soundOnSessionWaiting: true, notificationsDesktop: true, debugMode: false, sessionHistoryEnabled: true, insightsEnabled: true, autoTitleEnabled: true, confirmCloseWorkingSession: true },
   };
 }
 
@@ -26,7 +26,6 @@ export function loadState(): PersistedState {
       const raw = fs.readFileSync(file, 'utf-8');
       const parsed = JSON.parse(raw) as PersistedState;
       if (parsed.version !== 1) continue;
-      migrateSessionIds(parsed);
       if (file !== STATE_FILE) {
         console.warn('Recovered state from temp file');
       }
@@ -37,21 +36,6 @@ export function loadState(): PersistedState {
   }
   console.warn('No valid state file found, using defaults');
   return defaultState();
-}
-
-/** Migrate legacy claudeSessionId fields to cliSessionId */
-function migrateSessionIds(state: PersistedState): void {
-  for (const project of state.projects) {
-    for (const session of project.sessions) {
-      const s = session as unknown as Record<string, unknown>;
-      if (s.claudeSessionId !== undefined && s.cliSessionId === undefined) {
-        s.cliSessionId = s.claudeSessionId;
-      }
-      if (!s.providerId) {
-        s.providerId = 'claude';
-      }
-    }
-  }
 }
 
 export function saveState(state: PersistedState): void {

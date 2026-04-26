@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockMatchesAnyShortcut, mockPlatform } = vi.hoisted(() => ({
+const { mockMatchesAnyShortcut, mockPlatform, webglState } = vi.hoisted(() => ({
   mockMatchesAnyShortcut: vi.fn(() => false),
   mockPlatform: { isMac: false, isWin: false, isLinux: true },
+  webglState: {
+    shouldThrow: false,
+    lastInstance: null as null | { dispose: ReturnType<typeof vi.fn>; fireContextLoss: () => void },
+  },
 }));
 vi.mock('../shortcuts.js', () => ({
   shortcutManager: { matchesAnyShortcut: (...args: unknown[]) => mockMatchesAnyShortcut(...args) },
@@ -12,8 +16,25 @@ vi.mock('../platform.js', () => ({
   get isWin() { return mockPlatform.isWin; },
   get isLinux() { return mockPlatform.isLinux; },
 }));
+vi.mock('@xterm/addon-webgl', () => ({
+  WebglAddon: class {
+    private listener: (() => void) | null = null;
+    dispose = vi.fn();
+    onContextLoss = (listener: () => void) => {
+      this.listener = listener;
+      return { dispose() {} };
+    };
+    constructor() {
+      if (webglState.shouldThrow) throw new Error('no webgl');
+      webglState.lastInstance = {
+        dispose: this.dispose,
+        fireContextLoss: () => this.listener?.(),
+      };
+    }
+  },
+}));
 
-import { attachClipboardCopyHandler } from './terminal-utils.js';
+import { attachClipboardCopyHandler, loadWebglWithFallback } from './terminal-utils.js';
 
 const mockClipboardWrite = vi.fn().mockResolvedValue(undefined);
 const mockClipboardRead = vi.fn();
@@ -298,5 +319,37 @@ describe('attachClipboardCopyHandler app shortcut suppression', () => {
     const result = terminal.simulateKey({ key: 'a', type: 'keydown' });
 
     expect(result).toBe(true);
+  });
+});
+
+describe('loadWebglWithFallback', () => {
+  beforeEach(() => {
+    webglState.shouldThrow = false;
+    webglState.lastInstance = null;
+  });
+
+  it('loads the addon and subscribes to onContextLoss', () => {
+    const terminal = { loadAddon: vi.fn() };
+    loadWebglWithFallback(terminal as any);
+
+    expect(terminal.loadAddon).toHaveBeenCalledTimes(1);
+    expect(webglState.lastInstance).not.toBeNull();
+  });
+
+  it('disposes the addon when the WebGL context is lost', () => {
+    const terminal = { loadAddon: vi.fn() };
+    loadWebglWithFallback(terminal as any);
+
+    webglState.lastInstance!.fireContextLoss();
+
+    expect(webglState.lastInstance!.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back silently when WebGL is unavailable', () => {
+    webglState.shouldThrow = true;
+    const terminal = { loadAddon: vi.fn() };
+
+    expect(() => loadWebglWithFallback(terminal as any)).not.toThrow();
+    expect(terminal.loadAddon).not.toHaveBeenCalled();
   });
 });
