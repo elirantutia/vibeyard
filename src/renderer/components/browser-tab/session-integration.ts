@@ -15,10 +15,15 @@ import {
 
 function deliver(session: SessionRecord, prompt: string): void {
   const project = appState.activeProject;
+  // The picked session may have been closed between menu render and click.
+  // Bail out rather than queue a prompt against a session that no longer
+  // exists — setActiveSession on a removed id leaves the UI with no pane to
+  // render and shows a black screen.
+  if (!project || !project.sessions.some((s) => s.id === session.id)) return;
   if (!injectPromptIntoRunningSession(session.id, prompt)) {
     setPendingPrompt(session.id, prompt);
   }
-  if (project) appState.setActiveSession(project.id, session.id);
+  appState.setActiveSession(project.id, session.id);
 }
 
 export function sendFlowToNewSession(instance: BrowserTabInstance): void {

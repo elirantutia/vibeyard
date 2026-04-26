@@ -92,6 +92,7 @@ describe('deliverInspect', () => {
   });
 
   it('injects into a spawned target session and dismisses inspect', async () => {
+    setProject([{ id: 'sess-A', name: 'A' }]);
     injectPromptIntoRunningSession.mockReturnValueOnce(true);
     const { deliverInspect } = await import('./session-integration.js');
 
@@ -103,6 +104,7 @@ describe('deliverInspect', () => {
   });
 
   it('falls back to setPendingPrompt when inject returns false (dormant target)', async () => {
+    setProject([{ id: 'sess-B', name: 'B' }]);
     injectPromptIntoRunningSession.mockReturnValueOnce(false);
     const { deliverInspect } = await import('./session-integration.js');
 
@@ -112,6 +114,7 @@ describe('deliverInspect', () => {
   });
 
   it('activates the target session so the user sees the result', async () => {
+    setProject([{ id: 'sess-C', name: 'C' }]);
     injectPromptIntoRunningSession.mockReturnValueOnce(true);
     const { deliverInspect } = await import('./session-integration.js');
 
@@ -128,6 +131,17 @@ describe('deliverInspect', () => {
     expect(injectPromptIntoRunningSession).not.toHaveBeenCalled();
     expect(dismissInspect).not.toHaveBeenCalled();
   });
+
+  it('bails when the picked session was removed from the project (e.g. closed mid-menu)', async () => {
+    setProject([{ id: 'still-here', name: 'still' }]);
+    const { deliverInspect } = await import('./session-integration.js');
+
+    deliverInspect(makeInstance(), makeSession('was-closed'));
+
+    expect(injectPromptIntoRunningSession).not.toHaveBeenCalled();
+    expect(setPendingPrompt).not.toHaveBeenCalled();
+    expect(setActiveSession).not.toHaveBeenCalled();
+  });
 });
 
 describe('deliverFlow', () => {
@@ -138,6 +152,7 @@ describe('deliverFlow', () => {
   });
 
   it('delivers the flow prompt and dismisses the flow panel', async () => {
+    setProject([{ id: 'sess-D', name: 'D' }]);
     injectPromptIntoRunningSession.mockReturnValueOnce(true);
     const { deliverFlow } = await import('./session-integration.js');
 
@@ -166,6 +181,7 @@ describe('deliverDraw', () => {
   });
 
   it('captures a screenshot and delivers the built prompt', async () => {
+    setProject([{ id: 'sess-E', name: 'E' }]);
     captureScreenshotPath.mockResolvedValueOnce('/tmp/shot.png');
     injectPromptIntoRunningSession.mockReturnValueOnce(true);
     const { deliverDraw } = await import('./session-integration.js');

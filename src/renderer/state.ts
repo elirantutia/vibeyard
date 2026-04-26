@@ -85,25 +85,6 @@ class AppState {
     this.stepNav(1);
   }
 
-  /**
-   * Returns the most recently active CLI-backed session within the given project,
-   * walking the nav history backwards from the current position. Used by features
-   * that want to target "the session the user was just in" (e.g. browser-tab send).
-   * CLI-backed = no `type` set or `type === 'claude'`. Returns null if none found.
-   */
-  getLastActiveCliSessionInProject(projectId: string): SessionRecord | null {
-    const project = this.state.projects.find((p) => p.id === projectId);
-    if (!project) return null;
-    const isCli = (s: SessionRecord): boolean => !s.type || s.type === 'claude';
-    const startIdx = Math.min(this.navIndex, this.navHistory.length - 1);
-    for (let i = startIdx; i >= 0; i--) {
-      const sid = this.navHistory[i];
-      const session = project.sessions.find((s) => s.id === sid);
-      if (session && isCli(session)) return session;
-    }
-    return null;
-  }
-
   private stepNav(direction: 1 | -1): void {
     const id = this.nav.findNextValid(direction, (sid) => !!this.findProjectBySession(sid));
     if (!id) return;

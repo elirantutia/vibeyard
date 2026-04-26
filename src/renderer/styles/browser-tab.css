@@ -882,16 +882,6 @@ body.sidebar-resizing .browser-webview {
   color: var(--text-primary);
 }
 
-.send-menu-item-last-active {
-  background: rgba(233, 69, 96, 0.1);
-  box-shadow: inset 2px 0 0 var(--accent);
-  font-weight: 600;
-}
-
-.send-menu-item-last-active:hover {
-  background: rgba(233, 69, 96, 0.18);
-}
-
 .send-menu-dot {
   flex-shrink: 0;
   width: 8px;
