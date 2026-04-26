@@ -76,7 +76,7 @@ function getPaneContext(): PaneContext | null {
   }
 
   const inst = getFileReaderInstance(sessionId);
-  if (!inst || inst.kind === 'image') return null;
+  if (!inst || inst.kind === 'image' || inst.unsupported) return null;
 
   let lineStart: number | undefined;
   let lineEnd: number | undefined;

@@ -13,6 +13,7 @@ interface FileReaderInstance {
   targetLine?: number;
   viewMode: 'raw' | 'rendered';
   kind: 'text' | 'image';
+  unsupported: boolean;
   rawContent?: string;
   imageDataUrl?: string;
 }
@@ -108,6 +109,7 @@ async function loadFile(instance: FileReaderInstance, sessionId: string): Promis
   const project = appState.activeProject;
   if (!project) return;
 
+  instance.unsupported = false;
   const body = instance.element.querySelector('.file-reader-body')!;
   showFileReaderMessage(body, 'Loading...');
 
@@ -125,8 +127,17 @@ async function loadFile(instance: FileReaderInstance, sessionId: string): Promis
       instance.loaded = true;
       return;
     }
-    const content = await window.vibeyard.fs.readFile(fullPath);
-    instance.rawContent = content;
+    const result = await window.vibeyard.fs.readFile(fullPath);
+    if (!result.ok) {
+      showFileReaderMessage(
+        body,
+        result.reason === 'binary' ? 'Unable to preview this file' : 'Failed to load file',
+      );
+      instance.unsupported = true;
+      instance.loaded = true;
+      return;
+    }
+    instance.rawContent = result.content;
     renderBody(instance);
     instance.loaded = true;
     if (instance.targetLine && instance.viewMode === 'raw') {
@@ -134,6 +145,7 @@ async function loadFile(instance: FileReaderInstance, sessionId: string): Promis
     }
   } catch {
     showFileReaderMessage(body, 'Failed to load file');
+    instance.unsupported = true;
   }
 }
 
@@ -185,6 +197,7 @@ export function createFileReaderPane(sessionId: string, filePath: string, target
     element: el, filePath, resolvedPath: null, loaded: false, targetLine,
     viewMode: isMd ? 'rendered' : 'raw',
     kind: isImage ? 'image' : 'text',
+    unsupported: false,
   };
 
   if (isMd) {
@@ -319,7 +332,7 @@ const RAW_TEXT_SELECTOR = '.file-reader-line-text';
 export function getFileReaderTextSelector(sessionId: string): string {
   const instance = instances.get(sessionId);
   if (!instance) return RAW_TEXT_SELECTOR;
-  if (instance.kind === 'image') return '.file-reader-no-search';
+  if (instance.kind === 'image' || instance.unsupported) return '.file-reader-no-search';
   return instance.viewMode === 'rendered' ? MARKDOWN_TEXT_SELECTOR : RAW_TEXT_SELECTOR;
 }
 
@@ -328,7 +341,7 @@ const goToLineBars = new Map<string, { bar: HTMLDivElement; input: HTMLInputElem
 export function showGoToLineBar(sessionId: string): void {
   const instance = instances.get(sessionId);
   if (!instance) return;
-  if (instance.kind === 'image') return;
+  if (instance.kind === 'image' || instance.unsupported) return;
   if (instance.viewMode === 'rendered') return;
 
   const existing = goToLineBars.get(sessionId);

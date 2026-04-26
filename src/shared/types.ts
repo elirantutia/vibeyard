@@ -362,3 +362,9 @@ export interface StatsCache {
   firstSessionDate: string;
   hourCounts: Record<string, number>;
 }
+
+// --- Filesystem IPC ---
+
+export type ReadFileResult =
+  | { ok: true; content: string }
+  | { ok: false; reason: 'binary' | 'error' };
