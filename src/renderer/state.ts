@@ -5,7 +5,7 @@ import { restoreContext } from './session-context.js';
 import { getProviderCapabilities, getProviderAvailabilitySnapshot } from './provider-availability.js';
 import { basename } from '../shared/platform.js';
 import { isCliSession } from './session-utils.js';
-import { archiveSession as archiveSessionPure, buildResumedSession } from './state/session-archive.js';
+import { archiveSession as archiveSessionPure, buildResumedSession, buildResumedSessionFromCliId } from './state/session-archive.js';
 import {
   attachSessionToProject,
   buildBrowserTabSession,
@@ -519,6 +519,20 @@ class AppState {
     if (existing) return this.activateExistingSession(project, existing);
 
     const session = buildResumedSession(archived);
+    attachSessionToProject(project, session, { addToSwarm: true });
+    this.commitNewSession(projectId, session);
+    return session;
+  }
+
+  /** Open a Claude session by cliSessionId, bypassing Vibeyard history. Used for cross-project deep search results. */
+  openCliSession(projectId: string, cliSessionId: string, name: string): SessionRecord | undefined {
+    const project = this.state.projects.find((p) => p.id === projectId);
+    if (!project) return undefined;
+
+    const existing = project.sessions.find((s) => s.cliSessionId === cliSessionId);
+    if (existing) return this.activateExistingSession(project, existing);
+
+    const session = buildResumedSessionFromCliId(cliSessionId, name);
     attachSessionToProject(project, session, { addToSwarm: true });
     this.commitNewSession(projectId, session);
     return session;

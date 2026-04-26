@@ -17,6 +17,7 @@ import { checkForUpdates, quitAndInstall } from './auto-updater';
 import { createAppMenu } from './menu';
 import { getProvider, getProviderMeta, getAllProviderMetas } from './providers/registry';
 import { buildHandoffPrompt } from './providers/resume-handoff';
+import { searchSessions } from './session-deep-search';
 import type { ProviderId, GitFileEntry, SettingsValidationResult, ReadFileResult } from '../shared/types';
 import { analyzeReadiness } from './readiness/analyzer';
 import { expandUserPath, isBinaryBuffer, BINARY_SNIFF_BYTES } from './fs-utils';
@@ -273,6 +274,10 @@ export function registerIpcHandlers(): void {
       }
     }
     return buildHandoffPrompt({ fromProviderLabel, sessionName, transcriptPath });
+  });
+
+  ipcMain.handle('session:deepSearch', (_event, query: string) => {
+    return searchSessions(query);
   });
 
   ipcMain.handle('provider:checkBinary', (_event, providerId: ProviderId = 'claude') => {

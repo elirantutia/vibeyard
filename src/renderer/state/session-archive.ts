@@ -60,3 +60,14 @@ export function buildResumedSession(archived: ArchivedSession): SessionRecord {
     createdAt: new Date().toISOString(),
   };
 }
+
+/** Build a fresh SessionRecord from a bare cliSessionId (no Vibeyard history entry required). */
+export function buildResumedSessionFromCliId(cliSessionId: string, name: string, providerId: ProviderId = 'claude'): SessionRecord {
+  return {
+    id: crypto.randomUUID(),
+    name,
+    providerId,
+    cliSessionId,
+    createdAt: new Date().toISOString(),
+  };
+}
