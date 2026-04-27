@@ -150,11 +150,15 @@ function renderResults(): void {
     return;
   }
 
-  const activeProjectId = appState.activeProject?.id;
+  const activeProject = appState.activeProject;
+  const activeProjectId = activeProject?.id;
+  const activeProjectPath = activeProject?.path;
   const query = input?.value.trim() ?? '';
   for (let i = 0; i < resolvedResults.length; i++) {
     const r = resolvedResults[i];
-    const isCurrentProject = r.projectId === activeProjectId;
+    const isCurrentProject =
+      r.projectId === activeProjectId ||
+      (!!activeProjectPath && r.projectCwd === activeProjectPath);
 
     const item = document.createElement('div');
     item.className = 'session-palette-item';
