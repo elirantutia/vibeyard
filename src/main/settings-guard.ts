@@ -79,8 +79,35 @@ export function validateSettings(): SettingsValidationResult {
 }
 
 /**
+ * Whether the per-session warning banner should flag the statusLine state.
+ *
+ * Consent is bound to the specific foreign command the user was asked about.
+ * A different foreign command is a new conflict and still warrants a warning,
+ * even if the user previously declined a different one.
+ */
+export function shouldWarnStatusLine(
+  statusLine: SettingsValidationResult['statusLine'],
+  consent: 'granted' | 'declined' | null | undefined,
+  consentCommand: string | null | undefined,
+  currentForeignCommand: string | null | undefined,
+): boolean {
+  if (statusLine === 'vibeyard') return false;
+  if (
+    statusLine === 'foreign' &&
+    consent === 'declined' &&
+    !!consentCommand &&
+    !!currentForeignCommand &&
+    consentCommand === currentForeignCommand
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
  * Guarded hook/statusLine installation. Shows a dialog if a foreign statusLine
- * is detected and the user hasn't previously granted/declined consent.
+ * is detected and the user hasn't previously granted/declined consent for
+ * that specific foreign command.
  */
 export async function guardedInstall(win: BrowserWindow | null): Promise<void> {
   const validation = validateSettings();
@@ -96,17 +123,29 @@ export async function guardedInstall(win: BrowserWindow | null): Promise<void> {
   // Foreign statusLine detected — check stored consent
   const state = loadState();
   const consent = state.preferences.statusLineConsent;
+  const consentCommand = state.preferences.statusLineConsentCommand;
+  const currentForeign = validation.foreignStatusLineCommand ?? '';
 
-  if (consent === 'granted') {
+  // Legacy 'declined' without recorded command: assume the current foreign
+  // is what the user originally chose to keep, and freeze it. Future edits
+  // to a different command will re-prompt.
+  if (consent === 'declined' && !consentCommand) {
+    state.preferences.statusLineConsentCommand = currentForeign;
+    saveState(state);
+    return;
+  }
+
+  // Consent applies only to the specific foreign command it was given for.
+  // A different (or unknown) foreign command is a new conflict — re-prompt.
+  if (consent === 'granted' && consentCommand && consentCommand === currentForeign) {
     installStatusLine();
     return;
   }
-
-  if (consent === 'declined') {
+  if (consent === 'declined' && consentCommand === currentForeign) {
     return;
   }
 
-  // No prior decision — ask the user via in-app modal
+  // No prior decision for this foreign command — ask the user via in-app modal
   if (!win) return;
 
   // Wait for renderer to be ready before sending IPC
@@ -131,6 +170,7 @@ export async function guardedInstall(win: BrowserWindow | null): Promise<void> {
   });
 
   state.preferences.statusLineConsent = choice === 'replace' ? 'granted' : 'declined';
+  state.preferences.statusLineConsentCommand = currentForeign;
   saveState(state);
 
   if (choice === 'replace') {
@@ -148,5 +188,7 @@ export function reinstallSettings(): void {
 
   const state = loadState();
   state.preferences.statusLineConsent = 'granted';
+  // No specific foreign command anymore — Vibeyard now owns the statusLine.
+  state.preferences.statusLineConsentCommand = null;
   saveState(state);
 }

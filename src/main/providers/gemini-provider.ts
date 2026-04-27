@@ -34,8 +34,8 @@ export class GeminiProvider implements CliProvider {
     return resolveBinary('gemini', binaryCache);
   }
 
-  validatePrerequisites(): { ok: boolean; message: string } {
-    return validateBinaryExists('gemini', 'Gemini CLI', 'npm install -g @google/gemini-cli');
+  validatePrerequisites(): boolean {
+    return validateBinaryExists('gemini');
   }
 
   buildEnv(sessionId: string, baseEnv: Record<string, string>): Record<string, string> {

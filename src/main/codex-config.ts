@@ -1,24 +1,9 @@
 import * as path from 'path';
 import { homedir } from 'os';
-import { fileExists, readDirSafe, readFileSafe } from './fs-utils';
-import type { Agent, McpServer, ProviderConfig, Skill } from '../shared/types';
-
-function parseFrontmatter(filePath: string): Record<string, string> {
-  const content = readFileSafe(filePath);
-  if (!content) return {};
-  const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
-  if (!match) return {};
-
-  const result: Record<string, string> = {};
-  for (const line of match[1].split('\n')) {
-    const colonIdx = line.indexOf(':');
-    if (colonIdx === -1) continue;
-    const key = line.slice(0, colonIdx).trim();
-    const value = line.slice(colonIdx + 1).trim();
-    result[key] = value;
-  }
-  return result;
-}
+import { readDirSafe, readFileSafe } from './fs-utils';
+import { parseFrontmatter } from './frontmatter';
+import { dedupeByName, readSkillsFromDir } from './provider-config-utils';
+import type { Agent, McpServer, ProviderConfig } from '../shared/types';
 
 function readAgentsFromDir(dirPath: string, scope: 'user' | 'project'): Agent[] {
   const agents: Agent[] = [];
@@ -36,23 +21,6 @@ function readAgentsFromDir(dirPath: string, scope: 'user' | 'project'): Agent[] 
     });
   }
   return agents;
-}
-
-function readSkillsFromDir(dirPath: string, scope: 'user' | 'project'): Skill[] {
-  const skills: Skill[] = [];
-  for (const skillName of readDirSafe(dirPath)) {
-    if (skillName.startsWith('.')) continue;
-    const filePath = path.join(dirPath, skillName, 'SKILL.md');
-    if (!fileExists(filePath)) continue;
-    const fm = parseFrontmatter(filePath);
-    skills.push({
-      name: fm.name || skillName,
-      description: fm.description || '',
-      scope,
-      filePath,
-    });
-  }
-  return skills;
 }
 
 function splitTomlSectionPath(sectionPath: string): string[] {
@@ -142,31 +110,15 @@ export async function getCodexConfig(projectPath: string): Promise<ProviderConfi
   for (const server of userMcp) serverMap.set(server.name, server);
   for (const server of projectMcp) serverMap.set(server.name, server);
 
-  const agentNames = new Set<string>();
-  const agents: Agent[] = [];
-  for (const list of [
+  const agents = dedupeByName(
     readAgentsFromDir(path.join(codexDir, 'agents'), 'user'),
     readAgentsFromDir(path.join(projectCodexDir, 'agents'), 'project'),
-  ]) {
-    for (const agent of list) {
-      if (agentNames.has(agent.name)) continue;
-      agentNames.add(agent.name);
-      agents.push(agent);
-    }
-  }
+  );
 
-  const skillNames = new Set<string>();
-  const skills: Skill[] = [];
-  for (const list of [
+  const skills = dedupeByName(
     readSkillsFromDir(path.join(codexDir, 'skills'), 'user'),
     readSkillsFromDir(path.join(projectCodexDir, 'skills'), 'project'),
-  ]) {
-    for (const skill of list) {
-      if (skillNames.has(skill.name)) continue;
-      skillNames.add(skill.name);
-      skills.push(skill);
-    }
-  }
+  );
 
   return {
     mcpServers: Array.from(serverMap.values()),

@@ -1,6 +1,7 @@
 import picomatch from 'picomatch';
 import type { ToolFailureData } from '../../shared/types.js';
 import { DEFAULT_SCAN_IGNORE, EXCLUDED_DIRECTORIES, EXTRA_ALERT_IGNORE } from '../../shared/constants.js';
+import { basename as pathBasename } from '../../shared/platform.js';
 import { appState } from '../state.js';
 
 export interface LargeFileAlert {
@@ -36,31 +37,33 @@ function isExcludedPath(relative: string): boolean {
 type IgnoreMatchers = { basename: picomatch.Matcher; fullPath: picomatch.Matcher };
 const ignoreMatcherCache = new Map<string, IgnoreMatchers | null>();
 
+async function loadVibeyardignore(projectPath: string): Promise<IgnoreMatchers | null> {
+  try {
+    const result = await window.vibeyard.fs.readFile(projectPath + '/.vibeyardignore');
+    if (!result.ok) return null;
+    const patterns: string[] = [];
+    for (const raw of result.content.split('\n')) {
+      const line = raw.trim();
+      if (line && !line.startsWith('#')) patterns.push(line);
+    }
+    if (patterns.length === 0) return null;
+    return {
+      basename: picomatch(patterns, { basename: true }),
+      fullPath: picomatch(patterns),
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function matchesVibeyardignore(projectPath: string, relative: string): Promise<boolean> {
   if (!ignoreMatcherCache.has(projectPath)) {
-    try {
-      const content = await window.vibeyard.fs.readFile(projectPath + '/.vibeyardignore');
-      const patterns: string[] = [];
-      for (const raw of content.split('\n')) {
-        const line = raw.trim();
-        if (line && !line.startsWith('#')) patterns.push(line);
-      }
-      if (patterns.length > 0) {
-        ignoreMatcherCache.set(projectPath, {
-          basename: picomatch(patterns, { basename: true }),
-          fullPath: picomatch(patterns),
-        });
-      } else {
-        ignoreMatcherCache.set(projectPath, null);
-      }
-    } catch {
-      ignoreMatcherCache.set(projectPath, null);
-    }
+    ignoreMatcherCache.set(projectPath, await loadVibeyardignore(projectPath));
   }
   const matchers = ignoreMatcherCache.get(projectPath);
   if (!matchers) return false;
-  const basename = relative.split('/').pop() || relative;
-  return matchers.basename(basename) || matchers.fullPath(relative);
+  const base = pathBasename(relative);
+  return matchers.basename(base) || matchers.fullPath(relative);
 }
 
 const alertedPerSession = new Map<string, Set<string>>();

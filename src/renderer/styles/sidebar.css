@@ -56,6 +56,7 @@
 #sidebar.collapsed .sidebar-title,
 #sidebar.collapsed .sidebar-header-actions,
 #sidebar.collapsed #sidebar-content,
+#sidebar.collapsed #sidebar-discussions,
 #sidebar.collapsed #sidebar-footer {
   display: none;
 }
@@ -68,6 +69,7 @@
 #sidebar-content {
   flex: 1;
   overflow-y: auto;
+  min-height: 0;
 }
 
 #sidebar-footer {
@@ -83,6 +85,49 @@
   display: none;
 }
 
+#sidebar-discussions {
+  border-top: 1px solid var(--border);
+  padding: 10px 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+#sidebar-discussions:hover {
+  background: var(--bg-hover);
+}
+
+#sidebar-discussions.hidden {
+  display: none;
+}
+
+#sidebar-discussions .discussions-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+#sidebar-discussions .discussions-badge {
+  display: inline-block;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 8px;
+  padding: 0 4px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+#sidebar-discussions .discussions-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 #project-list {
   padding: 4px 0;
 }
@@ -93,9 +138,15 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  background: var(--bg-tertiary);
   color: var(--text-secondary);
   font-size: 13px;
+  border-top: 1px solid var(--border);
   border-left: 3px solid transparent;
+}
+
+.project-row:first-child .project-item {
+  border-top: none;
 }
 
 .project-item:hover {
@@ -103,7 +154,6 @@
 }
 
 .project-item.active {
-  background: var(--bg-primary);
   color: var(--text-primary);
   border-left-color: var(--accent);
 }
@@ -113,6 +163,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 600;
 }
 
 .project-item .project-name.unread {
@@ -125,6 +176,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  opacity: 0.85;
+  font-weight: 400;
 }
 
 .project-session-count {
@@ -173,6 +226,53 @@
 
 .project-item .project-delete:hover {
   color: var(--accent);
+}
+
+.project-actions {
+  display: flex;
+  gap: 4px;
+  padding: 4px 12px 6px;
+}
+
+.project-action-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  font-size: 11px;
+  font-family: inherit;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-action-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong, var(--border));
+  background: var(--bg-hover);
+}
+
+.project-action-btn.active {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+  background: var(--bg-hover);
+}
+
+.project-panel {
+  background: var(--bg-secondary);
+  border-left: 3px solid transparent;
+}
+
+.project-panel.hidden {
+  display: none;
+}
+
+.project-panel-history {
+  padding-bottom: 4px;
 }
 
 /* Update banner */

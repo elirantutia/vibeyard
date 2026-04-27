@@ -1,8 +1,20 @@
 import { appState, ProjectRecord } from '../state.js';
-import { showModal, setModalError, closeModal } from './modal.js';
+import { showModal, setModalError, closeModal, showConfirmDialog } from './modal.js';
 import { showPreferencesModal } from './preferences-modal.js';
 import { onChange as onCostChange, getAggregateCost } from '../session-cost.js';
 import { hasUnreadInProject, onChange as onUnreadChange } from '../session-unread.js';
+import { init as initDiscussionsBadge, getNewCount as getDiscussionsNewCount, markSeen as markDiscussionsSeen, onChange as onDiscussionsChange, DISCUSSIONS_URL } from '../discussions-badge.js';
+import { basename, lastSeparatorIndex } from '../../shared/platform.js';
+import { esc } from '../dom-utils.js';
+import { renderFileTree, clearProjectState as clearFileTreeState, closeFileTree } from './file-tree.js';
+import {
+  renderSessionHistory,
+  closeSessionHistory,
+  clearProjectState as clearSessionHistoryState,
+} from './session-history.js';
+
+type ProjectPanel = 'history' | 'files' | null;
+const projectPanelOpen = new Map<string, ProjectPanel>();
 
 const projectListEl = document.getElementById('project-list')!;
 let activeProjectContextMenu: HTMLElement | null = null;
@@ -12,6 +24,7 @@ const sidebarEl = document.getElementById('sidebar')!;
 const resizeHandle = document.getElementById('sidebar-resize-handle')!;
 
 const sidebarFooterEl = document.getElementById('sidebar-footer')!;
+const sidebarDiscussionsEl = document.getElementById('sidebar-discussions')!;
 const btnToggleSidebar = document.getElementById('btn-toggle-sidebar')!;
 
 const SIDEBAR_MIN = 150;
@@ -31,6 +44,16 @@ export function initSidebar(): void {
   btnAddProject.addEventListener('click', promptNewProject);
   btnPreferences.addEventListener('click', showPreferencesModal);
   btnToggleSidebar.addEventListener('click', toggleSidebar);
+
+  renderDiscussions();
+  applyDiscussionsVisibility();
+  sidebarDiscussionsEl.addEventListener('click', () => {
+    markDiscussionsSeen();
+    window.vibeyard.app.openExternal(DISCUSSIONS_URL);
+  });
+  initDiscussionsBadge();
+  onDiscussionsChange(renderDiscussions);
+
   initResizeHandle();
   appState.on('state-loaded', () => {
     if (appState.sidebarWidth) {
@@ -41,7 +64,14 @@ export function initSidebar(): void {
   });
   appState.on('sidebar-toggled', applySidebarCollapsed);
   appState.on('project-added', render);
-  appState.on('project-removed', render);
+  appState.on('project-removed', (id) => {
+    if (typeof id === 'string') {
+      projectPanelOpen.delete(id);
+      clearFileTreeState(id);
+      clearSessionHistoryState(id);
+    }
+    render();
+  });
   appState.on('project-changed', render);
   appState.on('session-added', render);
   appState.on('session-removed', render);
@@ -53,7 +83,11 @@ export function initSidebar(): void {
   });
 
   onUnreadChange(render);
-  appState.on('preferences-changed', () => applyCostFooterVisibility());
+  appState.on('preferences-changed', () => {
+    applyCostFooterVisibility();
+    applyDiscussionsVisibility();
+    render();
+  });
 
   document.addEventListener('click', hideProjectContextMenu);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideProjectContextMenu(); });
@@ -84,9 +118,19 @@ function render(): void {
   hideProjectContextMenu();
   projectListEl.innerHTML = '';
 
+  const fileTreeEnabled = appState.preferences.sidebarViews?.fileTree ?? true;
+  const historyEnabled =
+    (appState.preferences.sidebarViews?.sessionHistory ?? true) &&
+    appState.preferences.sessionHistoryEnabled;
+
   for (const project of appState.projects) {
+    const isActive = project.id === appState.activeProjectId;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'project-row';
+
     const el = document.createElement('div');
-    el.className = 'project-item' + (project.id === appState.activeProjectId ? ' active' : '');
+    el.className = 'project-item' + (isActive ? ' active' : '');
     el.innerHTML = `
       <div style="flex:1;min-width:0">
         <div class="project-name${hasUnreadInProject(project.id) ? ' unread' : ''}">${esc(project.name)}${project.sessions.length ? ` <span class="project-session-count">(${project.sessions.length})</span>` : ''}</div>
@@ -96,12 +140,10 @@ function render(): void {
     `;
 
     el.addEventListener('click', (e) => {
-      if ((e.target as HTMLElement).classList.contains('project-delete')) return;
-      if (project.id === appState.activeProjectId) {
-        appState.toggleSidebar();
-      } else {
-        appState.setActiveProject(project.id);
-      }
+      const target = e.target as HTMLElement;
+      if (target.classList.contains('project-delete')) return;
+      if (isActive) return;
+      appState.setActiveProject(project.id);
     });
 
     el.querySelector('.project-delete')!.addEventListener('click', () => {
@@ -113,17 +155,92 @@ function render(): void {
       showProjectContextMenu(e.clientX, e.clientY, project);
     });
 
-    projectListEl.appendChild(el);
+    wrapper.appendChild(el);
 
-    if (project.id === appState.activeProjectId) {
+    if (isActive) {
       const isBoardMode = project.layout.mode === 'board';
       const subItems = document.createElement('div');
       subItems.className = 'project-sub-items';
       subItems.appendChild(makeSubItem('Board', isBoardMode, () => { if (!isBoardMode) appState.toggleBoard(); }));
       subItems.appendChild(makeSubItem('Sessions', !isBoardMode, () => { if (isBoardMode) appState.toggleBoard(); }));
-      projectListEl.appendChild(subItems);
+      wrapper.appendChild(subItems);
+
+      const openPanel = projectPanelOpen.get(project.id) ?? null;
+      const actions = buildProjectActions(project, openPanel, { fileTreeEnabled, historyEnabled });
+      wrapper.appendChild(actions);
+
+      if (openPanel !== null) {
+        const panelContainer = document.createElement('div');
+        panelContainer.className = 'project-panel';
+        if (openPanel === 'files') {
+          panelContainer.classList.add('project-panel-files', 'project-file-tree');
+          renderFileTree(project, panelContainer);
+        } else {
+          panelContainer.classList.add('project-panel-history');
+          renderSessionHistory(project, panelContainer);
+        }
+        wrapper.appendChild(panelContainer);
+      }
     }
+
+    projectListEl.appendChild(wrapper);
   }
+}
+
+function buildProjectActions(
+  project: ProjectRecord,
+  openPanel: ProjectPanel,
+  opts: { fileTreeEnabled: boolean; historyEnabled: boolean },
+): HTMLElement {
+  const actions = document.createElement('div');
+  actions.className = 'project-actions';
+
+  if (opts.historyEnabled) {
+    const historyBtn = makeActionButton('Sessions', openPanel === 'history');
+    historyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setProjectPanel(project.id, openPanel === 'history' ? null : 'history');
+    });
+    actions.appendChild(historyBtn);
+  }
+
+  if (opts.fileTreeEnabled) {
+    const filesBtn = makeActionButton('Files', openPanel === 'files');
+    filesBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setProjectPanel(project.id, openPanel === 'files' ? null : 'files');
+    });
+    actions.appendChild(filesBtn);
+  }
+
+  const overviewBtn = makeActionButton('Overview', false);
+  overviewBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    appState.openProjectTab(project.id);
+  });
+  actions.appendChild(overviewBtn);
+
+  return actions;
+}
+
+function makeActionButton(label: string, active: boolean): HTMLButtonElement {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'project-action-btn' + (active ? ' active' : '');
+  btn.textContent = label;
+  return btn;
+}
+
+function setProjectPanel(projectId: string, next: ProjectPanel): void {
+  const current = projectPanelOpen.get(projectId) ?? null;
+  if (current === 'files' && next !== 'files') closeFileTree(projectId);
+  if (current === 'history' && next !== 'history') closeSessionHistory(projectId);
+  if (next === null) {
+    projectPanelOpen.delete(projectId);
+  } else {
+    projectPanelOpen.set(projectId, next);
+  }
+  render();
 }
 
 export function promptNewProject(): void {
@@ -161,7 +278,7 @@ export function promptNewProject(): void {
 
   const autoFillName = (path: string) => {
     if (nameInput && !nameManuallyEdited) {
-      nameInput.value = path.split('/').pop() || '';
+      nameInput.value = basename(path);
     }
   };
 
@@ -191,7 +308,7 @@ export function promptNewProject(): void {
       for (const dir of dirs) {
         const item = document.createElement('div');
         item.className = 'path-autocomplete-item';
-        item.textContent = dirPart + (dir.split('/').pop() ?? '');
+        item.textContent = dirPart + basename(dir);
         item.addEventListener('mousedown', (e) => {
           e.preventDefault();
           pathInput.value = item.textContent!;
@@ -206,7 +323,7 @@ export function promptNewProject(): void {
     pathInput.addEventListener('input', async () => {
       const value = pathInput.value;
       autoFillName(value);
-      const lastSlash = value.lastIndexOf('/');
+      const lastSlash = lastSeparatorIndex(value);
       if (lastSlash === -1) { hideDropdown(); return; }
 
       const dirPart = value.substring(0, lastSlash + 1);
@@ -264,6 +381,16 @@ function initResizeHandle(): void {
 
   document.addEventListener('mousemove', (e) => {
     if (!dragging) return;
+    // If the mouse was released outside the window, mouseup never fired — detect via buttons and tear down.
+    if (!e.buttons) {
+      dragging = false;
+      resizeHandle.classList.remove('active');
+      document.body.classList.remove('sidebar-resizing');
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      appState.setSidebarWidth(parseInt(sidebarEl.style.width, 10));
+      return;
+    }
     const width = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, e.clientX));
     sidebarEl.style.width = width + 'px';
   });
@@ -288,6 +415,11 @@ function applyCostFooterVisibility(): void {
   }
 }
 
+function applyDiscussionsVisibility(): void {
+  const visible = appState.preferences.sidebarViews?.discussions ?? true;
+  sidebarDiscussionsEl.classList.toggle('hidden', !visible);
+}
+
 function renderCostFooter(): void {
   const costVisible = appState.preferences.sidebarViews?.costFooter ?? true;
   if (!costVisible) {
@@ -308,8 +440,10 @@ function confirmRemoveProject(project: ProjectRecord): void {
   const message = historyCount > 0
     ? `Remove project "${project.name}"? This will delete all sessions and history (${historyCount} entries) from Vibeyard. No files on disk will be affected.`
     : `Remove project "${project.name}"? No files on disk will be affected.`;
-  if (!confirm(message)) return;
-  appState.removeProject(project.id);
+  showConfirmDialog('Remove project', message, {
+    confirmLabel: 'Remove',
+    onConfirm: () => appState.removeProject(project.id),
+  });
 }
 
 function showProjectContextMenu(x: number, y: number, project: ProjectRecord): void {
@@ -363,8 +497,11 @@ function hideProjectContextMenu(): void {
   }
 }
 
-function esc(s: string): string {
-  const el = document.createElement('span');
-  el.textContent = s;
-  return el.innerHTML;
+function renderDiscussions(): void {
+  const count = getDiscussionsNewCount();
+  const badge = count > 0 ? ` <span class="discussions-badge">${count}</span>` : '';
+  sidebarDiscussionsEl.innerHTML =
+    `<div class="discussions-title">Vibeyard Discussions${badge}</div>` +
+    '<div class="discussions-desc">Join the conversation about coding with AI</div>';
 }
+

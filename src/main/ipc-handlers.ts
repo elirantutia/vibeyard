@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, app, dialog, shell } from 'electron';
+import { ipcMain, BrowserWindow, app, dialog, shell, clipboard } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -17,10 +17,12 @@ import { checkForUpdates, quitAndInstall } from './auto-updater';
 import { createAppMenu } from './menu';
 import { getProvider, getProviderMeta, getAllProviderMetas } from './providers/registry';
 import { buildHandoffPrompt } from './providers/resume-handoff';
-import type { ProviderId, GitFileEntry, SettingsValidationResult } from '../shared/types';
+import type { ProviderId, GitFileEntry, SettingsValidationResult, ReadFileResult } from '../shared/types';
 import { analyzeReadiness } from './readiness/analyzer';
-import { expandUserPath } from './fs-utils';
+import { expandUserPath, isBinaryBuffer, BINARY_SNIFF_BYTES } from './fs-utils';
 import { isMac, isWin } from './platform';
+import { shouldWarnStatusLine } from './settings-guard';
+import { setCloseConfirmed } from './close-state';
 
 /**
  * Check if a resolved path is within one of the known project directories.
@@ -67,7 +69,7 @@ export function resetHookWatcher(): void {
 }
 
 export function registerIpcHandlers(): void {
-  ipcMain.handle('pty:create', (_event, sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs: string, providerId: ProviderId = 'claude', initialPrompt?: string) => {
+  ipcMain.handle('pty:create', async (_event, sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs: string, providerId: ProviderId = 'claude', initialPrompt?: string) => {
     const win = BrowserWindow.getAllWindows()[0];
     if (!win) return;
 
@@ -77,18 +79,7 @@ export function registerIpcHandlers(): void {
       hookWatcherStarted = true;
     }
 
-    // Validate provider settings and warn renderer if missing/tampered
     const provider = getProvider(providerId);
-    if (provider.meta.capabilities.hookStatus) {
-      const validation = provider.validateSettings();
-      if (validation.statusLine !== 'vibeyard' || validation.hooks !== 'complete') {
-        win.webContents.send('settings:warning', {
-          sessionId,
-          statusLine: validation.statusLine,
-          hooks: validation.hooks,
-        });
-      }
-    }
 
     // For Codex sessions without a cliSessionId, start watching history.jsonl
     if (providerId === 'codex' && !cliSessionId) {
@@ -96,7 +87,7 @@ export function registerIpcHandlers(): void {
       registerPendingCodexSession(sessionId);
     }
 
-    spawnPty(
+    await spawnPty(
       sessionId,
       cwd,
       cliSessionId,
@@ -120,6 +111,27 @@ export function registerIpcHandlers(): void {
         }
       }
     );
+
+    // Validate after spawnPty — Copilot installs per-project hooks there, so
+    // validating earlier would see an empty config on a project's first spawn.
+    if (provider.meta.capabilities.hookStatus) {
+      const validation = provider.validateSettings(cwd);
+      const prefs = loadState().preferences;
+      const statusLineIssue = shouldWarnStatusLine(
+        validation.statusLine,
+        prefs.statusLineConsent,
+        prefs.statusLineConsentCommand,
+        validation.foreignStatusLineCommand,
+      );
+      const hooksIssue = validation.hooks !== 'complete';
+      if (statusLineIssue || hooksIssue) {
+        win.webContents.send('settings:warning', {
+          sessionId,
+          statusLine: statusLineIssue ? validation.statusLine : 'vibeyard',
+          hooks: validation.hooks,
+        });
+      }
+    }
   });
 
   ipcMain.handle('pty:createShell', (_event, sessionId: string, cwd: string) => {
@@ -183,6 +195,22 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle('fs:listDir', (_event, dirPath: string) => {
+    try {
+      const expanded = expandUserPath(dirPath);
+      if (!isAllowedReadPath(expanded)) return [];
+      const entries = fs.readdirSync(expanded, { withFileTypes: true });
+      // Renderer sorts via sortEntries(); keep main process cheap.
+      return entries.map(e => ({
+        name: e.name,
+        path: path.join(expanded, e.name),
+        isDirectory: e.isDirectory(),
+      }));
+    } catch {
+      return [];
+    }
+  });
+
   ipcMain.handle('store:load', () => {
     return loadState();
   });
@@ -193,6 +221,12 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('menu:rebuild', (_event, debugMode: boolean) => {
     createAppMenu(debugMode);
+  });
+
+  ipcMain.handle('clipboard:write', (_event, text: string) => {
+    clipboard.writeText(text);
+    // Also write to X11 primary selection on Linux so middle-click paste works
+    if (process.platform === 'linux') clipboard.writeText(text, 'selection');
   });
 
   ipcMain.handle('provider:getConfig', async (_event, providerId: ProviderId, projectPath: string) => {
@@ -261,6 +295,11 @@ export function registerIpcHandlers(): void {
       if (win.isMinimized()) win.restore();
       win.focus();
     }
+  });
+
+  ipcMain.on('app:closeConfirmed', () => {
+    setCloseConfirmed(true);
+    app.quit();
   });
 
   ipcMain.handle('app:getVersion', () => app.getVersion());
@@ -430,18 +469,74 @@ export function registerIpcHandlers(): void {
     }
   });
 
-  ipcMain.handle('fs:readFile', (_event, filePath: string) => {
+  ipcMain.handle('fs:exists', (_event, filePath: string): boolean => {
+    try {
+      const resolved = path.resolve(filePath);
+      if (!isAllowedReadPath(resolved)) return false;
+      return fs.existsSync(resolved);
+    } catch {
+      return false;
+    }
+  });
+
+  ipcMain.handle('fs:readFile', (_event, filePath: string): ReadFileResult => {
     try {
       // Security: resolve to absolute and check it's within a known project directory
       const resolved = path.resolve(filePath);
       if (!isAllowedReadPath(resolved)) {
         console.warn(`fs:readFile blocked: ${resolved} is not within an allowed path`);
-        return '';
+        return { ok: false, reason: 'error' };
       }
-      return fs.readFileSync(resolved, 'utf-8');
+      // Sniff the head before slurping the whole file so a multi-MB binary
+      // (e.g. build artifacts in build/) doesn't get allocated just to be discarded.
+      const fd = fs.openSync(resolved, 'r');
+      try {
+        const head = Buffer.alloc(BINARY_SNIFF_BYTES);
+        const bytesRead = fs.readSync(fd, head, 0, BINARY_SNIFF_BYTES, 0);
+        if (isBinaryBuffer(head.subarray(0, bytesRead))) {
+          return { ok: false, reason: 'binary' };
+        }
+      } finally {
+        fs.closeSync(fd);
+      }
+      return { ok: true, content: fs.readFileSync(resolved, 'utf-8') };
     } catch (err) {
       console.warn('fs:readFile failed:', err);
-      return '';
+      return { ok: false, reason: 'error' };
+    }
+  });
+
+  const IMAGE_MIME_BY_EXT: Record<string, string> = {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.bmp': 'image/bmp',
+    '.ico': 'image/x-icon',
+    '.svg': 'image/svg+xml',
+  };
+  const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
+
+  ipcMain.handle('fs:readImage', (_event, filePath: string) => {
+    try {
+      const resolved = path.resolve(filePath);
+      if (!isAllowedReadPath(resolved)) {
+        console.warn(`fs:readImage blocked: ${resolved} is not within an allowed path`);
+        return null;
+      }
+      const mime = IMAGE_MIME_BY_EXT[path.extname(resolved).toLowerCase()];
+      if (!mime) return null;
+      const stat = fs.statSync(resolved);
+      if (stat.size > MAX_IMAGE_BYTES) {
+        console.warn(`fs:readImage rejected: ${resolved} exceeds ${MAX_IMAGE_BYTES} bytes`);
+        return null;
+      }
+      const buf = fs.readFileSync(resolved);
+      return { dataUrl: `data:${mime};base64,${buf.toString('base64')}` };
+    } catch (err) {
+      console.warn('fs:readImage failed:', err);
+      return null;
     }
   });
 

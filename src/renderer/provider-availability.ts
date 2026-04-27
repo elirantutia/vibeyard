@@ -2,6 +2,7 @@ import type { ProviderId, CliProviderMeta, CliProviderCapabilities } from '../sh
 
 let cachedProviders: CliProviderMeta[] | null = null;
 let cachedAvailability: Map<ProviderId, boolean> | null = null;
+let availabilityLoadPromise: Promise<void> | null = null;
 
 export async function loadProviderMetas(): Promise<void> {
   if (!cachedProviders) {
@@ -10,11 +11,20 @@ export async function loadProviderMetas(): Promise<void> {
 }
 
 export async function loadProviderAvailability(): Promise<void> {
-  await loadProviderMetas();
-  const checks = await Promise.all(
-    cachedProviders.map(async p => ({ id: p.id, ok: (await window.vibeyard.provider.checkBinary(p.id)).ok }))
-  );
-  cachedAvailability = new Map(checks.map(c => [c.id, c.ok]));
+  if (cachedAvailability) return;
+  if (availabilityLoadPromise) return availabilityLoadPromise;
+  availabilityLoadPromise = (async () => {
+    await loadProviderMetas();
+    const checks = await Promise.all(
+      cachedProviders!.map(async p => ({ id: p.id, ok: await window.vibeyard.provider.checkBinary(p.id) }))
+    );
+    cachedAvailability = new Map(checks.map(c => [c.id, c.ok]));
+  })();
+  try {
+    await availabilityLoadPromise;
+  } finally {
+    availabilityLoadPromise = null;
+  }
 }
 
 export function hasMultipleAvailableProviders(): boolean {
@@ -40,6 +50,11 @@ export function getProviderAvailabilitySnapshot(): {
 
 export function getCachedProviderMetas(): CliProviderMeta[] {
   return cachedProviders ?? [];
+}
+
+export function getAvailableProviderMetas(): CliProviderMeta[] {
+  if (!cachedProviders || !cachedAvailability) return [];
+  return cachedProviders.filter(p => cachedAvailability!.get(p.id));
 }
 
 export function getProviderCapabilities(providerId: ProviderId): CliProviderCapabilities | null {

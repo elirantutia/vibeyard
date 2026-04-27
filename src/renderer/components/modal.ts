@@ -41,18 +41,25 @@ export function closeModal(): void {
   cleanup();
 }
 
+const DEFAULT_CONFIRM_LABEL = 'Create';
+
+export interface ModalOptions {
+  confirmLabel?: string;
+}
+
 export function showModal(
   title: string,
   fields: FieldDef[],
   onConfirm: (values: Record<string, string>) => void | Promise<void>,
-  options?: { confirmLabel?: string }
+  options?: ModalOptions,
 ): void {
   titleEl.textContent = title;
-  btnConfirm.textContent = options?.confirmLabel ?? 'Create';
+  btnConfirm.textContent = options?.confirmLabel ?? DEFAULT_CONFIRM_LABEL;
   btnConfirm.style.display = '';
   btnConfirm.style.background = '';
   btnConfirm.style.borderColor = '';
   bodyEl.innerHTML = '';
+  btnCancel.textContent = 'Cancel';
 
   // Clean up any extra buttons injected into the footer by previous modals
   const footer = document.getElementById('modal-actions');
@@ -167,6 +174,63 @@ export function showModal(
   overlay.addEventListener('keydown', handleKeydown);
 
   // Store for cleanup
+  (overlay as any)._cleanup = () => {
+    btnConfirm.removeEventListener('click', handleConfirm);
+    btnCancel.removeEventListener('click', handleCancel);
+    overlay.removeEventListener('keydown', handleKeydown);
+  };
+}
+
+export function showConfirmDialog(
+  title: string,
+  message: string,
+  options: {
+    confirmLabel?: string;
+    cancelLabel?: string;
+    onConfirm: () => void;
+  }
+): void {
+  titleEl.textContent = title;
+  bodyEl.innerHTML = '';
+  btnConfirm.textContent = options.confirmLabel ?? 'Confirm';
+  btnCancel.textContent = options.cancelLabel ?? 'Cancel';
+
+  const messageEl = document.createElement('div');
+  messageEl.className = 'modal-message';
+  messageEl.textContent = message;
+  bodyEl.appendChild(messageEl);
+
+  overlay.classList.remove('hidden');
+
+  requestAnimationFrame(() => {
+    btnCancel.focus();
+  });
+
+  cleanup();
+
+  const handleConfirm = () => {
+    options.onConfirm();
+    closeModal();
+  };
+
+  const handleCancel = () => {
+    closeModal();
+  };
+
+  const handleKeydown = (e: KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleConfirm();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancel();
+    }
+  };
+
+  btnConfirm.addEventListener('click', handleConfirm);
+  btnCancel.addEventListener('click', handleCancel);
+  overlay.addEventListener('keydown', handleKeydown);
+
   (overlay as any)._cleanup = () => {
     btnConfirm.removeEventListener('click', handleConfirm);
     btnCancel.removeEventListener('click', handleCancel);

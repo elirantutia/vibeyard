@@ -49,3 +49,13 @@ export function dirExists(dirPath: string): boolean {
     return false;
   }
 }
+
+export const BINARY_SNIFF_BYTES = 8000;
+
+export function isBinaryBuffer(buf: Buffer): boolean {
+  const len = Math.min(buf.length, BINARY_SNIFF_BYTES);
+  for (let i = 0; i < len; i++) {
+    if (buf[i] === 0) return true;
+  }
+  return false;
+}

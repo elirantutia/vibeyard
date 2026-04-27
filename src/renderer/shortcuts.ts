@@ -1,4 +1,5 @@
 import { appState } from './state.js';
+import { isMac } from './platform.js';
 
 export interface ShortcutDef {
   id: string;
@@ -43,9 +44,13 @@ export const SHORTCUT_DEFAULTS: ShortcutDefault[] = [
   { id: 'find-in-terminal', label: 'Find', category: 'Search & Help', defaultKeys: 'CmdOrCtrl+F' },
   { id: 'goto-line', label: 'Go to Line', category: 'Search & Help', defaultKeys: 'CmdOrCtrl+L' },
   { id: 'help', label: 'Help', category: 'Search & Help', defaultKeys: 'F1' },
+  { id: 'close-session', label: 'Close Session', category: 'Sessions', defaultKeys: 'CmdOrCtrl+W' },
+  { id: 'usage-stats', label: 'Usage Stats', category: 'Panels', defaultKeys: 'CmdOrCtrl+Shift+U' },
+  { id: 'toggle-inspector', label: 'Toggle Session Inspector', category: 'Panels', defaultKeys: 'CmdOrCtrl+Shift+I' },
+  { id: 'zoom-in', label: 'Zoom In', category: 'View', defaultKeys: 'CmdOrCtrl+=' },
+  { id: 'zoom-out', label: 'Zoom Out', category: 'View', defaultKeys: 'CmdOrCtrl+-' },
+  { id: 'zoom-reset', label: 'Reset Zoom', category: 'View', defaultKeys: 'CmdOrCtrl+0' },
 ];
-
-const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
 
 /** Convert accelerator string to platform-specific display string */
 export function displayKeys(accelerator: string): string {
@@ -228,6 +233,16 @@ export class ShortcutManager {
         shortcut.handler();
         return true;
       }
+    }
+    return false;
+  }
+
+  /** Check if a keyboard event matches any registered shortcut (without executing) */
+  matchesAnyShortcut(e: KeyboardEvent): boolean {
+    const overrides = appState.preferences.keybindings ?? {};
+    for (const shortcut of this.shortcuts) {
+      const keys = overrides[shortcut.id] ?? shortcut.defaultKeys;
+      if (matchesAccelerator(e, keys)) return true;
     }
     return false;
   }

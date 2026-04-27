@@ -24,7 +24,7 @@ const DEFAULT_STATE: PersistedState = {
   version: 1,
   projects: [],
   activeProjectId: null,
-  preferences: { soundOnSessionWaiting: true, notificationsDesktop: true, debugMode: false, sessionHistoryEnabled: true, insightsEnabled: true, autoTitleEnabled: true },
+  preferences: { soundOnSessionWaiting: true, notificationsDesktop: true, debugMode: false, sessionHistoryEnabled: true, insightsEnabled: true, autoTitleEnabled: true, confirmCloseWorkingSession: true },
 };
 
 beforeEach(() => {
@@ -119,60 +119,3 @@ describe('flushState', () => {
   });
 });
 
-describe('migrateSessionIds', () => {
-  function makeState(sessions: Record<string, unknown>[]): string {
-    const state: PersistedState = {
-      version: 1,
-      projects: [{
-        id: 'p1',
-        name: 'Test',
-        path: '/test',
-        sessions: sessions as any,
-        activeSessionId: null,
-        layout: { mode: 'tabs', splitPanes: [], splitDirection: 'horizontal' },
-      }],
-      activeProjectId: 'p1',
-      preferences: { soundOnSessionWaiting: true, notificationsDesktop: true, debugMode: false, sessionHistoryEnabled: true, insightsEnabled: true, autoTitleEnabled: true },
-    };
-    return JSON.stringify(state);
-  }
-
-  it('migrates claudeSessionId to cliSessionId', () => {
-    mockExistsSync.mockReturnValue(true);
-    mockReadFileSync.mockReturnValue(makeState([
-      { id: 's1', name: 'S1', claudeSessionId: 'cs-123', createdAt: '2025-01-01' },
-    ]));
-    const loaded = loadState();
-    const session = loaded.projects[0].sessions[0] as any;
-    expect(session.cliSessionId).toBe('cs-123');
-  });
-
-  it('sets default providerId to claude', () => {
-    mockExistsSync.mockReturnValue(true);
-    mockReadFileSync.mockReturnValue(makeState([
-      { id: 's1', name: 'S1', cliSessionId: null, createdAt: '2025-01-01' },
-    ]));
-    const loaded = loadState();
-    const session = loaded.projects[0].sessions[0] as any;
-    expect(session.providerId).toBe('claude');
-  });
-
-  it('preserves existing cliSessionId over claudeSessionId', () => {
-    mockExistsSync.mockReturnValue(true);
-    mockReadFileSync.mockReturnValue(makeState([
-      { id: 's1', name: 'S1', claudeSessionId: 'old-id', cliSessionId: 'new-id', createdAt: '2025-01-01' },
-    ]));
-    const loaded = loadState();
-    const session = loaded.projects[0].sessions[0] as any;
-    expect(session.cliSessionId).toBe('new-id');
-  });
-
-  it('handles sessions with neither claudeSessionId nor cliSessionId', () => {
-    mockExistsSync.mockReturnValue(true);
-    mockReadFileSync.mockReturnValue(makeState([
-      { id: 's1', name: 'S1', createdAt: '2025-01-01' },
-    ]));
-    const loaded = loadState();
-    expect(loaded.projects[0].sessions[0]).toBeDefined();
-  });
-});

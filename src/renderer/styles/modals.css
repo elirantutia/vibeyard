@@ -9,7 +9,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 150;
+  z-index: 300;
 }
 
 #modal-overlay.hidden, .modal-overlay.hidden {
@@ -36,6 +36,12 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.modal-message {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
 }
 
 .modal-field {
@@ -134,7 +140,7 @@
   border: 1px solid var(--border);
   border-radius: 4px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  z-index: 200;
+  z-index: 310;
   margin-top: 2px;
 }
 
@@ -246,7 +252,7 @@
   border: 1px solid var(--border);
   border-radius: 4px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  z-index: 200;
+  z-index: 310;
   margin-top: 2px;
 }
 
@@ -316,6 +322,31 @@
 
 #config-sections.hidden {
   display: none;
+}
+
+.config-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  gap: 8px;
+}
+
+.config-panel-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.config-panel-header .custom-select {
+  flex-shrink: 0;
+}
+
+.config-panel-header .custom-select-trigger {
+  padding: 2px 8px;
+  font-size: 11px;
 }
 
 #readiness-section.hidden {

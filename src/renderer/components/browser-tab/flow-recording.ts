@@ -66,6 +66,7 @@ export function renderFlowSteps(instance: BrowserTabInstance): void {
   const hasSteps = instance.flowSteps.length > 0;
   instance.flowPanel.style.display = (instance.flowMode || hasSteps) ? 'flex' : 'none';
   instance.flowInputRow.style.display = hasSteps ? 'flex' : 'none';
+  instance.flowPlanModeRow.style.display = hasSteps ? 'flex' : 'none';
   instance.flowPanelLabel.textContent = `Flow (${instance.flowSteps.length} steps)`;
 }
 
@@ -95,6 +96,7 @@ export function toggleFlowMode(instance: BrowserTabInstance): void {
 export function clearFlow(instance: BrowserTabInstance): void {
   instance.flowSteps = [];
   instance.flowInstructionInput.value = '';
+  instance.flowInstructionInput.dispatchEvent(new Event('input'));
   renderFlowSteps(instance);
 }
 

@@ -6,6 +6,7 @@ import type { ProviderId } from '../shared/types';
 import { getProvider } from './providers/registry';
 import { registerSession } from './hook-status';
 import { isWin, pathSep } from './platform';
+import { nvmDefaultNodeBinDir } from './providers/nvm';
 
 interface PtyInstance {
   process: pty.IPty;
@@ -19,9 +20,49 @@ const silencedExits = new Set<string>();
  * Get the full PATH by sourcing the user's login shell.
  * When Electron is launched from macOS Finder/Dock, process.env.PATH
  * is minimal (/usr/bin:/bin:/usr/sbin:/sbin) and misses nvm, homebrew, etc.
- * We resolve this once by running a login shell to get the real PATH.
+ * On Windows, packaged Electron apps inherit PATH from explorer.exe which
+ * may be stale — we read the registry for the current PATH.
+ * We resolve this once by running a login shell / reading the registry.
  */
 let cachedFullPath: string | null = null;
+
+const PATH_MARKER_BEGIN = '__VY_PATH_BEGIN__';
+const PATH_MARKER_END = '__VY_PATH_END__';
+
+export function getRegistryPath(): string {
+  if (!isWin) return '';
+
+  const parse = (output: string): string => {
+    const match = output.match(/REG_(?:EXPAND_)?SZ\s+(.+)/);
+    if (!match) return '';
+    let value = match[1].trim();
+    value = value.replace(/%([^%]+)%/g, (_m, varName) => process.env[varName] || `%${varName}%`);
+    return value;
+  };
+
+  let systemPath = '';
+  try {
+    systemPath = parse(execSync(
+      'reg query "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment" /v Path',
+      { encoding: 'utf-8', timeout: 3000, windowsHide: true },
+    ));
+  } catch {}
+
+  let userPath = '';
+  try {
+    userPath = parse(execSync(
+      'reg query "HKCU\\Environment" /v Path',
+      { encoding: 'utf-8', timeout: 3000, windowsHide: true },
+    ));
+  } catch {}
+
+  return [systemPath, userPath].filter(Boolean).join(pathSep);
+}
+
+/** Reset cached PATH (used after install-then-retry flows and in tests). */
+export function resetPathCache(): void {
+  cachedFullPath = null;
+}
 
 export function getFullPath(): string {
   if (cachedFullPath) return cachedFullPath;
@@ -29,13 +70,19 @@ export function getFullPath(): string {
   const currentPath = process.env.PATH || '';
 
   if (isWin) {
-    // On Windows, PATH is generally correct — just ensure npm/appdata dirs are present
     const home = os.homedir();
     const extraDirs = [
       path.join(home, 'AppData', 'Roaming', 'npm'),
       path.join(home, '.local', 'bin'),
     ];
-    const pathSet = new Set(currentPath.split(pathSep));
+
+    // Read the up-to-date PATH from the Windows registry
+    const registryPath = getRegistryPath();
+
+    const pathSet = new Set([
+      ...currentPath.split(pathSep),
+      ...registryPath.split(pathSep),
+    ]);
     for (const dir of extraDirs) {
       pathSet.add(dir);
     }
@@ -45,21 +92,26 @@ export function getFullPath(): string {
 
   const shell = process.env.SHELL || '/bin/zsh';
 
-  // Try to get the real PATH from a login shell
+  // -i is required: nvm exports PATH from ~/.zshrc, only sourced for interactive shells.
   try {
-    const shellPath = execSync(`${shell} -ilc 'echo __PATH__=$PATH'`, {
-      encoding: 'utf-8',
-      timeout: 5000,
-      env: { ...process.env, HOME: os.homedir() },
-    });
-    const match = shellPath.match(/__PATH__=(.+)/);
+    const shellPath = execSync(
+      `${shell} -ilc 'echo "${PATH_MARKER_BEGIN}${'${PATH}'}${PATH_MARKER_END}"'`,
+      {
+        encoding: 'utf-8',
+        timeout: 8000,
+        env: { ...process.env, HOME: os.homedir() },
+        stdio: ['ignore', 'pipe', 'ignore'],
+      },
+    );
+    const match = shellPath.match(
+      new RegExp(`${PATH_MARKER_BEGIN}([\\s\\S]*?)${PATH_MARKER_END}`),
+    );
     if (match && match[1]) {
       cachedFullPath = match[1].trim();
       return cachedFullPath;
     }
   } catch (err) { console.warn('Failed to resolve PATH from login shell:', err); }
 
-  // Fallback: merge current PATH with common directories
   const home = os.homedir();
   const extraDirs = [
     '/usr/local/bin',
@@ -69,6 +121,8 @@ export function getFullPath(): string {
     '/usr/local/sbin',
     '/opt/homebrew/sbin',
   ];
+  const nvmBin = nvmDefaultNodeBinDir();
+  if (nvmBin) extraDirs.push(nvmBin);
 
   const pathSet = new Set(currentPath.split(pathSep));
   for (const dir of extraDirs) {
@@ -78,7 +132,31 @@ export function getFullPath(): string {
   return cachedFullPath;
 }
 
-export function spawnPty(
+/**
+ * On Windows, .cmd/.bat and .ps1 files cannot be spawned directly by node-pty
+ * (CreateProcess returns error 193). Wrap them via cmd.exe or powershell.exe.
+ */
+export function resolveWindowsShell(
+  shell: string,
+  args: string[]
+): { shell: string; args: string[] } {
+  if (!isWin) return { shell, args };
+  const ext = path.extname(shell).toLowerCase();
+  // .exe files can be spawned directly by CreateProcess
+  if (ext === '.exe') return { shell, args };
+  // .ps1 scripts need PowerShell
+  if (ext === '.ps1') {
+    return {
+      shell: 'powershell.exe',
+      args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', shell, ...args],
+    };
+  }
+  // Everything else (.cmd, .bat, bare names, extensionless paths):
+  // wrap with cmd.exe so CreateProcess doesn't choke on non-PE binaries.
+  return { shell: 'cmd.exe', args: ['/c', shell, ...args] };
+}
+
+export async function spawnPty(
   sessionId: string,
   cwd: string,
   cliSessionId: string | null,
@@ -88,7 +166,7 @@ export function spawnPty(
   initialPrompt: string | undefined,
   onData: (data: string) => void,
   onExit: (exitCode: number, signal?: number) => void
-): void {
+): Promise<void> {
   if (ptys.has(sessionId)) {
     // Silence the old PTY's exit event so it doesn't remove the new session
     silencedExits.add(sessionId);
@@ -98,11 +176,24 @@ export function spawnPty(
   registerSession(sessionId);
 
   const provider = getProvider(providerId);
+
+  // Copilot CLI loads hooks from <cwd>/.github/hooks/*.json, so we must
+  // install the hook file before spawning the binary. Other providers use
+  // global config and are already handled at app boot.
+  if (providerId === 'copilot') {
+    try {
+      await provider.installHooks(null, cwd);
+    } catch (err) {
+      console.warn('Failed to install Copilot hooks for project:', cwd, err);
+    }
+  }
+
   const env = provider.buildEnv(sessionId, { ...process.env } as Record<string, string>);
   const args = provider.buildArgs({ cliSessionId, isResume, extraArgs, initialPrompt });
-  const shell = provider.resolveBinaryPath();
+  const resolvedShell = provider.resolveBinaryPath();
+  const { shell, args: spawnArgs } = resolveWindowsShell(resolvedShell, args);
 
-  const ptyProcess = pty.spawn(shell, args, {
+  const ptyProcess = pty.spawn(shell, spawnArgs, {
     name: 'xterm-256color',
     cols: 120,
     rows: 30,
@@ -123,24 +214,73 @@ export function spawnPty(
   ptys.set(sessionId, { process: ptyProcess, sessionId });
 }
 
+// node-pty on Windows throws synchronously from write/resize/kill when the
+// underlying child process has already exited (see microsoft/node-pty#887).
+// A single dead PTY must not be allowed to crash the main Electron process
+// — it would take down every other active session with it. Guard each
+// operation, log a warning, and drop the dead handle only when the error
+// indicates the PTY is actually dead.
+
+/**
+ * True when a node-pty exception means the underlying process has already
+ * exited (as opposed to a transient or unknown failure). node-pty emits
+ * messages like "Cannot write to a pty that has already exited" / "Cannot
+ * resize a pty that has already exited" / "Cannot kill a pty that has
+ * already exited" — we only prune the map in that case, so a transient
+ * error does not silently leave the session unresponsive.
+ */
+function isPtyExitedError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /already exited/i.test(msg);
+}
+
+/**
+ * Escape sessionId for inclusion in a log message. sessionId arrives from
+ * the renderer over IPC, so it is semi-trusted — JSON.stringify neutralises
+ * newlines, ANSI escape sequences, and any other control characters that
+ * could confuse log output.
+ */
+function formatSessionIdForLog(sessionId: string): string {
+  return JSON.stringify(sessionId);
+}
+
 export function writePty(sessionId: string, data: string): void {
   const instance = ptys.get(sessionId);
-  if (instance) {
+  if (!instance) return;
+  try {
     instance.process.write(data);
+  } catch (err) {
+    const message = (err as Error).message;
+    console.warn(`[pty-manager] writePty(${formatSessionIdForLog(sessionId)}) failed: ${message}`);
+    if (isPtyExitedError(err)) {
+      ptys.delete(sessionId);
+    }
   }
 }
 
 export function resizePty(sessionId: string, cols: number, rows: number): void {
   const instance = ptys.get(sessionId);
-  if (instance) {
+  if (!instance) return;
+  try {
     instance.process.resize(cols, rows);
+  } catch (err) {
+    const message = (err as Error).message;
+    console.warn(`[pty-manager] resizePty(${formatSessionIdForLog(sessionId)}) failed: ${message}`);
+    if (isPtyExitedError(err)) {
+      ptys.delete(sessionId);
+    }
   }
 }
 
 export function killPty(sessionId: string): void {
   const instance = ptys.get(sessionId);
-  if (instance) {
+  if (!instance) return;
+  try {
     instance.process.kill();
+  } catch (err) {
+    console.warn(`[pty-manager] killPty(${formatSessionIdForLog(sessionId)}) failed: ${(err as Error).message}`);
+  } finally {
+    // kill is an intentional teardown — always drop the handle, even on throw.
     ptys.delete(sessionId);
   }
 }

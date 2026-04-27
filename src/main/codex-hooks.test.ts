@@ -19,7 +19,6 @@ vi.mock('./hook-commands', () => ({
   captureSessionIdCmd: vi.fn((_v: string, marker: string) => `capture .sessionid $VIBEYARD_SESSION_ID ${marker}`),
   captureToolFailureCmd: vi.fn((_v: string, marker: string) => `capture-toolfailure ${marker}`),
   wrapPythonHookCmd: vi.fn((_name: string, _code: string, marker: string) => `capture-event $VIBEYARD_SESSION_ID .events ${marker}`),
-  cleanupHookScripts: vi.fn(),
 }));
 
 import * as fs from 'fs';

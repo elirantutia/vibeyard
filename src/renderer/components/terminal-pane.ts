@@ -1,6 +1,6 @@
 import { Terminal } from '@xterm/xterm';
+import { getTerminalTheme } from '../terminal-theme.js';
 import { FitAddon } from '@xterm/addon-fit';
-import { WebglAddon } from '@xterm/addon-webgl';
 import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { initSession, removeSession } from '../session-activity.js';
@@ -9,8 +9,9 @@ import { removeSession as removeCostSession, type CostInfo } from '../session-co
 import { removeSession as removeContextSession, type ContextWindowInfo } from '../session-context.js';
 import type { ProviderId } from '../types.js';
 import { getProviderCapabilities } from '../provider-availability.js';
+import { appState } from '../state.js';
 import { FilePathLinkProvider, GithubLinkProvider } from './terminal-link-provider.js';
-import { attachClipboardCopyHandler } from './terminal-utils.js';
+import { attachClipboardCopyHandler, attachCopyOnSelect, loadWebglWithFallback } from './terminal-utils.js';
 
 interface TerminalInstance {
   terminal: Terminal;
@@ -72,20 +73,7 @@ export function createTerminalPane(
   element.appendChild(statusBar);
 
   const terminal = new Terminal({
-    theme: {
-      background: '#000000',
-      foreground: '#e0e0e0',
-      cursor: '#e94560',
-      selectionBackground: '#ff6b85a6',
-      black: '#000000',
-      red: '#e94560',
-      green: '#0f9b58',
-      yellow: '#f4b400',
-      blue: '#4285f4',
-      magenta: '#ab47bc',
-      cyan: '#00acc1',
-      white: '#e0e0e0',
-    },
+    theme: getTerminalTheme(appState.preferences.theme ?? 'dark'),
     fontSize: 14,
     fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace",
     cursorBlink: true,
@@ -111,6 +99,8 @@ export function createTerminalPane(
     }
   }));
 
+  const writeToPty = (data: string) => window.vibeyard.pty.write(sessionId, data);
+
   // Send CSI u encoding for Shift+Enter so Claude CLI treats it as newline
   attachClipboardCopyHandler(terminal, (e) => {
     if (e.shiftKey && e.key === 'Enter') {
@@ -118,7 +108,7 @@ export function createTerminalPane(
       e.preventDefault();
       return false;
     }
-  });
+  }, writeToPty);
 
   const instance: TerminalInstance = {
     terminal,
@@ -178,11 +168,29 @@ export function getAllInstances(): Map<string, TerminalInstance> {
   return instances;
 }
 
+export function applyThemeToAllTerminals(theme: 'dark' | 'light'): void {
+  const termTheme = getTerminalTheme(theme);
+  for (const instance of instances.values()) {
+    instance.terminal.options.theme = termTheme;
+  }
+}
+
 export function setPendingPrompt(sessionId: string, prompt: string): void {
   const instance = instances.get(sessionId);
   if (instance) {
     instance.pendingPrompt = prompt;
   }
+}
+
+export function injectPromptIntoRunningSession(sessionId: string, prompt: string): boolean {
+  const instance = instances.get(sessionId);
+  if (!instance || !instance.spawned || instance.exited) return false;
+  const modes = (instance.terminal as unknown as { modes?: { bracketedPasteMode?: boolean } }).modes;
+  const bp = modes?.bracketedPasteMode;
+  const payload = bp ? `\x1b[200~${prompt}\x1b[201~` : prompt;
+  window.vibeyard.pty.write(sessionId, payload);
+  window.vibeyard.pty.write(sessionId, '\r');
+  return true;
 }
 
 function clearPendingPromptTimer(instance: TerminalInstance): void {
@@ -226,13 +234,8 @@ export function attachToContainer(sessionId: string, container: HTMLElement): vo
     container.appendChild(instance.element);
     instance.terminal.open(xtermWrap as HTMLElement);
 
-    // Try WebGL, fall back silently
-    try {
-      const webglAddon = new WebglAddon();
-      instance.terminal.loadAddon(webglAddon);
-    } catch {
-      // WebGL not available, software renderer works fine
-    }
+    attachCopyOnSelect(instance.terminal);
+    loadWebglWithFallback(instance.terminal);
   } else {
     // Always re-append to ensure correct DOM order (appendChild moves existing children)
     container.appendChild(instance.element);

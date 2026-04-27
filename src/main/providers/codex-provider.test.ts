@@ -4,6 +4,7 @@ import { isWin } from '../platform';
 
 vi.mock('fs', () => ({
   existsSync: vi.fn(),
+  statSync: vi.fn(() => { throw new Error('ENOENT'); }),
 }));
 
 vi.mock('os', () => ({
@@ -42,7 +43,9 @@ import { startConfigWatcher, stopConfigWatcher } from '../config-watcher';
 import { installCodexHooks, validateCodexHooks, cleanupCodexHooks } from '../codex-hooks';
 
 const mockExistsSync = vi.mocked(fs.existsSync);
+const mockStatSync = vi.mocked(fs.statSync);
 const mockExecSync = vi.mocked(execSync);
+const fileStat = { isFile: () => true } as fs.Stats;
 const mockGetCodexConfig = vi.mocked(getCodexConfig);
 const mockStartConfigWatcher = vi.mocked(startConfigWatcher);
 const mockStopConfigWatcher = vi.mocked(stopConfigWatcher);
@@ -54,6 +57,7 @@ let provider: CodexProvider;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockStatSync.mockImplementation(() => { throw new Error('ENOENT'); });
   _resetCachedPath();
   provider = new CodexProvider();
 });
@@ -86,27 +90,31 @@ describe('resolveBinaryPath', () => {
     ? path.join('/mock/home', 'AppData', 'Roaming', 'npm', 'codex.cmd')
     : '/usr/local/bin/codex';
 
-  it('returns candidate path when existsSync returns true', () => {
-    mockExistsSync.mockImplementation((p) => p === firstCandidate);
+  it('returns candidate path when statSync finds a file', () => {
+    mockStatSync.mockImplementation((p) => {
+      if (p === firstCandidate) return fileStat;
+      throw new Error('ENOENT');
+    });
     expect(provider.resolveBinaryPath()).toBe(firstCandidate);
   });
 
   it(`falls back to ${isWin ? 'where' : 'which'} codex when no candidate exists`, () => {
-    mockExistsSync.mockReturnValue(false);
     mockExecSync.mockReturnValue('/some/other/path/codex\n' as any);
     expect(provider.resolveBinaryPath()).toBe('/some/other/path/codex');
   });
 
   it('falls back to bare "codex" when both candidate and which fail', () => {
-    mockExistsSync.mockReturnValue(false);
     mockExecSync.mockImplementation(() => { throw new Error('not found'); });
     expect(provider.resolveBinaryPath()).toBe('codex');
   });
 
   it('caches result on subsequent calls', () => {
-    mockExistsSync.mockImplementation((p) => p === firstCandidate);
+    mockStatSync.mockImplementation((p) => {
+      if (p === firstCandidate) return fileStat;
+      throw new Error('ENOENT');
+    });
     provider.resolveBinaryPath();
-    mockExistsSync.mockReturnValue(false);
+    mockStatSync.mockImplementation(() => { throw new Error('ENOENT'); });
     expect(provider.resolveBinaryPath()).toBe(firstCandidate);
   });
 });
@@ -116,24 +124,24 @@ describe('validatePrerequisites', () => {
     ? path.join('/mock/home', 'AppData', 'Roaming', 'npm', 'codex.cmd')
     : '/opt/homebrew/bin/codex';
 
-  it('returns ok when binary found via existsSync', () => {
-    mockExistsSync.mockImplementation((p) => p === validateCandidate);
-    expect(provider.validatePrerequisites()).toEqual({ ok: true, message: '' });
+  it('returns ok when binary found via statSync', () => {
+    mockStatSync.mockImplementation((p) => {
+      if (p === validateCandidate) return fileStat;
+      throw new Error('ENOENT');
+    });
+    expect(provider.validatePrerequisites()).toBe(true);
   });
 
   it('returns ok when binary found via which', () => {
     mockExistsSync.mockReturnValue(false);
     mockExecSync.mockReturnValue('/resolved/codex\n' as any);
-    expect(provider.validatePrerequisites()).toEqual({ ok: true, message: '' });
+    expect(provider.validatePrerequisites()).toBe(true);
   });
 
   it('returns not ok when binary not found anywhere', () => {
     mockExistsSync.mockReturnValue(false);
     mockExecSync.mockImplementation(() => { throw new Error('not found'); });
-    const result = provider.validatePrerequisites();
-    expect(result.ok).toBe(false);
-    expect(result.message).toContain('Codex CLI not found');
-    expect(result.message).toContain('@openai/codex');
+    expect(provider.validatePrerequisites()).toBe(false);
   });
 });
 

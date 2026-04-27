@@ -82,7 +82,7 @@ exception.
 
 ### State Persistence
 
-App state (projects, sessions, layout) persists to `~/.vibeyard/state.json` via the main process store. Saves are debounced and flushed on quit. Sessions track `cliSessionId` for CLI session resume capability. Legacy `claudeSessionId` fields are auto-migrated on load.
+App state (projects, sessions, layout) persists to `~/.vibeyard/state.json` via the main process store. Saves are debounced and flushed on quit. Sessions track `cliSessionId` for CLI session resume capability.
 
 ## UI Development
 
@@ -102,6 +102,8 @@ After completing an implementation task, always:
 ## Git Workflow
 
 Always use the `/commit` command when committing changes to this project. Do not create commits manually.
+
+Never commit, push, or create pull requests unless the user explicitly asks for it.
 
 ## Maintaining This File
 

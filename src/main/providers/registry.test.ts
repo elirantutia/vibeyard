@@ -23,7 +23,7 @@ function makeFakeProvider(meta: CliProviderMeta): CliProvider {
   return {
     meta,
     resolveBinaryPath: () => '/usr/bin/fake',
-    validatePrerequisites: () => ({ ok: true, message: '' }),
+    validatePrerequisites: () => true,
     buildEnv: (_sid, env) => env,
     buildArgs: () => [],
     installHooks: async () => {},
@@ -53,6 +53,12 @@ describe('initProviders', () => {
     expect(provider).toBeDefined();
     expect(provider.meta.id).toBe('codex');
   });
+
+  it('registers the Copilot provider', () => {
+    const provider = getProvider('copilot');
+    expect(provider).toBeDefined();
+    expect(provider.meta.id).toBe('copilot');
+  });
 });
 
 describe('getProvider', () => {
@@ -63,7 +69,7 @@ describe('getProvider', () => {
   });
 
   it('throws for unknown provider ID', () => {
-    expect(() => getProvider('copilot')).toThrow('Unknown CLI provider: copilot');
+    expect(() => getProvider('unknown-provider' as any)).toThrow('Unknown CLI provider: unknown-provider');
   });
 });
 

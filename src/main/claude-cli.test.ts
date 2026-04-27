@@ -15,7 +15,7 @@ vi.mock('os', () => ({
 
 vi.mock('./providers/resolve-binary', () => ({
   resolveBinary: vi.fn(() => '/mock/bin/claude'),
-  validateBinaryExists: vi.fn(() => ({ ok: true, message: '' })),
+  validateBinaryExists: vi.fn(() => true),
 }));
 
 vi.mock('./providers/claude-version', () => ({
@@ -29,7 +29,6 @@ vi.mock('./hook-commands', () => ({
   captureSessionIdCmd: vi.fn((_v: string, marker: string) => `capture-sessionid .sessionid ${marker}`),
   captureToolFailureCmd: vi.fn((_v: string, marker: string) => `capture-toolfailure .toolfailure ${marker}`),
   wrapPythonHookCmd: vi.fn((_name: string, _code: string, marker: string) => `capture-event .events ${marker}`),
-  cleanupHookScripts: vi.fn(),
 }));
 
 import * as fs from 'fs';

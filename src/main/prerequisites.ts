@@ -31,7 +31,11 @@ export function validatePrerequisites(): { ok: boolean; message: string } {
     ? [
         path.join(home, 'AppData', 'Roaming', 'npm', 'claude.cmd'),
         path.join(home, 'AppData', 'Roaming', 'npm', 'claude.exe'),
+        path.join(home, 'AppData', 'Local', 'Programs', 'claude', 'claude.exe'),
         path.join(home, '.local', 'bin', 'claude'),
+        path.join(home, 'scoop', 'shims', 'claude.cmd'),
+        path.join(home, 'scoop', 'shims', 'claude.exe'),
+        path.join(home, '.volta', 'bin', 'claude.exe'),
       ]
     : [
         '/usr/local/bin/claude',

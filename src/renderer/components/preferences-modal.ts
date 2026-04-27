@@ -1,9 +1,11 @@
 import { appState } from '../state.js';
 import { closeModal } from './modal.js';
 import { createCustomSelect, type CustomSelectInstance } from './custom-select.js';
+import { applyZoom, getZoomFactor, ZOOM_STEPS } from '../zoom.js';
 import { shortcutManager, displayKeys, eventToAccelerator } from '../shortcuts.js';
 import { loadProviderAvailability, getProviderAvailabilitySnapshot } from '../provider-availability.js';
 import type { CliProviderMeta, ProviderId, SettingsValidationResult } from '../../shared/types.js';
+import { hasProviderIssue, type ProviderStatus } from './setup-checks.js';
 
 
 const overlay = document.getElementById('modal-overlay')!;
@@ -13,7 +15,7 @@ const bodyEl = document.getElementById('modal-body')!;
 const btnCancel = document.getElementById('modal-cancel')!;
 const btnConfirm = document.getElementById('modal-confirm')!;
 
-type Section = 'general' | 'sidebar' | 'shortcuts' | 'setup' | 'about';
+type Section = 'general' | 'appearance' | 'shortcuts' | 'setup' | 'about';
 
 export function showPreferencesModal(): void {
   titleEl.textContent = 'Preferences';
@@ -30,7 +32,7 @@ export function showPreferencesModal(): void {
 
   const sections: { id: Section; label: string }[] = [
     { id: 'general', label: 'General' },
-    { id: 'sidebar', label: 'Sidebar' },
+    { id: 'appearance', label: 'Appearance' },
     { id: 'shortcuts', label: 'Shortcuts' },
     { id: 'setup', label: 'Setup' },
     { id: 'about', label: 'About' },
@@ -61,10 +63,16 @@ export function showPreferencesModal(): void {
   let historyCheckbox: HTMLInputElement | null = null;
   let insightsCheckbox: HTMLInputElement | null = null;
   let autoTitleCheckbox: HTMLInputElement | null = null;
+  let confirmCloseCheckbox: HTMLInputElement | null = null;
+  let copyOnSelectCheckbox: HTMLInputElement | null = null;
   let defaultProviderSelect: CustomSelectInstance | null = null;
+  let themeSelect: CustomSelectInstance | null = null;
+  let zoomSelect: CustomSelectInstance | null = null;
+  let zoomPrefUnsub: (() => void) | null = null;
   let debugModeCheckbox: HTMLInputElement | null = null;
-  let sidebarCheckboxes: { configSections: HTMLInputElement; gitPanel: HTMLInputElement; sessionHistory: HTMLInputElement; costFooter: HTMLInputElement; readinessSection: HTMLInputElement } | null = null;
+  let sidebarCheckboxes: { gitPanel: HTMLInputElement; sessionHistory: HTMLInputElement; costFooter: HTMLInputElement; discussions: HTMLInputElement; fileTree: HTMLInputElement } | null = null;
   let activeRecorder: { cleanup: () => void } | null = null;
+  const originalTheme = appState.preferences.theme ?? 'dark';
 
   function cleanupRecorder() {
     if (activeRecorder) {
@@ -75,6 +83,8 @@ export function showPreferencesModal(): void {
 
   function renderSection(section: Section) {
     cleanupRecorder();
+    zoomPrefUnsub?.();
+    zoomPrefUnsub = null;
     currentSection = section;
     content.innerHTML = '';
 
@@ -197,14 +207,89 @@ export function showPreferencesModal(): void {
       autoTitleRow.appendChild(autoTitleCheckbox);
       content.appendChild(autoTitleRow);
 
-    } else if (section === 'sidebar') {
-      const views = appState.preferences.sidebarViews ?? { configSections: true, gitPanel: true, sessionHistory: true, costFooter: true, readinessSection: true };
+      const confirmCloseRow = document.createElement('div');
+      confirmCloseRow.className = 'modal-toggle-field';
+
+      const confirmCloseLabel = document.createElement('label');
+      confirmCloseLabel.htmlFor = 'pref-confirm-close-working';
+      confirmCloseLabel.textContent = 'Confirm closing an active session';
+
+      confirmCloseCheckbox = document.createElement('input');
+      confirmCloseCheckbox.type = 'checkbox';
+      confirmCloseCheckbox.id = 'pref-confirm-close-working';
+      confirmCloseCheckbox.checked = appState.preferences.confirmCloseWorkingSession;
+
+      confirmCloseRow.appendChild(confirmCloseLabel);
+      confirmCloseRow.appendChild(confirmCloseCheckbox);
+      content.appendChild(confirmCloseRow);
+
+      const copyOnSelectRow = document.createElement('div');
+      copyOnSelectRow.className = 'modal-toggle-field';
+
+      const copyOnSelectLabel = document.createElement('label');
+      copyOnSelectLabel.htmlFor = 'pref-copy-on-select';
+      copyOnSelectLabel.textContent = 'Copy on select';
+
+      copyOnSelectCheckbox = document.createElement('input');
+      copyOnSelectCheckbox.type = 'checkbox';
+      copyOnSelectCheckbox.id = 'pref-copy-on-select';
+      copyOnSelectCheckbox.checked = appState.preferences.copyOnSelect ?? false;
+
+      copyOnSelectRow.appendChild(copyOnSelectLabel);
+      copyOnSelectRow.appendChild(copyOnSelectCheckbox);
+      content.appendChild(copyOnSelectRow);
+
+    } else if (section === 'appearance') {
+      const themeRow = document.createElement('div');
+      themeRow.className = 'modal-toggle-field';
+
+      const themeLabel = document.createElement('label');
+      themeLabel.textContent = 'Theme';
+
+      themeSelect = createCustomSelect(
+        'pref-theme',
+        [{ value: 'dark', label: 'Dark' }, { value: 'light', label: 'Light' }],
+        originalTheme,
+        (value) => { document.documentElement.dataset.theme = value; },
+      );
+
+      themeRow.appendChild(themeLabel);
+      themeRow.appendChild(themeSelect.element);
+      content.appendChild(themeRow);
+
+      const zoomRow = document.createElement('div');
+      zoomRow.className = 'modal-toggle-field';
+
+      const zoomLabel = document.createElement('label');
+      zoomLabel.textContent = 'Zoom';
+
+      const zoomOptions = ZOOM_STEPS.map((v) => ({ value: String(v), label: `${Math.round(v * 100)}%` }));
+      zoomSelect = createCustomSelect('pref-zoom', zoomOptions, String(getZoomFactor()), (value) => {
+        const n = parseFloat(value);
+        if (!Number.isNaN(n)) applyZoom(n);
+      });
+
+      zoomRow.appendChild(zoomLabel);
+      zoomRow.appendChild(zoomSelect.element);
+      content.appendChild(zoomRow);
+
+      zoomPrefUnsub?.();
+      zoomPrefUnsub = appState.on('preferences-changed', () => {
+        zoomSelect?.setValue(String(getZoomFactor()));
+      });
+
+      const sidebarViewsHeading = document.createElement('div');
+      sidebarViewsHeading.className = 'preferences-subheading';
+      sidebarViewsHeading.textContent = 'Sidebar Views';
+      content.appendChild(sidebarViewsHeading);
+
+      const views = appState.preferences.sidebarViews ?? { gitPanel: true, sessionHistory: true, costFooter: true, discussions: true, fileTree: true };
       const toggles: { key: keyof typeof views; label: string }[] = [
-        { key: 'configSections', label: 'Config Sections (MCP Servers, Agents, Skills, Commands)' },
-        { key: 'readinessSection', label: 'AI Readiness' },
+        { key: 'fileTree', label: 'Project File Tree' },
         { key: 'gitPanel', label: 'Git Panel' },
         { key: 'sessionHistory', label: 'Session History' },
         { key: 'costFooter', label: 'Cost Footer' },
+        { key: 'discussions', label: 'Discussions' },
       ];
 
       const checkboxes: Record<string, HTMLInputElement> = {};
@@ -219,7 +304,7 @@ export function showPreferencesModal(): void {
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.id = `pref-sidebar-${toggle.key}`;
-        cb.checked = views[toggle.key];
+        cb.checked = views[toggle.key] ?? true;
 
         row.appendChild(label);
         row.appendChild(cb);
@@ -504,12 +589,6 @@ export function showPreferencesModal(): void {
     parent.appendChild(header);
   }
 
-  interface ProviderStatus {
-    meta: CliProviderMeta;
-    validation: SettingsValidationResult;
-    binary: { ok: boolean; message: string };
-  }
-
   async function fetchProviderStatuses(): Promise<ProviderStatus[]> {
     const providers = await window.vibeyard.provider.listProviders();
     return Promise.all(
@@ -517,16 +596,9 @@ export function showPreferencesModal(): void {
         Promise.all([
           window.vibeyard.settings.validate(meta.id),
           window.vibeyard.provider.checkBinary(meta.id),
-        ]).then(([validation, binary]) => ({ meta, validation, binary })),
+        ]).then(([validation, binaryOk]) => ({ meta, validation, binaryOk })),
       ),
     );
-  }
-
-  function hasProviderIssue({ meta, validation, binary }: ProviderStatus): boolean {
-    if (!binary.ok) return true;
-    if ((meta.capabilities.costTracking || meta.capabilities.contextWindow) && validation.statusLine !== 'vibeyard') return true;
-    if (meta.capabilities.hookStatus && validation.hooks !== 'complete') return true;
-    return false;
   }
 
   async function renderSetupSection(container: HTMLElement) {
@@ -547,18 +619,18 @@ export function showPreferencesModal(): void {
 
     section.innerHTML = '';
 
-    for (const { meta, validation, binary } of results) {
+    for (const { meta, validation, binaryOk } of results) {
       renderProviderHeader(section, meta.displayName);
 
       renderCheckItem(section, {
         label: meta.displayName,
         description: `The ${meta.binaryName} binary must be installed for sessions to work.`,
-        ok: binary.ok,
-        statusText: binary.ok ? 'Installed' : 'Not found',
-        helpText: binary.ok ? undefined : binary.message,
+        ok: binaryOk,
+        statusText: binaryOk ? 'Installed' : 'Not found',
+        helpText: binaryOk ? undefined : `${meta.binaryName} not found.`,
       });
 
-      if (!binary.ok) continue;
+      if (!binaryOk) continue;
 
       const { capabilities } = meta;
 
@@ -682,8 +754,17 @@ export function showPreferencesModal(): void {
     if (autoTitleCheckbox) {
       appState.setPreference('autoTitleEnabled', autoTitleCheckbox.checked);
     }
+    if (confirmCloseCheckbox) {
+      appState.setPreference('confirmCloseWorkingSession', confirmCloseCheckbox.checked);
+    }
+    if (copyOnSelectCheckbox) {
+      appState.setPreference('copyOnSelect', copyOnSelectCheckbox.checked);
+    }
     if (defaultProviderSelect) {
       appState.setPreference('defaultProvider', defaultProviderSelect.getValue() as ProviderId);
+    }
+    if (themeSelect) {
+      appState.setPreference('theme', themeSelect.getValue() as 'dark' | 'light');
     }
     if (debugModeCheckbox && debugModeCheckbox.checked !== appState.preferences.debugMode) {
       appState.setPreference('debugMode', debugModeCheckbox.checked);
@@ -691,11 +772,11 @@ export function showPreferencesModal(): void {
     }
     if (sidebarCheckboxes) {
       appState.setPreference('sidebarViews', {
-        configSections: sidebarCheckboxes.configSections.checked,
         gitPanel: sidebarCheckboxes.gitPanel.checked,
         sessionHistory: sidebarCheckboxes.sessionHistory.checked,
         costFooter: sidebarCheckboxes.costFooter.checked,
-        readinessSection: sidebarCheckboxes.readinessSection.checked,
+        discussions: sidebarCheckboxes.discussions.checked,
+        fileTree: sidebarCheckboxes.fileTree.checked,
       });
     }
   };
@@ -710,6 +791,7 @@ export function showPreferencesModal(): void {
 
   const handleCancel = () => {
     cleanupRecorder();
+    document.documentElement.dataset.theme = originalTheme;
     closeModal();
     modal.classList.remove('modal-wide');
     btnConfirm.textContent = 'Create';
@@ -733,7 +815,11 @@ export function showPreferencesModal(): void {
 
   (overlay as any)._cleanup = () => {
     cleanupRecorder();
+    zoomPrefUnsub?.();
+    zoomPrefUnsub = null;
     if (defaultProviderSelect) defaultProviderSelect.destroy();
+    if (themeSelect) themeSelect.destroy();
+    if (zoomSelect) zoomSelect.destroy();
     btnConfirm.removeEventListener('click', handleConfirm);
     btnCancel.removeEventListener('click', handleCancel);
     document.removeEventListener('keydown', handleKeydown);

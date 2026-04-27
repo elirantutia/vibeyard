@@ -797,6 +797,16 @@ describe('preferences', () => {
     appState.setPreference('soundOnSessionWaiting', true);
     expect(cb).toHaveBeenCalledTimes(1);
   });
+
+  it('zoomFactor defaults to 1.0', () => {
+    expect(appState.preferences.zoomFactor).toBe(1.0);
+  });
+
+  it('setPreference stores zoomFactor', () => {
+    appState.setPreference('zoomFactor', 1.5);
+    expect(appState.preferences.zoomFactor).toBe(1.5);
+    expect(mockSave).toHaveBeenCalled();
+  });
 });
 
 describe('setSidebarWidth()', () => {
@@ -904,6 +914,18 @@ describe('archiveSession via removeSession()', () => {
     expect(history[0].createdAt).toBe(session.createdAt);
     expect(history[0].closedAt).toBeDefined();
     expect(history[0].providerId).toBe('claude');
+  });
+
+  it('archives Copilot sessions once a cliSessionId is available', () => {
+    const project = addProject();
+    const session = appState.addSession(project.id, 'Copilot Session', undefined, 'copilot')!;
+    appState.updateSessionCliId(project.id, session.id, 'copilot-cli-123');
+    appState.removeSession(project.id, session.id);
+    const history = appState.getSessionHistory(project.id);
+    expect(history).toHaveLength(1);
+    expect(history[0].name).toBe('Copilot Session');
+    expect(history[0].providerId).toBe('copilot');
+    expect(history[0].cliSessionId).toBe('copilot-cli-123');
   });
 
   it('captures cost data when available', () => {

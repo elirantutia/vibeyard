@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; connect-src 'self' http: https:; frame-src *;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; img-src 'self' data: blob: https:; connect-src 'self' http: https:; frame-src *;">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Vibeyard</title>
   <link rel="icon" type="image/png" href="icon.png">
@@ -22,11 +22,9 @@
       </div>
       <div id="sidebar-content">
         <div id="project-list"></div>
-        <div id="config-sections"></div>
-        <div id="readiness-section"></div>
         <div id="git-panel"></div>
-        <div id="session-history"></div>
       </div>
+      <div id="sidebar-discussions"></div>
       <div id="sidebar-footer"></div>
     </div>
     <div id="sidebar-resize-handle"></div>
@@ -41,7 +39,10 @@
           <button id="btn-add-mcp-inspector" class="icon-btn" title="MCP Inspector" style="font-size:11px;font-weight:600;">MCP</button>
           <button id="btn-toggle-board" class="icon-btn" title="Toggle Board (Ctrl+Shift+B)" style="font-size:12px;">&#x25A6;</button>
           <button id="btn-toggle-swarm" class="icon-btn" title="Toggle Swarm Mode (Ctrl+\)">&#x229E;</button>
-          <button id="btn-add-session" class="icon-btn" title="New Session (Ctrl+Shift+N)">+</button>
+          <div class="split-btn-group">
+            <button id="btn-add-session" class="icon-btn split-btn-main" title="New Session (Ctrl+Shift+N)">+</button>
+            <button id="btn-add-session-menu" class="icon-btn split-btn-caret" title="More session options" aria-haspopup="menu">&#x25BE;</button>
+          </div>
         </div>
       </div>
       <div id="terminal-container"></div>
@@ -49,9 +50,15 @@
       <div id="project-terminal-panel" class="hidden">
         <div id="project-terminal-header">
           <span class="project-terminal-title">Terminal</span>
-          <button id="btn-close-terminal" class="icon-btn" title="Close Terminal">&times;</button>
+          <div class="project-terminal-header-actions">
+            <button id="btn-new-terminal" class="icon-btn" title="New Terminal">+</button>
+            <button id="btn-close-terminal" class="icon-btn" title="Close Terminal">&times;</button>
+          </div>
         </div>
-        <div id="project-terminal-container"></div>
+        <div id="project-terminal-body">
+          <div id="project-terminal-container"></div>
+          <div id="project-terminal-sidebar" class="hidden"></div>
+        </div>
       </div>
     </div>
   </div>

@@ -3,6 +3,20 @@ import type { SessionRecord, ProjectRecord, Preferences, PersistedState, Archive
 import { getCost, restoreCost } from './session-cost.js';
 import { restoreContext } from './session-context.js';
 import { getProviderCapabilities, getProviderAvailabilitySnapshot } from './provider-availability.js';
+import { basename } from '../shared/platform.js';
+import { isCliSession } from './session-utils.js';
+import { archiveSession as archiveSessionPure, buildResumedSession } from './state/session-archive.js';
+import {
+  attachSessionToProject,
+  buildBrowserTabSession,
+  buildCliSession,
+  buildDiffViewerSession,
+  buildFileReaderSession,
+  buildMcpInspectorSession,
+  buildProjectTabSession,
+  buildRemoteSession,
+} from './state/session-factory.js';
+import { NavHistory } from './state/nav-history.js';
 
 export type { SessionRecord, ProjectRecord, Preferences, PersistedState, ArchivedSession } from '../shared/types.js';
 
@@ -41,41 +55,24 @@ const defaultPreferences: Preferences = {
   sessionHistoryEnabled: true,
   insightsEnabled: true,
   autoTitleEnabled: true,
+  confirmCloseWorkingSession: true,
+  copyOnSelect: false,
+  zoomFactor: 1.0,
   readinessExcludedProviders: [],
-  sidebarViews: { configSections: true, gitPanel: true, sessionHistory: true, costFooter: true, readinessSection: true },
+  sidebarViews: { gitPanel: true, sessionHistory: true, costFooter: true, discussions: true, fileTree: true },
 };
-
-const NAV_HISTORY_MAX = 50;
 
 class AppState {
   private state: PersistedState = { version: 1, projects: [], activeProjectId: null, preferences: { ...defaultPreferences } };
   private listeners = new Map<EventType, Set<EventCallback>>();
-  private navHistory: string[] = [];
-  private navIndex = -1;
-  private navSuppressPush = false;
+  private nav = new NavHistory();
 
   private pushNav(sessionId: string | null | undefined): void {
-    if (!sessionId || this.navSuppressPush) return;
-    if (this.navHistory[this.navIndex] === sessionId) return;
-    this.navHistory.length = this.navIndex + 1;
-    this.navHistory.push(sessionId);
-    if (this.navHistory.length > NAV_HISTORY_MAX) {
-      const drop = this.navHistory.length - NAV_HISTORY_MAX;
-      this.navHistory.splice(0, drop);
-    }
-    this.navIndex = this.navHistory.length - 1;
+    this.nav.push(sessionId);
   }
 
   private pruneNav(sessionId: string): void {
-    let i = 0;
-    while (i < this.navHistory.length) {
-      if (this.navHistory[i] === sessionId) {
-        this.navHistory.splice(i, 1);
-        if (i <= this.navIndex) this.navIndex--;
-      } else {
-        i++;
-      }
-    }
+    this.nav.prune(sessionId);
   }
 
   private findProjectBySession(sessionId: string): ProjectRecord | undefined {
@@ -91,31 +88,17 @@ class AppState {
   }
 
   private stepNav(direction: 1 | -1): void {
-    let i = this.navIndex + direction;
-    while (i >= 0 && i < this.navHistory.length) {
-      const id = this.navHistory[i];
-      const project = this.findProjectBySession(id);
-      if (project) {
-        this.navIndex = i;
-        this.navSuppressPush = true;
-        try {
-          const projectChanged = this.state.activeProjectId !== project.id;
-          this.state.activeProjectId = project.id;
-          project.activeSessionId = id;
-          this.persist();
-          if (projectChanged) this.emit('project-changed');
-          this.emit('session-changed');
-        } finally {
-          this.navSuppressPush = false;
-        }
-        return;
-      }
-      // Stale entry — drop and continue in same direction
-      this.navHistory.splice(i, 1);
-      if (direction === -1) i--;
-      // If we removed an entry before navIndex, shift it
-      if (i < this.navIndex) this.navIndex--;
-    }
+    const id = this.nav.findNextValid(direction, (sid) => !!this.findProjectBySession(sid));
+    if (!id) return;
+    const project = this.findProjectBySession(id)!;
+    this.nav.withSuppression(() => {
+      const projectChanged = this.state.activeProjectId !== project.id;
+      this.state.activeProjectId = project.id;
+      project.activeSessionId = id;
+      this.persist();
+      if (projectChanged) this.emit('project-changed');
+      this.emit('session-changed');
+    });
   }
 
   on(event: EventType, cb: EventCallback): () => void {
@@ -225,6 +208,15 @@ class AppState {
     this.emit('sidebar-toggled');
   }
 
+  get discussionsLastSeen(): string | undefined {
+    return this.state.discussionsLastSeen;
+  }
+
+  setDiscussionsLastSeen(timestamp: string): void {
+    this.state.discussionsLastSeen = timestamp;
+    this.persist();
+  }
+
   setTerminalPanelOpen(open: boolean): void {
     const project = this.activeProject;
     if (!project) return;
@@ -313,13 +305,13 @@ class AppState {
     this.emit('project-changed');
   }
 
-  addPlanSession(projectId: string, name: string): SessionRecord | undefined {
+  addPlanSession(projectId: string, name: string, planMode: boolean = true): SessionRecord | undefined {
     const project = this.state.projects.find((p) => p.id === projectId);
     if (!project) return undefined;
     const activeSession = project.sessions.find((s) => s.id === project.activeSessionId);
     const providerId = activeSession?.providerId ?? this.state.preferences.defaultProvider ?? 'claude';
     const caps = getProviderCapabilities(providerId);
-    const planArg = caps?.planModeArg ?? '';
+    const planArg = planMode ? (caps?.planModeArg ?? '') : '';
     const base = project.defaultArgs ?? '';
     const args = [base, planArg].filter(Boolean).join(' ').trim() || undefined;
     return this.addSession(projectId, name, args, providerId);
@@ -329,27 +321,32 @@ class AppState {
     const project = this.state.projects.find((p) => p.id === projectId);
     if (!project) return undefined;
 
-    const effectiveArgs = args ?? project.defaultArgs;
-    const session: SessionRecord = {
-      id: crypto.randomUUID(),
+    const session = buildCliSession({
       name,
       providerId: providerId ?? this.state.preferences.defaultProvider ?? 'claude',
-      ...(effectiveArgs ? { args: effectiveArgs } : {}),
-      ...(cwd ? { cwd } : {}),
-      cliSessionId: null,
-      createdAt: new Date().toISOString(),
-    };
-    project.sessions.push(session);
-    project.activeSessionId = session.id;
-    this.pushNav(session.id);
-    // Auto-add to swarm if in swarm mode and under limit
-    if (project.layout.mode === 'swarm') {
-      project.layout.splitPanes.push(session.id);
+      args: args ?? project.defaultArgs,
+      cwd,
+    });
+    attachSessionToProject(project, session, { addToSwarm: true });
+    this.commitNewSession(projectId, session);
+    return session;
+  }
+
+  private activateExistingSession(project: ProjectRecord, existing: SessionRecord): SessionRecord {
+    if (project.activeSessionId !== existing.id) {
+      project.activeSessionId = existing.id;
+      this.pushNav(existing.id);
+      this.persist();
+      this.emit('session-changed');
     }
+    return existing;
+  }
+
+  private commitNewSession(projectId: string, session: SessionRecord): void {
+    this.pushNav(session.id);
     this.persist();
     this.emit('session-added', { projectId, session });
     this.emit('session-changed');
-    return session;
   }
 
   addDiffViewerSession(projectId: string, filePath: string, area: string, worktreePath?: string): SessionRecord | undefined {
@@ -360,31 +357,11 @@ class AppState {
     const existing = project.sessions.find(
       (s) => s.type === 'diff-viewer' && s.diffFilePath === filePath && s.diffArea === area && s.worktreePath === worktreePath
     );
-    if (existing) {
-      project.activeSessionId = existing.id;
-      this.pushNav(existing.id);
-      this.persist();
-      this.emit('session-changed');
-      return existing;
-    }
+    if (existing) return this.activateExistingSession(project, existing);
 
-    const name = filePath.split('/').pop() || filePath;
-    const session: SessionRecord = {
-      id: crypto.randomUUID(),
-      name,
-      type: 'diff-viewer',
-      diffFilePath: filePath,
-      diffArea: area,
-      ...(worktreePath ? { worktreePath } : {}),
-      cliSessionId: null,
-      createdAt: new Date().toISOString(),
-    };
-    project.sessions.push(session);
-    project.activeSessionId = session.id;
-    this.pushNav(session.id);
-    this.persist();
-    this.emit('session-added', { projectId, session });
-    this.emit('session-changed');
+    const session = buildDiffViewerSession({ name: basename(filePath), filePath, area, worktreePath });
+    attachSessionToProject(project, session);
+    this.commitNewSession(projectId, session);
     return session;
   }
 
@@ -392,21 +369,9 @@ class AppState {
     const project = this.state.projects.find((p) => p.id === projectId);
     if (!project) return undefined;
 
-    const session: SessionRecord = {
-      id: sessionId,
-      name: `Remote: ${hostSessionName}`,
-      type: 'remote-terminal',
-      remoteHostName: hostSessionName,
-      shareMode,
-      cliSessionId: null,
-      createdAt: new Date().toISOString(),
-    };
-    project.sessions.push(session);
-    project.activeSessionId = session.id;
-    this.pushNav(session.id);
-    this.persist();
-    this.emit('session-added', { projectId, session });
-    this.emit('session-changed');
+    const session = buildRemoteSession({ id: sessionId, name: `Remote: ${hostSessionName}`, remoteHostName: hostSessionName, shareMode });
+    attachSessionToProject(project, session);
+    this.commitNewSession(projectId, session);
     return session;
   }
 
@@ -419,33 +384,33 @@ class AppState {
       const existing = project.sessions.find(
         (s) => s.type === 'browser-tab' && s.browserTabUrl === url
       );
-      if (existing) {
-        project.activeSessionId = existing.id;
-        this.pushNav(existing.id);
-        this.persist();
-        this.emit('session-changed');
-        return existing;
-      }
+      if (existing) return this.activateExistingSession(project, existing);
     }
 
     let name = 'Browser';
     if (url) {
       try { name = new URL(url).hostname || url; } catch { name = url; }
     }
-    const session: SessionRecord = {
-      id: crypto.randomUUID(),
-      name,
-      type: 'browser-tab',
-      browserTabUrl: url,
-      cliSessionId: null,
-      createdAt: new Date().toISOString(),
-    };
-    project.sessions.push(session);
-    project.activeSessionId = session.id;
-    this.pushNav(session.id);
-    this.persist();
-    this.emit('session-added', { projectId, session });
-    this.emit('session-changed');
+    const session = buildBrowserTabSession({ name, url });
+    attachSessionToProject(project, session);
+    this.commitNewSession(projectId, session);
+    return session;
+  }
+
+  openProjectTab(projectId: string): SessionRecord | undefined {
+    const project = this.state.projects.find((p) => p.id === projectId);
+    if (!project) return undefined;
+
+    if (this.state.activeProjectId !== projectId) {
+      this.setActiveProject(projectId);
+    }
+
+    const existing = project.sessions.find((s) => s.type === 'project-tab');
+    if (existing) return this.activateExistingSession(project, existing);
+
+    const session = buildProjectTabSession({ name: project.name });
+    attachSessionToProject(project, session);
+    this.commitNewSession(projectId, session);
     return session;
   }
 
@@ -458,30 +423,25 @@ class AppState {
       (s) => s.type === 'file-reader' && s.fileReaderPath === filePath
     );
     if (existing) {
+      const lineChanged = existing.fileReaderLine !== lineNumber;
+      const activating = project.activeSessionId !== existing.id;
       existing.fileReaderLine = lineNumber;
-      project.activeSessionId = existing.id;
-      this.pushNav(existing.id);
-      this.persist();
-      this.emit('session-changed');
+      if (activating) {
+        project.activeSessionId = existing.id;
+        this.pushNav(existing.id);
+      }
+      // Emit even when the tab is already active so renderLayout re-runs
+      // setFileReaderLine and scrolls to the new position.
+      if (activating || lineChanged) {
+        this.persist();
+        this.emit('session-changed');
+      }
       return existing;
     }
 
-    const name = filePath.split('/').pop() || filePath;
-    const session: SessionRecord = {
-      id: crypto.randomUUID(),
-      name,
-      type: 'file-reader',
-      fileReaderPath: filePath,
-      ...(lineNumber !== undefined ? { fileReaderLine: lineNumber } : {}),
-      cliSessionId: null,
-      createdAt: new Date().toISOString(),
-    };
-    project.sessions.push(session);
-    project.activeSessionId = session.id;
-    this.pushNav(session.id);
-    this.persist();
-    this.emit('session-added', { projectId, session });
-    this.emit('session-changed');
+    const session = buildFileReaderSession({ name: basename(filePath), filePath, lineNumber });
+    attachSessionToProject(project, session);
+    this.commitNewSession(projectId, session);
     return session;
   }
 
@@ -489,19 +449,9 @@ class AppState {
     const project = this.state.projects.find((p) => p.id === projectId);
     if (!project) return undefined;
 
-    const session: SessionRecord = {
-      id: crypto.randomUUID(),
-      name,
-      type: 'mcp-inspector',
-      cliSessionId: null,
-      createdAt: new Date().toISOString(),
-    };
-    project.sessions.push(session);
-    project.activeSessionId = session.id;
-    this.pushNav(session.id);
-    this.persist();
-    this.emit('session-added', { projectId, session });
-    this.emit('session-changed');
+    const session = buildMcpInspectorSession({ name });
+    attachSessionToProject(project, session);
+    this.commitNewSession(projectId, session);
     return session;
   }
 
@@ -511,7 +461,7 @@ class AppState {
 
     // Archive CLI sessions before removing (cost data must be captured before session-removed triggers destroyTerminal)
     const session = project.sessions.find((s) => s.id === sessionId);
-    if (session && (!session.type || session.type === 'claude') && this.state.preferences.sessionHistoryEnabled) {
+    if (session && isCliSession(session) && this.state.preferences.sessionHistoryEnabled) {
       // Skip archiving empty sessions (no CLI activity)
       if (session.cliSessionId || getCost(session.id) !== null) {
         this.archiveSession(project, session);
@@ -534,48 +484,7 @@ class AppState {
   }
 
   private archiveSession(project: ProjectRecord, session: SessionRecord): void {
-    const costInfo = getCost(session.id);
-    const archived: ArchivedSession = {
-      id: crypto.randomUUID(),
-      name: session.name,
-      providerId: (session.providerId || 'claude') as ProviderId,
-      cliSessionId: session.cliSessionId,
-      createdAt: session.createdAt,
-      closedAt: new Date().toISOString(),
-      cost: costInfo ? {
-        totalCostUsd: costInfo.totalCostUsd,
-        totalInputTokens: costInfo.totalInputTokens,
-        totalOutputTokens: costInfo.totalOutputTokens,
-        totalDurationMs: costInfo.totalDurationMs,
-      } : null,
-    };
-
-    if (!project.sessionHistory) project.sessionHistory = [];
-
-    // If a history entry with the same cliSessionId exists, update it instead of creating a duplicate
-    const existingIndex = archived.cliSessionId
-      ? project.sessionHistory.findIndex((a) => a.cliSessionId === archived.cliSessionId)
-      : -1;
-    if (existingIndex !== -1) {
-      project.sessionHistory[existingIndex].closedAt = archived.closedAt;
-      if (archived.cost) project.sessionHistory[existingIndex].cost = archived.cost;
-      if (archived.name !== project.sessionHistory[existingIndex].name) {
-        project.sessionHistory[existingIndex].name = archived.name;
-      }
-    } else {
-      project.sessionHistory.push(archived);
-    }
-
-    // Cap at 500 entries per project, preserving bookmarked sessions
-    if (project.sessionHistory.length > 500) {
-      let nonBookmarkedToRemove = project.sessionHistory.length - 500;
-      project.sessionHistory = project.sessionHistory.filter((a) => {
-        if (a.bookmarked) return true;
-        if (nonBookmarkedToRemove > 0) { nonBookmarkedToRemove--; return false; }
-        return true;
-      });
-    }
-
+    archiveSessionPure(project, session);
     this.emit('history-changed', project.id);
   }
 
@@ -619,31 +528,11 @@ class AppState {
 
     // If a tab with the same cliSessionId is already open, just activate it
     const existing = project.sessions.find((s) => s.cliSessionId === archived.cliSessionId);
-    if (existing) {
-      project.activeSessionId = existing.id;
-      this.pushNav(existing.id);
-      this.persist();
-      this.emit('session-changed');
-      return existing;
-    }
+    if (existing) return this.activateExistingSession(project, existing);
 
-    const session: SessionRecord = {
-      id: crypto.randomUUID(),
-      name: archived.name,
-      providerId: archived.providerId,
-      cliSessionId: archived.cliSessionId,
-      createdAt: new Date().toISOString(),
-    };
-    project.sessions.push(session);
-    project.activeSessionId = session.id;
-    this.pushNav(session.id);
-    // Auto-add to swarm if in swarm mode
-    if (project.layout.mode === 'swarm') {
-      project.layout.splitPanes.push(session.id);
-    }
-    this.persist();
-    this.emit('session-added', { projectId, session });
-    this.emit('session-changed');
+    const session = buildResumedSession(archived);
+    attachSessionToProject(project, session, { addToSwarm: true });
+    this.commitNewSession(projectId, session);
     return session;
   }
 
@@ -690,24 +579,14 @@ class AppState {
     );
 
     const session: SessionRecord = {
-      id: crypto.randomUUID(),
-      name: `${sourceName} (↪ ${targetProviderId})`,
-      providerId: targetProviderId,
-      cliSessionId: null,
-      createdAt: new Date().toISOString(),
+      ...buildCliSession({ name: `${sourceName} (↪ ${targetProviderId})`, providerId: targetProviderId }),
       pendingInitialPrompt: initialPrompt,
     };
-    project.sessions.push(session);
-    project.activeSessionId = session.id;
-    this.pushNav(session.id);
-    if (project.layout.mode === 'swarm') {
-      project.layout.splitPanes.push(session.id);
-    }
-    // persist() strips pendingInitialPrompt (transient). split-layout.onSessionAdded
-    // will consume it synchronously from in-memory state before the next persist.
-    this.persist();
-    this.emit('session-added', { projectId, session });
-    this.emit('session-changed');
+    attachSessionToProject(project, session, { addToSwarm: true });
+    // commitNewSession persist()s before emitting session-added; persist strips
+    // the transient pendingInitialPrompt, but split-layout.onSessionAdded reads
+    // it from in-memory state synchronously inside the emit.
+    this.commitNewSession(projectId, session);
     return session;
   }
 
@@ -836,9 +715,7 @@ class AppState {
       project.layout.mode = 'tabs';
       // Keep splitPanes as-is so order is preserved when switching back
     } else {
-      const cliSessions = project.sessions.filter(
-        (s) => !s.type || s.type === 'claude'
-      );
+      const cliSessions = project.sessions.filter(isCliSession);
       project.layout.mode = 'swarm';
 
       // Remove stale IDs (deleted sessions)
@@ -978,9 +855,7 @@ export function createDefaultBoard(): BoardData {
 export function _resetForTesting(): void {
   (appState as any)['state'] = { version: 1, projects: [], activeProjectId: null, preferences: { ...defaultPreferences } };
   (appState as any)['listeners'] = new Map();
-  (appState as any)['navHistory'] = [];
-  (appState as any)['navIndex'] = -1;
-  (appState as any)['navSuppressPush'] = false;
+  (appState as any)['nav'] = new NavHistory();
 }
 
 export const appState = new AppState();

@@ -4,32 +4,13 @@ import { homedir } from 'os';
 import { STATUS_DIR, getStatusLineScriptPath } from './hook-status';
 import { statusCmd as mkStatusCmd, captureSessionIdCmd as mkCaptureSessionIdCmd, captureToolFailureCmd as mkCaptureToolFailureCmd, installEventScript, wrapPythonHookCmd, installHookScripts } from './hook-commands';
 import { readJsonSafe, readDirSafe } from './fs-utils';
+import { parseFrontmatter } from './frontmatter';
 import { getSupportedHookEvents as computeSupportedHookEvents } from './claude-hook-versions';
 import { getClaudeVersion } from './providers/claude-version';
 import { resolveBinary } from './providers/resolve-binary';
 import type { McpServer, Agent, Skill, Command, ClaudeConfig, InspectorEventType } from '../shared/types';
 
 export type { McpServer, Agent, Skill, Command, ClaudeConfig } from '../shared/types';
-
-/** Parse YAML-ish frontmatter from an .md file (between --- delimiters) */
-function parseFrontmatter(filePath: string): Record<string, string> {
-  try {
-    const content = fs.readFileSync(filePath, 'utf-8');
-    const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
-    if (!match) return {};
-    const result: Record<string, string> = {};
-    for (const line of match[1].split('\n')) {
-      const colonIdx = line.indexOf(':');
-      if (colonIdx === -1) continue;
-      const key = line.slice(0, colonIdx).trim();
-      const value = line.slice(colonIdx + 1).trim();
-      result[key] = value;
-    }
-    return result;
-  } catch {
-    return {};
-  }
-}
 
 /** Read MCP servers from settings.json mcpServers key and .mcp.json files */
 function readMcpServers(settingsPath: string, mcpJsonPath: string, scope: 'user' | 'project'): McpServer[] {

@@ -9,6 +9,7 @@ import {
   type WebviewElement,
 } from './types.js';
 import { instances, getPreloadPath } from './instance.js';
+import { createPlanModeRow } from '../../dom-utils.js';
 import { navigateTo } from './navigation.js';
 import { applyViewport, openViewportDropdown, closeViewportDropdown } from './viewport.js';
 import { toggleInspectMode, showElementInfo, dismissInspect } from './inspect-mode.js';
@@ -23,11 +24,16 @@ import {
 import { addFlowStep, clearFlow, toggleFlowMode } from './flow-recording.js';
 import { showFlowPicker, dismissFlowPicker } from './flow-picker.js';
 import {
+  deliverDraw,
+  deliverFlow,
+  deliverInspect,
   sendFlowToCustomSession,
   sendFlowToNewSession,
   sendToCustomSession,
   sendToNewSession,
 } from './session-integration.js';
+import { showSendMenu, dismissSendMenu } from './send-menu.js';
+import { wireSubmitDisabled } from '../submit-disabled.js';
 
 export function createBrowserTabPane(sessionId: string, url?: string): void {
   if (instances.has(sessionId)) return;
@@ -187,6 +193,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   const webview = document.createElement('webview') as unknown as WebviewElement;
   webview.className = 'browser-webview';
   webview.setAttribute('allowpopups', '');
+  webview.setAttribute('webpreferences', 'backgroundThrottling=false');
   viewportContainer.appendChild(webview);
   el.appendChild(viewportContainer);
 
@@ -215,8 +222,8 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
 
   const customBtn = document.createElement('button');
   customBtn.className = 'inspect-dropdown-btn';
-  customBtn.textContent = '\u25BC';
-  customBtn.title = 'Send to custom session';
+  customBtn.textContent = '▼';
+  customBtn.title = 'More options — pick a session or create new';
 
   submitGroup.appendChild(submitBtn);
   submitGroup.appendChild(customBtn);
@@ -234,6 +241,9 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   inspectAttachDimsRow.appendChild(inspectAttachDimsCheckbox);
   inspectAttachDimsRow.appendChild(inspectAttachDimsText);
   inspectPanel.appendChild(inspectAttachDimsRow);
+
+  const { row: inspectPlanModeRow, checkbox: inspectPlanModeCheckbox } = createPlanModeRow();
+  inspectPanel.appendChild(inspectPlanModeRow);
 
   inspectPanel.appendChild(submitGroup);
   el.appendChild(inspectPanel);
@@ -269,8 +279,8 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
 
   const drawCustomBtn = document.createElement('button');
   drawCustomBtn.className = 'inspect-dropdown-btn';
-  drawCustomBtn.textContent = '\u25BC';
-  drawCustomBtn.title = 'Send to custom session';
+  drawCustomBtn.textContent = '▼';
+  drawCustomBtn.title = 'More options — pick a session or create new';
 
   drawSubmitGroup.appendChild(drawSubmitBtn);
   drawSubmitGroup.appendChild(drawCustomBtn);
@@ -293,6 +303,9 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   drawAttachDimsRow.appendChild(drawAttachDimsCheckbox);
   drawAttachDimsRow.appendChild(drawAttachDimsText);
   drawPanel.appendChild(drawAttachDimsRow);
+
+  const { row: drawPlanModeRow, checkbox: drawPlanModeCheckbox } = createPlanModeRow();
+  drawPanel.appendChild(drawPlanModeRow);
 
   const drawErrorEl = document.createElement('div');
   drawErrorEl.className = 'inspect-error-text';
@@ -343,13 +356,18 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
 
   const flowCustomBtn = document.createElement('button');
   flowCustomBtn.className = 'inspect-dropdown-btn';
-  flowCustomBtn.textContent = '\u25BC';
-  flowCustomBtn.title = 'Send to custom session';
+  flowCustomBtn.textContent = '▼';
+  flowCustomBtn.title = 'More options — pick a session or create new';
 
   flowSubmitGroup.appendChild(flowSubmitBtn);
   flowSubmitGroup.appendChild(flowCustomBtn);
   flowInputRow.appendChild(flowInstructionInput);
   flowInputRow.appendChild(flowSubmitGroup);
+
+  const { row: flowPlanModeRow, checkbox: flowPlanModeCheckbox } = createPlanModeRow();
+  flowPlanModeRow.style.display = 'none';
+
+  flowPanel.appendChild(flowPlanModeRow);
   flowPanel.appendChild(flowInputRow);
   el.appendChild(flowPanel);
 
@@ -383,6 +401,15 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   flowPickerOverlay.appendChild(flowPickerMenu);
   el.appendChild(flowPickerOverlay);
 
+  // Send-menu (overflow) popup — replaces the old "custom session" modal + "pick existing" modal
+  const sendMenuOverlay = document.createElement('div');
+  sendMenuOverlay.className = 'send-menu-overlay';
+  sendMenuOverlay.style.display = 'none';
+  const sendMenuEl = document.createElement('div');
+  sendMenuEl.className = 'send-menu';
+  sendMenuOverlay.appendChild(sendMenuEl);
+  el.appendChild(sendMenuOverlay);
+
   const instance: BrowserTabInstance = {
     sessionId,
     element: el,
@@ -396,6 +423,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
     inspectPanel,
     instructionInput,
     inspectAttachDimsCheckbox,
+    inspectPlanModeCheckbox,
     elementInfoEl,
     inspectMode: false,
     selectedElement: null,
@@ -407,6 +435,8 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
     flowStepsList,
     flowInputRow,
     flowInstructionInput,
+    flowPlanModeRow,
+    flowPlanModeCheckbox,
     flowMode: false,
     flowSteps: [],
     flowPickerOverlay,
@@ -416,8 +446,11 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
     drawPanel,
     drawInstructionInput,
     drawAttachDimsCheckbox,
+    drawPlanModeCheckbox,
     drawErrorEl,
     drawMode: false,
+    sendMenuOverlay,
+    sendMenuEl,
   };
   instances.set(sessionId, instance);
 
@@ -484,12 +517,22 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   customWInput.addEventListener('keydown', (e: KeyboardEvent) => { if (e.key === 'Enter') applyCustomSize(); });
   customHInput.addEventListener('keydown', (e: KeyboardEvent) => { if (e.key === 'Enter') applyCustomSize(); });
 
+  wireSubmitDisabled(instructionInput, submitBtn, customBtn);
+  wireSubmitDisabled(drawInstructionInput, drawSubmitBtn, drawCustomBtn);
+  wireSubmitDisabled(flowInstructionInput, flowSubmitBtn, flowCustomBtn);
+
   inspectBtn.addEventListener('click', () => toggleInspectMode(instance));
   recordBtn.addEventListener('click', () => toggleFlowMode(instance));
   drawBtn.addEventListener('click', () => toggleDrawMode(instance));
   drawClearBtn.addEventListener('click', () => clearDrawing(instance));
   drawSubmitBtn.addEventListener('click', () => { void sendDrawToNewSession(instance); });
-  drawCustomBtn.addEventListener('click', () => { void sendDrawToCustomSession(instance); });
+  drawCustomBtn.addEventListener('click', () => {
+    showSendMenu(instance, drawCustomBtn, {
+      deliverTo: (session) => deliverDraw(instance, session),
+      onNewSession: () => sendDrawToNewSession(instance),
+      onNewWithArgs: () => sendDrawToCustomSession(instance),
+    });
+  });
   drawInstructionInput.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -498,7 +541,13 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   });
   flowClearBtn.addEventListener('click', () => clearFlow(instance));
   flowSubmitBtn.addEventListener('click', () => sendFlowToNewSession(instance));
-  flowCustomBtn.addEventListener('click', () => sendFlowToCustomSession(instance));
+  flowCustomBtn.addEventListener('click', () => {
+    showSendMenu(instance, flowCustomBtn, {
+      deliverTo: (session) => deliverFlow(instance, session),
+      onNewSession: () => sendFlowToNewSession(instance),
+      onNewWithArgs: () => sendFlowToCustomSession(instance),
+    });
+  });
 
   flowPickerMenu.addEventListener('click', (e: MouseEvent) => {
     const item = (e.target as HTMLElement).closest<HTMLButtonElement>('.flow-picker-item');
@@ -525,8 +574,18 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
     if (e.target === flowPickerOverlay) dismissFlowPicker(instance);
   });
 
+  sendMenuOverlay.addEventListener('click', (e: MouseEvent) => {
+    if (e.target === sendMenuOverlay) dismissSendMenu(instance);
+  });
+
   submitBtn.addEventListener('click', () => sendToNewSession(instance));
-  customBtn.addEventListener('click', () => sendToCustomSession(instance));
+  customBtn.addEventListener('click', () => {
+    showSendMenu(instance, customBtn, {
+      deliverTo: (session) => deliverInspect(instance, session),
+      onNewSession: () => sendToNewSession(instance),
+      onNewWithArgs: () => sendToCustomSession(instance),
+    });
+  });
   instructionInput.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -565,6 +624,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
       positionDrawPopover(instance, x, y);
     }
   }) as EventListener);
+
 }
 
 export function attachBrowserTabToContainer(sessionId: string, container: HTMLElement): void {
@@ -595,6 +655,7 @@ export function destroyBrowserTabPane(sessionId: string): void {
   instances.delete(sessionId);
 
   document.removeEventListener('mousedown', instance.viewportOutsideClickHandler);
+  try { dismissSendMenu(instance); } catch {}
 
   // <webview> calls throw if it isn't attached + dom-ready yet. Guard each
   // one individually so a failure can't skip instance.element.remove() below.

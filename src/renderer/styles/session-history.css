@@ -1,23 +1,7 @@
 /* Session History */
-#session-history {
-  border-top: 1px solid var(--border);
-}
-
-#session-history.hidden {
-  display: none;
-}
-
-#session-history:empty {
-  border-top: none;
-}
-
-.history-body {
-  padding: 0 0 4px;
-}
-
 .history-search {
-  width: calc(100% - 24px);
-  margin: 4px 12px;
+  width: calc(100% - 32px);
+  margin: 4px 12px 4px 20px;
   padding: 4px 8px;
   font-size: 12px;
   background: var(--bg-tertiary);
@@ -58,7 +42,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 12px;
+  padding: 4px 12px 4px 20px;
   cursor: default;
 }
 
@@ -151,7 +135,7 @@
 .history-actions {
   display: flex;
   gap: 6px;
-  padding: 2px 12px 4px;
+  padding: 2px 12px 4px 20px;
 }
 
 .history-bookmark-filter {
@@ -177,7 +161,7 @@
 }
 
 .history-empty {
-  padding: 8px 12px;
+  padding: 8px 12px 8px 20px;
   font-size: 11px;
   color: var(--text-dim);
   font-style: italic;

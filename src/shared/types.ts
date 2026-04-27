@@ -1,5 +1,8 @@
 // Shared type definitions used across main, preload, and renderer processes.
 
+export const ZOOM_MIN = 0.75;
+export const ZOOM_MAX = 2.0;
+
 // --- Provider ---
 
 export type ProviderId = 'claude' | 'codex' | 'copilot' | 'gemini';
@@ -69,15 +72,21 @@ export interface ContextWindowInfo {
 
 // --- Session / State ---
 
+export type SessionType =
+  | 'mcp-inspector'
+  | 'diff-viewer'
+  | 'file-reader'
+  | 'remote-terminal'
+  | 'browser-tab'
+  | 'project-tab';
+
 export interface SessionRecord {
   id: string;
   name: string;
-  type?: 'claude' | 'mcp-inspector' | 'diff-viewer' | 'file-reader' | 'remote-terminal' | 'browser-tab';
+  type?: SessionType;
   providerId?: ProviderId;
   args?: string;
   cliSessionId: string | null;
-  /** @deprecated Use cliSessionId instead. Kept for state migration compatibility. */
-  claudeSessionId?: string | null;
   mcpServerUrl?: string;
   diffFilePath?: string;
   diffArea?: string;
@@ -192,16 +201,24 @@ export interface Preferences {
   sessionHistoryEnabled: boolean;
   insightsEnabled: boolean;
   autoTitleEnabled: boolean;
+  confirmCloseWorkingSession: boolean;
+  zoomFactor?: number;
   defaultProvider?: ProviderId;
   statusLineConsent?: 'granted' | 'declined' | null;
+  // The foreign statusLine command the user was asked about when they made
+  // the consent decision. Used to detect new conflicts (different command)
+  // vs the previously-acknowledged one.
+  statusLineConsentCommand?: string | null;
+  copyOnSelect?: boolean;
   keybindings?: Record<string, string>;
+  theme?: 'dark' | 'light';
   readinessExcludedProviders?: ProviderId[];
   sidebarViews?: {
-    configSections: boolean;
     gitPanel: boolean;
     sessionHistory: boolean;
     costFooter: boolean;
-    readinessSection: boolean;
+    discussions: boolean;
+    fileTree: boolean;
   };
 }
 
@@ -234,6 +251,7 @@ export interface PersistedState {
   lastSeenVersion?: string;
   appLaunchCount?: number;
   starPromptDismissed?: boolean;
+  discussionsLastSeen?: string;
 }
 
 // --- AI Readiness ---
@@ -387,3 +405,9 @@ export interface StatsCache {
   firstSessionDate: string;
   hourCounts: Record<string, number>;
 }
+
+// --- Filesystem IPC ---
+
+export type ReadFileResult =
+  | { ok: true; content: string }
+  | { ok: false; reason: 'binary' | 'error' };

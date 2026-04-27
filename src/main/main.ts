@@ -10,8 +10,19 @@ import { initAutoUpdater } from './auto-updater';
 import { stopGitWatcher } from './git-watcher';
 import { checkPythonAvailable } from './prerequisites';
 import { isMac } from './platform';
+import { isCloseConfirmed, setCloseConfirmed } from './close-state';
 
 let mainWindow: BrowserWindow | null = null;
+
+function requestConfirmClose(): void {
+  const win = BrowserWindow.getAllWindows()[0];
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('app:confirmClose');
+  } else {
+    setCloseConfirmed(true);
+    app.quit();
+  }
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -48,7 +59,12 @@ function createWindow(): void {
     }
   });
 
-  mainWindow.on('close', () => {
+  mainWindow.on('close', (event) => {
+    if (!isCloseConfirmed()) {
+      event.preventDefault();
+      requestConfirmClose();
+      return;
+    }
     flushState();
   });
 
@@ -62,23 +78,17 @@ function createWindow(): void {
 app.whenReady().then(async () => {
   initProviders();
 
-  // Validate all registered providers; require at least one to be available.
-  const providerResults = getAllProviders().map(provider => ({
-    provider,
-    prereq: provider.validatePrerequisites(),
-  }));
-  for (const { provider, prereq } of providerResults) {
-    if (!prereq.ok) {
-      console.warn(`Provider "${provider.meta.displayName}" not available: ${prereq.message}`);
-    }
+  const providers = getAllProviders();
+  const missing = providers.filter(p => !p.validatePrerequisites());
+  for (const p of missing) {
+    console.warn(`Provider "${p.meta.displayName}" not available`);
   }
-  if (!providerResults.some(r => r.prereq.ok)) {
-    const details = providerResults
-      .map(r => `- ${r.provider.meta.displayName}:\n${r.prereq.message}`)
-      .join('\n\n');
+  if (missing.length === providers.length) {
+    const bullets = providers.map(p => `  • ${p.meta.displayName}`).join('\n');
     dialog.showErrorBox(
-      'Vibeyard — Missing Prerequisite',
-      `Vibeyard requires at least one supported CLI provider to be installed.\n\n${details}\n\nAfter installing, restart Vibeyard.`,
+      'Vibeyard — No CLI Provider Found',
+      `Vibeyard needs at least one supported CLI provider installed to run.\n\n` +
+        `Install one of the following, then restart Vibeyard:\n\n${bullets}`,
     );
     app.quit();
     return;
@@ -102,7 +112,7 @@ app.whenReady().then(async () => {
 
   // Install hooks and status scripts for available providers (after window creation so dialogs can attach)
   for (const provider of getAllProviders()) {
-    if (provider.validatePrerequisites().ok) {
+    if (provider.validatePrerequisites()) {
       await provider.installHooks(mainWindow);
       provider.installStatusScripts();
     }
@@ -129,7 +139,12 @@ app.whenReady().then(async () => {
   });
 });
 
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
+  if (!isCloseConfirmed()) {
+    event.preventDefault();
+    requestConfirmClose();
+    return;
+  }
   flushState();
   const win = BrowserWindow.getAllWindows()[0];
   if (win && !win.isDestroyed()) {

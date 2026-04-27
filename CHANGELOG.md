@@ -2,6 +2,109 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.30] - 2026-04-26
+
+### Features
+
+- Send to existing session path in browser tab popovers
+- Line-number suffix in quick-open file search
+- Confirmation modal when quitting the app with working sessions
+
+### Fixes
+
+- Windows file viewer renders blank for absolute paths
+- Show "unable to preview" for binary files in the file viewer
+- Auto-close file viewer and diff tabs when the file is missing
+- Blacked-out terminal characters on WebGL context loss
+
+### Changes
+
+- Close-confirmation to include sessions awaiting input
+- Split AppState into nav-history, session-factory, and session-archive helpers
+- Centralize SessionType and drop legacy claude state
+- Extract readMcpServersFromJson into shared provider-config-utils
+
+## [0.2.29] - 2026-04-24
+
+### Features
+
+- Appearance section to preferences modal
+- Light theme support
+- Confirmation dialog when closing a working session
+- Project file tree and dedicated project tab layout
+- Dropdown caret next to new-session button for discoverable options
+- Disabled styling for empty-prompt send-to-ai buttons
+- Plan-mode toggle to ask-ai send surfaces
+- Ask AI prompt for text selections in file panes
+- Whole-app zoom preference with keyboard shortcuts
+
+### Fixes
+
+- Archive copilot sessions in history
+- Selectionchange listener leak when file viewers destroyed mid-reload
+- Sidebar resize sticking when mouse released outside window
+- Modal z-index rendering below tab context menus
+- Inspect popover clipping at pane edges
+- Statusline conflict alerts ignoring user consent
+
+### Changes
+
+- Delete-project confirmation to use themed modal
+- Discussions badge to sort and count by post creation date
+
+## [0.2.28] - 2026-04-19
+
+### Features
+
+- Preference to hide discussions button in sidebar
+- New-post badge to Discussions sidebar link via Atom feed polling
+
+### Fixes
+
+- Browser tab input lag by disabling background throttling on webview
+- Guard PTY operations against errors from exited processes
+- Sidebar discussions overlapping project list when sidebar content overflows
+
+## [0.2.27] - 2026-04-12
+
+### Features
+
+- Copilot CLI provider with hooks and config support
+- Image preview in file reader
+- Multi-terminal support to project terminal panel
+- GitHub Discussions link to sidebar
+- Scope config panel to project with provider dropdown
+
+### Fixes
+
+- False positive tool-not-found alerts from successful command output
+- Claude detection for nvm installs on macOS
+
+### Changes
+
+- Hook script cleanup to avoid racing with long-lived CLI processes
+- AI readiness provider filter with inline description
+- Missing-provider dialog copy
+
+## [0.2.26] - 2026-04-10
+
+### Features
+
+- Version-gated claude code hook installation
+- Resume with different provider
+
+### Fixes
+
+- Windows platform compatibility and unify shortcut system
+- Setup badge showing for uninstalled providers
+- Auto-override legacy vibeyard statusline path on upgrade
+- Cost attribution in session inspector tools and costs tabs
+
+### Changes
+
+- Split hook script dir from runtime status dir
+- Centralize platform checks in platform.ts
+
 ## [0.2.25] - 2026-04-09
 
 ### Features

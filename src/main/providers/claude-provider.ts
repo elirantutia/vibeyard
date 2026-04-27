@@ -35,8 +35,8 @@ export class ClaudeProvider implements CliProvider {
     return resolveBinary('claude', binaryCache);
   }
 
-  validatePrerequisites(): { ok: boolean; message: string } {
-    return validateBinaryExists('claude', 'Claude Code CLI', 'npm install -g @anthropic-ai/claude-code');
+  validatePrerequisites(): boolean {
+    return validateBinaryExists('claude');
   }
 
   buildEnv(sessionId: string, baseEnv: Record<string, string>): Record<string, string> {
@@ -65,7 +65,7 @@ export class ClaudeProvider implements CliProvider {
     return args;
   }
 
-  async installHooks(win?: BrowserWindow | null): Promise<void> {
+  async installHooks(win?: BrowserWindow | null, _projectPath?: string): Promise<void> {
     await guardedInstall(win ?? null);
   }
 

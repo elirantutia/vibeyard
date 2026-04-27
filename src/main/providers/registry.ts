@@ -2,6 +2,7 @@ import type { ProviderId, CliProviderMeta } from '../../shared/types';
 import type { CliProvider } from './provider';
 import { ClaudeProvider } from './claude-provider';
 import { CodexProvider } from './codex-provider';
+import { CopilotProvider } from './copilot-provider';
 import { GeminiProvider } from './gemini-provider';
 
 const providers = new Map<ProviderId, CliProvider>();
@@ -9,6 +10,7 @@ const providers = new Map<ProviderId, CliProvider>();
 export function initProviders(): void {
   registerProvider(new ClaudeProvider());
   registerProvider(new CodexProvider());
+  registerProvider(new CopilotProvider());
   registerProvider(new GeminiProvider());
 }
 
@@ -38,6 +40,6 @@ export function getAllProviderMetas(): CliProviderMeta[] {
 
 export function getAvailableProviderIds(): ProviderId[] {
   return getAllProviders()
-    .filter(p => p.validatePrerequisites().ok)
+    .filter(p => p.validatePrerequisites())
     .map(p => p.meta.id);
 }

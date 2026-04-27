@@ -1,13 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mockClipboardWrite = vi.fn();
+const mockClipboardWrite = vi.fn().mockResolvedValue(undefined);
 const mockPtyWrite = vi.fn();
 
 class FakeTerminal {
   cols = 120;
   rows = 30;
+  options: Record<string, unknown>;
   private keyHandler: ((e: KeyboardEvent) => boolean) | null = null;
   private _selection = '';
+
+  constructor(options: Record<string, unknown> = {}) {
+    this.options = options;
+  }
 
   loadAddon(): void {}
   attachCustomKeyEventHandler(handler: (e: KeyboardEvent) => boolean): void {
@@ -18,6 +23,7 @@ class FakeTerminal {
   }
   getSelection(): string { return this._selection; }
   setSelection(s: string): void { this._selection = s; }
+  onSelectionChange(_listener: () => void): { dispose(): void } { return { dispose() {} }; }
   onData(_cb: (data: string) => void): void {}
   open(): void {}
   write(): void {}
@@ -27,7 +33,12 @@ class FakeTerminal {
 
 vi.mock('@xterm/xterm', () => ({ Terminal: FakeTerminal }));
 vi.mock('@xterm/addon-fit', () => ({ FitAddon: class { fit(): void {} } }));
-vi.mock('@xterm/addon-webgl', () => ({ WebglAddon: class {} }));
+vi.mock('@xterm/addon-webgl', () => ({
+  WebglAddon: class {
+    onContextLoss = (_: () => void) => ({ dispose() {} });
+    dispose() {}
+  },
+}));
 vi.mock('@xterm/addon-search', () => ({ SearchAddon: class {} }));
 
 const mockStateOn = vi.fn();
@@ -36,6 +47,7 @@ vi.mock('../state.js', () => ({
   appState: {
     projects: [],
     activeProject: null,
+    preferences: { theme: 'dark' },
     on: (...args: unknown[]) => mockStateOn(...args),
     setTerminalPanelOpen: vi.fn(),
     setTerminalPanelHeight: vi.fn(),
@@ -101,7 +113,7 @@ describe('project-terminal Ctrl+Shift+C clipboard copy', () => {
 
   async function setupTerminal() {
     const { appState } = await import('../state.js');
-    const { initProjectTerminal, getShellTerminalInstance } = await import('./project-terminal.js');
+    const { initProjectTerminal, getShellTerminalInstance, getActiveShellSessionId } = await import('./project-terminal.js');
 
     const project = { id: 'proj1', path: '/project', terminalPanelOpen: true, terminalPanelHeight: 200, sessions: [] };
     (appState as any).activeProject = project;
@@ -109,10 +121,11 @@ describe('project-terminal Ctrl+Shift+C clipboard copy', () => {
 
     initProjectTerminal();
 
-    // Trigger state-loaded → showPanel → ensureShell
+    // Trigger state-loaded → showPanel → createShell
     stateHandlers['state-loaded']?.forEach(cb => cb());
 
-    return getShellTerminalInstance('shell-proj1');
+    const sessionId = getActiveShellSessionId();
+    return sessionId ? getShellTerminalInstance(sessionId) : undefined;
   }
 
   it('copies selected text to clipboard on Ctrl+Shift+C keydown', async () => {
@@ -152,5 +165,71 @@ describe('project-terminal Ctrl+Shift+C clipboard copy', () => {
     const result = term.simulateKey({ ctrlKey: true, shiftKey: true, key: 'C', type: 'keydown' });
 
     expect(result).toBe(false);
+  });
+});
+
+describe('applyThemeToAllShells()', () => {
+  let stateHandlers: Record<string, (() => void)[]>;
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+
+    stateHandlers = {};
+    mockStateOn.mockImplementation((event: string, cb: () => void) => {
+      if (!stateHandlers[event]) stateHandlers[event] = [];
+      stateHandlers[event].push(cb);
+    });
+
+    vi.stubGlobal('document', makeFakeDocument());
+    vi.stubGlobal('window', {
+      vibeyard: {
+        pty: { write: mockPtyWrite, kill: vi.fn(), resize: vi.fn(), createShell: vi.fn() },
+      },
+    });
+    vi.stubGlobal('navigator', { clipboard: { writeText: mockClipboardWrite } });
+    vi.stubGlobal('ResizeObserver', class { observe(): void {} });
+    vi.stubGlobal('requestAnimationFrame', (cb: () => void) => cb());
+  });
+
+  it('updates existing shell terminals to the selected theme', async () => {
+    const { darkTerminalTheme, lightTerminalTheme } = await import('../terminal-theme.js');
+    const { appState } = await import('../state.js');
+    const { initProjectTerminal, getShellTerminalInstance, getActiveShellSessionId, applyThemeToAllShells } = await import('./project-terminal.js');
+
+    const project = { id: 'proj1', path: '/project', terminalPanelOpen: true, terminalPanelHeight: 200, sessions: [] };
+    (appState as any).activeProject = project;
+    (appState as any).projects = [project];
+
+    initProjectTerminal();
+    stateHandlers['state-loaded']?.forEach(cb => cb());
+
+    const sessionId = getActiveShellSessionId()!;
+    const instance = getShellTerminalInstance(sessionId)!;
+
+    expect((instance.terminal as unknown as FakeTerminal).options.theme).toBe(darkTerminalTheme);
+
+    applyThemeToAllShells('light');
+
+    expect((instance.terminal as unknown as FakeTerminal).options.theme).toBe(lightTerminalTheme);
+  });
+
+  it('uses the current light theme for newly created shell terminals', async () => {
+    const { lightTerminalTheme } = await import('../terminal-theme.js');
+    const { appState } = await import('../state.js');
+    const { initProjectTerminal, getShellTerminalInstance, getActiveShellSessionId } = await import('./project-terminal.js');
+
+    const project = { id: 'proj1', path: '/project', terminalPanelOpen: true, terminalPanelHeight: 200, sessions: [] };
+    (appState as any).activeProject = project;
+    (appState as any).projects = [project];
+    (appState as any).preferences.theme = 'light';
+
+    initProjectTerminal();
+    stateHandlers['state-loaded']?.forEach(cb => cb());
+
+    const sessionId = getActiveShellSessionId()!;
+    const instance = getShellTerminalInstance(sessionId)!;
+
+    expect((instance.terminal as unknown as FakeTerminal).options.theme).toBe(lightTerminalTheme);
   });
 });

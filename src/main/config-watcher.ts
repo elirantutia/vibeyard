@@ -48,6 +48,26 @@ function stopAll(): void {
   dirWatchers = [];
 }
 
+function setupCopilotWatchers(projectPath: string): void {
+  const home = os.homedir();
+  const copilotDir = path.join(home, '.copilot');
+
+  const files = [
+    path.join(copilotDir, 'mcp-config.json'),
+    path.join(projectPath, '.copilot', 'mcp-config.json'),
+    path.join(projectPath, '.github', 'hooks', 'vibeyard-copilot-hooks.json'),
+  ];
+  for (const f of files) watchFile(f);
+
+  const dirs = [
+    path.join(copilotDir, 'agents'),
+    path.join(copilotDir, 'skills'),
+    path.join(projectPath, '.github', 'agents'),
+    path.join(projectPath, '.github', 'skills'),
+  ];
+  for (const d of dirs) watchDir(d);
+}
+
 function setupClaudeWatchers(projectPath: string): void {
   const home = os.homedir();
   const claudeDir = path.join(home, '.claude');
@@ -113,6 +133,8 @@ export function startConfigWatcher(win: BrowserWindow, projectPath: string, prov
     setupCodexWatchers(projectPath);
   } else if (providerId === 'gemini') {
     setupGeminiWatchers(projectPath);
+  } else if (providerId === 'copilot') {
+    setupCopilotWatchers(projectPath);
   } else {
     setupClaudeWatchers(projectPath);
   }

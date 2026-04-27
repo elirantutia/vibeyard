@@ -4,6 +4,7 @@ const mockAppState = vi.hoisted(() => {
   const listeners = new Map<string, Set<() => void>>();
   const state = {
     preferences: { sessionHistoryEnabled: true, sidebarViews: { sessionHistory: true } },
+    projects: [] as Array<{ id: string; sessionHistory: unknown[] }>,
     activeProject: {
       id: 'p1',
       sessionHistory: [
@@ -49,6 +50,7 @@ const mockAppState = vi.hoisted(() => {
           },
         ],
       };
+      state.projects = [state.activeProject];
       state.getSessionHistory.mockImplementation(() => state.activeProject.sessionHistory);
       state.clearSessionHistory.mockClear();
       state.toggleBookmark.mockClear();
@@ -57,11 +59,20 @@ const mockAppState = vi.hoisted(() => {
       state.on.mockClear();
     },
   };
+  state.projects = [state.activeProject];
   return state;
 });
 
 vi.mock('../state.js', () => ({
   appState: mockAppState,
+}));
+
+vi.mock('../provider-availability.js', () => ({
+  loadProviderAvailability: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock('./resume-with-provider-menu.js', () => ({
+  buildResumeWithProviderItems: vi.fn(() => []),
 }));
 
 class FakeClassList {
@@ -147,35 +158,51 @@ class FakeElement {
     }
     return null;
   }
+
+  querySelectorAll(selector: string): FakeElement[] {
+    const results: FakeElement[] = [];
+    if (!selector.startsWith('.')) return results;
+    const className = selector.slice(1);
+    for (const child of this.children) {
+      if (child.classList.contains(className)) results.push(child);
+      results.push(...child.querySelectorAll(selector));
+    }
+    return results;
+  }
 }
 
 class FakeDocument {
-  private elements = new Map<string, FakeElement>();
+  body: FakeElement;
+  private elementsById = new Map<string, FakeElement>();
+
+  constructor() {
+    this.body = new FakeElement('body', this);
+  }
 
   createElement(tagName: string): FakeElement {
     return new FakeElement(tagName, this);
   }
 
-  getElementById(id: string): FakeElement | null {
-    return this.elements.get(id) ?? null;
+  getElementById(id: string): FakeElement {
+    let el = this.elementsById.get(id);
+    if (!el) {
+      el = new FakeElement('div', this);
+      this.elementsById.set(id, el);
+    }
+    return el;
   }
 
-  registerElement(id: string, element: FakeElement): void {
-    this.elements.set(id, element);
-  }
+  addEventListener = vi.fn();
 }
 
 async function renderHistory(): Promise<FakeElement> {
   vi.resetModules();
-  const document = new FakeDocument();
-  const container = document.createElement('div');
-  document.registerElement('session-history', container);
-  vi.stubGlobal('document', document);
+  const doc = new FakeDocument();
+  const container = doc.createElement('div');
+  vi.stubGlobal('document', doc);
 
-  const { initSessionHistory } = await import('./session-history.js');
-  initSessionHistory();
-
-  container.children[0]?.dispatch('click');
+  const { renderSessionHistory } = await import('./session-history.js');
+  renderSessionHistory(mockAppState.activeProject as never, container as never);
   return container;
 }
 
@@ -184,7 +211,7 @@ beforeEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('initSessionHistory', () => {
+describe('renderSessionHistory', () => {
   it('renders the provider name in the subtitle after the cost', async () => {
     const container = await renderHistory();
     const details = container.querySelector('.history-item-details');
@@ -201,5 +228,19 @@ describe('initSessionHistory', () => {
     const details = container.querySelector('.history-item-details');
 
     expect(details?.textContent).toContain('Codex CLI');
+  });
+
+  it('shows empty state when there is no history', async () => {
+    mockAppState.activeProject.sessionHistory = [];
+    const container = await renderHistory();
+    const empty = container.querySelector('.history-empty');
+    expect(empty?.textContent).toBe('No session history yet');
+  });
+
+  it('renders search, bookmark filter, and clear buttons', async () => {
+    const container = await renderHistory();
+    expect(container.querySelector('.history-search')).not.toBeNull();
+    expect(container.querySelector('.history-bookmark-filter')).not.toBeNull();
+    expect(container.querySelector('.history-clear-btn')).not.toBeNull();
   });
 });

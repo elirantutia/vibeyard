@@ -1,4 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('../shortcuts.js', () => ({
+  shortcutManager: { matchesAnyShortcut: () => false },
+}));
+
 import { isMcpToolEvent, parseMcpToolName } from './session-inspector-utils.js';
 
 describe('parseMcpToolName', () => {

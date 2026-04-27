@@ -1,5 +1,6 @@
-import { contextBridge, ipcRenderer } from 'electron';
-import type { CostData, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, ToolFailureData, SettingsWarningData, SettingsValidationResult, StatusLineConflictData, InspectorEvent, ProviderConfig } from '../shared/types';
+import { contextBridge, ipcRenderer, webFrame } from 'electron';
+import type { CostData, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, ToolFailureData, SettingsWarningData, SettingsValidationResult, StatusLineConflictData, InspectorEvent, ProviderConfig, ReadFileResult } from '../shared/types';
+import { ZOOM_MIN, ZOOM_MAX } from '../shared/types';
 
 export type { CostData } from '../shared/types';
 
@@ -28,9 +29,12 @@ export interface VibeyardApi {
     isDirectory(path: string): Promise<boolean>;
     expandPath(path: string): Promise<string>;
     listDirs(dirPath: string, prefix?: string): Promise<string[]>;
+    listDir(dirPath: string): Promise<Array<{ name: string; path: string; isDirectory: boolean }>>;
     browseDirectory(): Promise<string | null>;
     listFiles(cwd: string, query: string): Promise<string[]>;
-    readFile(filePath: string): Promise<string>;
+    exists(filePath: string): Promise<boolean>;
+    readFile(filePath: string): Promise<ReadFileResult>;
+    readImage(filePath: string): Promise<{ dataUrl: string } | null>;
     watchFile(filePath: string): void;
     unwatchFile(filePath: string): void;
     onFileChanged(callback: (filePath: string) => void): () => void;
@@ -43,7 +47,7 @@ export interface VibeyardApi {
     getConfig(providerId: ProviderId, projectPath: string): Promise<ProviderConfig>;
     getMeta(providerId: ProviderId): Promise<CliProviderMeta>;
     listProviders(): Promise<CliProviderMeta[]>;
-    checkBinary(providerId?: ProviderId): Promise<{ ok: boolean; message: string }>;
+    checkBinary(providerId?: ProviderId): Promise<boolean>;
     watchProject(providerId: ProviderId, projectPath: string): void;
     onConfigChanged(callback: () => void): () => void;
   };
@@ -81,6 +85,8 @@ export interface VibeyardApi {
     openExternal(url: string): Promise<void>;
     getBrowserPreloadPath(): Promise<string>;
     onQuitting(callback: () => void): () => void;
+    onConfirmClose(callback: () => void): () => void;
+    closeConfirmed(): void;
   };
   browser: {
     saveScreenshot(sessionId: string, dataUrl: string): Promise<string>;
@@ -109,6 +115,12 @@ export interface VibeyardApi {
     respondConflictDialog(choice: 'replace' | 'keep'): void;
     reinstall(providerId?: ProviderId): Promise<{ success: boolean }>;
     validate(providerId?: ProviderId): Promise<SettingsValidationResult>;
+  };
+  clipboard: {
+    write(text: string): Promise<void>;
+  };
+  zoom: {
+    set(factor: number): void;
   };
   menu: {
     onNewProject(callback: () => void): () => void;
@@ -177,9 +189,12 @@ const api: VibeyardApi = {
     isDirectory: (path) => ipcRenderer.invoke('fs:isDirectory', path),
     expandPath: (path: string) => ipcRenderer.invoke('fs:expandPath', path),
     listDirs: (dirPath: string, prefix?: string) => ipcRenderer.invoke('fs:listDirs', dirPath, prefix),
+    listDir: (dirPath: string) => ipcRenderer.invoke('fs:listDir', dirPath),
     browseDirectory: () => ipcRenderer.invoke('fs:browseDirectory'),
     listFiles: (cwd: string, query: string) => ipcRenderer.invoke('fs:listFiles', cwd, query),
+    exists: (filePath: string) => ipcRenderer.invoke('fs:exists', filePath),
     readFile: (filePath: string) => ipcRenderer.invoke('fs:readFile', filePath),
+    readImage: (filePath: string) => ipcRenderer.invoke('fs:readImage', filePath),
     watchFile: (filePath: string) => ipcRenderer.send('fs:watchFile', filePath),
     unwatchFile: (filePath: string) => ipcRenderer.send('fs:unwatchFile', filePath),
     onFileChanged: (callback: (filePath: string) => void) => onChannel('fs:fileChanged', (filePath) => callback(filePath as string)),
@@ -229,6 +244,8 @@ const api: VibeyardApi = {
     openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', url),
     getBrowserPreloadPath: () => ipcRenderer.invoke('app:getBrowserPreloadPath'),
     onQuitting: (cb: () => void) => onChannel('app:quitting', cb),
+    onConfirmClose: (cb: () => void) => onChannel('app:confirmClose', cb),
+    closeConfirmed: () => { ipcRenderer.send('app:closeConfirmed'); },
   },
   browser: {
     saveScreenshot: (sessionId: string, dataUrl: string) =>
@@ -258,6 +275,14 @@ const api: VibeyardApi = {
     respondConflictDialog: (choice) => ipcRenderer.send('settings:conflictDialogResponse', choice),
     reinstall: (providerId) => ipcRenderer.invoke('settings:reinstall', providerId || 'claude'),
     validate: (providerId) => ipcRenderer.invoke('settings:validate', providerId || 'claude'),
+  },
+  clipboard: {
+    write: (text: string) => ipcRenderer.invoke('clipboard:write', text),
+  },
+  zoom: {
+    set: (factor: number) => {
+      webFrame.setZoomFactor(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, factor)));
+    },
   },
   menu: {
     onNewProject: (cb) => onChannel('menu:new-project', cb),

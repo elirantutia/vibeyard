@@ -30,7 +30,7 @@ function extractCommand(cmd: string): string {
   return parts[0] || '';
 }
 
-const NOT_FOUND_RE = /command not found|:\s*not found(?!\s*\(HTTP\b)|status code 127|exit code 127/i;
+const NOT_FOUND_RE = /command not found|(?:bash|sh|zsh):\s*\S+:\s*not found|is not recognized as |status code 127|exit code 127/i;
 const PERMISSION_DENIED_RE = /permission denied|status code 126|exit code 126/i;
 
 export function classifyError(error: string, tool: ToolInfo): FailureReason {

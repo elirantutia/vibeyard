@@ -4,6 +4,7 @@ import { isWin } from '../platform';
 
 vi.mock('fs', () => ({
   existsSync: vi.fn(),
+  statSync: vi.fn(() => { throw new Error('ENOENT'); }),
 }));
 
 vi.mock('os', () => ({
@@ -34,12 +35,15 @@ import { execSync } from 'child_process';
 import { ClaudeProvider, _resetCachedPath } from './claude-provider';
 
 const mockExistsSync = vi.mocked(fs.existsSync);
+const mockStatSync = vi.mocked(fs.statSync);
 const mockExecSync = vi.mocked(execSync);
+const fileStat = { isFile: () => true } as fs.Stats;
 
 let provider: ClaudeProvider;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockStatSync.mockImplementation(() => { throw new Error('ENOENT'); });
   _resetCachedPath();
   provider = new ClaudeProvider();
 });
@@ -73,27 +77,31 @@ describe('resolveBinaryPath', () => {
     ? path.join('/mock/home', 'AppData', 'Roaming', 'npm', 'claude.cmd')
     : '/usr/local/bin/claude';
 
-  it('returns candidate path when existsSync returns true', () => {
-    mockExistsSync.mockImplementation((p) => p === firstCandidate);
+  it('returns candidate path when statSync finds a file', () => {
+    mockStatSync.mockImplementation((p) => {
+      if (p === firstCandidate) return fileStat;
+      throw new Error('ENOENT');
+    });
     expect(provider.resolveBinaryPath()).toBe(firstCandidate);
   });
 
   it(`falls back to ${isWin ? 'where' : 'which'} claude when no candidate exists`, () => {
-    mockExistsSync.mockReturnValue(false);
     mockExecSync.mockReturnValue('/some/other/path/claude\n' as any);
     expect(provider.resolveBinaryPath()).toBe('/some/other/path/claude');
   });
 
   it('falls back to bare "claude" when both candidate and which fail', () => {
-    mockExistsSync.mockReturnValue(false);
     mockExecSync.mockImplementation(() => { throw new Error('not found'); });
     expect(provider.resolveBinaryPath()).toBe('claude');
   });
 
   it('caches result on subsequent calls', () => {
-    mockExistsSync.mockImplementation((p) => p === firstCandidate);
+    mockStatSync.mockImplementation((p) => {
+      if (p === firstCandidate) return fileStat;
+      throw new Error('ENOENT');
+    });
     provider.resolveBinaryPath();
-    mockExistsSync.mockReturnValue(false); // change behavior
+    mockStatSync.mockImplementation(() => { throw new Error('ENOENT'); }); // change behavior
     // Should still return cached value
     expect(provider.resolveBinaryPath()).toBe(firstCandidate);
   });
@@ -104,23 +112,24 @@ describe('validatePrerequisites', () => {
     ? path.join('/mock/home', 'AppData', 'Roaming', 'npm', 'claude.cmd')
     : '/opt/homebrew/bin/claude';
 
-  it('returns ok when binary found via existsSync', () => {
-    mockExistsSync.mockImplementation((p) => p === validateCandidate);
-    expect(provider.validatePrerequisites()).toEqual({ ok: true, message: '' });
+  it('returns ok when binary found via statSync', () => {
+    mockStatSync.mockImplementation((p) => {
+      if (p === validateCandidate) return fileStat;
+      throw new Error('ENOENT');
+    });
+    expect(provider.validatePrerequisites()).toBe(true);
   });
 
   it('returns ok when binary found via which', () => {
     mockExistsSync.mockReturnValue(false);
     mockExecSync.mockReturnValue('/resolved/claude\n' as any);
-    expect(provider.validatePrerequisites()).toEqual({ ok: true, message: '' });
+    expect(provider.validatePrerequisites()).toBe(true);
   });
 
   it('returns not ok when binary not found anywhere', () => {
     mockExistsSync.mockReturnValue(false);
     mockExecSync.mockImplementation(() => { throw new Error('not found'); });
-    const result = provider.validatePrerequisites();
-    expect(result.ok).toBe(false);
-    expect(result.message).toContain('Claude Code CLI not found');
+    expect(provider.validatePrerequisites()).toBe(false);
   });
 });
 

@@ -41,8 +41,20 @@ describe('classifyError', () => {
     expect(classifyError('Command exited with non-zero status code 127', baseTool)).toBe('not-found');
   });
 
-  it('classifies "/usr/bin/thing: not found" as not-found', () => {
-    expect(classifyError('/usr/bin/thing: not found', baseTool)).toBe('not-found');
+  it('classifies "sh: /usr/bin/thing: not found" as not-found', () => {
+    expect(classifyError('sh: /usr/bin/thing: not found', baseTool)).toBe('not-found');
+  });
+
+  it('does not classify "repository: not found" as not-found', () => {
+    expect(classifyError('repository: not found', baseTool)).toBe('other');
+  });
+
+  it('classifies Windows cmd.exe "not recognized" as not-found', () => {
+    expect(classifyError("'gh' is not recognized as an internal or external command", baseTool)).toBe('not-found');
+  });
+
+  it('classifies Windows PowerShell "not recognized" as not-found', () => {
+    expect(classifyError("The term 'gh' is not recognized as the name of a cmdlet", baseTool)).toBe('not-found');
   });
 
   it('classifies "Permission denied" as permission-denied', () => {

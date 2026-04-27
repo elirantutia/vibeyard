@@ -13,6 +13,14 @@ function escapeHtml(s: string): string {
   return d.innerHTML;
 }
 
+function parseQuery(raw: string): { fileQuery: string; lineNumber?: number } {
+  const m = /^(.*):(\d+)$/.exec(raw);
+  if (m && m[1].length > 0) {
+    return { fileQuery: m[1], lineNumber: parseInt(m[2], 10) };
+  }
+  return { fileQuery: raw };
+}
+
 function createOverlay(): void {
   if (overlay) return;
 
@@ -50,9 +58,9 @@ async function searchFiles(): Promise<void> {
   const project = appState.activeProject;
   if (!project || !input) return;
 
-  const query = input.value;
+  const { fileQuery } = parseQuery(input.value);
   try {
-    results = await window.vibeyard.fs.listFiles(project.path, query);
+    results = await window.vibeyard.fs.listFiles(project.path, fileQuery);
   } catch {
     results = [];
   }
@@ -142,7 +150,8 @@ function selectFile(): void {
   const project = appState.activeProject;
   if (!project) return;
 
-  appState.addFileReaderSession(project.id, filePath);
+  const { lineNumber } = parseQuery(input?.value ?? '');
+  appState.addFileReaderSession(project.id, filePath, lineNumber);
   hideQuickOpen();
 }
 

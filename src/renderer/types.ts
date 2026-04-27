@@ -25,7 +25,9 @@ export interface VibeyardApi {
     listDirs(dirPath: string, prefix?: string): Promise<string[]>;
     browseDirectory(): Promise<string | null>;
     listFiles(cwd: string, query: string): Promise<string[]>;
+    exists(filePath: string): Promise<boolean>;
     readFile(filePath: string): Promise<string>;
+    readImage(filePath: string): Promise<{ dataUrl: string } | null>;
     watchFile(filePath: string): void;
     unwatchFile(filePath: string): void;
     onFileChanged(callback: (filePath: string) => void): () => void;
@@ -82,6 +84,9 @@ export interface VibeyardApi {
   };
   stats: {
     getCache(): Promise<StatsCache | null>;
+  };
+  clipboard: {
+    write(text: string): Promise<void>;
   };
   menu: {
     onNewProject(callback: () => void): () => void;
