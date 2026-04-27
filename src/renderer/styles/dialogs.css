@@ -125,6 +125,15 @@
   text-overflow: ellipsis;
 }
 
+.session-palette-item-snippet .search-match {
+  background: var(--bookmark);
+  color: #1a1a1a;
+  font-weight: 700;
+  font-style: normal;
+  padding: 0 3px;
+  border-radius: 2px;
+}
+
 .session-palette-footer {
   display: flex;
   gap: 16px;
