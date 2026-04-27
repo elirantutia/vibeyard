@@ -32,6 +32,7 @@ let resultsList: HTMLElement | null = null;
 let activeIndex = 0;
 let resolvedResults: ResolvedResult[] = [];
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+let latestSearchToken = 0;
 
 function buildSessionMap(): Map<string, { projectId: string; archivedId: string; name: string }> {
   const map = new Map<string, { projectId: string; archivedId: string; name: string }>();
@@ -103,6 +104,7 @@ function onInput(): void {
 async function searchSessions(): Promise<void> {
   if (!input || !resultsList) return;
   const query = input.value.trim();
+  const myToken = ++latestSearchToken;
   if (query.length < 2) {
     resolvedResults = [];
     renderResults();
@@ -121,6 +123,8 @@ async function searchSessions(): Promise<void> {
   } catch {
     raw = [];
   }
+
+  if (myToken !== latestSearchToken) return;
 
   const sessionMap = buildSessionMap();
   resolvedResults = raw.map(r => {
@@ -232,6 +236,7 @@ export function showSessionSearchPalette(): void {
   input.value = '';
   resolvedResults = [];
   activeIndex = 0;
+  latestSearchToken++;
   renderResults();
   input.focus();
 }
@@ -239,4 +244,5 @@ export function showSessionSearchPalette(): void {
 function hidePalette(): void {
   if (overlay) overlay.style.display = 'none';
   if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
+  latestSearchToken++;
 }
