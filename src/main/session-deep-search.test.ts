@@ -212,6 +212,25 @@ describe('searchSessions()', () => {
     expect(results).toHaveLength(0);
   });
 
+  it('gibberish query returns no results even when chars appear as subsequence', async () => {
+    // "asdcv" chars all appear in long English text as a subsequence — should NOT match
+    const jsonl = makeJsonl([
+      { cwd: '/repo' },
+      { type: 'user', message: { content: 'please add some documentation and cover all cases very well' } },
+    ]);
+
+    mockReaddir
+      .mockResolvedValueOnce(['repo'] as unknown as Awaited<ReturnType<typeof mockReaddir>>)
+      .mockResolvedValueOnce([`${FAKE_UUID}.jsonl`] as unknown as Awaited<ReturnType<typeof mockReaddir>>);
+    mockStat
+      .mockResolvedValueOnce(makeStat({ isDirectory: true }))
+      .mockResolvedValueOnce(makeStat({ mtime: 1 }));
+    mockReadFile.mockResolvedValueOnce(jsonl as unknown as Buffer);
+
+    const results = await searchSessions('asdcv');
+    expect(results).toHaveLength(0);
+  });
+
   it('returns zero score and excludes session when query has no match', async () => {
     const jsonl = makeJsonl([
       { cwd: '/repo' },

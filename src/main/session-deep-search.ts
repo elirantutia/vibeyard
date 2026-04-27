@@ -80,18 +80,10 @@ function scoreFuzzy(text: string, query: string): number {
   if (t.includes(q)) return 100;
 
   const words = q.split(/\s+/).filter(Boolean);
-  if (words.length > 1) {
-    const matched = words.filter(w => t.includes(w));
-    if (matched.length === words.length) return 80;
-    if (matched.length > 0) return Math.round((matched.length / words.length) * 50);
-  }
-
-  // char subsequence fallback
-  let qi = 0;
-  for (let ti = 0; ti < t.length && qi < q.length; ti++) {
-    if (t[ti] === q[qi]) qi++;
-  }
-  return qi === q.length ? 10 : 0;
+  const matched = words.filter(w => t.includes(w));
+  if (matched.length === words.length) return 80;
+  if (matched.length > 0) return Math.round((matched.length / words.length) * 50);
+  return 0;
 }
 
 function extractSnippet(text: string, query: string): string {
