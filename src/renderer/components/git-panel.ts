@@ -67,9 +67,7 @@ function showGitFileContextMenu(x: number, y: number, entry: GitFileEntry, gitPa
 
   if (entry.area !== 'staged' && entry.area !== 'conflicted') {
     menu.appendChild(createMenuItem('Discard Changes', async () => {
-      const msg = entry.area === 'untracked'
-        ? `Delete untracked file "${entry.path}"?`
-        : `Discard changes to "${entry.path}"? This cannot be undone.`;
+      const msg = discardConfirmMessage(entry);
       if (confirm(msg)) {
         await window.vibeyard.git.discardFile(gitPath, entry.path, entry.area);
         afterAction();
@@ -101,6 +99,14 @@ function esc(s: string): string {
   const d = document.createElement('div');
   d.textContent = s;
   return d.innerHTML;
+}
+
+function discardConfirmMessage(entry: GitFileEntry): string {
+  if (entry.area !== 'untracked') {
+    return `Discard changes to "${entry.path}"? This cannot be undone.`;
+  }
+  const kind = entry.path.endsWith('/') ? 'folder' : 'file';
+  return `Delete untracked ${kind} "${entry.path}"?`;
 }
 
 function statusBadge(entry: GitFileEntry): string {
@@ -344,9 +350,7 @@ async function loadFiles(body: HTMLElement, gitPath: string): Promise<void> {
       } else {
         if (entry.area !== 'conflicted') {
           actions.appendChild(createActionButton('Discard Changes', '↩', async () => {
-            const msg = entry.area === 'untracked'
-              ? `Delete untracked file "${entry.path}"?`
-              : `Discard changes to "${entry.path}"? This cannot be undone.`;
+            const msg = discardConfirmMessage(entry);
             if (confirm(msg)) {
               await window.vibeyard.git.discardFile(gitPath, entry.path, entry.area);
               afterAction();

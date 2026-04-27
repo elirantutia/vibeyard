@@ -242,7 +242,7 @@ export function gitUnstageFile(cwd: string, filePath: string): Promise<void> {
 export function gitDiscardFile(cwd: string, filePath: string, area: GitFileEntry['area']): Promise<void> {
   if (area === 'untracked') {
     const fullPath = path.join(cwd, filePath);
-    return fs.promises.unlink(fullPath);
+    return fs.promises.rm(fullPath, { recursive: true, force: true });
   }
   return execGit(cwd, ['checkout', '--', filePath]);
 }

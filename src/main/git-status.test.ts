@@ -8,14 +8,18 @@ vi.mock('child_process', () => ({
 
 vi.mock('fs', () => ({
   readFileSync: vi.fn(),
+  promises: {
+    rm: vi.fn(),
+  },
 }));
 
 import { execFile } from 'child_process';
-import { readFileSync } from 'fs';
-import { getGitStatus, getGitFiles, getGitDiff, getGitWorktrees } from './git-status';
+import { readFileSync, promises as fsPromises } from 'fs';
+import { getGitStatus, getGitFiles, getGitDiff, getGitWorktrees, gitDiscardFile } from './git-status';
 
 const mockExecFile = vi.mocked(execFile);
 const mockReadFileSync = vi.mocked(readFileSync);
+const mockRm = vi.mocked(fsPromises.rm);
 
 function simulateExecFile(err: ExecFileException | null, stdout: string) {
   mockExecFile.mockImplementationOnce((_cmd, _args, _opts, callback) => {
@@ -210,6 +214,33 @@ describe('getGitDiff', () => {
     });
     const diff = await getGitDiff('/test', 'file.ts', 'working');
     expect(diff).toBe('(no diff available)');
+  });
+});
+
+describe('gitDiscardFile', () => {
+  it('removes an untracked file via fs.rm with recursive+force', async () => {
+    mockRm.mockResolvedValueOnce(undefined);
+    await gitDiscardFile('/repo', 'new.ts', 'untracked');
+    expect(mockRm).toHaveBeenCalledWith('/repo/new.ts', { recursive: true, force: true });
+    expect(mockExecFile).not.toHaveBeenCalled();
+  });
+
+  it('removes an untracked folder (path with trailing slash)', async () => {
+    mockRm.mockResolvedValueOnce(undefined);
+    await gitDiscardFile('/repo', 'e2e/', 'untracked');
+    expect(mockRm).toHaveBeenCalledWith('/repo/e2e/', { recursive: true, force: true });
+  });
+
+  it('runs git checkout for working-tree changes', async () => {
+    simulateExecFile(null, '');
+    await gitDiscardFile('/repo', 'file.ts', 'working');
+    expect(mockExecFile).toHaveBeenCalledWith(
+      'git',
+      ['checkout', '--', 'file.ts'],
+      expect.any(Object),
+      expect.any(Function),
+    );
+    expect(mockRm).not.toHaveBeenCalled();
   });
 });
 
