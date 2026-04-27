@@ -1,10 +1,29 @@
 import { appState } from '../state.js';
+import { escapeHtml, escapeRegExp } from './dom-search-backend.js';
 import type { DeepSearchResult } from '../../shared/types.js';
 
 interface ResolvedResult extends DeepSearchResult {
   sessionName: string | null;
   projectId: string | null;
   archivedId: string | null;
+}
+
+export function highlightMatches(text: string, query: string): string {
+  const q = query.trim();
+  if (!q) return escapeHtml(text);
+  const tokens = Array.from(new Set([q, ...q.split(/\s+/)])).filter(Boolean);
+  tokens.sort((a, b) => b.length - a.length);
+  const re = new RegExp(tokens.map(escapeRegExp).join('|'), 'gi');
+  let html = '';
+  let pos = 0;
+  for (const m of text.matchAll(re)) {
+    const start = m.index!;
+    html += escapeHtml(text.slice(pos, start));
+    html += `<mark class="search-match">${escapeHtml(m[0])}</mark>`;
+    pos = start + m[0].length;
+  }
+  html += escapeHtml(text.slice(pos));
+  return html;
 }
 
 let overlay: HTMLElement | null = null;
@@ -127,6 +146,7 @@ function renderResults(): void {
   }
 
   const activeProjectId = appState.activeProject?.id;
+  const query = input?.value.trim() ?? '';
   for (let i = 0; i < resolvedResults.length; i++) {
     const r = resolvedResults[i];
     const isCurrentProject = r.projectId === activeProjectId;
@@ -156,7 +176,7 @@ function renderResults(): void {
 
     const snippet = document.createElement('div');
     snippet.className = 'session-palette-item-snippet';
-    snippet.textContent = r.snippet;
+    snippet.innerHTML = highlightMatches(r.snippet, query);
 
     item.appendChild(nameRow);
     item.appendChild(meta);
