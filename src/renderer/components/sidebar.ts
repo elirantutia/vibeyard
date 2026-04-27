@@ -75,7 +75,7 @@ export function initSidebar(): void {
   appState.on('project-changed', render);
   appState.on('session-added', render);
   appState.on('session-removed', render);
-  appState.on('layout-changed', updateSubItems);
+  appState.on('layout-changed', render);
 
 
   onCostChange(() => {
@@ -93,25 +93,6 @@ export function initSidebar(): void {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideProjectContextMenu(); });
 
   render();
-}
-
-function makeSubItem(label: string, isActive: boolean, onClick: () => void): HTMLDivElement {
-  const el = document.createElement('div');
-  el.className = 'project-sub-item' + (isActive ? ' active' : '');
-  el.textContent = label;
-  el.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
-  return el;
-}
-
-function updateSubItems(): void {
-  const subItems = projectListEl.querySelector('.project-sub-items');
-  if (!subItems) return;
-  const project = appState.activeProject;
-  if (!project) return;
-  const isBoardMode = project.layout.mode === 'board';
-  subItems.innerHTML = '';
-  subItems.appendChild(makeSubItem('Board', isBoardMode, () => { if (!isBoardMode) appState.toggleBoard(); }));
-  subItems.appendChild(makeSubItem('Sessions', !isBoardMode, () => { if (isBoardMode) appState.toggleBoard(); }));
 }
 
 function render(): void {
@@ -158,13 +139,6 @@ function render(): void {
     wrapper.appendChild(el);
 
     if (isActive) {
-      const isBoardMode = project.layout.mode === 'board';
-      const subItems = document.createElement('div');
-      subItems.className = 'project-sub-items';
-      subItems.appendChild(makeSubItem('Board', isBoardMode, () => { if (!isBoardMode) appState.toggleBoard(); }));
-      subItems.appendChild(makeSubItem('Sessions', !isBoardMode, () => { if (isBoardMode) appState.toggleBoard(); }));
-      wrapper.appendChild(subItems);
-
       const openPanel = projectPanelOpen.get(project.id) ?? null;
       const actions = buildProjectActions(project, openPanel, { fileTreeEnabled, historyEnabled });
       wrapper.appendChild(actions);
@@ -194,6 +168,13 @@ function buildProjectActions(
 ): HTMLElement {
   const actions = document.createElement('div');
   actions.className = 'project-actions';
+
+  const kanbanBtn = makeActionButton('Kanban', project.layout.mode === 'board');
+  kanbanBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    appState.toggleBoard();
+  });
+  actions.appendChild(kanbanBtn);
 
   if (opts.historyEnabled) {
     const historyBtn = makeActionButton('Sessions', openPanel === 'history');

@@ -185,33 +185,6 @@
   font-size: 0.85em;
 }
 
-.project-sub-items {
-  display: flex;
-  flex-direction: column;
-  padding-left: 16px;
-}
-
-.project-sub-item {
-  padding: 4px 8px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.project-sub-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.project-sub-item.active {
-  color: var(--accent);
-  background: var(--bg-hover);
-}
-
 .project-item .project-delete {
   opacity: 0;
   cursor: pointer;

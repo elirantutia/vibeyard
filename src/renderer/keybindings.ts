@@ -52,7 +52,6 @@ export function initKeybindings(): void {
   shortcutManager.registerHandler('tab-forward', () => appState.navigateForward());
   shortcutManager.registerHandler('toggle-sidebar', toggleSidebar);
   shortcutManager.registerHandler('toggle-split', () => appState.toggleSwarm());
-  shortcutManager.registerHandler('toggle-board', () => appState.toggleBoard());
   shortcutManager.registerHandler('project-terminal', toggleProjectTerminal);
   shortcutManager.registerHandler('project-terminal-alt', toggleProjectTerminal);
   shortcutManager.registerHandler('debug-panel', toggleDebugPanel);
