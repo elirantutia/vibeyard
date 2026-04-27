@@ -1,4 +1,5 @@
 import { appState } from '../state.js';
+import { getProviderDisplayName } from '../provider-availability.js';
 import { escapeHtml, escapeRegExp } from './dom-search-backend.js';
 import type { DeepSearchResult } from '../../shared/types.js';
 
@@ -168,6 +169,11 @@ function renderResults(): void {
     nameText.textContent = r.sessionName ?? r.cliSessionId.slice(0, 8) + '\u2026';
     nameRow.appendChild(nameText);
 
+    const providerBadge = document.createElement('span');
+    providerBadge.className = `session-palette-badge provider provider-${r.providerId}`;
+    providerBadge.textContent = getProviderDisplayName(r.providerId);
+    nameRow.appendChild(providerBadge);
+
     const badge = document.createElement('span');
     badge.className = `session-palette-badge${isCurrentProject ? ' current' : ''}`;
     const projectName = r.projectCwd ? r.projectCwd.split('/').filter(Boolean).pop() ?? r.projectSlug : r.projectSlug;
@@ -208,7 +214,7 @@ function openResult(r: ResolvedResult): void {
       project = appState.addProject(name, r.projectCwd);
     }
     const name = r.sessionName ?? r.cliSessionId.slice(0, 8) + '\u2026';
-    appState.openCliSession(project.id, r.cliSessionId, name);
+    appState.openCliSession(project.id, r.cliSessionId, name, r.providerId);
   }
   hidePalette();
 }

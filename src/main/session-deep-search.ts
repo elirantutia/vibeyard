@@ -1,14 +1,13 @@
 import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
 import type { DeepSearchResult } from '../shared/types';
+import type { CliProvider, TranscriptDescriptor } from './providers/provider';
+import { getAllProviders } from './providers/registry';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const MAX_CHARS_PER_SESSION = 50 * 1024;
 const MAX_CACHE_ENTRIES = 500;
 
 interface CacheEntry {
   text: string;
+  textLower: string;
   cwd: string;
   mtime: number;
 }
@@ -19,80 +18,50 @@ export function _resetForTesting(): void {
   textCache.clear();
 }
 
-async function extractSessionText(jsonlPath: string): Promise<{ text: string; cwd: string }> {
-  const content = await fs.promises.readFile(jsonlPath, 'utf8');
-  const texts: string[] = [];
-  let cwd = '';
-  let totalChars = 0;
-
-  for (const line of content.split('\n')) {
-    if (!line.trim() || totalChars >= MAX_CHARS_PER_SESSION) continue;
-    try {
-      const entry = JSON.parse(line);
-      if (!cwd && entry.cwd) cwd = entry.cwd;
-      if (entry.type !== 'user' || !entry.message?.content) continue;
-      const c = entry.message.content;
-      let text = '';
-      if (typeof c === 'string') {
-        text = c;
-      } else if (Array.isArray(c)) {
-        for (const block of c) {
-          if (block.type === 'text') text += block.text + '\n';
-        }
-      }
-      if (text) {
-        texts.push(text.trim());
-        totalChars += text.length;
-      }
-    } catch {
-      // JSONL entries can be partially written on crash; skip gracefully
-    }
-  }
-
-  return { text: texts.join('\n---\n'), cwd };
-}
-
-async function getCachedEntry(jsonlPath: string): Promise<CacheEntry> {
+async function getCachedIndex(provider: CliProvider, transcriptPath: string): Promise<CacheEntry> {
   try {
-    const stat = await fs.promises.stat(jsonlPath);
+    const stat = await fs.promises.stat(transcriptPath);
     const mtime = stat.mtimeMs;
-    const cached = textCache.get(jsonlPath);
-    if (cached && cached.mtime === mtime) return cached;
+    const cached = textCache.get(transcriptPath);
+    if (cached && cached.mtime === mtime) {
+      // Move-to-end for true LRU semantics on cache hits.
+      textCache.delete(transcriptPath);
+      textCache.set(transcriptPath, cached);
+      return cached;
+    }
 
     if (textCache.size >= MAX_CACHE_ENTRIES) {
       const oldest = textCache.keys().next().value;
       if (oldest) textCache.delete(oldest);
     }
 
-    const { text, cwd } = await extractSessionText(jsonlPath);
-    const entry: CacheEntry = { text, cwd, mtime };
-    textCache.set(jsonlPath, entry);
+    const { text, cwd } = await provider.indexTranscript!(transcriptPath);
+    const entry: CacheEntry = { text, textLower: text.toLowerCase(), cwd, mtime };
+    textCache.set(transcriptPath, entry);
     return entry;
   } catch {
-    return { text: '', cwd: '', mtime: 0 };
+    return { text: '', textLower: '', cwd: '', mtime: 0 };
   }
 }
 
-function scoreFuzzy(text: string, query: string): number {
-  const t = text.toLowerCase();
+function scoreFuzzy(textLower: string, query: string): number {
   const q = query.toLowerCase().trim();
   if (!q) return 0;
-  if (t.includes(q)) return 100;
+  if (textLower.includes(q)) return 100;
 
   const words = q.split(/\s+/).filter(Boolean);
-  const matched = words.filter(w => t.includes(w));
+  const matched = words.filter(w => textLower.includes(w));
   if (matched.length === words.length) return 80;
   if (matched.length > 0) return Math.round((matched.length / words.length) * 50);
   return 0;
 }
 
-function extractSnippet(text: string, query: string): string {
+function extractSnippet(text: string, textLower: string, query: string): string {
   const q = query.toLowerCase().trim();
-  const t = text.toLowerCase();
-  let idx = t.indexOf(q);
+  let idx = textLower.indexOf(q);
   if (idx === -1) {
     const firstWord = q.split(/\s+/)[0];
-    idx = firstWord ? t.indexOf(firstWord) : -1;
+    idx = firstWord ? textLower.indexOf(firstWord) : -1;
   }
   if (idx === -1) idx = 0;
 
@@ -100,59 +69,43 @@ function extractSnippet(text: string, query: string): string {
   const start = Math.max(0, idx - RADIUS);
   const end = Math.min(text.length, idx + q.length + RADIUS);
   let snippet = text.slice(start, end).replace(/\n+/g, ' ').trim();
-  if (start > 0) snippet = '\u2026' + snippet;
-  if (end < text.length) snippet = snippet + '\u2026';
+  if (start > 0) snippet = '…' + snippet;
+  if (end < text.length) snippet = snippet + '…';
   return snippet;
 }
 
-export async function searchSessions(query: string): Promise<DeepSearchResult[]> {
-  const claudeProjectsDir = path.join(os.homedir(), '.claude', 'projects');
-
-  let slugDirs: string[];
+async function searchOneProvider(provider: CliProvider, query: string): Promise<DeepSearchResult[]> {
+  if (!provider.discoverTranscripts || !provider.indexTranscript) return [];
+  let descriptors: TranscriptDescriptor[];
   try {
-    slugDirs = await fs.promises.readdir(claudeProjectsDir);
+    descriptors = await provider.discoverTranscripts();
   } catch {
     return [];
   }
-
-  const results: DeepSearchResult[] = [];
-
-  for (const slug of slugDirs) {
-    const slugPath = path.join(claudeProjectsDir, slug);
-    try {
-      if (!(await fs.promises.stat(slugPath)).isDirectory()) continue;
-    } catch {
-      continue;
-    }
-
-    let files: string[];
-    try {
-      files = await fs.promises.readdir(slugPath);
-    } catch {
-      continue;
-    }
-
-    for (const file of files) {
-      if (!file.endsWith('.jsonl')) continue;
-      const cliSessionId = file.slice(0, -6);
-      if (!UUID_RE.test(cliSessionId)) continue;
-
-      const entry = await getCachedEntry(path.join(slugPath, file));
-      if (!entry.text) continue;
-
-      const score = scoreFuzzy(entry.text, query);
-      if (score === 0) continue;
-
-      results.push({
-        cliSessionId,
-        projectSlug: slug,
-        projectCwd: entry.cwd,
-        snippet: extractSnippet(entry.text, query),
-        score,
-      });
-    }
+  const indexed = await Promise.all(descriptors.map(async (desc) => {
+    const entry = await getCachedIndex(provider, desc.transcriptPath);
+    return { desc, entry };
+  }));
+  const out: DeepSearchResult[] = [];
+  for (const { desc, entry } of indexed) {
+    if (!entry.textLower) continue;
+    const score = scoreFuzzy(entry.textLower, query);
+    if (score === 0) continue;
+    out.push({
+      providerId: provider.meta.id,
+      cliSessionId: desc.cliSessionId,
+      projectSlug: desc.projectSlug ?? '',
+      projectCwd: desc.projectCwd || entry.cwd,
+      snippet: extractSnippet(entry.text, entry.textLower, query),
+      score,
+    });
   }
+  return out;
+}
 
+export async function searchSessions(query: string): Promise<DeepSearchResult[]> {
+  const all = await Promise.all(getAllProviders().map((p) => searchOneProvider(p, query)));
+  const results = all.flat();
   results.sort((a, b) => b.score - a.score);
   return results.slice(0, 20);
 }

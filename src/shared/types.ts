@@ -129,6 +129,7 @@ export interface InitialContextSnapshot {
 }
 
 export interface DeepSearchResult {
+  providerId: ProviderId;
   cliSessionId: string;
   projectSlug: string;
   projectCwd: string;

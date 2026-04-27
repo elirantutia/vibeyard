@@ -1,14 +1,17 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import type { CliProvider } from './provider';
+import type { CliProvider, TranscriptDescriptor } from './provider';
 import type { CliProviderMeta, ProviderConfig, SettingsValidationResult } from '../../shared/types';
 import { getFullPath } from '../pty-manager';
 import { resolveBinary, validateBinaryExists } from './resolve-binary';
 import { getCodexConfig } from '../codex-config';
 import { installCodexHooks, validateCodexHooks, cleanupCodexHooks, SESSION_ID_VAR } from '../codex-hooks';
 import { startConfigWatcher as startConfigWatch, stopConfigWatcher as stopConfigWatch } from '../config-watcher';
+import { MAX_INDEX_CHARS_PER_SESSION, TRANSCRIPT_TEXT_SEPARATOR } from './transcript-utils';
 import type { BrowserWindow } from 'electron';
+
+const CODEX_FILE_RE = /-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i;
 
 const binaryCache = { path: null as string | null };
 
@@ -114,6 +117,60 @@ export class CodexProvider implements CliProvider {
     } catch {
       return null;
     }
+  }
+
+  async discoverTranscripts(): Promise<TranscriptDescriptor[]> {
+    const root = path.join(os.homedir(), '.codex', 'sessions');
+    const out: TranscriptDescriptor[] = [];
+    const walk = async (dir: string, depth: number): Promise<void> => {
+      let entries: fs.Dirent[];
+      try {
+        entries = await fs.promises.readdir(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      if (depth === 3) {
+        for (const entry of entries) {
+          const m = entry.name.match(CODEX_FILE_RE);
+          if (!m) continue;
+          out.push({ cliSessionId: m[1], transcriptPath: path.join(dir, entry.name) });
+        }
+        return;
+      }
+      for (const entry of entries) {
+        if (entry.isDirectory()) await walk(path.join(dir, entry.name), depth + 1);
+      }
+    };
+    await walk(root, 0);
+    return out;
+  }
+
+  async indexTranscript(transcriptPath: string): Promise<{ text: string; cwd: string }> {
+    const content = await fs.promises.readFile(transcriptPath, 'utf8');
+    const texts: string[] = [];
+    let cwd = '';
+    let totalChars = 0;
+    for (const line of content.split('\n')) {
+      if (!line.trim() || totalChars >= MAX_INDEX_CHARS_PER_SESSION) continue;
+      try {
+        const entry = JSON.parse(line);
+        if (!cwd && entry.type === 'session_meta' && entry.payload?.cwd) cwd = entry.payload.cwd;
+        if (entry.type !== 'response_item') continue;
+        const p = entry.payload;
+        if (!p || p.type !== 'message' || p.role !== 'user' || !Array.isArray(p.content)) continue;
+        let text = '';
+        for (const block of p.content) {
+          if (block && typeof block.text === 'string') text += block.text + '\n';
+        }
+        if (text) {
+          texts.push(text.trim());
+          totalChars += text.length;
+        }
+      } catch {
+        // partial-write tolerance
+      }
+    }
+    return { text: texts.join(TRANSCRIPT_TEXT_SEPARATOR), cwd };
   }
 }
 

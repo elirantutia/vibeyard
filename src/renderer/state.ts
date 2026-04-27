@@ -524,15 +524,15 @@ class AppState {
     return session;
   }
 
-  /** Open a Claude session by cliSessionId, bypassing Vibeyard history. Used for cross-project deep search results. */
-  openCliSession(projectId: string, cliSessionId: string, name: string): SessionRecord | undefined {
+  /** Open a CLI session by cliSessionId, bypassing Vibeyard history. Used for cross-project deep search results. */
+  openCliSession(projectId: string, cliSessionId: string, name: string, providerId: ProviderId = 'claude'): SessionRecord | undefined {
     const project = this.state.projects.find((p) => p.id === projectId);
     if (!project) return undefined;
 
     const existing = project.sessions.find((s) => s.cliSessionId === cliSessionId);
     if (existing) return this.activateExistingSession(project, existing);
 
-    const session = buildResumedSessionFromCliId(cliSessionId, name);
+    const session = buildResumedSessionFromCliId(cliSessionId, name, providerId);
     attachSessionToProject(project, session, { addToSwarm: true });
     this.commitNewSession(projectId, session);
     return session;

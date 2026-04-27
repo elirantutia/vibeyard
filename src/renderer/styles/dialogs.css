@@ -108,6 +108,14 @@
   border-color: rgba(52, 168, 83, 0.3);
 }
 
+.session-palette-badge.provider {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-color: var(--border);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
 .session-palette-item-meta {
   font-size: 11px;
   color: var(--text-muted);
