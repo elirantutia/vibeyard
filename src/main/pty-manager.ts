@@ -1,5 +1,5 @@
 import * as pty from 'node-pty';
-import { execSync, execFile } from 'child_process';
+import { execSync, execFile, execFileSync } from 'child_process';
 import * as os from 'os';
 import * as path from 'path';
 import type { ProviderId } from '../shared/types';
@@ -156,6 +156,60 @@ export function resolveWindowsShell(
   return { shell: 'cmd.exe', args: ['/c', shell, ...args] };
 }
 
+const wslShellCache = new Map<string, string>();
+
+/** @internal Test-only: clear WSL shell cache between tests. */
+export function resetWslShellCache(): void {
+  wslShellCache.clear();
+}
+
+/**
+ * Returns the default interactive shell for a WSL distro (e.g. 'zsh', 'bash').
+ * Result is cached per distro so the lookup only happens once per process lifetime.
+ */
+export function getWslDefaultShell(distro: string): string {
+  if (wslShellCache.has(distro)) return wslShellCache.get(distro)!;
+  try {
+    const result = execFileSync('wsl.exe', ['-d', distro, '--', 'sh', '-c', 'echo $SHELL'], {
+      encoding: 'utf-8',
+      timeout: 2000,
+      windowsHide: true,
+    }).trim();
+    const name = path.posix.basename(result);
+    if (name) {
+      wslShellCache.set(distro, name);
+      return name;
+    }
+  } catch {}
+  wslShellCache.set(distro, 'bash');
+  return 'bash';
+}
+
+/**
+ * Returns true if the path is a WSL UNC path (\\WSL$\... or //WSL$/...).
+ * CMD.EXE cannot use UNC paths as working directory, so WSL paths must be
+ * spawned via wsl.exe instead.
+ */
+export function isWslPath(p: string): boolean {
+  return /^[/\\]{2}WSL\$[/\\]/i.test(p);
+}
+
+interface WslPathInfo {
+  distro: string;
+  linuxPath: string;
+}
+
+/**
+ * Parses a WSL UNC path into its distro name and Linux-side path.
+ * e.g. "//WSL$/Ubuntu-24.04/home/user/project" → { distro: "Ubuntu-24.04", linuxPath: "/home/user/project" }
+ */
+export function parseWslPath(p: string): WslPathInfo | null {
+  const normalized = p.replace(/\\/g, '/');
+  const m = normalized.match(/^\/\/WSL\$\/([^/]+)(\/.*)?$/i);
+  if (!m) return null;
+  return { distro: m[1], linuxPath: m[2] || '/' };
+}
+
 export async function spawnPty(
   sessionId: string,
   cwd: string,
@@ -190,14 +244,45 @@ export async function spawnPty(
 
   const env = provider.buildEnv(sessionId, { ...process.env } as Record<string, string>);
   const args = provider.buildArgs({ cliSessionId, isResume, extraArgs, initialPrompt });
-  const resolvedShell = provider.resolveBinaryPath();
-  const { shell, args: spawnArgs } = resolveWindowsShell(resolvedShell, args);
+
+  let shell: string;
+  let spawnArgs: string[];
+  let spawnCwd: string;
+
+  // On Windows, CMD.EXE cannot use WSL UNC paths (\\WSL$\...) as working directory.
+  // Spawn wsl.exe directly instead, passing the distro and linux path via --cd.
+  if (isWin && isWslPath(cwd)) {
+    const wslInfo = parseWslPath(cwd);
+    if (wslInfo) {
+      // wsl.exe runs in a non-login, non-interactive shell by default, so PATH
+      // additions from .zshrc/.bashrc (nvm, npm global bins) are not loaded.
+      // Wrap the command in `<shell> -ic` so rc files are sourced and the CLI binary is found.
+      // Use the distro's default shell (zsh, bash, etc.) detected via $SHELL.
+      const wslShell = getWslDefaultShell(wslInfo.distro);
+      const claudeCmd = [provider.meta.binaryName, ...args]
+        .map(a => `'${a.replace(/'/g, "'\\''")}'`)
+        .join(' ');
+      shell = 'wsl.exe';
+      spawnArgs = ['-d', wslInfo.distro, '--cd', wslInfo.linuxPath, '--', wslShell, '-ic', claudeCmd];
+      spawnCwd = os.homedir(); // valid Windows path; WSL cwd is controlled by --cd above
+    } else {
+      const resolved = resolveWindowsShell(provider.resolveBinaryPath(), args);
+      shell = resolved.shell;
+      spawnArgs = resolved.args;
+      spawnCwd = cwd;
+    }
+  } else {
+    const resolved = resolveWindowsShell(provider.resolveBinaryPath(), args);
+    shell = resolved.shell;
+    spawnArgs = resolved.args;
+    spawnCwd = cwd;
+  }
 
   const ptyProcess = pty.spawn(shell, spawnArgs, {
     name: 'xterm-256color',
     cols: 120,
     rows: 30,
-    cwd,
+    cwd: spawnCwd,
     env,
   });
 
@@ -295,15 +380,38 @@ export function spawnShellPty(
     killPty(sessionId);
   }
 
-  const shell = isWin
-    ? (process.env.COMSPEC || 'cmd.exe')
-    : (process.env.SHELL || '/bin/zsh');
+  let spawnShell: string;
+  let spawnShellArgs: string[];
+  let spawnShellCwd: string;
+
+  if (isWin && isWslPath(cwd)) {
+    const wslInfo = parseWslPath(cwd);
+    if (wslInfo) {
+      const wslShell = getWslDefaultShell(wslInfo.distro);
+      spawnShell = 'wsl.exe';
+      spawnShellArgs = ['-d', wslInfo.distro, '--cd', wslInfo.linuxPath, '--', wslShell];
+      spawnShellCwd = os.homedir();
+    } else {
+      spawnShell = process.env.COMSPEC || 'cmd.exe';
+      spawnShellArgs = [];
+      spawnShellCwd = cwd;
+    }
+  } else if (isWin) {
+    spawnShell = process.env.COMSPEC || 'cmd.exe';
+    spawnShellArgs = [];
+    spawnShellCwd = cwd;
+  } else {
+    spawnShell = process.env.SHELL || '/bin/zsh';
+    spawnShellArgs = [];
+    spawnShellCwd = cwd;
+  }
+
   const shellEnv = { ...process.env, PATH: getFullPath() };
-  const ptyProcess = pty.spawn(shell, [], {
+  const ptyProcess = pty.spawn(spawnShell, spawnShellArgs, {
     name: 'xterm-256color',
     cols: 120,
     rows: 15,
-    cwd,
+    cwd: spawnShellCwd,
     env: shellEnv,
   });
 
