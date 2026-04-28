@@ -2,12 +2,13 @@ import { vi } from 'vitest';
 import * as path from 'path';
 import { isWin } from './platform';
 
-const { mockSpawn, mockWrite, mockResize, mockKill, mockExecFile, mockNvmDefaultNodeBinDir } = vi.hoisted(() => ({
+const { mockSpawn, mockWrite, mockResize, mockKill, mockExecFile, mockExecFileSync, mockNvmDefaultNodeBinDir } = vi.hoisted(() => ({
   mockSpawn: vi.fn(),
   mockWrite: vi.fn(),
   mockResize: vi.fn(),
   mockKill: vi.fn(),
   mockExecFile: vi.fn(),
+  mockExecFileSync: vi.fn(() => { throw new Error('not found'); }),
   mockNvmDefaultNodeBinDir: vi.fn(() => null as string | null),
 }));
 
@@ -19,6 +20,7 @@ vi.mock('node-pty', () => ({
 vi.mock('child_process', () => ({
   execSync: vi.fn(() => { throw new Error('not found'); }),
   execFile: mockExecFile,
+  execFileSync: mockExecFileSync,
 }));
 
 vi.mock('os', () => ({
@@ -42,7 +44,7 @@ vi.mock('./providers/nvm', () => ({
 
 import * as fs from 'fs';
 import * as child_process from 'child_process';
-import { spawnPty, writePty, resizePty, killPty, getPtyCwd, getRegistryPath, getFullPath, resetPathCache, resolveWindowsShell } from './pty-manager';
+import { spawnPty, spawnShellPty, writePty, resizePty, killPty, getPtyCwd, getRegistryPath, getFullPath, resetPathCache, resolveWindowsShell, isWslPath, parseWslPath, getWslDefaultShell, resetWslShellCache } from './pty-manager';
 import { initProviders } from './providers/registry';
 
 const mockExistsSync = vi.mocked(fs.existsSync);
@@ -67,6 +69,8 @@ function createMockPtyProcess() {
 beforeEach(() => {
   vi.clearAllMocks();
   mockExistsSync.mockReturnValue(false);
+  mockExecFileSync.mockImplementation(() => { throw new Error('not found'); });
+  resetWslShellCache();
   initProviders();
 });
 
@@ -671,4 +675,180 @@ describe('resolveWindowsShell', () => {
       });
     });
   }
+});
+
+describe('isWslPath', () => {
+  it('detects forward-slash WSL UNC paths', () => {
+    expect(isWslPath('//WSL$/Ubuntu-24.04/home/user/project')).toBe(true);
+  });
+
+  it('detects backslash WSL UNC paths', () => {
+    expect(isWslPath('\\\\WSL$\\Ubuntu-24.04\\home\\user\\project')).toBe(true);
+  });
+
+  it('is case-insensitive', () => {
+    expect(isWslPath('//wsl$/ubuntu/home')).toBe(true);
+    expect(isWslPath('//WSL$/Ubuntu')).toBe(true);
+  });
+
+  it('returns false for normal Windows paths', () => {
+    expect(isWslPath('C:\\Users\\foo\\project')).toBe(false);
+  });
+
+  it('returns false for normal Unix paths', () => {
+    expect(isWslPath('/home/user/project')).toBe(false);
+  });
+
+  it('returns false for UNC paths that are not WSL', () => {
+    expect(isWslPath('//server/share/folder')).toBe(false);
+  });
+});
+
+describe('parseWslPath', () => {
+  it('parses forward-slash WSL UNC path', () => {
+    expect(parseWslPath('//WSL$/Ubuntu-24.04/home/user/project')).toEqual({
+      distro: 'Ubuntu-24.04',
+      linuxPath: '/home/user/project',
+    });
+  });
+
+  it('parses backslash WSL UNC path', () => {
+    expect(parseWslPath('\\\\WSL$\\Ubuntu-24.04\\home\\user\\project')).toEqual({
+      distro: 'Ubuntu-24.04',
+      linuxPath: '/home/user/project',
+    });
+  });
+
+  it('defaults linuxPath to / when only distro is present', () => {
+    expect(parseWslPath('//WSL$/Ubuntu')).toEqual({ distro: 'Ubuntu', linuxPath: '/' });
+  });
+
+  it('returns null for non-WSL paths', () => {
+    expect(parseWslPath('C:\\Users\\foo')).toBeNull();
+    expect(parseWslPath('/home/user')).toBeNull();
+  });
+});
+
+describe('getWslDefaultShell', () => {
+  if (!isWin) return;
+
+  it('returns zsh when $SHELL is /bin/zsh in the distro', () => {
+    mockExecFileSync.mockReturnValue('/bin/zsh\n');
+    expect(getWslDefaultShell('Ubuntu-24.04')).toBe('zsh');
+  });
+
+  it('returns bash when $SHELL is /bin/bash', () => {
+    mockExecFileSync.mockReturnValue('/bin/bash\n');
+    expect(getWslDefaultShell('Ubuntu-24.04')).toBe('bash');
+  });
+
+  it('falls back to bash when wsl.exe call fails', () => {
+    mockExecFileSync.mockImplementation(() => { throw new Error('not found'); });
+    expect(getWslDefaultShell('Ubuntu-24.04')).toBe('bash');
+  });
+
+  it('caches the result per distro', () => {
+    mockExecFileSync.mockReturnValue('/bin/zsh\n');
+    getWslDefaultShell('Ubuntu-24.04');
+    getWslDefaultShell('Ubuntu-24.04');
+    expect(mockExecFileSync).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('spawnPty with WSL path', () => {
+  if (!isWin) return;
+
+  it('spawns wsl.exe using the distro default shell when cwd is a WSL UNC path', async () => {
+    mockExecFileSync.mockReturnValue('/bin/zsh\n');
+    const proc = createMockPtyProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    await spawnPty('s1', '//WSL$/Ubuntu-24.04/home/user/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      'wsl.exe',
+      ['-d', 'Ubuntu-24.04', '--cd', '/home/user/project', '--', 'zsh', '-ic', "'claude'"],
+      expect.objectContaining({ name: 'xterm-256color' }),
+    );
+    // cwd must be a valid Windows path, not the UNC path
+    const spawnOpts = mockSpawn.mock.calls[0][2];
+    expect(spawnOpts.cwd).not.toMatch(/WSL/i);
+  });
+
+  it('falls back to bash when zsh is not available in the distro', async () => {
+    mockExecFileSync.mockImplementation(() => { throw new Error('not found'); });
+    const proc = createMockPtyProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    await spawnPty('s1', '//WSL$/Ubuntu-24.04/home/user/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      'wsl.exe',
+      ['-d', 'Ubuntu-24.04', '--cd', '/home/user/project', '--', 'bash', '-ic', "'claude'"],
+      expect.any(Object),
+    );
+  });
+
+  it('includes session resume args inside the shell -ic command string', async () => {
+    mockExecFileSync.mockReturnValue('/bin/zsh\n');
+    const proc = createMockPtyProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    await spawnPty('s1', '//WSL$/Ubuntu-24.04/home/user/project', 'abc-123', true, '', 'claude', undefined, vi.fn(), vi.fn());
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      'wsl.exe',
+      ['-d', 'Ubuntu-24.04', '--cd', '/home/user/project', '--', 'zsh', '-ic', "'claude' '-r' 'abc-123'"],
+      expect.any(Object),
+    );
+  });
+});
+
+describe('spawnShellPty with WSL path', () => {
+  it('spawns wsl.exe with the distro default shell when cwd is a WSL UNC path', () => {
+    if (!isWin) return;
+
+    mockExecFileSync.mockReturnValue('/bin/zsh\n');
+    const proc = createMockPtyProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    spawnShellPty('s1', '//WSL$/Ubuntu-24.04/home/user/project', vi.fn(), vi.fn());
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      'wsl.exe',
+      ['-d', 'Ubuntu-24.04', '--cd', '/home/user/project', '--', 'zsh'],
+      expect.objectContaining({ cwd: '/mock/home' }),
+    );
+  });
+
+  it('falls back to bash when shell detection fails', () => {
+    if (!isWin) return;
+
+    mockExecFileSync.mockImplementation(() => { throw new Error('wsl not found'); });
+    const proc = createMockPtyProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    spawnShellPty('s1', '//WSL$/Ubuntu-24.04/home/user/project', vi.fn(), vi.fn());
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      'wsl.exe',
+      ['-d', 'Ubuntu-24.04', '--cd', '/home/user/project', '--', 'bash'],
+      expect.objectContaining({ cwd: '/mock/home' }),
+    );
+  });
+
+  it('uses cmd.exe for regular Windows paths', () => {
+    if (!isWin) return;
+
+    const proc = createMockPtyProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    spawnShellPty('s1', 'C:\\Users\\user\\project', vi.fn(), vi.fn());
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      expect.stringMatching(/cmd\.exe/i),
+      [],
+      expect.objectContaining({ cwd: 'C:\\Users\\user\\project' }),
+    );
+  });
 });
