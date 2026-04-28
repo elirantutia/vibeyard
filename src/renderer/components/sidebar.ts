@@ -115,6 +115,7 @@ function render(): void {
     const el = document.createElement('div');
     el.className = 'project-item' + (isActive ? ' active' : '');
     el.dataset.projectId = project.id;
+    el.draggable = true;
     el.innerHTML = `
       <div style="flex:1;min-width:0">
         <div class="project-name${hasUnreadInProject(project.id) ? ' unread' : ''}">${esc(project.name)}${project.sessions.length ? ` <span class="project-session-count">(${project.sessions.length})</span>` : ''}</div>
@@ -137,6 +138,58 @@ function render(): void {
     el.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       showProjectContextMenu(e.clientX, e.clientY, project);
+    });
+
+    el.addEventListener('dragstart', (e) => {
+      if (renamingProjectId !== null) {
+        e.preventDefault();
+        return;
+      }
+      e.dataTransfer!.effectAllowed = 'move';
+      e.dataTransfer!.setData('text/plain', project.id);
+      el.classList.add('dragging');
+    });
+
+    el.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer!.dropEffect = 'move';
+      const rect = el.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      el.classList.remove('drag-over-top', 'drag-over-bottom');
+      if (e.clientY < midY) {
+        el.classList.add('drag-over-top');
+      } else {
+        el.classList.add('drag-over-bottom');
+      }
+    });
+
+    el.addEventListener('dragleave', () => {
+      el.classList.remove('drag-over-top', 'drag-over-bottom');
+    });
+
+    el.addEventListener('drop', (e) => {
+      e.preventDefault();
+      el.classList.remove('drag-over-top', 'drag-over-bottom');
+      const draggedId = e.dataTransfer!.getData('text/plain');
+      if (!draggedId || draggedId === project.id) return;
+
+      const fromIndex = appState.projects.findIndex(p => p.id === draggedId);
+      if (fromIndex === -1) return;
+
+      const rect = el.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      let targetIndex = appState.projects.findIndex(p => p.id === project.id);
+      if (e.clientY >= midY) targetIndex++;
+      // Adjust for the fact that removing the dragged item shifts indices
+      if (fromIndex < targetIndex) targetIndex--;
+
+      appState.reorderProject(fromIndex, targetIndex);
+    });
+
+    el.addEventListener('dragend', () => {
+      projectListEl.querySelectorAll('.project-item.dragging, .project-item.drag-over-top, .project-item.drag-over-bottom').forEach(node => {
+        node.classList.remove('dragging', 'drag-over-top', 'drag-over-bottom');
+      });
     });
 
     wrapper.appendChild(el);

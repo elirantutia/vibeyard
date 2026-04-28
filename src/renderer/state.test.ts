@@ -847,6 +847,53 @@ describe('batch removals', () => {
   });
 });
 
+describe('reorderProject()', () => {
+  it('moves project forward', () => {
+    const a = appState.addProject('A', '/a');
+    const b = appState.addProject('B', '/b');
+    const c = appState.addProject('C', '/c');
+    appState.reorderProject(0, 2);
+    expect(appState.projects.map(p => p.id)).toEqual([b.id, c.id, a.id]);
+  });
+
+  it('moves project backward', () => {
+    const a = appState.addProject('A', '/a');
+    const b = appState.addProject('B', '/b');
+    const c = appState.addProject('C', '/c');
+    appState.reorderProject(2, 0);
+    expect(appState.projects.map(p => p.id)).toEqual([c.id, a.id, b.id]);
+  });
+
+  it('no-op when fromIndex === toIndex', () => {
+    appState.addProject('A', '/a');
+    appState.addProject('B', '/b');
+    mockSave.mockClear();
+    appState.reorderProject(1, 1);
+    expect(mockSave).not.toHaveBeenCalled();
+  });
+
+  it('no-op when index is out of range', () => {
+    appState.addProject('A', '/a');
+    appState.addProject('B', '/b');
+    mockSave.mockClear();
+    appState.reorderProject(0, 5);
+    appState.reorderProject(-1, 0);
+    appState.reorderProject(5, 0);
+    expect(mockSave).not.toHaveBeenCalled();
+  });
+
+  it('emits project-changed and persists', () => {
+    appState.addProject('A', '/a');
+    appState.addProject('B', '/b');
+    const cb = vi.fn();
+    appState.on('project-changed', cb);
+    mockSave.mockClear();
+    appState.reorderProject(0, 1);
+    expect(cb).toHaveBeenCalledTimes(1);
+    expect(mockSave).toHaveBeenCalled();
+  });
+});
+
 describe('reorderSession()', () => {
   it('moves session to a different index', () => {
     const { project, sessions } = addProjectWithSessions(3);
