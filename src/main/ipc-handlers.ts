@@ -545,6 +545,23 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle('fs:trashItem', async (_event, filePath: string): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      const resolved = path.resolve(filePath);
+      // Stricter than isAllowedReadPath: only allow trashing inside a known project,
+      // never config dirs like ~/.claude or ~/.codex.
+      if (!isWithinKnownProject(resolved)) {
+        console.warn(`fs:trashItem blocked: ${resolved} is not within a known project`);
+        return { ok: false, error: 'Path is not within a known project' };
+      }
+      await shell.trashItem(resolved);
+      return { ok: true };
+    } catch (err) {
+      console.warn('fs:trashItem failed:', err);
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
   ipcMain.on('fs:watchFile', (event, filePath: string) => {
     const resolved = path.resolve(filePath);
     if (!isAllowedReadPath(resolved)) return;

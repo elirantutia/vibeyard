@@ -36,6 +36,7 @@ export interface VibeyardApi {
     exists(filePath: string): Promise<boolean>;
     readFile(filePath: string): Promise<ReadFileResult>;
     readImage(filePath: string): Promise<{ dataUrl: string } | null>;
+    trashItem(filePath: string): Promise<{ ok: boolean; error?: string }>;
     watchFile(filePath: string): void;
     unwatchFile(filePath: string): void;
     onFileChanged(callback: (filePath: string) => void): () => void;
@@ -198,6 +199,7 @@ const api: VibeyardApi = {
     exists: (filePath: string) => ipcRenderer.invoke('fs:exists', filePath),
     readFile: (filePath: string) => ipcRenderer.invoke('fs:readFile', filePath),
     readImage: (filePath: string) => ipcRenderer.invoke('fs:readImage', filePath),
+    trashItem: (filePath: string) => ipcRenderer.invoke('fs:trashItem', filePath),
     watchFile: (filePath: string) => ipcRenderer.send('fs:watchFile', filePath),
     unwatchFile: (filePath: string) => ipcRenderer.send('fs:unwatchFile', filePath),
     onFileChanged: (callback: (filePath: string) => void) => onChannel('fs:fileChanged', (filePath) => callback(filePath as string)),

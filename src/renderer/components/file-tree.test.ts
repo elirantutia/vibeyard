@@ -6,6 +6,14 @@ vi.mock('../state.js', () => ({
   },
 }));
 
+vi.mock('./modal.js', () => ({
+  showConfirmModal: vi.fn(),
+}));
+
+vi.mock('./board/board-context-menu.js', () => ({
+  showContextMenu: vi.fn(),
+}));
+
 import {
   sortEntries,
   toggleFolder,
