@@ -28,6 +28,7 @@ const btnAddSession = document.getElementById('btn-add-session')!;
 const btnAddSessionMenu = document.getElementById('btn-add-session-menu')!;
 const btnAddMcpInspector = document.getElementById('btn-add-mcp-inspector')!;
 const btnToggleSwarm = document.getElementById('btn-toggle-swarm')!;
+const btnAddBrowserTab = document.getElementById('btn-add-browser-tab')!;
 const btnHelp = document.getElementById('btn-help')!;
 
 let activeContextMenu: HTMLElement | null = null;
@@ -51,6 +52,10 @@ export function initTabBar(): void {
   });
   btnAddMcpInspector.addEventListener('click', promptNewMcpInspector);
   btnToggleSwarm.addEventListener('click', () => appState.toggleSwarm());
+  btnAddBrowserTab.addEventListener('click', () => {
+    const project = appState.activeProject;
+    if (project) appState.addBrowserTabSession(project.id);
+  });
   btnHelp.addEventListener('click', () => showHelpDialog());
   gitStatusEl.addEventListener('click', (e) => showBranchContextMenu(e));
 
