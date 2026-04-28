@@ -1,7 +1,12 @@
 import { appState } from '../state.js';
+import { isWin } from '../platform.js';
 import { getProviderDisplayName } from '../provider-availability.js';
 import { escapeHtml, escapeRegExp } from './dom-search-backend.js';
+import { basename, samePath as samePathRaw } from '../../shared/platform.js';
 import type { DeepSearchResult } from '../../shared/types.js';
+
+const samePath = (a: string | null | undefined, b: string | null | undefined): boolean =>
+  samePathRaw(a, b, isWin);
 
 interface ResolvedResult extends DeepSearchResult {
   sessionName: string | null;
@@ -188,8 +193,7 @@ function renderResults(): void {
   for (let i = 0; i < resolvedResults.length; i++) {
     const r = resolvedResults[i];
     const isCurrentProject =
-      r.projectId === activeProjectId ||
-      (!!activeProjectPath && r.projectCwd === activeProjectPath);
+      r.projectId === activeProjectId || samePath(r.projectCwd, activeProjectPath);
 
     const item = document.createElement('div');
     item.className = 'session-palette-item';
@@ -211,7 +215,7 @@ function renderResults(): void {
 
     const badge = document.createElement('span');
     badge.className = `session-palette-badge${isCurrentProject ? ' current' : ''}`;
-    const projectName = r.projectCwd ? r.projectCwd.split('/').filter(Boolean).pop() ?? r.projectSlug : r.projectSlug;
+    const projectName = r.projectCwd ? basename(r.projectCwd) : r.projectSlug;
     badge.textContent = isCurrentProject ? 'current project' : projectName;
     nameRow.appendChild(badge);
 
@@ -238,23 +242,26 @@ function updateActiveItem(): void {
 }
 
 function openResult(r: ResolvedResult): void {
-  if (r.projectId && r.activeSessionId) {
-    appState.setActiveProject(r.projectId);
-    appState.setActiveSession(r.projectId, r.activeSessionId);
-  } else if (r.projectId && r.archivedId) {
-    appState.setActiveProject(r.projectId);
-    appState.resumeFromHistory(r.projectId, r.archivedId);
+  const projectId = resolveProjectId(r);
+  appState.setActiveProject(projectId);
+
+  if (r.activeSessionId) {
+    appState.setActiveSession(projectId, r.activeSessionId);
+  } else if (r.archivedId) {
+    appState.resumeFromHistory(projectId, r.archivedId);
   } else {
-    // Not in Vibeyard — find or create project by cwd, then open session directly
-    let project = appState.projects.find(p => p.path === r.projectCwd);
-    if (!project) {
-      const name = r.projectCwd ? r.projectCwd.split('/').filter(Boolean).pop()! : r.projectSlug;
-      project = appState.addProject(name, r.projectCwd);
-    }
-    const name = r.sessionName ?? r.derivedName ?? r.cliSessionId.slice(0, 8) + '\u2026';
-    appState.openCliSession(project.id, r.cliSessionId, name, r.providerId);
+    const name = r.sessionName ?? r.derivedName ?? r.cliSessionId.slice(0, 8) + '…';
+    appState.openCliSession(projectId, r.cliSessionId, name, r.providerId);
   }
   hidePalette();
+}
+
+function resolveProjectId(r: ResolvedResult): string {
+  if (r.projectId) return r.projectId;
+  const existing = appState.projects.find(p => samePath(p.path, r.projectCwd));
+  if (existing) return existing.id;
+  const name = r.projectCwd ? basename(r.projectCwd) : r.projectSlug;
+  return appState.addProject(name, r.projectCwd).id;
 }
 
 function onKeydown(e: KeyboardEvent): void {

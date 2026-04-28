@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { basename, isAbsolutePath, lastSeparatorIndex } from './platform';
+import { basename, isAbsolutePath, lastSeparatorIndex, samePath } from './platform';
 
 describe('basename', () => {
   it('extracts last segment from POSIX paths', () => {
@@ -92,5 +92,44 @@ describe('isAbsolutePath', () => {
 
   it('returns false for empty string', () => {
     expect(isAbsolutePath('')).toBe(false);
+  });
+});
+
+describe('samePath', () => {
+  it('returns true for identical paths', () => {
+    expect(samePath('/home/user/project', '/home/user/project', false)).toBe(true);
+    expect(samePath('C:\\Users\\me', 'C:\\Users\\me', true)).toBe(true);
+  });
+
+  it('treats / and \\ as equivalent separators', () => {
+    expect(samePath('C:/Users/me', 'C:\\Users\\me', true)).toBe(true);
+    expect(samePath('/home/user', '\\home\\user', false)).toBe(true);
+  });
+
+  it('ignores casing when caseInsensitive is true', () => {
+    expect(samePath('C:\\Users\\Me', 'c:\\users\\me', true)).toBe(true);
+    expect(samePath('/Home/User', '/home/user', true)).toBe(true);
+  });
+
+  it('respects casing when caseInsensitive is false', () => {
+    expect(samePath('/Home/User', '/home/user', false)).toBe(false);
+    expect(samePath('C:\\Users\\Me', 'c:\\users\\me', false)).toBe(false);
+  });
+
+  it('ignores a single trailing separator', () => {
+    expect(samePath('/home/user/', '/home/user', false)).toBe(true);
+    expect(samePath('C:\\Users\\me\\', 'C:\\Users\\me', true)).toBe(true);
+  });
+
+  it('returns false when either side is empty or nullish', () => {
+    expect(samePath(null, '/home', false)).toBe(false);
+    expect(samePath('/home', undefined, false)).toBe(false);
+    expect(samePath('', '/home', false)).toBe(false);
+    expect(samePath('/home', '', false)).toBe(false);
+  });
+
+  it('rejects paths that differ beyond casing/separators', () => {
+    expect(samePath('/home/user', '/home/other', false)).toBe(false);
+    expect(samePath('C:\\Users\\me', 'D:\\Users\\me', true)).toBe(false);
   });
 });

@@ -17,3 +17,17 @@ export function basename(filePath: string): string {
   const i = lastSeparatorIndex(trimmed);
   return i === -1 ? trimmed : trimmed.slice(i + 1);
 }
+
+export function samePath(
+  a: string | null | undefined,
+  b: string | null | undefined,
+  caseInsensitive: boolean,
+): boolean {
+  if (!a || !b) return false;
+  const norm = (p: string): string => {
+    let n = p.replace(/\\/g, '/');
+    if (n.length > 1 && n.endsWith('/')) n = n.slice(0, -1);
+    return caseInsensitive ? n.toLowerCase() : n;
+  };
+  return norm(a) === norm(b);
+}
