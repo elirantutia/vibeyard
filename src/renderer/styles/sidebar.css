@@ -197,6 +197,18 @@
   font-size: 0.85em;
 }
 
+.project-item.dragging {
+  opacity: 0.4;
+}
+
+.project-item.drag-over-top {
+  box-shadow: inset 0 2px 0 0 var(--accent);
+}
+
+.project-item.drag-over-bottom {
+  box-shadow: inset 0 -2px 0 0 var(--accent);
+}
+
 .project-item .project-delete {
   opacity: 0;
   cursor: pointer;

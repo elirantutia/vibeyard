@@ -873,6 +873,16 @@ class AppState {
     this.emit('readiness-changed', projectId);
   }
 
+  reorderProject(fromIndex: number, toIndex: number): void {
+    if (fromIndex === toIndex) return;
+    if (fromIndex < 0 || fromIndex >= this.state.projects.length) return;
+    if (toIndex < 0 || toIndex >= this.state.projects.length) return;
+    const [project] = this.state.projects.splice(fromIndex, 1);
+    this.state.projects.splice(toIndex, 0, project);
+    this.persist();
+    this.emit('project-changed');
+  }
+
   reorderSession(projectId: string, sessionId: string, toIndex: number): void {
     const project = this.state.projects.find(p => p.id === projectId);
     if (!project) return;
