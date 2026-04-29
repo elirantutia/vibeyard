@@ -22,6 +22,7 @@ interface TerminalInstance {
   projectPath: string;
   cliSessionId: string | null;
   providerId: ProviderId;
+  commandOverride: string | undefined;
   args: string;
   isResume: boolean;
   wasResumed: boolean;
@@ -41,7 +42,8 @@ export function createTerminalPane(
   isResume: boolean = false,
   args: string = '',
   providerId: ProviderId = 'claude',
-  projectId?: string
+  projectId?: string,
+  commandOverride?: string
 ): TerminalInstance {
   if (instances.has(sessionId)) {
     return instances.get(sessionId)!;
@@ -119,6 +121,7 @@ export function createTerminalPane(
     projectPath,
     cliSessionId,
     providerId,
+    commandOverride,
     args,
     isResume,
     wasResumed: isResume,
@@ -221,7 +224,7 @@ export async function spawnTerminal(sessionId: string): Promise<void> {
     initialPrompt = instance.pendingPrompt;
     instance.pendingPrompt = null;
   }
-  await window.vibeyard.pty.create(sessionId, instance.projectPath, instance.cliSessionId, instance.isResume, instance.args, instance.providerId, initialPrompt);
+  await window.vibeyard.pty.create(sessionId, instance.projectPath, instance.cliSessionId, instance.isResume, instance.args, instance.providerId, initialPrompt, instance.commandOverride);
   instance.isResume = true; // subsequent spawns (e.g. Restart Session) should resume
 }
 

@@ -833,8 +833,16 @@ export async function promptNewSession(onCreated?: (session: SessionRecord) => v
   const providers = providerSnapshot?.providers ?? [];
   const availabilityMap = providerSnapshot?.availability ?? new Map();
 
+  const getBinaryName = (id: string): string => providers.find(p => p.id === id)?.binaryName ?? 'claude';
+
+  const preferred = appState.preferences.defaultProvider ?? 'claude';
+  const firstAvailable = (providers.length > 1)
+    ? ((availabilityMap.get(preferred) ? preferred : providers.find(p => availabilityMap.get(p.id))?.id) ?? 'claude')
+    : 'claude';
+
   const fields: FieldDef[] = [
     { label: 'Name', id: 'session-name', placeholder: `Session ${sessionNum}`, defaultValue: `Session ${sessionNum}` },
+    { label: 'Command', id: 'session-command', placeholder: 'e.g. claude or /usr/local/bin/claude-beta', defaultValue: getBinaryName(firstAvailable) },
     { label: 'Arguments', id: 'session-args', placeholder: 'e.g. --model sonnet', defaultValue: project.defaultArgs ?? '' },
     {
       label: 'Keep args for future sessions',
@@ -845,8 +853,6 @@ export async function promptNewSession(onCreated?: (session: SessionRecord) => v
   ];
 
   if (providers.length > 1) {
-    const preferred = appState.preferences.defaultProvider ?? 'claude';
-    const firstAvailable = (availabilityMap.get(preferred) ? preferred : providers.find(p => availabilityMap.get(p.id))?.id) ?? 'claude';
     fields.unshift({
       label: 'Provider',
       id: 'provider',
@@ -856,6 +862,10 @@ export async function promptNewSession(onCreated?: (session: SessionRecord) => v
         const available = availabilityMap.get(p.id);
         return { value: p.id, label: available ? p.displayName : `${p.displayName} (not installed)`, disabled: !available };
       }),
+      onSelectChange: (value: string) => {
+        const commandInput = document.getElementById('modal-session-command') as HTMLInputElement | null;
+        if (commandInput) commandInput.value = getBinaryName(value);
+      },
     });
   }
 
@@ -867,7 +877,10 @@ export async function promptNewSession(onCreated?: (session: SessionRecord) => v
       const keepArgs = values['keep-args'] === 'true';
       project.defaultArgs = keepArgs ? (args || undefined) : undefined;
       const providerId = (values['provider'] || 'claude') as ProviderId;
-      const session = appState.addSession(project.id, name, args, providerId);
+      const command = values['session-command']?.trim() || undefined;
+      const defaultBinary = getBinaryName(providerId);
+      const commandOverride = (command && command !== defaultBinary) ? command : undefined;
+      const session = appState.addSession(project.id, name, args, providerId, commandOverride);
       if (session && onCreated) onCreated(session);
     }
   });

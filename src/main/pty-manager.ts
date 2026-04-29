@@ -164,6 +164,7 @@ export async function spawnPty(
   extraArgs: string,
   providerId: ProviderId,
   initialPrompt: string | undefined,
+  commandOverride: string | undefined,
   onData: (data: string) => void,
   onExit: (exitCode: number, signal?: number) => void
 ): Promise<void> {
@@ -190,8 +191,27 @@ export async function spawnPty(
 
   const env = provider.buildEnv(sessionId, { ...process.env } as Record<string, string>);
   const args = provider.buildArgs({ cliSessionId, isResume, extraArgs, initialPrompt });
-  const resolvedShell = provider.resolveBinaryPath();
-  const { shell, args: spawnArgs } = resolveWindowsShell(resolvedShell, args);
+
+  let shell: string;
+  let spawnArgs: string[];
+
+  if (commandOverride) {
+    // Command overrides may be shell functions/aliases (defined in .zshrc/.bashrc),
+    // not just executables on PATH. Spawn through an interactive login shell so
+    // the user's shell config is sourced and functions/aliases resolve correctly.
+    const userShell = isWin ? (process.env.COMSPEC || 'cmd.exe') : (process.env.SHELL || '/bin/zsh');
+    if (isWin) {
+      shell = userShell;
+      spawnArgs = ['/c', commandOverride, ...args];
+    } else {
+      shell = userShell;
+      const escaped = [commandOverride, ...args].map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ');
+      spawnArgs = ['-ic', escaped];
+    }
+  } else {
+    const resolvedShell = provider.resolveBinaryPath();
+    ({ shell, args: spawnArgs } = resolveWindowsShell(resolvedShell, args));
+  }
 
   const ptyProcess = pty.spawn(shell, spawnArgs, {
     name: 'xterm-256color',
