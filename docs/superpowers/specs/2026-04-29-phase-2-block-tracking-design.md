@@ -409,3 +409,28 @@ existing assertions on `usdSpent`, `entryCount`, and (where
 checked) `resetsAt` hold under both semantics for the inputs used,
 because each test's first entry happens to be the active-block
 anchor.
+
+## Postmortem amendment (2026-04-30): SDK CLI filter
+
+After fixing the rolling-window bug, the widget still drifted from
+the Claude web UI — by as much as ~1.5 hours. Root cause: a
+background tool (`claude-mem`'s observer agent) writes JSONL
+entries to `~/.claude/projects/...` with `entrypoint: "sdk-cli"`,
+indicating the call went through the Anthropic SDK with its own
+API key. Those calls bill against `ANTHROPIC_API_KEY`, not the
+user's claude.ai subscription, so the web UI's 5h block view
+ignores them. We were aggregating them, so our block start was
+anchored to the earliest sdk-cli entry rather than the earliest
+interactive-CLI entry.
+
+Fix in `parseFile()`: skip any line where `obj.entrypoint ===
+'sdk-cli'`. All other entrypoint values (`cli`, missing, unknown)
+fall through and are counted. Verified empirically: with the
+filter, the active block start matched the web UI's reported
+anchor to the second (post-fix block start `14:33:37.926Z` vs.
+web UI's 14:33).
+
+The filter is intentionally narrow: it blacklists exactly one
+known non-billable entrypoint instead of allowlisting `cli`. That
+keeps legacy formats and any future Claude Code entrypoints
+working without ongoing maintenance.

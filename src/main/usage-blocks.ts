@@ -80,6 +80,13 @@ function parseFile(filePath: string, now: number): ParsedEntry[] {
     }
     const ts = typeof obj.timestamp === 'string' ? Date.parse(obj.timestamp) : NaN;
     if (!Number.isFinite(ts)) continue;
+    // Skip entries from the Anthropic SDK CLI (claude-mem's observer agent
+    // and similar tools). Those calls bill against ANTHROPIC_API_KEY rather
+    // than the user's claude.ai subscription quota, so they don't appear in
+    // the Claude web UI's 5h block view. Including them here drove the block
+    // start ~1.5h earlier than the website. Other entrypoints (`cli`, missing,
+    // legacy formats) fall through.
+    if (obj.entrypoint === 'sdk-cli') continue;
     const message = obj.message as
       | { model?: string; usage?: UsageEntry; id?: string }
       | undefined;
@@ -149,6 +156,9 @@ function computeBlock(now: number): BlockInfo | null {
   // Dedupe by Anthropic message.id — Claude appends prior turns when sessions
   // resume, so the same usage entry can appear multiple times across (or
   // within) JSONL files. Entries without an id (older format) fall through.
+  // (Note: `entrypoint: 'sdk-cli'` entries are filtered upstream in
+  // parseFile() — they bill against ANTHROPIC_API_KEY, not the user's
+  // claude.ai subscription, and don't appear in the web UI's block view.)
   const seenIds = new Set<string>();
 
   let activeStart = -1;
@@ -156,6 +166,9 @@ function computeBlock(now: number): BlockInfo | null {
   let activeCount = 0;
 
   for (const entry of all) {
+    // Dedup must precede boundary detection: a replayed turn (same message.id
+    // as an earlier entry) must not anchor a new block — it's the same
+    // logical API call, not new activity.
     if (entry.messageId !== null) {
       if (seenIds.has(entry.messageId)) continue;
       seenIds.add(entry.messageId);

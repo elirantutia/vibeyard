@@ -105,4 +105,14 @@ describe('computeCost', () => {
     const cost = computeCost('claude-sonnet-4-6', {});
     expect(cost).toBe(0);
   });
+
+  it('skips Claude Code <synthetic> sentinel silently', () => {
+    const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
+    const cost = computeCost('<synthetic>', { input_tokens: 1_000_000 });
+    expect(cost).toBeNull();
+    // Must not log "[pricing] unknown model" — these are internal
+    // compaction/system messages, not unknown billable models.
+    expect(debugSpy).not.toHaveBeenCalled();
+    debugSpy.mockRestore();
+  });
 });

@@ -74,17 +74,25 @@ function addProject(name: string, files: Record<string, string>, mtimeMs: number
 }
 
 function jsonl(
-  entries: Array<{ ts: string; model: string; usage: object; id?: string }>,
+  entries: Array<{
+    ts: string;
+    model: string;
+    usage: object;
+    id?: string;
+    entrypoint?: string;
+  }>,
 ): string {
   return entries
-    .map((e) =>
-      JSON.stringify({
+    .map((e) => {
+      const obj: Record<string, unknown> = {
         timestamp: e.ts,
         message: e.id
           ? { model: e.model, usage: e.usage, id: e.id }
           : { model: e.model, usage: e.usage },
-      })
-    )
+      };
+      if (e.entrypoint !== undefined) obj.entrypoint = e.entrypoint;
+      return JSON.stringify(obj);
+    })
     .join('\n');
 }
 
@@ -110,18 +118,18 @@ describe('usage-blocks', () => {
     expect(block).toBeNull();
   });
 
-  it('aggregates entries within the rolling 5h window', async () => {
+  it('aggregates entries within the active 5h block', async () => {
     addProject(
       'p1',
       {
         'a.jsonl': jsonl([
           {
-            ts: '2026-04-30T10:00:00.000Z', // 2h ago — inside window
+            ts: '2026-04-30T10:00:00.000Z', // 2h ago — anchors the active block
             model: 'claude-sonnet-4-6',
             usage: { input_tokens: 1_000_000 }, // $3
           },
           {
-            ts: '2026-04-30T11:30:00.000Z', // 30m ago — inside window
+            ts: '2026-04-30T11:30:00.000Z', // within the same block
             model: 'claude-sonnet-4-6',
             usage: { output_tokens: 1_000_000 }, // $15
           },
@@ -134,22 +142,22 @@ describe('usage-blocks', () => {
     expect(block).not.toBeNull();
     expect(block!.usdSpent).toBeCloseTo(18, 4);
     expect(block!.entryCount).toBe(2);
-    // Oldest in window is 10:00 → resets at 15:00 UTC
+    // Block anchored at 10:00 → resets at 15:00 UTC
     expect(block!.resetsAt).toBe(Date.parse('2026-04-30T15:00:00.000Z'));
   });
 
-  it('skips entries outside the 5h window', async () => {
+  it('skips entries from prior expired blocks', async () => {
     addProject(
       'p1',
       {
         'a.jsonl': jsonl([
           {
-            ts: '2026-04-30T06:00:00.000Z', // 6h ago — outside window
+            ts: '2026-04-30T06:00:00.000Z', // anchors expired block (06:00–11:00)
             model: 'claude-sonnet-4-6',
             usage: { input_tokens: 1_000_000 },
           },
           {
-            ts: '2026-04-30T11:00:00.000Z', // 1h ago — inside
+            ts: '2026-04-30T11:00:00.000Z', // anchors active block (>= 06:00 + 5h)
             model: 'claude-sonnet-4-6',
             usage: { input_tokens: 1_000_000 }, // $3
           },
@@ -458,6 +466,206 @@ describe('usage-blocks', () => {
     fakeDirs.set(PROJECTS, []);
     init();
     expect(await getCurrentBlock()).toBeNull();
+  });
+
+  it('excludes entries with entrypoint=sdk-cli (separately billed via API key)', async () => {
+    addProject(
+      'p1',
+      {
+        'a.jsonl': jsonl([
+          {
+            ts: '2026-04-30T10:00:00.000Z',
+            model: 'claude-sonnet-4-6',
+            usage: { input_tokens: 1_000_000 }, // $3 — would anchor block 1.5h earlier
+            entrypoint: 'sdk-cli',
+          },
+          {
+            ts: '2026-04-30T11:30:00.000Z',
+            model: 'claude-sonnet-4-6',
+            usage: { input_tokens: 1_000_000 }, // $3
+            entrypoint: 'cli',
+          },
+        ]),
+      },
+      NOW - 30 * 60 * 1000
+    );
+    init();
+    const block = await getCurrentBlock();
+    expect(block).not.toBeNull();
+    // Only the 11:30 cli entry counts; sdk-cli at 10:00 is filtered out
+    expect(block!.entryCount).toBe(1);
+    expect(block!.usdSpent).toBeCloseTo(3, 4);
+    expect(block!.resetsAt).toBe(Date.parse('2026-04-30T16:30:00.000Z'));
+  });
+
+  it('counts entries when entrypoint is missing or unknown', async () => {
+    addProject(
+      'p1',
+      {
+        'a.jsonl': jsonl([
+          {
+            ts: '2026-04-30T11:00:00.000Z',
+            model: 'claude-sonnet-4-6',
+            usage: { input_tokens: 1_000_000 },
+            entrypoint: 'cli',
+          },
+          {
+            ts: '2026-04-30T11:15:00.000Z',
+            model: 'claude-sonnet-4-6',
+            usage: { input_tokens: 1_000_000 },
+            // entrypoint omitted (legacy format)
+          },
+          {
+            ts: '2026-04-30T11:30:00.000Z',
+            model: 'claude-sonnet-4-6',
+            usage: { input_tokens: 1_000_000 },
+            entrypoint: 'something-new',
+          },
+        ]),
+      },
+      NOW - 30 * 60 * 1000
+    );
+    init();
+    const block = await getCurrentBlock();
+    expect(block!.entryCount).toBe(3);
+    expect(block!.usdSpent).toBeCloseTo(9, 4);
+  });
+
+  it('opens a new block when an entry crosses the 5h boundary', async () => {
+    // Active block expected to anchor at the latest entry that is ≥ prior
+    // anchor + 5h. NOW=12:00. We construct a sequence where:
+    //   06:00 → anchors block 1 (ends 11:00)
+    //   08:00 → still in block 1
+    //   11:30 → ≥ 11:00 → opens block 2 (ends 16:30)
+    //   11:45 → still in block 2
+    addProject(
+      'p1',
+      {
+        'a.jsonl': jsonl([
+          {
+            ts: '2026-04-30T06:00:00.000Z',
+            model: 'claude-sonnet-4-6',
+            usage: { input_tokens: 1_000_000 },
+          },
+          {
+            ts: '2026-04-30T08:00:00.000Z',
+            model: 'claude-sonnet-4-6',
+            usage: { input_tokens: 1_000_000 },
+          },
+          {
+            ts: '2026-04-30T11:30:00.000Z',
+            model: 'claude-sonnet-4-6',
+            usage: { input_tokens: 1_000_000 }, // $3
+          },
+          {
+            ts: '2026-04-30T11:45:00.000Z',
+            model: 'claude-sonnet-4-6',
+            usage: { input_tokens: 1_000_000 }, // $3
+          },
+        ]),
+      },
+      NOW - 15 * 60 * 1000
+    );
+    init();
+    const block = await getCurrentBlock();
+    expect(block).not.toBeNull();
+    expect(block!.entryCount).toBe(2); // only block 2's entries
+    expect(block!.usdSpent).toBeCloseTo(6, 4);
+    expect(block!.resetsAt).toBe(Date.parse('2026-04-30T16:30:00.000Z'));
+  });
+
+  it('treats timestamp exactly at activeStart + 5h as opening a new block', async () => {
+    // Half-open interval [start, start+5h). An entry at exactly start+5h
+    // opens a fresh block.
+    addProject(
+      'p1',
+      {
+        'a.jsonl': jsonl([
+          {
+            ts: '2026-04-30T07:00:00.000Z',
+            model: 'claude-sonnet-4-6',
+            usage: { input_tokens: 1_000_000 },
+          },
+          {
+            ts: '2026-04-30T12:00:00.000Z', // exactly start + 5h
+            model: 'claude-sonnet-4-6',
+            usage: { input_tokens: 1_000_000 }, // $3
+          },
+        ]),
+      },
+      NOW
+    );
+    init();
+    const block = await getCurrentBlock();
+    expect(block).not.toBeNull();
+    expect(block!.entryCount).toBe(1);
+    expect(block!.usdSpent).toBeCloseTo(3, 4);
+    expect(block!.resetsAt).toBe(Date.parse('2026-04-30T17:00:00.000Z'));
+  });
+
+  it('returns null when the latest block has expired with no successor', async () => {
+    // Single entry whose block ended before now, file mtime fresh enough to
+    // be read. computeBlock should return null via the `now >= resetsAt`
+    // branch rather than report a phantom block whose countdown is negative.
+    addProject(
+      'p1',
+      {
+        'a.jsonl': jsonl([
+          {
+            ts: '2026-04-30T06:30:00.000Z', // ends 11:30 — before NOW (12:00)
+            model: 'claude-sonnet-4-6',
+            usage: { input_tokens: 1_000_000 },
+          },
+        ]),
+      },
+      NOW - 30 * 60 * 1000 // mtime = 11:30, within 5h+5min cutoff
+    );
+    init();
+    expect(await getCurrentBlock()).toBeNull();
+  });
+
+  it('does not let a deduped replay anchor a new block', async () => {
+    // If a duplicate id appears past the 5h boundary, we must skip it
+    // (replay of earlier turn) rather than start a fresh block at the
+    // replay's timestamp.
+    addProject(
+      'p1',
+      {
+        'a.jsonl': jsonl([
+          {
+            ts: '2026-04-30T07:30:00.000Z',
+            model: 'claude-sonnet-4-6',
+            usage: { input_tokens: 1_000_000 }, // $3 — anchors block (ends 12:30)
+            id: 'msg_anchor',
+          },
+          {
+            ts: '2026-04-30T11:00:00.000Z',
+            model: 'claude-sonnet-4-6',
+            usage: { input_tokens: 1_000_000 }, // $3 — within block
+            id: 'msg_within',
+          },
+        ]),
+        'b.jsonl': jsonl([
+          // Resumed session replays the anchor turn with its original id.
+          // Treated as duplicate — must NOT open a new block at this ts.
+          {
+            ts: '2026-04-30T11:55:00.000Z',
+            model: 'claude-sonnet-4-6',
+            usage: { input_tokens: 1_000_000 },
+            id: 'msg_anchor',
+          },
+        ]),
+      },
+      NOW - 5 * 60 * 1000
+    );
+    init();
+    const block = await getCurrentBlock();
+    expect(block).not.toBeNull();
+    // anchor + within = 2 entries; the dup is suppressed
+    expect(block!.entryCount).toBe(2);
+    expect(block!.usdSpent).toBeCloseTo(6, 4);
+    // Block anchored at 07:30, resets 12:30
+    expect(block!.resetsAt).toBe(Date.parse('2026-04-30T12:30:00.000Z'));
   });
 });
 

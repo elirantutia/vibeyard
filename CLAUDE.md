@@ -77,6 +77,8 @@ CLI-specific behavior is encapsulated behind a `CliProvider` interface (`src/mai
 
 **JSONL dedup:** Claude appends prior turns when sessions resume, so the same usage entry can appear multiple times across (or within) JSONL files. `computeBlock()` dedupes by `message.id` (Anthropic's API response identifier). Without this dedup, observed over-counting was ~40% (1.6× inflated cost). Entries lacking `message.id` (older format) fall through and are counted as-is.
 
+**SDK CLI filter:** Entries with `entrypoint === 'sdk-cli'` (e.g. claude-mem's observer agent calling Anthropic via the SDK with its own API key) are excluded at the parse layer (`parseFile()`). Those calls bill against `ANTHROPIC_API_KEY` rather than the user's claude.ai subscription quota and don't appear in the Claude web UI's 5h block view. Including them shifted the block start as much as ~1.5h earlier than the website. All other `entrypoint` values (including `cli`, missing, or unknown) fall through.
+
 IPC: `usage:getBlock` (one-shot), `usage:refresh` (force recompute), `usage:blockChanged` (push). Renderer receives via `window.vibeyard.usage` namespace.
 
 ### Close Confirmation System
