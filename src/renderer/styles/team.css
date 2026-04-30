@@ -184,6 +184,7 @@
   border-color: var(--accent);
 }
 .team-card-btn-primary {
+  flex-basis: 100%;
   background: var(--accent);
   color: var(--accent-fg, #fff);
   border-color: var(--accent);

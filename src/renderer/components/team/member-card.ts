@@ -50,25 +50,17 @@ export function createMemberCard(member: TeamMember, projectId: string): HTMLEle
   const actions = document.createElement('div');
   actions.className = 'team-card-actions';
 
-  const chatBtn = document.createElement('button');
-  chatBtn.className = 'team-card-btn team-card-btn-primary';
-  chatBtn.textContent = 'Chat';
-  chatBtn.addEventListener('click', () => {
-    appState.startTeamChat(projectId, member);
-  });
-  actions.appendChild(chatBtn);
+  const sessionsBtn = document.createElement('button');
+  sessionsBtn.className = 'team-card-btn';
+  sessionsBtn.textContent = 'Sessions';
+  sessionsBtn.addEventListener('click', () => showMemberSessionsModal(member, projectId));
+  actions.appendChild(sessionsBtn);
 
   const editBtn = document.createElement('button');
   editBtn.className = 'team-card-btn';
   editBtn.textContent = 'Edit';
   editBtn.addEventListener('click', () => showTeamMemberModal('edit', member));
   actions.appendChild(editBtn);
-
-  const sessionsBtn = document.createElement('button');
-  sessionsBtn.className = 'team-card-btn';
-  sessionsBtn.textContent = 'Sessions';
-  sessionsBtn.addEventListener('click', () => showMemberSessionsModal(member, projectId));
-  actions.appendChild(sessionsBtn);
 
   const deleteBtn = document.createElement('button');
   deleteBtn.className = 'team-card-btn team-card-btn-danger';
@@ -82,6 +74,14 @@ export function createMemberCard(member: TeamMember, projectId: string): HTMLEle
     );
   });
   actions.appendChild(deleteBtn);
+
+  const chatBtn = document.createElement('button');
+  chatBtn.className = 'team-card-btn team-card-btn-primary';
+  chatBtn.textContent = 'Chat';
+  chatBtn.addEventListener('click', () => {
+    appState.startTeamChat(projectId, member);
+  });
+  actions.appendChild(chatBtn);
 
   card.appendChild(actions);
 
