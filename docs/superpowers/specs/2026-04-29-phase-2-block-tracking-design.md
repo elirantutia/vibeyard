@@ -113,15 +113,20 @@ preference, one CSS module.
 - **Performance budget for cold scan:**
   - Skip any file whose `mtime < now - 5h - 5min` (5-min margin
     covers clock skew). These cannot contribute to the current
-    window.
-  - For files within the window, parse line-by-line and bail on the
-    first entry whose timestamp is older than `now - 5h` from the
-    *end* of the file (timestamps are monotonic within a transcript).
-    In practice this means we read only the trailing portion of long
-    transcripts.
+    window and are dropped without opening.
+  - Files within the window are streamed forward line-by-line in
+    full. There is no early-bail on the read path: timestamps are
+    monotonic within a transcript, but the cache stores *all*
+    parsed entries so that the next recompute can re-filter against
+    a moving 5h window without re-reading. Subsequent recomputes hit
+    the mtime cache and read nothing.
+  - The "trailing region" optimization considered earlier was
+    rejected (would have required reverse line iteration, which
+    Node has no clean primitive for and is fragile with multi-line
+    JSONL).
   - Target: cold scan completes in < 200ms on a directory with 100
-    transcripts totalling 50 MB. Documented in test plan; not
-    asserted in tests (timing-flaky).
+    transcripts whose mtime is within the 5h window. Not asserted in
+    tests (timing-flaky); documented as a budget.
 - **Cache:** `Map<filePath, { mtime, entries }>`. On recompute,
   `fs.statSync` each file; if mtime unchanged, reuse cached
   entries. Drops cache entries for files that no longer exist.
@@ -143,34 +148,81 @@ preference, one CSS module.
   compared as integer ms; `entryCount` as integer. An emit fires
   only when at least one of the three rounded values differs.
 - **API:**
-  - `getCurrentBlock(): { usdSpent: number, resetsAt: number, entryCount: number } | null`
-  - Internal event emitter for IPC bridge subscription.
+  - `getCurrentBlock(): Promise<BlockInfo | null>` where
+    `BlockInfo = { usdSpent, resetsAt, entryCount }`. Awaits the
+    initial startup scan via a one-shot `ready` promise so a
+    pre-ready call from the renderer does not falsely return `null`.
+    Subsequent calls resolve immediately from the cache.
+  - Internal event emitter for IPC bridge subscription
+    (`'block-changed'` event).
   - `_resetForTesting(): void` — clears cache, stops timers, drops
-    listeners. Required because module-level state is held.
+    listeners, resets the `ready` promise. Required because
+    module-level state is held.
 
 **New module `src/main/pricing.ts`:**
 
 - Exports `computeCost(model: string, usage: UsageEntry): number | null`.
 - Returns `null` for unknown models (caller skips the entry).
-- Single source of truth for per-model `{input, output, cacheRead,
-  cacheWrite}` rates per million tokens. Header comment states the
-  source URL (Anthropic pricing page) and a "verified on
-  YYYY-MM-DD" date so drift is visible in `git blame`.
+- **Model-key strategy:** the table is keyed on Anthropic's family
+  aliases as written in the JSONL (verified sample shows
+  `"model":"claude-opus-4-7"` — no date suffix). A small
+  normalization step strips any `-YYYYMMDD` date suffix and any
+  trailing `[1m]`-style variant tag, mapping dated IDs back to the
+  alias before lookup. Aliases not in the table return `null` (skip
+  + debug log).
+- **Cache-write rates:** Anthropic prices 5-minute and 1-hour cache
+  writes differently. The JSONL `usage` object exposes both as
+  `cache_creation.ephemeral_5m_input_tokens` and
+  `cache_creation.ephemeral_1h_input_tokens`. The pricing table
+  carries separate `cacheWrite5m` and `cacheWrite1h` rates per
+  model; `computeCost` reads both ephemeral fields when present and
+  falls back to `cache_creation_input_tokens` × `cacheWrite5m` when
+  the breakdown is absent (older transcript schema).
+- **Inputs:**
+  `{ input_tokens, cache_read_input_tokens, output_tokens,
+  cache_creation: { ephemeral_5m_input_tokens, ephemeral_1h_input_tokens },
+  cache_creation_input_tokens }` — fields exactly as they appear in
+  JSONL.
+- Single source of truth for per-model rates. Header comment names
+  the Anthropic pricing page URL and a "verified on YYYY-MM-DD" date
+  so drift is visible in `git blame`.
 
-### Trigger wiring (no `hook-status.ts` changes)
+### Trigger wiring (one small change to `hook-status.ts`)
 
-`usage-blocks.ts` registers itself with the existing main-side cost
-event flow by **subscribing**, not being called. Concretely: the
-IPC handler that forwards `session:costData` to the renderer also
-emits an internal Node `EventEmitter` event (e.g.
-`costEvents.emit('costData', payload)`) that `usage-blocks.ts`
-listens for. This keeps `hook-status.ts` Claude-agnostic. If a
-future provider has its own usage record, it can publish to the
-same internal bus or wire its own block tracker.
+QA confirmed there is no pre-existing internal cost-event bus —
+`session:costData` is sent directly via `win.webContents.send(...)`
+from `hook-status.ts:processFile`. To avoid hard-wiring `hook-status`
+to a Claude-specific module, Phase 2 introduces a tiny shared
+`src/main/cost-events.ts` containing a single `EventEmitter`
+singleton:
 
-The 30-second ticker and startup scan are registered from
-`main.ts` at app-ready. Both are cleared in `before-quit` to
-avoid leaks (called out in QA finding N3).
+```ts
+// cost-events.ts
+import { EventEmitter } from 'node:events';
+export const costEvents = new EventEmitter();
+```
+
+`hook-status.ts` is modified in exactly one place: immediately after
+the existing `webContents.send('session:costData', payload)` call,
+also `costEvents.emit('costData', payload)`. That is the only
+change to `hook-status.ts`. The module remains provider-agnostic
+because the bus is generic — any future provider's cost pipeline
+can publish to the same emitter.
+
+`usage-blocks.ts` subscribes to `costEvents` on initialization. The
+30-second ticker and startup scan are registered from `main.ts` at
+`app.whenReady`. Both are cleared in `before-quit`.
+
+**Race between `.cost` write and JSONL append:** the statusline
+hook writes the `.cost` file before Claude's CLI flushes the
+matching line to the JSONL transcript, so a `recompute()` triggered
+by `costData` may scan a JSONL that does not yet contain the new
+turn. Mitigation: every `costData`-triggered recompute is followed
+by a one-shot retry 1.5 seconds later, sufficient for the JSONL
+write to land. The 30-second ticker also catches anything missed.
+Duplicate-turn protection comes from the mtime cache (a re-read
+that produces the same `(timestamp, model, usage)` tuples is a
+no-op via cents-rounded change detection).
 
 ### IPC
 
@@ -228,6 +280,9 @@ app startup ──────────────────────�
   corrupting the total).
 - A scan that throws is caught at the `recompute()` boundary; the
   prior `BlockInfo` is preserved.
+- A `costData` event arriving before its JSONL line has been flushed
+  is not an error — the 1.5s retry plus the 30s ticker will pick up
+  the missing entry on the next pass.
 
 ## Testing
 
@@ -245,7 +300,12 @@ app startup ──────────────────────�
 - File deletion: removed file dropped from cache on next recompute.
 - `resetsAt = oldestInWindow.timestamp + 5h`.
 - Change detection: cents-rounded equality suppresses no-op emits.
-- `_resetForTesting()` clears cache, timers, listeners.
+- `_resetForTesting()` clears cache, timers, listeners, and resets
+  the `ready` promise.
+- `getCurrentBlock()` called before startup scan resolves awaits the
+  scan rather than returning a premature `null`.
+- `costData` event with no matching JSONL line yet (race) does not
+  emit a stale block; the 1.5s retry picks up the line and emits.
 
 `src/main/pricing.test.ts`:
 
@@ -253,6 +313,12 @@ app startup ──────────────────────�
   Haiku) using fixed token counts.
 - Unknown model returns `null`.
 - Cache-read / cache-write pricing differs from input pricing.
+- Dated suffix (`claude-opus-4-7-20260101`) normalizes to alias and
+  hits the table.
+- 1h vs 5m ephemeral cache rates applied separately when both
+  fields present.
+- Falls back to aggregate `cache_creation_input_tokens` × 5m rate
+  when the per-window breakdown is missing.
 
 `src/renderer/components/sidebar-usage.test.ts` (extend Phase 1
 tests):
