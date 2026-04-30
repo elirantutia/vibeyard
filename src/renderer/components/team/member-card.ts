@@ -14,7 +14,7 @@ export function createMemberCard(member: TeamMember, projectId: string): HTMLEle
 
   const avatar = document.createElement('div');
   avatar.className = 'team-card-avatar';
-  avatar.textContent = member.emoji || initials(member.name);
+  avatar.textContent = initials(member.name);
 
   const heading = document.createElement('div');
   heading.className = 'team-card-heading';

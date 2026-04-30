@@ -117,7 +117,6 @@ export interface TeamMember {
   name: string;
   role: string;
   description?: string;
-  emoji?: string;
   systemPrompt: string;
   source: 'predefined' | 'custom';
   sourceUrl?: string;

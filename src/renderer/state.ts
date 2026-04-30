@@ -497,7 +497,6 @@ class AppState {
       name: input.name,
       role: input.role,
       description: input.description,
-      emoji: input.emoji,
       systemPrompt: input.systemPrompt,
       source: input.source,
       sourceUrl: input.sourceUrl,
@@ -548,7 +547,7 @@ class AppState {
       ?? 'claude';
 
     const base = buildCliSession({
-      name: `${member.emoji ? member.emoji + ' ' : ''}${member.name}`.trim().slice(0, MAX_SESSION_NAME_LENGTH),
+      name: member.name.slice(0, MAX_SESSION_NAME_LENGTH),
       providerId,
       args: project.defaultArgs,
     });

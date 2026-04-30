@@ -39,7 +39,6 @@ id: cmo
 name: CMO
 role: Chief Marketing Officer
 description: Strategic marketing leadership
-emoji: 📣
 ---
 
 You are the CMO.`;
@@ -51,7 +50,6 @@ You are the CMO.`;
     expect(m!.name).toBe('CMO');
     expect(m!.role).toBe('Chief Marketing Officer');
     expect(m!.description).toBe('Strategic marketing leadership');
-    expect(m!.emoji).toBe('📣');
     expect(m!.systemPrompt).toBe('You are the CMO.');
     expect(m!.source).toBe('predefined');
     expect(m!.sourceUrl).toBe('https://x');
@@ -89,7 +87,6 @@ describe('memberToMarkdown round-trip', () => {
       name: 'CMO',
       role: 'Chief Marketing Officer',
       description: 'Strategic marketing leadership',
-      emoji: '📣',
       systemPrompt: 'You are the CMO.\nFocus on growth.',
       source: 'custom' as const,
       createdAt: 1,
@@ -102,7 +99,6 @@ describe('memberToMarkdown round-trip', () => {
     expect(parsed!.name).toBe('CMO');
     expect(parsed!.role).toBe('Chief Marketing Officer');
     expect(parsed!.description).toBe('Strategic marketing leadership');
-    expect(parsed!.emoji).toBe('📣');
     expect(parsed!.systemPrompt).toBe('You are the CMO.\nFocus on growth.');
   });
 });

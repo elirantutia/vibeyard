@@ -107,7 +107,7 @@ function renderSuggestions(state: DialogState, suggestions: TeamMember[]): void 
 
     const name = document.createElement('div');
     name.className = 'team-picker-row-name';
-    name.textContent = `${suggestion.emoji ? suggestion.emoji + ' ' : ''}${suggestion.name} · ${suggestion.role}`;
+    name.textContent = `${suggestion.name} · ${suggestion.role}`;
 
     main.appendChild(name);
 
@@ -133,7 +133,6 @@ function renderSuggestions(state: DialogState, suggestions: TeamMember[]): void 
           name: suggestion.name,
           role: suggestion.role,
           description: suggestion.description,
-          emoji: suggestion.emoji,
           systemPrompt: suggestion.systemPrompt,
           source: 'predefined',
           sourceUrl: suggestion.sourceUrl,

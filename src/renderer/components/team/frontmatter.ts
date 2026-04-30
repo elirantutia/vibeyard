@@ -40,7 +40,6 @@ export function memberFromMarkdown(
     name,
     role,
     description: meta.description?.trim() || undefined,
-    emoji: meta.emoji?.trim() || undefined,
     systemPrompt: body,
     source: opts.source,
     sourceUrl: opts.sourceUrl,
@@ -52,7 +51,6 @@ export function memberFromMarkdown(
 export function memberToMarkdown(member: TeamMember): string {
   const lines = ['---', `id: ${member.id}`, `name: ${member.name}`, `role: ${member.role}`];
   if (member.description) lines.push(`description: ${member.description}`);
-  if (member.emoji) lines.push(`emoji: ${member.emoji}`);
   lines.push('---', '', member.systemPrompt.trim(), '');
   return lines.join('\n');
 }
