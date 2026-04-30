@@ -536,13 +536,18 @@ class AppState {
     this.emit('team-changed');
   }
 
-  startTeamChat(projectId: string, member: TeamMember): SessionRecord | undefined {
+  startTeamChat(
+    projectId: string,
+    member: TeamMember,
+    overrideProviderId?: ProviderId,
+  ): SessionRecord | undefined {
     const project = this.state.projects.find((p) => p.id === projectId);
     if (!project) return undefined;
 
     const activeSession = project.sessions.find((s) => s.id === project.activeSessionId);
     const providerId =
-      (activeSession && isCliSession(activeSession) ? activeSession.providerId : undefined)
+      overrideProviderId
+      ?? (activeSession && isCliSession(activeSession) ? activeSession.providerId : undefined)
       ?? this.state.preferences.defaultProvider
       ?? 'claude';
 

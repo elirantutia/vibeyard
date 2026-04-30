@@ -197,6 +197,30 @@
   color: var(--danger, #d23);
 }
 
+/* Chat split button: main button + provider chevron */
+.team-card-chat-group {
+  display: flex;
+  flex-basis: 100%;
+  position: relative;
+}
+.team-card-chat-main {
+  flex: 1;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: none;
+}
+.team-card-chat-dropdown {
+  flex: 0 0 auto;
+  flex-basis: auto;
+  min-width: 0;
+  padding: 6px 8px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.25);
+  font-size: 9px;
+  line-height: 1;
+}
+
 /* Predefined picker dialog */
 .team-picker-overlay {
   position: fixed;

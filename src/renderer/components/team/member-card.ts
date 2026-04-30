@@ -1,5 +1,10 @@
 import type { TeamMember } from '../../../shared/types.js';
 import { appState } from '../../state.js';
+import {
+  getAvailableProviderMetas,
+  hasMultipleAvailableProviders,
+} from '../../provider-availability.js';
+import { showContextMenu } from '../board/board-context-menu.js';
 import { showConfirmModal } from '../modal.js';
 import { showTeamMemberModal } from './member-modal.js';
 import { showMemberSessionsModal } from './member-sessions-modal.js';
@@ -75,17 +80,50 @@ export function createMemberCard(member: TeamMember, projectId: string): HTMLEle
   });
   actions.appendChild(deleteBtn);
 
+  actions.appendChild(buildChatControl(projectId, member));
+
+  card.appendChild(actions);
+
+  return card;
+}
+
+function buildChatControl(projectId: string, member: TeamMember): HTMLElement {
   const chatBtn = document.createElement('button');
   chatBtn.className = 'team-card-btn team-card-btn-primary';
   chatBtn.textContent = 'Chat';
   chatBtn.addEventListener('click', () => {
     appState.startTeamChat(projectId, member);
   });
-  actions.appendChild(chatBtn);
 
-  card.appendChild(actions);
+  if (!hasMultipleAvailableProviders()) return chatBtn;
 
-  return card;
+  chatBtn.classList.add('team-card-chat-main');
+
+  const chevronBtn = document.createElement('button');
+  chevronBtn.className = 'team-card-btn team-card-btn-primary team-card-chat-dropdown';
+  chevronBtn.setAttribute('aria-label', 'Chat with another provider');
+  chevronBtn.setAttribute('aria-haspopup', 'menu');
+  chevronBtn.textContent = '▼';
+  chevronBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const r = chevronBtn.getBoundingClientRect();
+    showContextMenu(
+      r.right,
+      r.bottom + 4,
+      getAvailableProviderMetas().map((p) => ({
+        label: p.displayName,
+        action: () => {
+          appState.startTeamChat(projectId, member, p.id);
+        },
+      })),
+    );
+  });
+
+  const group = document.createElement('div');
+  group.className = 'team-card-chat-group';
+  group.appendChild(chatBtn);
+  group.appendChild(chevronBtn);
+  return group;
 }
 
 function initials(name: string): string {
