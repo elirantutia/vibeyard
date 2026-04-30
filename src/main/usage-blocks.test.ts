@@ -73,12 +73,16 @@ function addProject(name: string, files: Record<string, string>, mtimeMs: number
   }
 }
 
-function jsonl(entries: Array<{ ts: string; model: string; usage: object }>): string {
+function jsonl(
+  entries: Array<{ ts: string; model: string; usage: object; id?: string }>,
+): string {
   return entries
     .map((e) =>
       JSON.stringify({
         timestamp: e.ts,
-        message: { model: e.model, usage: e.usage },
+        message: e.id
+          ? { model: e.model, usage: e.usage, id: e.id }
+          : { model: e.model, usage: e.usage },
       })
     )
     .join('\n');
@@ -381,6 +385,54 @@ describe('usage-blocks', () => {
     await promise;
     expect(resolved).not.toBe('pending');
     expect((resolved as BlockInfo).entryCount).toBe(1);
+  });
+
+  it('dedupes entries with the same message.id across files', async () => {
+    const dup = {
+      ts: '2026-04-30T11:00:00.000Z',
+      model: 'claude-sonnet-4-6',
+      usage: { input_tokens: 1_000_000 }, // $3
+      id: 'msg_duplicate',
+    };
+    const fresh = {
+      ts: '2026-04-30T11:30:00.000Z',
+      model: 'claude-sonnet-4-6',
+      usage: { input_tokens: 1_000_000 }, // $3
+      id: 'msg_unique',
+    };
+    addProject('p1', { 'a.jsonl': jsonl([dup, fresh]) }, NOW - 60 * 60 * 1000);
+    addProject('p2', { 'b.jsonl': jsonl([dup]) }, NOW - 60 * 60 * 1000);
+
+    init();
+    const block = await getCurrentBlock();
+    expect(block).not.toBeNull();
+    expect(block!.entryCount).toBe(2); // dup counted once + fresh
+    expect(block!.usdSpent).toBeCloseTo(6, 5);
+  });
+
+  it('counts entries with no message.id without deduping', async () => {
+    addProject(
+      'p1',
+      {
+        'a.jsonl': jsonl([
+          {
+            ts: '2026-04-30T11:00:00.000Z',
+            model: 'claude-sonnet-4-6',
+            usage: { input_tokens: 1_000_000 },
+          },
+          {
+            ts: '2026-04-30T11:30:00.000Z',
+            model: 'claude-sonnet-4-6',
+            usage: { input_tokens: 1_000_000 },
+          },
+        ]),
+      },
+      NOW - 60 * 60 * 1000
+    );
+    init();
+    const block = await getCurrentBlock();
+    expect(block!.entryCount).toBe(2);
+    expect(block!.usdSpent).toBeCloseTo(6, 5);
   });
 
   it('_resetForTesting clears cache, timers, listeners, and ready state', async () => {

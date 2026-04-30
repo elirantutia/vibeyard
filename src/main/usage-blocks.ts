@@ -13,6 +13,7 @@ export type { BlockInfo };
 interface ParsedEntry {
   timestamp: number; // UTC ms (clamped to now if future)
   cost: number;
+  messageId: string | null; // Anthropic message.id, used to dedupe replayed entries
 }
 
 interface CachedFile {
@@ -80,14 +81,18 @@ function parseFile(filePath: string, now: number): ParsedEntry[] {
     const ts = typeof obj.timestamp === 'string' ? Date.parse(obj.timestamp) : NaN;
     if (!Number.isFinite(ts)) continue;
     const message = obj.message as
-      | { model?: string; usage?: UsageEntry }
+      | { model?: string; usage?: UsageEntry; id?: string }
       | undefined;
     if (!message?.model || !message.usage) continue;
     const cost = computeCost(message.model, message.usage);
     if (cost === null) continue; // unknown model — skip
     // Clamp future timestamps to now (clock skew)
     const clamped = ts > now ? now : ts;
-    entries.push({ timestamp: clamped, cost });
+    entries.push({
+      timestamp: clamped,
+      cost,
+      messageId: typeof message.id === 'string' ? message.id : null,
+    });
   }
   return entries;
 }
@@ -132,10 +137,18 @@ function computeBlock(now: number): BlockInfo | null {
   let usdSpent = 0;
   let oldestInWindow = Infinity;
   let entryCount = 0;
+  // Dedupe by Anthropic message.id — Claude appends prior turns when sessions
+  // resume, so the same usage entry can appear multiple times across (or
+  // within) JSONL files. Entries without an id (older format) fall through.
+  const seenIds = new Set<string>();
 
   for (const cached of fileCache.values()) {
     for (const entry of cached.entries) {
       if (entry.timestamp < windowStart) continue;
+      if (entry.messageId !== null) {
+        if (seenIds.has(entry.messageId)) continue;
+        seenIds.add(entry.messageId);
+      }
       usdSpent += entry.cost;
       entryCount++;
       if (entry.timestamp < oldestInWindow) {
