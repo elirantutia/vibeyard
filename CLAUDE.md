@@ -69,7 +69,15 @@ CLI-specific behavior is encapsulated behind a `CliProvider` interface (`src/mai
 - `confirm-helpers.ts` — Utility functions `countActiveStatuses()` and `buildWarningBannerDetail()` for building session status warning banners in close confirmation dialogs.
 - `close-guard.ts` — Window close guard; listens for `app:confirmClose` IPC from main process, checks active session status and `confirmCloseActive` preference, shows warning banner dialog if needed, responds with `app:closeConfirmed` or `app:closeCancelled`.
 - `terminal-context-menu.ts` — Right-click context menu for terminal panes (Copy, Paste, Select All, Clear Terminal). DOM-based using shared `tab-context-menu` CSS classes. `showTerminalContextMenu()` / `hideTerminalContextMenu()` exports; integrated via `contextmenu` listener on `xtermWrap` in `terminal-pane.ts`.
-- `sidebar-usage.ts` — Sidebar context-window usage indicator (issue #68 Phase 1). Subscribes to `session-cost.onChange` + active-session events; reads authoritative limit from `CostInfo.contextWindowSize` (falls back to model-name lookup), displays a progress bar + percent with amber/danger thresholds and ARIA `progressbar` role. Mounted between `#sidebar-content` and `#sidebar-footer`; hidden when no active session, no structured cost data (no `cost.model`), or `sidebarViews.usageIndicator === false`.
+- `sidebar-usage.ts` — Sidebar context-window usage indicator (issue #68). **Phase 1** (top row): subscribes to `session-cost.onChange` + active-session events; reads authoritative limit from `CostInfo.contextWindowSize` (falls back to model-name lookup), displays a progress bar + percent with amber/danger thresholds and ARIA `progressbar` role. **Phase 2** (bottom row): subscribes to `window.vibeyard.usage.onBlockChange`; renders `$X.XX · resets in HhMMm` for the rolling 5h block. Click anywhere on the widget to force a refresh (debounce-bypass). 60s renderer-side ticker keeps the countdown updating between block-change events. Mounted between `#sidebar-content` and `#sidebar-footer`; hidden when no active session, no structured cost data (no `cost.model`), or `sidebarViews.usageIndicator === false`.
+
+### 5-hour Usage Block Tracking
+
+`src/main/usage-blocks.ts` scans `~/.claude/projects/<hash>/*.jsonl` and aggregates Claude API spend within the rolling 5-hour window. Per-model rates live in `src/main/pricing.ts` (opus/sonnet/haiku 4.x families with separate 5m/1h ephemeral cache-write rates). Refresh cadence: debounced (250ms) on the internal `cost-events` bus + 30s wall-clock ticker + startup scan + on-demand `usage:refresh` IPC (used by the widget's click handler). mtime cache skips files older than `now - 5h - 5min`.
+
+**JSONL dedup:** Claude appends prior turns when sessions resume, so the same usage entry can appear multiple times across (or within) JSONL files. `computeBlock()` dedupes by `message.id` (Anthropic's API response identifier). Without this dedup, observed over-counting was ~40% (1.6× inflated cost). Entries lacking `message.id` (older format) fall through and are counted as-is.
+
+IPC: `usage:getBlock` (one-shot), `usage:refresh` (force recompute), `usage:blockChanged` (push). Renderer receives via `window.vibeyard.usage` namespace.
 
 ### Close Confirmation System
 

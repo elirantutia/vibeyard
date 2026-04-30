@@ -224,6 +224,17 @@ Duplicate-turn protection comes from the mtime cache (a re-read
 that produces the same `(timestamp, model, usage)` tuples is a
 no-op via cents-rounded change detection).
 
+**Postmortem amendment (2026-04-30):** the mtime cache prevents
+re-counting a single file's contents but does **not** catch the
+larger source of duplicates — Claude appends prior turns to JSONL
+files when sessions resume, so the same logical API call appears
+multiple times across (and sometimes within) files. Empirical
+measurement showed ~40% of entries in a 5-hour window were
+duplicates by `message.id`. Dedup now happens in `computeBlock()`
+via a `Set<string>` of seen `message.id` values; entries lacking
+an id (older format) fall through unchanged. Without this dedup
+the widget over-reports by ~1.6×.
+
 ### IPC
 
 New namespace `window.vibeyard.usage`:
