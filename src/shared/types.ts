@@ -137,6 +137,7 @@ export interface ArchivedSession {
   createdAt: string;
   closedAt: string;
   bookmarked?: boolean;
+  teamMemberId?: string;
   cost: {
     totalCostUsd: number;
     totalInputTokens: number;

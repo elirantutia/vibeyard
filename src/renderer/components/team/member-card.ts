@@ -2,6 +2,7 @@ import type { TeamMember } from '../../../shared/types.js';
 import { appState } from '../../state.js';
 import { showConfirmModal } from '../modal.js';
 import { showTeamMemberModal } from './member-modal.js';
+import { showMemberSessionsModal } from './member-sessions-modal.js';
 import { shareTeamMember } from './share-flow.js';
 
 export function createMemberCard(member: TeamMember, projectId: string): HTMLElement {
@@ -63,6 +64,12 @@ export function createMemberCard(member: TeamMember, projectId: string): HTMLEle
   editBtn.textContent = 'Edit';
   editBtn.addEventListener('click', () => showTeamMemberModal('edit', member));
   actions.appendChild(editBtn);
+
+  const sessionsBtn = document.createElement('button');
+  sessionsBtn.className = 'team-card-btn';
+  sessionsBtn.textContent = 'Sessions';
+  sessionsBtn.addEventListener('click', () => showMemberSessionsModal(member, projectId));
+  actions.appendChild(sessionsBtn);
 
   if (member.source === 'custom') {
     const shareBtn = document.createElement('button');

@@ -324,3 +324,46 @@
   border-color: var(--border);
   filter: none;
 }
+
+/* Member sessions modal */
+.team-sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.team-sessions-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.team-sessions-row:hover {
+  border-color: var(--accent);
+}
+.team-sessions-row-disabled {
+  cursor: default;
+}
+.team-sessions-row-disabled:hover {
+  border-color: var(--border);
+}
+.team-sessions-row-name {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.team-sessions-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.team-sessions-empty {
+  padding: 16px 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+}

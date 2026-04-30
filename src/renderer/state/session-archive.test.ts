@@ -9,11 +9,34 @@ vi.stubGlobal('crypto', {
   randomUUID: () => `uuid-${++uuidCounter}`,
 });
 
-import { buildResumedSessionFromCliId } from './session-archive';
+import { archiveSession, buildResumedSession, buildResumedSessionFromCliId } from './session-archive';
+import type { ProjectRecord, SessionRecord } from '../../shared/types';
 
 beforeEach(() => {
   uuidCounter = 0;
 });
+
+function makeProject(): ProjectRecord {
+  return {
+    id: 'p1',
+    name: 'P',
+    path: '/tmp/p',
+    sessions: [],
+    activeSessionId: null,
+    layout: { mode: 'tabs', splitPanes: [], splitDirection: 'horizontal' },
+  };
+}
+
+function makeSession(overrides: Partial<SessionRecord> = {}): SessionRecord {
+  return {
+    id: 's1',
+    name: 'Session 1',
+    providerId: 'claude',
+    cliSessionId: 'cli-1',
+    createdAt: new Date().toISOString(),
+    ...overrides,
+  };
+}
 
 describe('buildResumedSessionFromCliId()', () => {
   it('creates a SessionRecord with the given cliSessionId', () => {
@@ -49,5 +72,43 @@ describe('buildResumedSessionFromCliId()', () => {
   it('does not set type field (plain CLI session)', () => {
     const session = buildResumedSessionFromCliId('cli-t', 'T');
     expect((session as Record<string, unknown>).type).toBeUndefined();
+  });
+});
+
+describe('teamMemberId propagation', () => {
+  it('archiveSession copies teamMemberId from session into the archive entry', () => {
+    const project = makeProject();
+    archiveSession(project, makeSession({ teamMemberId: 'member-42' }));
+    expect(project.sessionHistory).toHaveLength(1);
+    expect(project.sessionHistory![0].teamMemberId).toBe('member-42');
+  });
+
+  it('archiveSession leaves teamMemberId undefined when the session has none', () => {
+    const project = makeProject();
+    archiveSession(project, makeSession());
+    expect(project.sessionHistory![0].teamMemberId).toBeUndefined();
+  });
+
+  it('archiveSession backfills teamMemberId on existing entry sharing cliSessionId', () => {
+    const project = makeProject();
+    archiveSession(project, makeSession({ cliSessionId: 'cli-share' }));
+    expect(project.sessionHistory![0].teamMemberId).toBeUndefined();
+    archiveSession(project, makeSession({ cliSessionId: 'cli-share', teamMemberId: 'member-7' }));
+    expect(project.sessionHistory).toHaveLength(1);
+    expect(project.sessionHistory![0].teamMemberId).toBe('member-7');
+  });
+
+  it('buildResumedSession carries teamMemberId forward', () => {
+    const session = buildResumedSession({
+      id: 'a1',
+      name: 'Old',
+      providerId: 'claude',
+      cliSessionId: 'cli-9',
+      createdAt: new Date().toISOString(),
+      closedAt: new Date().toISOString(),
+      teamMemberId: 'member-99',
+      cost: null,
+    });
+    expect(session.teamMemberId).toBe('member-99');
   });
 });

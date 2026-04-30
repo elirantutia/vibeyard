@@ -17,6 +17,7 @@ export function archiveSession(project: ProjectRecord, session: SessionRecord): 
     cliSessionId: session.cliSessionId,
     createdAt: session.createdAt,
     closedAt: new Date().toISOString(),
+    teamMemberId: session.teamMemberId,
     cost: costInfo ? {
       totalCostUsd: costInfo.totalCostUsd,
       totalInputTokens: costInfo.totalInputTokens,
@@ -35,6 +36,9 @@ export function archiveSession(project: ProjectRecord, session: SessionRecord): 
     if (archived.cost) project.sessionHistory[existingIndex].cost = archived.cost;
     if (archived.name !== project.sessionHistory[existingIndex].name) {
       project.sessionHistory[existingIndex].name = archived.name;
+    }
+    if (archived.teamMemberId) {
+      project.sessionHistory[existingIndex].teamMemberId = archived.teamMemberId;
     }
   } else {
     project.sessionHistory.push(archived);
@@ -58,6 +62,7 @@ export function buildResumedSession(archived: ArchivedSession): SessionRecord {
     providerId: archived.providerId,
     cliSessionId: archived.cliSessionId,
     createdAt: new Date().toISOString(),
+    teamMemberId: archived.teamMemberId,
   };
 }
 
