@@ -1,12 +1,13 @@
-// Source of predefined team members. The exact repo is TBD; this single
-// constant is the only place to update once we settle on a location. The
-// renderer fetches this directory via the GitHub Contents API.
+// Source of predefined team members. The picker fetches this directory at
+// runtime via the GitHub Contents API. Personas live in this repo's
+// top-level `personas/` folder so curated content can be updated
+// independently of app releases — flip the four fields below to retarget.
 
 export const TEAM_MEMBERS_REPO = {
-  owner: 'vibeyard',
-  repo: 'team-members',
+  owner: 'elirantutia',
+  repo: 'vibeyard',
   branch: 'main',
-  path: 'members',
+  path: 'personas',
 } as const;
 
 export function buildContentsApiUrl(): string {
