@@ -146,7 +146,8 @@ This is unrelated to #68 and only worth doing if there's user demand.
 ## Status
 
 - [x] Phase 1: sidebar widget with context window % — verified working 2026-04-29
-- [ ] Phase 2: 5-hour block tracking (native, not ccstatusline)
+- [x] Phase 2: design spec written and QA-reviewed (twice) — 2026-04-30
+- [ ] Phase 2: implementation (pricing.ts, usage-blocks.ts, cost-events.ts, widget extension)
 - [ ] Phase 3: optional ccstatusline integration (only if requested)
 
 ---
@@ -186,15 +187,24 @@ verification:
 
 Run `/commit` to land all of the above as a single commit.
 
-### Phase 2 brainstorm — open questions
+### Phase 2 brainstorm — resolved 2026-04-30
 
-Still need user decisions before Phase 2 can be designed:
+All three open questions answered. Full design at
+[`docs/superpowers/specs/2026-04-29-phase-2-block-tracking-design.md`](superpowers/specs/2026-04-29-phase-2-block-tracking-design.md)
+(commit `def8736`, after two QA-review passes).
 
-1. **Plan-tier discovery for the 5-hour block limit.**
-   Recommended: Option C — skip the % entirely, show raw
-   `$X.XX used in this 5-hour window, resets in HH:MM`. Sidesteps the
-   plan-tier problem entirely.
-2. (Pending after question 1) data source / refresh cadence for block
-   tracking.
-3. (Pending) where the block info is rendered — same widget, or a
-   separate row?
+1. **Plan-tier discovery:** skipped. Display is raw `$X.XX · resets
+   in HhMMm` — no plan-tier setting, no progress bar on the block
+   row. Avoids the maintenance burden of a tier table that
+   Anthropic could change without notice.
+2. **Data source:** local JSONL transcripts at
+   `~/.claude/projects/<hash>/*.jsonl`. Cost is computed
+   client-side via a new `src/main/pricing.ts` (per-model rate
+   table; 5m vs 1h ephemeral cache-write rates split). Phase 1
+   `.cost` files were ruled out — they live in `os.tmpdir()/vibeyard/`
+   and are wiped on app exit. Refresh cadence: debounced (250ms)
+   on internal cost-event bus + 30s wall-clock ticker + startup
+   scan. mtime gating skips files older than `now - 5h - 5min`.
+3. **Render location:** same `sidebar-usage` widget, second row
+   beneath the existing context bar. Single
+   `sidebarViews.usageIndicator` preference still controls both.
