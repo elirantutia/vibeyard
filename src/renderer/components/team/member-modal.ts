@@ -4,10 +4,9 @@ import { showModal, closeModal, setModalError, type FieldDef } from '../modal.js
 
 export function showTeamMemberModal(mode: 'create' | 'edit', existing?: TeamMember): void {
   const fields: FieldDef[] = [
-    { label: 'Name', id: 'name', placeholder: 'CMO', defaultValue: existing?.name ?? '' },
+    { label: 'Name', id: 'name', placeholder: 'Sarah', defaultValue: existing?.name ?? '' },
     { label: 'Role', id: 'role', placeholder: 'Chief Marketing Officer', defaultValue: existing?.role ?? '' },
     { label: 'Description', id: 'description', placeholder: 'Strategic marketing leadership', defaultValue: existing?.description ?? '' },
-    { label: 'Emoji', id: 'emoji', placeholder: '\u{1F4E3}', defaultValue: existing?.emoji ?? '' },
     {
       label: 'System prompt',
       id: 'systemPrompt',
@@ -31,19 +30,17 @@ export function showTeamMemberModal(mode: 'create' | 'edit', existing?: TeamMemb
     if (!systemPrompt) { setModalError('systemPrompt', 'System prompt is required'); return; }
 
     const description = values.description?.trim() || undefined;
-    const emoji = values.emoji?.trim() || undefined;
 
     if (mode === 'create') {
       appState.addTeamMember({
         name,
         role,
         description,
-        emoji,
         systemPrompt,
         source: 'custom',
       });
     } else if (existing) {
-      appState.updateTeamMember(existing.id, { name, role, description, emoji, systemPrompt });
+      appState.updateTeamMember(existing.id, { name, role, description, systemPrompt });
     }
 
     closeModal();
