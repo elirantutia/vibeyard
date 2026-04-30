@@ -86,11 +86,20 @@ co-located test. Roughly 200-300 LOC.
 
 ---
 
-## Phase 2 — 5-hour block tracking (Claude Pro/Max rolling-window quota)
+## Phase 2 — 5-hour block tracking (Claude Pro/Max quota)
 
-**Goal:** show fraction of the rolling 5-hour usage window consumed,
+**Goal:** show how much of the active 5-hour usage block has been consumed,
 aggregated across all sessions on the machine. This is what users typically
 mean by "how much have I spent this session."
+
+> **Implementation note (2026-04-30):** Initial implementation used a
+> pure rolling-window aggregation (`resetsAt = oldestEntryInLast5h + 5h`).
+> With continuous activity that pinned the countdown near `0h00m`
+> indefinitely. Switched to fixed-anchor blocks (matching ccusage):
+> a block is anchored to its first entry, lasts 5h, and the next entry
+> past the boundary opens a fresh block. See
+> `docs/superpowers/specs/2026-04-29-phase-2-block-tracking-design.md`
+> postmortem for details.
 
 **Approach:** native Vibeyard implementation, *not* an integration with
 [ccstatusline](https://github.com/sirmalloc/ccstatusline). Reasons documented
@@ -106,13 +115,13 @@ below.
    Issue #68 needs a sidebar DOM widget, so the renderer-side component
    from Phase 1 is required either way.
 3. The block-tracking logic is ~50 lines: read Claude's transcripts at
-   `~/.claude/projects/<hash>/<sid>.jsonl`, bucket entries into rolling
-   5-hour windows. Vibeyard already touches that directory for session
+   `~/.claude/projects/<hash>/<sid>.jsonl`, bucket entries into fixed
+   5-hour blocks. Vibeyard already touches that directory for session
    history; no need to shell out to a third-party binary.
 
 **Data source:** Claude's JSONL transcripts. Walk all session files,
-extract usage entries with timestamps, aggregate within the active rolling
-5-hour window.
+extract usage entries with timestamps, group into fixed-anchor 5-hour
+blocks, and report the active (latest, not-yet-expired) block.
 
 **Scope:**
 - New main-process module `src/main/usage-blocks.ts` to scan JSONL files

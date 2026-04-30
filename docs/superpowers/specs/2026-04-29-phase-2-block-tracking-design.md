@@ -363,3 +363,49 @@ tests):
   pricing table. Both can drift; mitigations are documented above
   (silent-skip on bad lines, skip-and-log on unknown models, dated
   comment in `pricing.ts`).
+
+## Postmortem amendment (2026-04-30): rolling window → fixed-anchor blocks
+
+The original spec defined `resetsAt = oldestInWindow.timestamp + 5h`,
+where `oldestInWindow` is the oldest entry whose timestamp falls in
+`[now - 5h, now]`. With continuous Claude activity that produced a
+"stuck at `0h00m`" countdown indefinitely: the oldest entry in the
+last 5h is always ≈ `now − 5h`, so `resetsAt ≈ now`, so
+`formatCountdown` returned `"0h00m"` on every tick. Once the original
+"first entry" rolled out, the next-oldest entry took its place
+within the same minute, never giving the countdown a chance to
+"reset" to a fresh ~5h window.
+
+**Fix:** switched `computeBlock()` from rolling window to
+fixed-anchor blocks (matching ccusage):
+
+1. Walk all entries chronologically (deduped by `message.id`).
+2. The first entry anchors a block: `blockStart = entry.timestamp`,
+   `blockEnd = blockStart + 5h`. (An interim "fix" hour-floored the
+   anchor to match ccusage's convention. That made the widget read
+   ~30 minutes earlier than the Claude web UI in practice — the web
+   UI does not hour-floor either. Direct comparison against
+   `~/.claude/projects/*.jsonl` showed the unfloored, exact-timestamp
+   anchor matches the web UI to the second; the original 4-min
+   discrepancy that prompted the hour-flooring attempt was cache
+   staleness, fixable with click-to-refresh.)
+3. Each subsequent entry whose timestamp `>= blockEnd` opens a new
+   block at its own timestamp.
+4. The active block is the latest one. If `now >= activeBlock.end`,
+   no entry has arrived to start a successor yet — return `null`
+   (widget hides bottom row until activity resumes).
+
+Behavioural difference: with continuous use, the countdown now
+jumps back to ~5h at each block boundary instead of hovering near
+zero. Expired-with-no-followup is the only path that reports
+`null`; previously the widget reported a phantom block whose
+`resetsAt` was perpetually in the past. The renderer-side
+`formatCountdown` clamp (`max(0, resetsAt - now)`) is retained as a
+safety net but is no longer the load-bearing piece of the
+"countdown reaches zero" UX.
+
+Tests in `src/main/usage-blocks.test.ts` were unaffected — the
+existing assertions on `usdSpent`, `entryCount`, and (where
+checked) `resetsAt` hold under both semantics for the inputs used,
+because each test's first entry happens to be the active-block
+anchor.

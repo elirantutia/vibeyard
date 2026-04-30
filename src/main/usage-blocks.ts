@@ -133,35 +133,52 @@ function refreshCache(now: number): void {
 }
 
 function computeBlock(now: number): BlockInfo | null {
-  const windowStart = now - FIVE_HOURS_MS;
-  let usdSpent = 0;
-  let oldestInWindow = Infinity;
-  let entryCount = 0;
+  // Fixed-anchor 5h blocks: a block starts at its first entry's timestamp and
+  // lasts exactly 5 hours. The next entry past that boundary opens a fresh
+  // block. The "active" block is the latest one whose end is still in the
+  // future. With continuous activity, the countdown resets to ~5h whenever a
+  // block boundary is crossed (rather than hovering near zero, which is what
+  // a pure rolling-window implementation produces).
+  const all: ParsedEntry[] = [];
+  for (const cached of fileCache.values()) {
+    for (const entry of cached.entries) all.push(entry);
+  }
+  if (all.length === 0) return null;
+  all.sort((a, b) => a.timestamp - b.timestamp);
+
   // Dedupe by Anthropic message.id — Claude appends prior turns when sessions
   // resume, so the same usage entry can appear multiple times across (or
   // within) JSONL files. Entries without an id (older format) fall through.
   const seenIds = new Set<string>();
 
-  for (const cached of fileCache.values()) {
-    for (const entry of cached.entries) {
-      if (entry.timestamp < windowStart) continue;
-      if (entry.messageId !== null) {
-        if (seenIds.has(entry.messageId)) continue;
-        seenIds.add(entry.messageId);
-      }
-      usdSpent += entry.cost;
-      entryCount++;
-      if (entry.timestamp < oldestInWindow) {
-        oldestInWindow = entry.timestamp;
-      }
+  let activeStart = -1;
+  let activeUsd = 0;
+  let activeCount = 0;
+
+  for (const entry of all) {
+    if (entry.messageId !== null) {
+      if (seenIds.has(entry.messageId)) continue;
+      seenIds.add(entry.messageId);
+    }
+    if (activeStart === -1 || entry.timestamp >= activeStart + FIVE_HOURS_MS) {
+      activeStart = entry.timestamp;
+      activeUsd = entry.cost;
+      activeCount = 1;
+    } else {
+      activeUsd += entry.cost;
+      activeCount += 1;
     }
   }
 
-  if (entryCount === 0) return null;
+  if (activeStart === -1) return null;
+  const resetsAt = activeStart + FIVE_HOURS_MS;
+  // Latest block has expired with no follow-up activity → no active block.
+  if (now >= resetsAt) return null;
+
   return {
-    usdSpent,
-    resetsAt: oldestInWindow + FIVE_HOURS_MS,
-    entryCount,
+    usdSpent: activeUsd,
+    resetsAt,
+    entryCount: activeCount,
   };
 }
 

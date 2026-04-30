@@ -62,7 +62,13 @@ export function normalizeModelKey(model: string): string {
   return key;
 }
 
+// Claude Code marks internal/non-API messages with a sentinel model value
+// (e.g. `<synthetic>` for compaction/system messages). These are not billable
+// and should be skipped silently rather than logged as unknown.
+const NON_BILLABLE_MODELS = new Set(['<synthetic>']);
+
 export function computeCost(model: string, usage: UsageEntry): number | null {
+  if (NON_BILLABLE_MODELS.has(model)) return null;
   const key = normalizeModelKey(model);
   const family = FAMILY_OF[key];
   const rates = family ? FAMILY_RATES[family] : undefined;
