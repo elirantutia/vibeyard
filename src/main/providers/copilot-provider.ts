@@ -27,6 +27,7 @@ export class CopilotProvider implements CliProvider {
       shiftEnterNewline: false,
       pendingPromptTrigger: 'startup-arg',
       planModeArg: '--mode plan',
+      systemPromptInjection: false,
     },
     defaultContextWindowSize: 128_000,
   };
@@ -48,9 +49,6 @@ export class CopilotProvider implements CliProvider {
 
   buildArgs(opts: { cliSessionId: string | null; isResume: boolean; extraArgs: string; initialPrompt?: string; systemPrompt?: string }): string[] {
     const args: string[] = [];
-    if (opts.systemPrompt) {
-      args.push('--system-prompt', opts.systemPrompt);
-    }
     if (opts.isResume && opts.cliSessionId) {
       args.push(`--resume=${opts.cliSessionId}`);
     } else if (opts.initialPrompt) {

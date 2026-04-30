@@ -17,6 +17,7 @@ export interface CliProviderCapabilities {
   shiftEnterNewline: boolean;
   pendingPromptTrigger: PendingPromptTrigger;
   planModeArg?: string;
+  systemPromptInjection: boolean;
 }
 
 export interface CliProviderMeta {

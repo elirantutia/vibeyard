@@ -78,6 +78,7 @@ describe('meta', () => {
     expect(caps.configReading).toBe(true);
     expect(caps.shiftEnterNewline).toBe(false);
     expect(caps.pendingPromptTrigger).toBe('startup-arg');
+    expect(caps.systemPromptInjection).toBe(true);
   });
 
   it('has defaultContextWindowSize of 200,000', () => {

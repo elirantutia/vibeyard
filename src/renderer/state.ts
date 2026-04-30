@@ -2,7 +2,7 @@ import type { VibeyardApi } from './types.js';
 import type { SessionRecord, ProjectRecord, Preferences, PersistedState, ArchivedSession, ProviderId, CostInfo, ContextWindowInfo, InitialContextSnapshot, ReadinessResult, BoardColumn, BoardData, TeamMember, TeamData } from '../shared/types.js';
 import { getCost, restoreCost } from './session-cost.js';
 import { restoreContext } from './session-context.js';
-import { getProviderCapabilities, getProviderAvailabilitySnapshot } from './provider-availability.js';
+import { getProviderCapabilities, getProviderAvailabilitySnapshot, getTeamChatProviderMetas } from './provider-availability.js';
 import { basename } from '../shared/platform.js';
 import { isCliSession } from './session-utils.js';
 import { archiveSession as archiveSessionPure, buildResumedSession, buildResumedSessionFromCliId } from './state/session-archive.js';
@@ -545,11 +545,15 @@ class AppState {
     if (!project) return undefined;
 
     const activeSession = project.sessions.find((s) => s.id === project.activeSessionId);
-    const providerId =
-      overrideProviderId
-      ?? (activeSession && isCliSession(activeSession) ? activeSession.providerId : undefined)
-      ?? this.state.preferences.defaultProvider
-      ?? 'claude';
+    const teamCapable = new Set(getTeamChatProviderMetas().map((p) => p.id));
+    const candidates: (ProviderId | undefined)[] = [
+      overrideProviderId,
+      activeSession && isCliSession(activeSession) ? activeSession.providerId : undefined,
+      this.state.preferences.defaultProvider,
+      'claude',
+    ];
+    const providerId = candidates.find((id): id is ProviderId => !!id && teamCapable.has(id));
+    if (!providerId) return undefined;
 
     const base = buildCliSession({
       name: member.name.slice(0, MAX_SESSION_NAME_LENGTH),

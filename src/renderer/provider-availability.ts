@@ -57,6 +57,10 @@ export function getAvailableProviderMetas(): CliProviderMeta[] {
   return cachedProviders.filter(p => cachedAvailability!.get(p.id));
 }
 
+export function getTeamChatProviderMetas(): CliProviderMeta[] {
+  return getAvailableProviderMetas().filter(p => p.capabilities.systemPromptInjection);
+}
+
 export function getProviderCapabilities(providerId: ProviderId): CliProviderCapabilities | null {
   if (!cachedProviders) return null;
   return cachedProviders.find(provider => provider.id === providerId)?.capabilities ?? null;

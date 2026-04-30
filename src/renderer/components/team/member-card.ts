@@ -1,9 +1,6 @@
 import type { TeamMember } from '../../../shared/types.js';
 import { appState } from '../../state.js';
-import {
-  getAvailableProviderMetas,
-  hasMultipleAvailableProviders,
-} from '../../provider-availability.js';
+import { getTeamChatProviderMetas } from '../../provider-availability.js';
 import { showContextMenu } from '../board/board-context-menu.js';
 import { showConfirmModal } from '../modal.js';
 import { showTeamMemberModal } from './member-modal.js';
@@ -88,14 +85,23 @@ export function createMemberCard(member: TeamMember, projectId: string): HTMLEle
 }
 
 function buildChatControl(projectId: string, member: TeamMember): HTMLElement {
+  const teamProviders = getTeamChatProviderMetas();
+
   const chatBtn = document.createElement('button');
   chatBtn.className = 'team-card-btn team-card-btn-primary';
   chatBtn.textContent = 'Chat';
+
+  if (teamProviders.length === 0) {
+    chatBtn.disabled = true;
+    chatBtn.title = 'No installed CLI supports team personas. Install Claude or Codex.';
+    return chatBtn;
+  }
+
   chatBtn.addEventListener('click', () => {
     appState.startTeamChat(projectId, member);
   });
 
-  if (!hasMultipleAvailableProviders()) return chatBtn;
+  if (teamProviders.length === 1) return chatBtn;
 
   chatBtn.classList.add('team-card-chat-main');
 
@@ -110,7 +116,7 @@ function buildChatControl(projectId: string, member: TeamMember): HTMLElement {
     showContextMenu(
       r.right,
       r.bottom + 4,
-      getAvailableProviderMetas().map((p) => ({
+      teamProviders.map((p) => ({
         label: p.displayName,
         action: () => {
           appState.startTeamChat(projectId, member, p.id);

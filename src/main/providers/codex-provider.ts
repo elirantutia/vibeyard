@@ -28,6 +28,7 @@ export class CodexProvider implements CliProvider {
       configReading: true,
       shiftEnterNewline: false,
       pendingPromptTrigger: 'startup-arg',
+      systemPromptInjection: true,
     },
     defaultContextWindowSize: 200_000,
   };
