@@ -109,6 +109,7 @@ export interface VibeyardApi {
   };
   usage: {
     getBlock(): Promise<BlockInfo | null>;
+    refresh(): Promise<BlockInfo | null>;
     onBlockChange(callback: (info: BlockInfo | null) => void): () => void;
   };
   settings: {
@@ -266,6 +267,7 @@ const api: VibeyardApi = {
   },
   usage: {
     getBlock: () => ipcRenderer.invoke('usage:getBlock'),
+    refresh: () => ipcRenderer.invoke('usage:refresh'),
     onBlockChange: (cb) =>
       onChannel('usage:blockChanged', (info) => cb(info as BlockInfo | null)),
   },

@@ -249,6 +249,15 @@ export async function getCurrentBlock(): Promise<BlockInfo | null> {
   return lastEmitted;
 }
 
+export async function refresh(): Promise<void> {
+  if (!isReady) await readyPromise;
+  if (debounceTimer) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+  }
+  recompute();
+}
+
 export function onBlockChange(cb: (info: BlockInfo | null) => void): () => void {
   emitter.on('block-changed', cb);
   return () => emitter.off('block-changed', cb);

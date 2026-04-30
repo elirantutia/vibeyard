@@ -8,7 +8,7 @@ import { addMcpServer, removeMcpServer } from './claude-cli';
 import type { McpServerConfig } from './claude-cli';
 import { loadState, saveState, PersistedState } from './store';
 import { startWatching, cleanupSessionStatus } from './hook-status';
-import { getCurrentBlock, onBlockChange } from './usage-blocks';
+import { getCurrentBlock, onBlockChange, refresh as refreshUsageBlock } from './usage-blocks';
 import { startCodexSessionWatcher, registerPendingCodexSession, unregisterCodexSession } from './codex-session-watcher';
 import { getGitStatus, getGitFiles, getGitDiff, getGitWorktrees, gitStageFile, gitUnstageFile, gitDiscardFile, getGitRemoteUrl, listGitBranches, checkoutGitBranch, createGitBranch } from './git-status';
 import { startGitWatcher, stopGitWatcher, notifyGitChanged } from './git-watcher';
@@ -494,6 +494,10 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('usage:getBlock', () => getCurrentBlock());
+  ipcMain.handle('usage:refresh', async () => {
+    await refreshUsageBlock();
+    return getCurrentBlock();
+  });
   onBlockChange((info) => {
     for (const w of BrowserWindow.getAllWindows()) {
       if (!w.isDestroyed()) {

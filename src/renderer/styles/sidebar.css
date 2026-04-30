@@ -91,9 +91,14 @@
   border-top: 1px solid var(--border);
   padding: 8px 12px;
   font-size: 11px;
+  cursor: pointer;
   color: var(--text-secondary);
   user-select: none;
   flex-shrink: 0;
+}
+
+#sidebar-usage:hover {
+  background: var(--bg-hover);
 }
 
 #sidebar-usage.hidden {

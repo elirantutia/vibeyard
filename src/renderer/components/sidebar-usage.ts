@@ -17,6 +17,8 @@ let blockRowEl: HTMLElement | null = null;
 let unsubscribeCost: (() => void) | null = null;
 let unsubscribeBlock: (() => void) | null = null;
 let countdownTickerId: number | null = null;
+let clickHandler: ((e: Event) => void) | null = null;
+let clickHandlerEl: HTMLElement | null = null;
 const appStateUnsubscribers: Array<() => void> = [];
 let currentBlock: BlockInfo | null = null;
 const COUNTDOWN_TICKER_MS = 60_000;
@@ -107,6 +109,17 @@ export function initSidebarUsage(): void {
   containerEl = document.getElementById('sidebar-usage');
   if (!containerEl) return;
   buildDom(containerEl);
+
+  if (clickHandler && clickHandlerEl) {
+    clickHandlerEl.removeEventListener('click', clickHandler);
+  }
+  clickHandler = () => {
+    void window.vibeyard.usage.refresh().catch((err) => {
+      console.warn('[sidebar-usage] refresh failed', err);
+    });
+  };
+  clickHandlerEl = containerEl;
+  containerEl.addEventListener('click', clickHandler);
 
   if (appStateUnsubscribers.length === 0) {
     appStateUnsubscribers.push(
@@ -216,6 +229,11 @@ export function _resetForTesting(): void {
     clearInterval(countdownTickerId);
     countdownTickerId = null;
   }
+  if (clickHandler && clickHandlerEl) {
+    clickHandlerEl.removeEventListener('click', clickHandler);
+  }
+  clickHandler = null;
+  clickHandlerEl = null;
   while (appStateUnsubscribers.length > 0) {
     appStateUnsubscribers.pop()!();
   }

@@ -1,5 +1,13 @@
-import { describe, it, expect } from 'vitest';
-import { getContextWindowLimit, computeUsedTokens, prettyModel, formatCountdown } from './sidebar-usage';
+// @vitest-environment jsdom
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  getContextWindowLimit,
+  computeUsedTokens,
+  prettyModel,
+  formatCountdown,
+  initSidebarUsage,
+  _resetForTesting,
+} from './sidebar-usage';
 import type { CostInfo } from '../session-cost';
 
 describe('sidebar-usage', () => {
@@ -105,5 +113,47 @@ describe('sidebar-usage', () => {
     it('handles multi-hour durations', () => {
       expect(formatCountdown(NOW + (4 * 60 + 59) * 60_000, NOW)).toBe('4h59m');
     });
+  });
+});
+
+describe('sidebar-usage click-to-refresh', () => {
+  let refreshSpy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    document.body.innerHTML = '<div id="sidebar-usage"></div>';
+    refreshSpy = vi.fn().mockResolvedValue(null);
+    (globalThis as unknown as { window: typeof window }).window.vibeyard = {
+      usage: {
+        getBlock: vi.fn().mockResolvedValue(null),
+        refresh: refreshSpy,
+        onBlockChange: vi.fn().mockReturnValue(() => {}),
+      },
+    } as unknown as typeof window.vibeyard;
+  });
+
+  afterEach(() => {
+    _resetForTesting();
+    document.body.innerHTML = '';
+  });
+
+  it('invokes window.vibeyard.usage.refresh when the widget is clicked', () => {
+    initSidebarUsage();
+    document.getElementById('sidebar-usage')!.click();
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('only attaches one click listener if init runs twice on the same element', () => {
+    initSidebarUsage();
+    initSidebarUsage();
+    document.getElementById('sidebar-usage')!.click();
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes the click listener after _resetForTesting', () => {
+    initSidebarUsage();
+    const el = document.getElementById('sidebar-usage')!;
+    _resetForTesting();
+    el.click();
+    expect(refreshSpy).not.toHaveBeenCalled();
   });
 });
