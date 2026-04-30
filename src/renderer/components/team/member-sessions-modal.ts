@@ -2,6 +2,7 @@ import type { ArchivedSession, SessionRecord, TeamMember } from '../../../shared
 import { appState } from '../../state.js';
 import { closeModal, registerModalCleanup } from '../modal.js';
 import { isCliSession } from '../../session-utils.js';
+import { getProviderDisplayName } from '../../provider-availability.js';
 
 const overlay = document.getElementById('modal-overlay')!;
 const titleEl = document.getElementById('modal-title')!;
@@ -69,9 +70,10 @@ export function showMemberSessionsModal(member: TeamMember, projectId: string): 
 }
 
 function activeRow(session: SessionRecord, projectId: string): SessionRow {
+  const provider = getProviderDisplayName(session.providerId ?? 'claude');
   return {
     name: session.name,
-    meta: `Open · started ${formatRelative(Date.parse(session.createdAt))}`,
+    meta: `Open · started ${formatRelative(Date.parse(session.createdAt))} · ${provider}`,
     onClick: () => {
       appState.setActiveSession(projectId, session.id);
       closeModal();
@@ -81,9 +83,10 @@ function activeRow(session: SessionRecord, projectId: string): SessionRow {
 
 function archivedRow(entry: ArchivedSession, projectId: string): SessionRow {
   const canResume = !!entry.cliSessionId;
+  const provider = getProviderDisplayName(entry.providerId);
   return {
     name: entry.name,
-    meta: `Closed · ${formatRelative(Date.parse(entry.closedAt))}${canResume ? '' : ' · cannot resume'}`,
+    meta: `Closed · ${formatRelative(Date.parse(entry.closedAt))}${canResume ? '' : ' · cannot resume'} · ${provider}`,
     onClick: canResume
       ? () => {
           appState.resumeFromHistory(projectId, entry.id);
