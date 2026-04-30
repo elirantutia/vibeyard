@@ -48,17 +48,3 @@ export function memberFromMarkdown(
   };
 }
 
-export function memberToMarkdown(member: TeamMember): string {
-  const lines = ['---', `id: ${member.id}`, `name: ${member.name}`, `role: ${member.role}`];
-  if (member.description) lines.push(`description: ${member.description}`);
-  lines.push('---', '', member.systemPrompt.trim(), '');
-  return lines.join('\n');
-}
-
-export function slugifyMemberId(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40) || 'member';
-}

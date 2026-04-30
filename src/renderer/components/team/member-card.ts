@@ -3,7 +3,6 @@ import { appState } from '../../state.js';
 import { showConfirmModal } from '../modal.js';
 import { showTeamMemberModal } from './member-modal.js';
 import { showMemberSessionsModal } from './member-sessions-modal.js';
-import { shareTeamMember } from './share-flow.js';
 
 export function createMemberCard(member: TeamMember, projectId: string): HTMLElement {
   const card = document.createElement('div');
@@ -70,17 +69,6 @@ export function createMemberCard(member: TeamMember, projectId: string): HTMLEle
   sessionsBtn.textContent = 'Sessions';
   sessionsBtn.addEventListener('click', () => showMemberSessionsModal(member, projectId));
   actions.appendChild(sessionsBtn);
-
-  if (member.source === 'custom') {
-    const shareBtn = document.createElement('button');
-    shareBtn.className = 'team-card-btn';
-    shareBtn.textContent = 'Share';
-    shareBtn.title = 'Copy as Markdown and open a GitHub PR';
-    shareBtn.addEventListener('click', () => {
-      void shareTeamMember(member);
-    });
-    actions.appendChild(shareBtn);
-  }
 
   const deleteBtn = document.createElement('button');
   deleteBtn.className = 'team-card-btn team-card-btn-danger';

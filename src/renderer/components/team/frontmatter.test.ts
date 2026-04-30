@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseTeamMarkdown, memberFromMarkdown, memberToMarkdown, slugifyMemberId } from './frontmatter';
+import { parseTeamMarkdown, memberFromMarkdown } from './frontmatter';
 
 describe('parseTeamMarkdown', () => {
   it('parses frontmatter and body', () => {
@@ -80,35 +80,3 @@ role: x
   });
 });
 
-describe('memberToMarkdown round-trip', () => {
-  it('produces a parseable string that round-trips', () => {
-    const member = {
-      id: 'cmo',
-      name: 'CMO',
-      role: 'Chief Marketing Officer',
-      description: 'Strategic marketing leadership',
-      systemPrompt: 'You are the CMO.\nFocus on growth.',
-      source: 'custom' as const,
-      createdAt: 1,
-      updatedAt: 1,
-    };
-    const md = memberToMarkdown(member);
-    const parsed = memberFromMarkdown(md, { fallbackId: 'x', source: 'custom' });
-    expect(parsed).toBeTruthy();
-    expect(parsed!.id).toBe('cmo');
-    expect(parsed!.name).toBe('CMO');
-    expect(parsed!.role).toBe('Chief Marketing Officer');
-    expect(parsed!.description).toBe('Strategic marketing leadership');
-    expect(parsed!.systemPrompt).toBe('You are the CMO.\nFocus on growth.');
-  });
-});
-
-describe('slugifyMemberId', () => {
-  it('lowercases and replaces non-alphanum with dashes', () => {
-    expect(slugifyMemberId('Chief Marketing Officer!')).toBe('chief-marketing-officer');
-  });
-
-  it('returns "member" for empty input', () => {
-    expect(slugifyMemberId('!!!')).toBe('member');
-  });
-});

@@ -19,8 +19,3 @@ export function buildRawUrl(filename: string): string {
   const { owner, repo, branch, path } = TEAM_MEMBERS_REPO;
   return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}/${filename}`;
 }
-
-export function buildNewFileUrl(filename: string): string {
-  const { owner, repo, branch, path } = TEAM_MEMBERS_REPO;
-  return `https://github.com/${owner}/${repo}/new/${branch}/${path}?filename=${encodeURIComponent(filename)}`;
-}
