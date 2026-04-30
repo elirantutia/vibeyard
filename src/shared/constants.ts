@@ -9,6 +9,7 @@ export const DEFAULT_SCAN_IGNORE = [
   'poetry.lock',
   'go.sum',
   'Pipfile.lock',
+  'uv.lock',
   '*.min.js',
   '*.min.css',
   '*.bundle.js',
