@@ -38,7 +38,7 @@ function buildTeamShell(): HTMLElement {
 
   const browseBtn = document.createElement('button');
   browseBtn.className = 'team-header-btn';
-  browseBtn.textContent = 'Browse predefined';
+  browseBtn.textContent = 'Browse';
   browseBtn.addEventListener('click', () => { void showPredefinedPicker(); });
 
   const addBtn = document.createElement('button');
@@ -91,7 +91,7 @@ export function renderTeam(target?: HTMLElement): void {
   if (members.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'team-empty';
-    empty.innerHTML = 'No team members yet. Click <strong>+ New member</strong> to create one, or <strong>Browse predefined</strong> to add a suggestion.';
+    empty.innerHTML = 'No team members yet. Click <strong>+ New member</strong> to create one, or <strong>Browse</strong> to add a suggestion.';
     grid.appendChild(empty);
     return;
   }
