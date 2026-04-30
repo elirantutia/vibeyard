@@ -1,13 +1,13 @@
 import * as path from 'path';
 import { homedir } from 'os';
 import { ipcMain, BrowserWindow } from 'electron';
-import { getStatusLineScriptPath } from './hook-status';
+import { getStatusLineCommand } from './hook-status';
 import { HOOK_MARKER, installHooksOnly, installStatusLine, getSupportedHookEvents } from './claude-cli';
 import { readJsonSafe } from './fs-utils';
 import { loadState, saveState } from './store';
 import type { SettingsValidationResult } from '../shared/types';
 
-const LEGACY_STATUSLINE_RE = /[/\\]vibeyard[/\\]statusline\.(sh|cmd)$/;
+const LEGACY_STATUSLINE_RE = /[/\\]\.?vibeyard[/\\](?:run[/\\])?statusline\.(sh|cmd|py)["']?$/;
 
 const CANDIDATE_HOOK_EVENTS = [
   'SessionStart', 'UserPromptSubmit', 'PostToolUse',
@@ -32,7 +32,7 @@ function readClaudeSettings(): Record<string, unknown> {
 export function isVibeyardStatusLine(statusLine: unknown): boolean {
   if (!statusLine || typeof statusLine !== 'object') return false;
   const sl = statusLine as Record<string, unknown>;
-  if (sl.command === getStatusLineScriptPath()) return true;
+  if (sl.command === getStatusLineCommand()) return true;
   // Recognize legacy Vibeyard statusline paths (e.g. /tmp/vibeyard/statusline.sh)
   // so upgrades silently replace them without showing a conflict dialog.
   if (typeof sl.command === 'string') {

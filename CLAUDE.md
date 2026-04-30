@@ -63,12 +63,13 @@ CLI-specific behavior is encapsulated behind a `CliProvider` interface (`src/mai
 - `state.ts` — Reactive AppState singleton; debounced persistence (300ms) to `~/.vibeyard/state.json`
 - `split-layout.ts` — Manages tab mode (single terminal) vs split mode (side-by-side)
 - `session-activity.ts` — Tracks working/waiting/idle status with debounced transitions
-- `session-cost.ts` — Structured cost tracking via Claude CLI status line (`statusLine` setting), with regex fallback for older CLI versions. Provides per-session and aggregate cost data (USD, tokens, cache, duration)
+- `session-cost.ts` — Structured cost tracking via Claude CLI status line (`statusLine` setting), with regex fallback for older CLI versions. Provides per-session and aggregate cost data (USD, tokens, cache, duration, `contextWindowSize` reported by Claude). Listeners can use `cost.model` as a marker to discriminate structured data (always set) vs the regex fallback (never sets it).
 - `browser-tab/` — Browser tab pane split into focused modules: `types.ts`, `instance.ts` (registry + preload path), `navigation.ts`, `viewport.ts`, `selector-ui.ts`, `inspect-mode.ts`, `flow-recording.ts`, `flow-picker.ts`, `session-integration.ts`, and `pane.ts` (DOM build + event wiring). `browser-tab-pane.ts` is a re-export shim for backward compatibility.
 - `confirm-dialog.ts` — Promise-based confirmation dialog (`showConfirmDialog()`) returning `true`/`false`. Separate from `modal.ts` (which handles form inputs). Supports optional warning banner via `detail` HTML.
 - `confirm-helpers.ts` — Utility functions `countActiveStatuses()` and `buildWarningBannerDetail()` for building session status warning banners in close confirmation dialogs.
 - `close-guard.ts` — Window close guard; listens for `app:confirmClose` IPC from main process, checks active session status and `confirmCloseActive` preference, shows warning banner dialog if needed, responds with `app:closeConfirmed` or `app:closeCancelled`.
 - `terminal-context-menu.ts` — Right-click context menu for terminal panes (Copy, Paste, Select All, Clear Terminal). DOM-based using shared `tab-context-menu` CSS classes. `showTerminalContextMenu()` / `hideTerminalContextMenu()` exports; integrated via `contextmenu` listener on `xtermWrap` in `terminal-pane.ts`.
+- `sidebar-usage.ts` — Sidebar context-window usage indicator (issue #68 Phase 1). Subscribes to `session-cost.onChange` + active-session events; reads authoritative limit from `CostInfo.contextWindowSize` (falls back to model-name lookup), displays a progress bar + percent with amber/danger thresholds and ARIA `progressbar` role. Mounted between `#sidebar-content` and `#sidebar-footer`; hidden when no active session, no structured cost data (no `cost.model`), or `sidebarViews.usageIndicator === false`.
 
 ### Close Confirmation System
 
@@ -91,6 +92,12 @@ exception.
 ### State Persistence
 
 App state (projects, sessions, layout) persists to `~/.vibeyard/state.json` via the main process store. Saves are debounced and flushed on quit. Sessions track `cliSessionId` for CLI session resume capability. Legacy `claudeSessionId` fields are auto-migrated on load.
+
+Hook scripts in `~/.vibeyard/run/` (Python helpers for status writing, session ID capture, etc.) are **not** cleaned up on app exit — they persist across restarts. This is intentional: hooks registered in `~/.claude/settings.json` reference these scripts and must work even when Vibeyard isn't running (e.g. standalone `claude` sessions). The scripts are small and idempotent; `installHookScripts()` overwrites them on next launch. Only session-specific runtime files in the temp `STATUS_DIR` are cleaned up on exit.
+
+### Status-line invocation pipeline
+
+Claude Code's `statusLine.command` runs **without going through cmd.exe/sh**, so on Windows the command must be a directly executable program (`python "..."`), **not** a `.cmd` wrapper. A `.cmd` path silently fails — Claude makes no error noise, no `.cost` files get written, and the cost footer stays empty. The python script reads JSON from stdin, looks up `CLAUDE_IDE_SESSION_ID` from the env Vibeyard injects, and writes `<sid>.cost` to `STATUS_DIR`. Main-process logic in `hook-status.ts` watches `STATUS_DIR`, forwards `.cost` payloads to the renderer via `session:costData` IPC, and lets `appState.hasSession()` in the renderer be the single gate for which sessions get updated. There is **no** `knownSessionIds` filter in main — that gate was removed because it dropped events for any session whose PTY hadn't yet been spawned in the current process. `startWatching()` calls `resyncAllSessions()` immediately so pre-existing `.cost` files propagate at startup rather than waiting for a fresh write.
 
 ## UI Development
 

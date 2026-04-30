@@ -1,5 +1,6 @@
 import { appState } from './state.js';
 import { initSidebar, promptNewProject } from './components/sidebar.js';
+import { initSidebarUsage } from './components/sidebar-usage.js';
 import { initTabBar } from './components/tab-bar.js';
 import { initSplitLayout } from './components/split-layout.js';
 import { initKeybindings } from './keybindings.js';
@@ -151,6 +152,7 @@ async function main(): Promise<void> {
   // Initialize components
   initSessionUnread();
   initSidebar();
+  initSidebarUsage();
   initTabBar();
   initSplitLayout();
   initKeybindings();

@@ -3,7 +3,8 @@ import * as path from 'path';
 import { isWin } from './platform';
 
 const SCRIPT_DIR = path.join('/home/test', '.vibeyard', 'run');
-const STATUSLINE_SCRIPT = path.join(SCRIPT_DIR, isWin ? 'statusline.cmd' : 'statusline.sh');
+const STATUSLINE_SCRIPT = path.join(SCRIPT_DIR, isWin ? 'statusline.py' : 'statusline.sh');
+const STATUSLINE_COMMAND = isWin ? `python "${STATUSLINE_SCRIPT}"` : STATUSLINE_SCRIPT;
 
 vi.mock('os', () => ({
   tmpdir: () => '/tmp',
@@ -31,8 +32,8 @@ vi.mock('fs', () => ({
 import { isVibeyardStatusLine } from './settings-guard';
 
 describe('isVibeyardStatusLine', () => {
-  it('returns true for current statusline path', () => {
-    expect(isVibeyardStatusLine({ command: STATUSLINE_SCRIPT })).toBe(true);
+  it('returns true for current statusline command', () => {
+    expect(isVibeyardStatusLine({ command: STATUSLINE_COMMAND })).toBe(true);
   });
 
   it('returns true for legacy tmp-dir statusline path (unix)', () => {
@@ -48,6 +49,18 @@ describe('isVibeyardStatusLine', () => {
   it('returns true for legacy windows tmp-dir statusline path', () => {
     expect(isVibeyardStatusLine({
       command: 'C:\\Users\\test\\AppData\\Local\\Temp\\vibeyard\\statusline.cmd',
+    })).toBe(true);
+  });
+
+  it('returns true for windows python-wrapped statusline command', () => {
+    expect(isVibeyardStatusLine({
+      command: 'python "C:\\Users\\test\\.vibeyard\\run\\statusline.py"',
+    })).toBe(true);
+  });
+
+  it('returns true for unix python-wrapped statusline command', () => {
+    expect(isVibeyardStatusLine({
+      command: '/usr/bin/python3 "/home/test/.vibeyard/run/statusline.py"',
     })).toBe(true);
   });
 

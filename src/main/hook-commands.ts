@@ -149,21 +149,12 @@ export function wrapPythonHookCmd(
 }
 
 /**
- * Clean up hook scripts from STATUS_DIR.
+ * Reset the install-once gate so the next `installHookScripts()` call rewrites
+ * the script files. We deliberately do NOT delete the scripts on shutdown —
+ * hooks registered in `~/.claude/settings.json` must keep working when
+ * Vibeyard isn't running (e.g. standalone `claude` sessions); deleting them
+ * would cause "No such file" errors that block user input.
  */
-export function cleanupHookScripts(): void {
-  const scripts = ['status_writer.py', 'session_id_capture.py', 'tool_failure_capture.py'];
-  for (const name of scripts) {
-    try { fs.unlinkSync(path.join(SCRIPT_DIR, name)); } catch {}
-  }
-  // Also clean up any event capture scripts
-  try {
-    const files = fs.readdirSync(SCRIPT_DIR);
-    for (const f of files) {
-      if (f.endsWith('.py')) {
-        try { fs.unlinkSync(path.join(SCRIPT_DIR, f)); } catch {}
-      }
-    }
-  } catch {}
+export function markHookScriptsForReinstall(): void {
   scriptsInstalled = false;
 }

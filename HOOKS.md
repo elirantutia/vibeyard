@@ -45,13 +45,19 @@ waiting
 3. **IPC broadcast** — Main sends `session:hookStatus` to renderer
 4. **State update** (`session-activity.ts`) — Renderer applies the transition rules above
 
+## Script Persistence
+
+Hook scripts live in `~/.vibeyard/run/` (`SCRIPT_DIR`) and are **not** cleaned up on app exit. This is intentional — hooks registered in `~/.claude/settings.json` reference these scripts by absolute path, and they must work even when Vibeyard isn't running (e.g. standalone `claude` sessions). Deleting scripts while hooks remain causes "No such file" errors that block all user input in the CLI.
+
+Only session-specific runtime files (`.status`, `.sessionid`, `.cost`, `.toolfailure`) in the temp `STATUS_DIR` (`/tmp/vibeyard/`) are cleaned up on exit. The scripts are small and idempotent; `installHookScripts()` overwrites them on next launch.
+
 ## Additional Data Captured by Hooks
 
 | File Extension | Source | Data |
 |---|---|---|
 | `.status` | Hook commands | Session status string |
 | `.sessionid` | `SessionStart` + `UserPromptSubmit` hooks | CLI session ID for resume |
-| `.cost` | `statusline.sh` (Python script via statusLine setting) | Cost, tokens, context window |
+| `.cost` | `statusline.py` (invoked directly via Claude's `statusLine` setting) | Cost, tokens, context window size, model |
 | `.toolfailure` | `PostToolUseFailure` + `PostToolUse` (error results) | tool_name, tool_input, error |
 
 ## Inspector-Only Hook Events (19 additional)
@@ -83,3 +89,9 @@ These hooks write only to the `.events` inspector log — they do NOT change ses
 ## Validation (`settings-guard.ts`)
 
 On each PTY creation, the app validates the 7 core hooks are installed and the statusLine is configured. Returns `'missing'`, `'partial'`, or `'complete'` — shows a warning banner if incomplete. Inspector-only hooks are not validated.
+
+`isVibeyardStatusLine()` recognises the current command (`python "<abs path>/statusline.py"` on Windows; the `.sh` wrapper on Unix) and a legacy regex (`statusline.{sh,cmd,py}` under `vibeyard/` or `.vibeyard/run/`) so upgrades silently replace the old `.cmd` form without surfacing the foreign-statusLine consent dialog.
+
+## Windows-Specific Status-line Note
+
+Claude Code spawns `statusLine.command` directly (no shell). A `.cmd` wrapper therefore silently fails to execute on Windows — Claude logs nothing, no `.cost` files are written, and the cost UI stays empty. Vibeyard installs the python script directly and wires the command as `python "<abs path>/statusline.py"` so the spawn succeeds.

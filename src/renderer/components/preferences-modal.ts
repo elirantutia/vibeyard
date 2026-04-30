@@ -66,7 +66,7 @@ export function showPreferencesModal(): void {
   let confirmCloseInactiveCheckbox: HTMLInputElement | null = null;
   let defaultProviderSelect: CustomSelectInstance | null = null;
   let debugModeCheckbox: HTMLInputElement | null = null;
-  let sidebarCheckboxes: { configSections: HTMLInputElement; gitPanel: HTMLInputElement; sessionHistory: HTMLInputElement; costFooter: HTMLInputElement; readinessSection: HTMLInputElement } | null = null;
+  let sidebarCheckboxes: { configSections: HTMLInputElement; gitPanel: HTMLInputElement; sessionHistory: HTMLInputElement; costFooter: HTMLInputElement; readinessSection: HTMLInputElement; usageIndicator: HTMLInputElement } | null = null;
   let activeRecorder: { cleanup: () => void } | null = null;
 
   function cleanupRecorder() {
@@ -233,13 +233,14 @@ export function showPreferencesModal(): void {
       content.appendChild(confirmInactiveRow);
 
     } else if (section === 'sidebar') {
-      const views = appState.preferences.sidebarViews ?? { configSections: true, gitPanel: true, sessionHistory: true, costFooter: true, readinessSection: true };
+      const views = appState.preferences.sidebarViews ?? { configSections: true, gitPanel: true, sessionHistory: true, costFooter: true, readinessSection: true, usageIndicator: true };
       const toggles: { key: keyof typeof views; label: string }[] = [
         { key: 'configSections', label: 'Config Sections (MCP Servers, Agents, Skills, Commands)' },
         { key: 'readinessSection', label: 'AI Readiness' },
         { key: 'gitPanel', label: 'Git Panel' },
         { key: 'sessionHistory', label: 'Session History' },
         { key: 'costFooter', label: 'Cost Footer' },
+        { key: 'usageIndicator', label: 'Context Window Usage Indicator' },
       ];
 
       const checkboxes: Record<string, HTMLInputElement> = {};
@@ -724,6 +725,7 @@ export function showPreferencesModal(): void {
         sessionHistory: sidebarCheckboxes.sessionHistory.checked,
         costFooter: sidebarCheckboxes.costFooter.checked,
         readinessSection: sidebarCheckboxes.readinessSection.checked,
+        usageIndicator: sidebarCheckboxes.usageIndicator.checked,
       });
     }
   };

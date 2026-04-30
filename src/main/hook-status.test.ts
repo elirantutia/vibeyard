@@ -4,7 +4,7 @@ import { isWin } from './platform';
 
 const STATUS_DIR = path.join('/tmp', 'vibeyard');
 const SCRIPT_DIR = path.join('/home/test', '.vibeyard', 'run');
-const STATUSLINE_SCRIPT = path.join(SCRIPT_DIR, isWin ? 'statusline.cmd' : 'statusline.sh');
+const STATUSLINE_SCRIPT = path.join(SCRIPT_DIR, isWin ? 'statusline.py' : 'statusline.sh');
 
 vi.mock('fs', () => ({
   mkdirSync: vi.fn(),
@@ -92,7 +92,7 @@ describe('hook-status', () => {
       expect(fs.mkdirSync).toHaveBeenCalledWith(STATUS_DIR, { recursive: true, mode: 0o700 });
       expect(fs.writeFileSync).toHaveBeenCalledWith(
         STATUSLINE_SCRIPT,
-        isWin ? expect.stringContaining('@echo off') : expect.stringContaining('#!/bin/sh'),
+        isWin ? expect.stringContaining('import sys,json,os') : expect.stringContaining('#!/bin/sh'),
         { mode: 0o755 },
       );
     });
@@ -109,14 +109,14 @@ describe('hook-status', () => {
   });
 
   describe('file change handling', () => {
-    it('ignores file changes for unregistered sessions', () => {
+    it('forwards file changes for unregistered sessions (renderer is the gate)', () => {
       const win = createMockWin();
       startWatching(win);
 
       vi.mocked(fs.readFileSync).mockReturnValue('working');
       watchCallback!('change', 'unknown-session.status');
 
-      expect(mockSend).not.toHaveBeenCalled();
+      expect(mockSend).toHaveBeenCalledWith('session:hookStatus', 'unknown-session', 'working', '');
     });
 
     it('.status with valid content sends session:hookStatus (legacy format)', () => {
@@ -392,7 +392,7 @@ describe('hook-status', () => {
   });
 
   describe('cleanupAll', () => {
-    it('closes watcher, removes matching files, script, and dir', () => {
+    it('closes watcher, removes STATUS_DIR files but preserves SCRIPT_DIR', () => {
       const win = createMockWin();
       startWatching(win);
       vi.clearAllMocks();
@@ -401,24 +401,20 @@ describe('hook-status', () => {
         if (dir === STATUS_DIR) {
           return ['a.status', 'b.sessionid', 'c.cost', 'other.log'];
         }
-        if (dir === SCRIPT_DIR) {
-          return [isWin ? 'statusline.cmd' : 'statusline.sh', 'status_writer.py', 'other.log'];
-        }
         return [];
       }) as any);
 
       cleanupAll();
 
       expect(mockClose).toHaveBeenCalled();
+      // STATUS_DIR runtime files are cleaned up
       expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'a.status'));
       expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'b.sessionid'));
       expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'c.cost'));
-      expect(fs.unlinkSync).toHaveBeenCalledWith(STATUSLINE_SCRIPT);
-      expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(SCRIPT_DIR, 'status_writer.py'));
       expect(fs.rmSync).toHaveBeenCalledWith(STATUS_DIR, { recursive: true });
-      expect(fs.rmSync).toHaveBeenCalledWith(SCRIPT_DIR, { recursive: true });
-      // 3 runtime files + 2 scripts; 'other.log' skipped in both dirs
-      expect(fs.unlinkSync).toHaveBeenCalledTimes(5);
+      // SCRIPT_DIR is NOT cleaned — hooks in settings.json reference these scripts
+      // and must work even when Vibeyard isn't running
+      expect(fs.unlinkSync).toHaveBeenCalledTimes(3);
     });
 
     it('handles missing directory gracefully', () => {

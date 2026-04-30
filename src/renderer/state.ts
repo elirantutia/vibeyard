@@ -44,7 +44,7 @@ const defaultPreferences: Preferences = {
   confirmCloseActive: true,
   confirmCloseInactive: false,
   readinessExcludedProviders: [],
-  sidebarViews: { configSections: true, gitPanel: true, sessionHistory: true, costFooter: true, readinessSection: true },
+  sidebarViews: { configSections: true, gitPanel: true, sessionHistory: true, costFooter: true, readinessSection: true, usageIndicator: true },
 };
 
 const NAV_HISTORY_MAX = 50;

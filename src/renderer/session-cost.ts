@@ -24,6 +24,7 @@ export function setCostData(sessionId: string, rawData: CostData): void {
     totalDurationMs: cost.total_duration_ms ?? 0,
     totalApiDurationMs: cost.total_api_duration_ms ?? 0,
     model: model ?? existing?.model,
+    contextWindowSize: ctx.context_window_size ?? existing?.contextWindowSize,
   };
 
   if (existing && existing.totalCostUsd === info.totalCostUsd

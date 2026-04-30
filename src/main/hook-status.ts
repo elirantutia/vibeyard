@@ -2,11 +2,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { BrowserWindow } from 'electron';
-import { isWin } from './platform';
+import { isWin, pythonBin } from './platform';
 
 export const STATUS_DIR = path.join(os.tmpdir(), 'vibeyard');
 export const SCRIPT_DIR = path.join(os.homedir(), '.vibeyard', 'run');
-const STATUSLINE_SCRIPT = path.join(SCRIPT_DIR, isWin ? 'statusline.cmd' : 'statusline.sh');
+const STATUSLINE_SCRIPT = path.join(SCRIPT_DIR, isWin ? 'statusline.py' : 'statusline.sh');
 
 const KNOWN_EXTENSIONS = ['.status', '.sessionid', '.cost', '.toolfailure', '.events'];
 
@@ -28,7 +28,21 @@ function isKnownExtension(filename: string): boolean {
   return KNOWN_EXTENSIONS.some(ext => filename.endsWith(ext));
 }
 
-export function getStatusLineScriptPath(): string {
+/**
+ * The command Vibeyard installs into Claude's `statusLine.command` setting.
+ * Claude Code spawns this directly without going through cmd.exe/sh, so on
+ * Windows the command must invoke python on the script path; a bare `.cmd`
+ * path silently fails to execute.
+ */
+export function getStatusLineCommand(): string {
+  if (isWin) {
+    // Quote-wrap the path so spaces in `C:\Users\<User Name>\...` work.
+    // Escape any embedded `"` (rare but legal in Windows usernames). Do NOT
+    // use JSON.stringify here — it would double every backslash in the path,
+    // which Claude Code passes through verbatim to the spawned process.
+    const escaped = STATUSLINE_SCRIPT.replace(/"/g, '\\"');
+    return `${pythonBin} "${escaped}"`;
+  }
   return STATUSLINE_SCRIPT;
 }
 
@@ -38,14 +52,12 @@ export function installStatusLineScript(): void {
 
   // Script that extracts cost, context_window, and session_id from hook JSON stdin.
   // Used by hook commands to write .cost and .sessionid files to STATUS_DIR.
-  // Use forward slashes — backslashes inside double-quoted .cmd strings can
-  // interfere with cmd.exe's >> redirection parsing on some Windows versions.
-  const statusDir = STATUS_DIR.replace(/\\/g, '/');
-
   let script: string;
   if (isWin) {
-    // On Windows, write a Python helper script and a .cmd wrapper
-    const pyScript = `import sys,json,os
+    // Claude Code spawns statusLine.command directly (no shell), so we install
+    // a Python script and let installStatusLine() wire `python "<path>"` as the
+    // command. A .cmd wrapper would silently fail to execute.
+    script = `import sys,json,os
 try:
     d=json.load(sys.stdin)
 except:
@@ -68,9 +80,6 @@ if claude_sid:
     with open(os.path.join(status_dir,sid+'.sessionid'),'w') as f:
         f.write(claude_sid)
 `;
-    const pyPath = path.join(SCRIPT_DIR, 'statusline.py');
-    fs.writeFileSync(pyPath, pyScript, { mode: 0o755 });
-    script = `@echo off\r\npython "${pyPath}" 2>>"${statusDir}/statusline.log"\r\n`;
   } else {
     script = `#!/bin/sh
 /usr/bin/python3 -c "
@@ -115,8 +124,10 @@ function extractSessionId(filename: string): string {
 }
 
 function handleFileChange(win: BrowserWindow, filename: string): void {
-  const extractedId = extractSessionId(filename);
-  if (extractedId && !knownSessionIds.has(extractedId)) return;
+  // No session-id gate here — the renderer's `appState.hasSession()` check
+  // is the source of truth. Filtering here drops events for sessions the
+  // main process hasn't seen `registerSession()` for yet, including all
+  // pre-existing files at startup.
 
   if (filename.endsWith('.status')) {
     const sessionId = filename.replace('.status', '');
@@ -164,7 +175,7 @@ function handleFileChange(win: BrowserWindow, filename: string): void {
       // File may have been deleted or contain invalid JSON
     }
   } else if (filename.endsWith('.toolfailure')) {
-    const sessionId = extractedId;
+    const sessionId = extractSessionId(filename);
     const filePath = path.join(STATUS_DIR, filename);
 
     try {
@@ -291,7 +302,7 @@ export function restartAndResync(win: BrowserWindow): void {
 }
 
 export function startWatching(win: BrowserWindow): void {
-  restartWatcher(win);
+  restartAndResync(win);
 }
 
 export function cleanupSessionStatus(sessionId: string): void {
@@ -314,7 +325,10 @@ export function cleanupAll(): void {
     watcher = null;
   }
   cleanupDir(STATUS_DIR, isKnownExtension);
-  cleanupDir(SCRIPT_DIR, (f) => f.endsWith('.py') || f.endsWith('.cmd') || f.endsWith('.sh'));
+  // Do NOT clean SCRIPT_DIR — hooks registered in settings.json reference
+  // these scripts and must work even when Vibeyard isn't running (e.g.
+  // standalone `claude` sessions). The scripts are small and idempotent;
+  // installHookScripts() overwrites them on next launch.
 }
 
 function cleanupDir(dir: string, shouldUnlink: (filename: string) => boolean): void {

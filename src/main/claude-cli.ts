@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { homedir } from 'os';
-import { STATUS_DIR, getStatusLineScriptPath } from './hook-status';
+import { STATUS_DIR, getStatusLineCommand } from './hook-status';
 import { statusCmd as mkStatusCmd, captureSessionIdCmd as mkCaptureSessionIdCmd, captureToolFailureCmd as mkCaptureToolFailureCmd, installEventScript, wrapPythonHookCmd, installHookScripts } from './hook-commands';
 import { readJsonSafe, readDirSafe } from './fs-utils';
 import { getSupportedHookEvents as computeSupportedHookEvents } from './claude-hook-versions';
@@ -394,7 +394,7 @@ export function installStatusLine(): void {
 
   settings.statusLine = {
     type: 'command',
-    command: getStatusLineScriptPath(),
+    command: getStatusLineCommand(),
   };
 
   writeSettings(settings);

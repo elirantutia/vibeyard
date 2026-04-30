@@ -59,6 +59,7 @@ export interface CostInfo {
   totalDurationMs: number;
   totalApiDurationMs: number;
   model?: string;
+  contextWindowSize?: number;
 }
 
 export interface ContextWindowInfo {
@@ -162,6 +163,7 @@ export interface Preferences {
     sessionHistory: boolean;
     costFooter: boolean;
     readinessSection: boolean;
+    usageIndicator: boolean;
   };
 }
 
