@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { BrowserWindow } from 'electron';
 import { isWin, pythonBin } from './platform';
+import { costEvents } from './cost-events';
 
 export const STATUS_DIR = path.join(os.tmpdir(), 'vibeyard');
 export const SCRIPT_DIR = path.join(os.homedir(), '.vibeyard', 'run');
@@ -171,6 +172,7 @@ function handleFileChange(win: BrowserWindow, filename: string): void {
       if (!win.isDestroyed()) {
         win.webContents.send('session:costData', sessionId, costData);
       }
+      costEvents.emit('costData', { sessionId, costData });
     } catch {
       // File may have been deleted or contain invalid JSON
     }

@@ -247,6 +247,14 @@ export interface CostData {
   };
 }
 
+// --- 5h Usage Block ---
+
+export interface BlockInfo {
+  usdSpent: number;
+  resetsAt: number; // UTC ms
+  entryCount: number;
+}
+
 // --- Tool Failure ---
 
 export interface ToolFailureData {

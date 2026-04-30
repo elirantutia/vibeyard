@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { CostData, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, ToolFailureData, SettingsWarningData, SettingsValidationResult, StatusLineConflictData, InspectorEvent, ProviderConfig } from '../shared/types';
+import type { CostData, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, ToolFailureData, SettingsWarningData, SettingsValidationResult, StatusLineConflictData, InspectorEvent, ProviderConfig, BlockInfo } from '../shared/types';
 
 export type { CostData } from '../shared/types';
 
@@ -106,6 +106,10 @@ export interface VibeyardApi {
   };
   stats: {
     getCache(): Promise<StatsCache | null>;
+  };
+  usage: {
+    getBlock(): Promise<BlockInfo | null>;
+    onBlockChange(callback: (info: BlockInfo | null) => void): () => void;
   };
   settings: {
     onWarning(callback: (data: SettingsWarningData) => void): () => void;
@@ -259,6 +263,11 @@ const api: VibeyardApi = {
   },
   stats: {
     getCache: () => ipcRenderer.invoke('stats:getCache'),
+  },
+  usage: {
+    getBlock: () => ipcRenderer.invoke('usage:getBlock'),
+    onBlockChange: (cb) =>
+      onChannel('usage:blockChanged', (info) => cb(info as BlockInfo | null)),
   },
   settings: {
     onWarning: (cb) => onChannel('settings:warning', (data) => cb(data as SettingsWarningData)),

@@ -138,6 +138,17 @@
   background: var(--error, #d44a3f);
 }
 
+.sidebar-usage-block {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.sidebar-usage-block.hidden {
+  display: none;
+}
+
 #project-list {
   padding: 4px 0;
 }

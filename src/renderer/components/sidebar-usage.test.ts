@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getContextWindowLimit, computeUsedTokens, prettyModel } from './sidebar-usage';
+import { getContextWindowLimit, computeUsedTokens, prettyModel, formatCountdown } from './sidebar-usage';
 import type { CostInfo } from '../session-cost';
 
 describe('sidebar-usage', () => {
@@ -80,6 +80,30 @@ describe('sidebar-usage', () => {
 
     it('returns empty string when undefined', () => {
       expect(prettyModel(undefined)).toBe('');
+    });
+  });
+
+  describe('formatCountdown', () => {
+    const NOW = Date.parse('2026-04-30T12:00:00.000Z');
+
+    it('formats hours and minutes with zero-padded minutes', () => {
+      expect(formatCountdown(NOW + (2 * 60 + 14) * 60_000, NOW)).toBe('2h14m');
+    });
+
+    it('zero-pads single-digit minutes', () => {
+      expect(formatCountdown(NOW + 7 * 60_000, NOW)).toBe('0h07m');
+    });
+
+    it('renders 0h00m when resetsAt is in the past', () => {
+      expect(formatCountdown(NOW - 60_000, NOW)).toBe('0h00m');
+    });
+
+    it('renders 0h00m when resetsAt equals now', () => {
+      expect(formatCountdown(NOW, NOW)).toBe('0h00m');
+    });
+
+    it('handles multi-hour durations', () => {
+      expect(formatCountdown(NOW + (4 * 60 + 59) * 60_000, NOW)).toBe('4h59m');
     });
   });
 });

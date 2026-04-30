@@ -8,6 +8,7 @@ import { restartAndResync } from './hook-status';
 import { initProviders, getAllProviders } from './providers/registry';
 import { initAutoUpdater } from './auto-updater';
 import { stopGitWatcher } from './git-watcher';
+import { init as initUsageBlocks, dispose as disposeUsageBlocks } from './usage-blocks';
 import { checkPythonAvailable } from './prerequisites';
 import { isMac } from './platform';
 
@@ -78,6 +79,7 @@ ipcMain.on('app:closeCancelled', () => {
 
 app.whenReady().then(async () => {
   initProviders();
+  initUsageBlocks();
 
   const providers = getAllProviders();
   const missing = providers.filter(p => !p.validatePrerequisites());
@@ -151,6 +153,7 @@ app.on('before-quit', () => {
   }
   killAllPtys();
   stopGitWatcher();
+  disposeUsageBlocks();
   // Cleanup all providers
   for (const provider of getAllProviders()) {
     provider.cleanup();

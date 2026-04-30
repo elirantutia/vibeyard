@@ -147,7 +147,7 @@ This is unrelated to #68 and only worth doing if there's user demand.
 
 - [x] Phase 1: sidebar widget with context window % — verified working 2026-04-29
 - [x] Phase 2: design spec written and QA-reviewed (twice) — 2026-04-30
-- [ ] Phase 2: implementation (pricing.ts, usage-blocks.ts, cost-events.ts, widget extension)
+- [x] Phase 2: implementation (pricing.ts, usage-blocks.ts, cost-events.ts, widget extension) — 2026-04-30
 - [ ] Phase 3: optional ccstatusline integration (only if requested)
 
 ---
