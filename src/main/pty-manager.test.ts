@@ -75,7 +75,7 @@ describe('spawnPty', () => {
     const proc = createMockPtyProcess();
     mockSpawn.mockReturnValue(proc);
 
-    spawnPty('s1', '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
+    spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, vi.fn(), vi.fn());
 
     if (isWin) {
       expect(mockSpawn).toHaveBeenCalledWith(
@@ -106,7 +106,7 @@ describe('spawnPty', () => {
     const proc = createMockPtyProcess();
     mockSpawn.mockReturnValue(proc);
 
-    spawnPty('s1', '/project', 'claude-123', true, '', 'claude', undefined, vi.fn(), vi.fn());
+    spawnPty('s1', '/project', 'claude-123', true, '', 'claude', undefined, undefined, vi.fn(), vi.fn());
 
     if (isWin) {
       expect(mockSpawn).toHaveBeenCalledWith(
@@ -127,7 +127,7 @@ describe('spawnPty', () => {
     const proc = createMockPtyProcess();
     mockSpawn.mockReturnValue(proc);
 
-    spawnPty('s1', '/project', 'claude-123', false, '', 'claude', undefined, vi.fn(), vi.fn());
+    spawnPty('s1', '/project', 'claude-123', false, '', 'claude', undefined, undefined, vi.fn(), vi.fn());
 
     if (isWin) {
       expect(mockSpawn).toHaveBeenCalledWith(
@@ -148,7 +148,8 @@ describe('spawnPty', () => {
     const proc = createMockPtyProcess();
     mockSpawn.mockReturnValue(proc);
 
-    spawnPty('s1', '/project', null, false, '--verbose --debug', 'claude', undefined, vi.fn(), vi.fn());
+    spawnPty('s1', '/project', null, false, '--verbose --debug', 'claude', undefined, undefined, vi.fn(), vi.fn());
+
 
     if (isWin) {
       expect(mockSpawn).toHaveBeenCalledWith(
@@ -170,7 +171,7 @@ describe('spawnPty', () => {
     mockSpawn.mockReturnValue(proc);
     const onData = vi.fn();
 
-    spawnPty('s1', '/project', null, false, '', 'claude', undefined, onData, vi.fn());
+    spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, onData, vi.fn());
     proc._emitData('hello');
 
     expect(onData).toHaveBeenCalledWith('hello');
@@ -181,7 +182,7 @@ describe('spawnPty', () => {
     mockSpawn.mockReturnValue(proc);
     const onExit = vi.fn();
 
-    spawnPty('s1', '/project', null, false, '', 'claude', undefined, vi.fn(), onExit);
+    spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, vi.fn(), onExit);
     proc._emitExit(0, 0);
 
     expect(onExit).toHaveBeenCalledWith(0, 0);
@@ -203,7 +204,7 @@ describe('spawnPty', () => {
     const { initProviders: freshInit } = await import('./providers/registry');
     const { spawnPty: freshSpawnPty } = await import('./pty-manager');
     freshInit();
-    freshSpawnPty('s1', '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
+    freshSpawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, vi.fn(), vi.fn());
 
     if (isWin) {
       // On Windows, .cmd files are wrapped with cmd.exe /c
@@ -225,7 +226,7 @@ describe('spawnPty', () => {
     const proc = createMockPtyProcess();
     mockSpawn.mockReturnValue(proc);
 
-    spawnPty('s1', '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
+    spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, vi.fn(), vi.fn());
 
     const env = mockSpawn.mock.calls[0][2].env;
     expect(env.CLAUDE_IDE_SESSION_ID).toBe('s1');
@@ -236,7 +237,7 @@ describe('spawnPty', () => {
     const proc = createMockPtyProcess();
     mockSpawn.mockReturnValue(proc);
 
-    spawnPty('s1', '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
+    spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, vi.fn(), vi.fn());
 
     const envPath = mockSpawn.mock.calls[0][2].env.PATH;
     if (isWin) {
@@ -253,7 +254,7 @@ describe('writePty', () => {
   it('writes to existing PTY', () => {
     const proc = createMockPtyProcess();
     mockSpawn.mockReturnValue(proc);
-    spawnPty('s1', '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
+    spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, vi.fn(), vi.fn());
 
     writePty('s1', 'input');
     expect(mockWrite).toHaveBeenCalledWith('input');
@@ -269,7 +270,7 @@ describe('resizePty', () => {
   it('resizes existing PTY', () => {
     const proc = createMockPtyProcess();
     mockSpawn.mockReturnValue(proc);
-    spawnPty('s1', '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
+    spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, vi.fn(), vi.fn());
 
     resizePty('s1', 200, 50);
     expect(mockResize).toHaveBeenCalledWith(200, 50);
@@ -281,7 +282,7 @@ describe('resizePty', () => {
   it('swallows errors from node-pty on already-exited PTY (issue #70)', () => {
     const proc = createMockPtyProcess();
     mockSpawn.mockReturnValue(proc);
-    spawnPty('s1', '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
+    spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, vi.fn(), vi.fn());
 
     mockResize.mockImplementationOnce(() => {
       throw new Error('Cannot resize a pty that has already exited');
@@ -306,7 +307,7 @@ describe('resizePty', () => {
   it('keeps the handle on transient (non-exit) errors (issue #70 review)', () => {
     const proc = createMockPtyProcess();
     mockSpawn.mockReturnValue(proc);
-    spawnPty('s1', '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
+    spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, vi.fn(), vi.fn());
 
     mockResize.mockImplementationOnce(() => {
       throw new Error('EBUSY: some transient failure');
@@ -328,7 +329,7 @@ describe('writePty error handling (issue #70)', () => {
   it('swallows errors when writing to an already-exited PTY', () => {
     const proc = createMockPtyProcess();
     mockSpawn.mockReturnValue(proc);
-    spawnPty('s1', '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
+    spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, vi.fn(), vi.fn());
 
     mockWrite.mockImplementationOnce(() => {
       throw new Error('Cannot write to a pty that has already exited');
@@ -349,7 +350,7 @@ describe('writePty error handling (issue #70)', () => {
   it('keeps the handle on transient (non-exit) errors (issue #70 review)', () => {
     const proc = createMockPtyProcess();
     mockSpawn.mockReturnValue(proc);
-    spawnPty('s1', '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
+    spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, vi.fn(), vi.fn());
 
     mockWrite.mockImplementationOnce(() => {
       throw new Error('EAGAIN: resource temporarily unavailable');
@@ -372,7 +373,7 @@ describe('writePty error handling (issue #70)', () => {
     const proc = createMockPtyProcess();
     mockSpawn.mockReturnValue(proc);
     const hostileId = "evil\n[pty-manager] fake log line\x1b[31m";
-    spawnPty(hostileId, '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
+    spawnPty(hostileId, '/project', null, false, '', 'claude', undefined, undefined, vi.fn(), vi.fn());
 
     mockWrite.mockImplementationOnce(() => {
       throw new Error('Cannot write to a pty that has already exited');
@@ -396,7 +397,7 @@ describe('killPty error handling (issue #70)', () => {
   it('swallows errors when killing an already-exited PTY and still drops the handle', () => {
     const proc = createMockPtyProcess();
     mockSpawn.mockReturnValue(proc);
-    spawnPty('s1', '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
+    spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, vi.fn(), vi.fn());
 
     mockKill.mockImplementationOnce(() => {
       throw new Error('Cannot kill a pty that has already exited');
@@ -419,7 +420,7 @@ describe('killPty', () => {
   it('kills and removes PTY', () => {
     const proc = createMockPtyProcess();
     mockSpawn.mockReturnValue(proc);
-    spawnPty('s1', '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
+    spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, vi.fn(), vi.fn());
 
     killPty('s1');
     expect(mockKill).toHaveBeenCalled();
@@ -441,7 +442,7 @@ describe('getPtyCwd', () => {
     const proc = createMockPtyProcess();
     (proc as unknown as { pid: number }).pid = 1000;
     mockSpawn.mockReturnValue(proc);
-    spawnPty('s1', '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
+    spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, vi.fn(), vi.fn());
 
     if (isWin) {
       // On Windows, getPtyCwd always returns null (not supported)
@@ -476,7 +477,7 @@ describe('getPtyCwd', () => {
     const proc = createMockPtyProcess();
     (proc as unknown as { pid: number }).pid = 1000;
     mockSpawn.mockReturnValue(proc);
-    spawnPty('s2', '/project', null, false, '', 'claude', undefined, vi.fn(), vi.fn());
+    spawnPty('s2', '/project', null, false, '', 'claude', undefined, undefined, vi.fn(), vi.fn());
 
     // pgrep returns no children
     mockExecFile.mockImplementationOnce((_cmd: string, _args: string[], _opts: unknown, callback: (err: Error | null, stdout: string) => void) => {

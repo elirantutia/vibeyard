@@ -1,5 +1,5 @@
 import type { VibeyardApi } from './types.js';
-import type { SessionRecord, ProjectRecord, Preferences, PersistedState, ArchivedSession, ProviderId, CostInfo, ContextWindowInfo, InitialContextSnapshot, ReadinessResult, BoardColumn, BoardData } from '../shared/types.js';
+import type { SessionRecord, ProjectRecord, Preferences, PersistedState, ArchivedSession, ProviderId, CostInfo, ContextWindowInfo, InitialContextSnapshot, ReadinessResult, BoardColumn, BoardData, TeamMember, TeamData } from '../shared/types.js';
 import { getCost, restoreCost } from './session-cost.js';
 import { restoreContext } from './session-context.js';
 import { getProviderCapabilities, getProviderAvailabilitySnapshot } from './provider-availability.js';
@@ -16,6 +16,7 @@ import {
   buildMcpInspectorSession,
   buildProjectTabSession,
   buildRemoteSession,
+  buildTeamSession,
 } from './state/session-factory.js';
 import { NavHistory } from './state/nav-history.js';
 
@@ -46,6 +47,7 @@ type EventType =
   | 'sidebar-toggled'
   | 'cli-session-cleared'
   | 'board-changed'
+  | 'team-changed'
   | 'state-loaded';
 
 type EventCallback = (data?: unknown) => void;
@@ -178,7 +180,7 @@ class AppState {
       ...this.state,
       projects: this.state.projects.map((p) => ({
         ...p,
-        sessions: p.sessions.map(({ pendingInitialPrompt, ...rest }) => rest),
+        sessions: p.sessions.map(({ pendingInitialPrompt, pendingSystemPrompt, ...rest }) => rest),
       })),
     };
     window.vibeyard.store.save(toSave);
@@ -460,6 +462,113 @@ class AppState {
     attachSessionToProject(project, session);
     this.commitNewSession(projectId, session);
     return session;
+  }
+
+  openTeamTab(projectId: string): SessionRecord | undefined {
+    const project = this.state.projects.find((p) => p.id === projectId);
+    if (!project) return undefined;
+
+    if (this.state.activeProjectId !== projectId) {
+      this.setActiveProject(projectId);
+    }
+
+    const existing = project.sessions.find((s) => s.type === 'team');
+    if (existing) return this.activateExistingSession(project, existing);
+
+    const session = buildTeamSession({ projectName: project.name });
+    attachSessionToProject(project, session);
+    this.commitNewSession(projectId, session);
+    return session;
+  }
+
+  get team(): TeamData {
+    if (!this.state.team) this.state.team = { members: [] };
+    return this.state.team;
+  }
+
+  getTeamMembers(): TeamMember[] {
+    return this.team.members;
+  }
+
+  addTeamMember(input: Omit<TeamMember, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): TeamMember {
+    const now = Date.now();
+    const member: TeamMember = {
+      id: input.id ?? crypto.randomUUID(),
+      name: input.name,
+      role: input.role,
+      description: input.description,
+      emoji: input.emoji,
+      systemPrompt: input.systemPrompt,
+      source: input.source,
+      sourceUrl: input.sourceUrl,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.team.members.push(member);
+    this.persist();
+    this.emit('team-changed');
+    return member;
+  }
+
+  updateTeamMember(id: string, patch: Partial<Omit<TeamMember, 'id' | 'createdAt'>>): TeamMember | undefined {
+    const member = this.team.members.find((m) => m.id === id);
+    if (!member) return undefined;
+    Object.assign(member, patch, { updatedAt: Date.now() });
+    this.persist();
+    this.emit('team-changed');
+    return member;
+  }
+
+  removeTeamMember(id: string): void {
+    const before = this.team.members.length;
+    this.team.members = this.team.members.filter((m) => m.id !== id);
+    if (this.team.members.length === before) return;
+    this.persist();
+    this.emit('team-changed');
+  }
+
+  setTeamPredefinedCache(suggestions: TeamMember[]): void {
+    this.team.predefinedCache = { fetchedAt: Date.now(), suggestions };
+    this.persist();
+  }
+
+  notifyTeamChanged(): void {
+    this.persist();
+    this.emit('team-changed');
+  }
+
+  startTeamChat(projectId: string, member: TeamMember): SessionRecord | undefined {
+    const project = this.state.projects.find((p) => p.id === projectId);
+    if (!project) return undefined;
+
+    const activeSession = project.sessions.find((s) => s.id === project.activeSessionId);
+    const providerId =
+      (activeSession && isCliSession(activeSession) ? activeSession.providerId : undefined)
+      ?? this.state.preferences.defaultProvider
+      ?? 'claude';
+
+    const base = buildCliSession({
+      name: `${member.emoji ? member.emoji + ' ' : ''}${member.name}`.trim().slice(0, MAX_SESSION_NAME_LENGTH),
+      providerId,
+      args: project.defaultArgs,
+    });
+    const session: SessionRecord = {
+      ...base,
+      teamMemberId: member.id,
+      pendingSystemPrompt: member.systemPrompt,
+    };
+    attachSessionToProject(project, session, { addToSwarm: true });
+    this.commitNewSession(projectId, session);
+    return session;
+  }
+
+  consumePendingSystemPrompt(projectId: string, sessionId: string): string | undefined {
+    const project = this.state.projects.find((p) => p.id === projectId);
+    const session = project?.sessions.find((s) => s.id === sessionId);
+    if (!session?.pendingSystemPrompt) return undefined;
+    const prompt = session.pendingSystemPrompt;
+    delete session.pendingSystemPrompt;
+    return prompt;
   }
 
   addFileReaderSession(projectId: string, filePath: string, lineNumber?: number): SessionRecord | undefined {

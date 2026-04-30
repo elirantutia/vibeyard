@@ -28,6 +28,7 @@ interface TerminalInstance {
   spawned: boolean;
   exited: boolean;
   pendingPrompt: string | null;
+  pendingSystemPrompt: string | null;
   pendingPromptTimer: ReturnType<typeof setTimeout> | null;
 }
 
@@ -125,6 +126,7 @@ export function createTerminalPane(
     spawned: false,
     exited: false,
     pendingPrompt: null,
+    pendingSystemPrompt: null,
     pendingPromptTimer: null,
   };
 
@@ -182,6 +184,13 @@ export function setPendingPrompt(sessionId: string, prompt: string): void {
   }
 }
 
+export function setPendingSystemPrompt(sessionId: string, prompt: string): void {
+  const instance = instances.get(sessionId);
+  if (instance) {
+    instance.pendingSystemPrompt = prompt;
+  }
+}
+
 export function injectPromptIntoRunningSession(sessionId: string, prompt: string): boolean {
   const instance = instances.get(sessionId);
   if (!instance || !instance.spawned || instance.exited) return false;
@@ -221,7 +230,12 @@ export async function spawnTerminal(sessionId: string): Promise<void> {
     initialPrompt = instance.pendingPrompt;
     instance.pendingPrompt = null;
   }
-  await window.vibeyard.pty.create(sessionId, instance.projectPath, instance.cliSessionId, instance.isResume, instance.args, instance.providerId, initialPrompt);
+  let systemPrompt: string | undefined;
+  if (instance.pendingSystemPrompt) {
+    systemPrompt = instance.pendingSystemPrompt;
+    instance.pendingSystemPrompt = null;
+  }
+  await window.vibeyard.pty.create(sessionId, instance.projectPath, instance.cliSessionId, instance.isResume, instance.args, instance.providerId, initialPrompt, systemPrompt);
   instance.isResume = true; // subsequent spawns (e.g. Restart Session) should resume
 }
 

@@ -17,7 +17,7 @@ export interface CliProvider {
   resolveBinaryPath(): string;
   validatePrerequisites(): boolean;
   buildEnv(sessionId: string, baseEnv: Record<string, string>): Record<string, string>;
-  buildArgs(opts: { cliSessionId: string | null; isResume: boolean; extraArgs: string; initialPrompt?: string }): string[];
+  buildArgs(opts: { cliSessionId: string | null; isResume: boolean; extraArgs: string; initialPrompt?: string; systemPrompt?: string }): string[];
   installHooks(win?: BrowserWindow | null, projectPath?: string): Promise<void>;
   installStatusScripts(): void;
   cleanup(): void;

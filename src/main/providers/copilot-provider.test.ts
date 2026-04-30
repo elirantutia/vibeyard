@@ -199,6 +199,11 @@ describe('buildArgs', () => {
     const args = provider.buildArgs({ cliSessionId: 'sid-1', isResume: true, extraArgs: '--model gpt-5.2' });
     expect(args).toEqual(['--resume=sid-1', '--model', 'gpt-5.2']);
   });
+
+  it('passes systemPrompt via --system-prompt flag', () => {
+    const args = provider.buildArgs({ cliSessionId: null, isResume: false, extraArgs: '', systemPrompt: 'You are the CMO.' });
+    expect(args).toEqual(['--system-prompt', 'You are the CMO.']);
+  });
 });
 
 describe('getShiftEnterSequence', () => {

@@ -39,6 +39,7 @@ import { applyThemeToAllRemoteTerminals } from './components/remote-terminal-pan
 import { loadProviderMetas } from './provider-availability.js';
 import { initBoard } from './components/board/board-view.js';
 import { initBoardSessionSync } from './board-session-sync.js';
+import { initTeamView } from './components/team/team-view.js';
 import { getZoomFactor } from './zoom.js';
 import { confirmAppClose } from './session-close.js';
 
@@ -178,6 +179,7 @@ async function main(): Promise<void> {
   initSessionInspector();
   initBoard();
   initBoardSessionSync();
+  initTeamView();
   initFilePrompt();
   startGitPolling();
 

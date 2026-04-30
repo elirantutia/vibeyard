@@ -199,6 +199,11 @@ describe('buildArgs', () => {
     const args = provider.buildArgs({ cliSessionId: null, isResume: false, extraArgs: '' });
     expect(args).toEqual([]);
   });
+
+  it('passes systemPrompt via --system-prompt flag', () => {
+    const args = provider.buildArgs({ cliSessionId: null, isResume: false, extraArgs: '', systemPrompt: 'You are the CMO.' });
+    expect(args).toEqual(['--system-prompt', 'You are the CMO.']);
+  });
 });
 
 describe('getShiftEnterSequence', () => {

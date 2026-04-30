@@ -1,0 +1,25 @@
+// Source of predefined team members. The exact repo is TBD; this single
+// constant is the only place to update once we settle on a location. The
+// renderer fetches this directory via the GitHub Contents API.
+
+export const TEAM_MEMBERS_REPO = {
+  owner: 'vibeyard',
+  repo: 'team-members',
+  branch: 'main',
+  path: 'members',
+} as const;
+
+export function buildContentsApiUrl(): string {
+  const { owner, repo, path, branch } = TEAM_MEMBERS_REPO;
+  return `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
+}
+
+export function buildRawUrl(filename: string): string {
+  const { owner, repo, branch, path } = TEAM_MEMBERS_REPO;
+  return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}/${filename}`;
+}
+
+export function buildNewFileUrl(filename: string): string {
+  const { owner, repo, branch, path } = TEAM_MEMBERS_REPO;
+  return `https://github.com/${owner}/${repo}/new/${branch}/${path}?filename=${encodeURIComponent(filename)}`;
+}

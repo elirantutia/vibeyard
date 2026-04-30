@@ -164,6 +164,7 @@ export async function spawnPty(
   extraArgs: string,
   providerId: ProviderId,
   initialPrompt: string | undefined,
+  systemPrompt: string | undefined,
   onData: (data: string) => void,
   onExit: (exitCode: number, signal?: number) => void
 ): Promise<void> {
@@ -189,7 +190,7 @@ export async function spawnPty(
   }
 
   const env = provider.buildEnv(sessionId, { ...process.env } as Record<string, string>);
-  const args = provider.buildArgs({ cliSessionId, isResume, extraArgs, initialPrompt });
+  const args = provider.buildArgs({ cliSessionId, isResume, extraArgs, initialPrompt, systemPrompt });
   const resolvedShell = provider.resolveBinaryPath();
   const { shell, args: spawnArgs } = resolveWindowsShell(resolvedShell, args);
 

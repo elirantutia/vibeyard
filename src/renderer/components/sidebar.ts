@@ -189,6 +189,13 @@ function buildProjectActions(
     actions.appendChild(historyBtn);
   }
 
+  const teamBtn = makeActionButton('Team', false);
+  teamBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    appState.openTeamTab(project.id);
+  });
+  actions.appendChild(teamBtn);
+
   if (opts.fileTreeEnabled) {
     const filesBtn = makeActionButton('Files', openPanel === 'files');
     filesBtn.addEventListener('click', (e) => {

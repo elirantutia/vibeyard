@@ -1,0 +1,326 @@
+/* Team tab */
+.team-pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--bg-primary);
+  overflow: hidden;
+}
+
+.team-pane.hidden {
+  display: none;
+}
+
+.team-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--bg-primary);
+}
+
+.team-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.team-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.team-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.team-header-btn {
+  padding: 6px 10px;
+  font-size: 12px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.team-header-btn:hover {
+  border-color: var(--accent);
+}
+.team-header-btn-primary {
+  background: var(--accent);
+  color: var(--accent-fg, #fff);
+  border-color: var(--accent);
+}
+.team-header-btn-primary:hover {
+  filter: brightness(1.1);
+}
+
+.team-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  padding: 16px;
+  overflow-y: auto;
+  align-content: start;
+}
+
+.team-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+  padding: 40px 16px;
+  line-height: 1.6;
+}
+
+.team-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.team-card:hover {
+  border-color: var(--accent);
+}
+
+.team-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.team-card-avatar {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 600;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.team-card-heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.team-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.team-card-role {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.team-card-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+.team-card-badge-predefined {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.team-card-description {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.team-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: auto;
+}
+
+.team-card-btn {
+  flex: 1;
+  min-width: 64px;
+  padding: 6px 10px;
+  font-size: 12px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.team-card-btn:hover {
+  border-color: var(--accent);
+}
+.team-card-btn-primary {
+  background: var(--accent);
+  color: var(--accent-fg, #fff);
+  border-color: var(--accent);
+}
+.team-card-btn-primary:hover {
+  filter: brightness(1.1);
+}
+.team-card-btn-danger:hover {
+  border-color: var(--danger, #d23);
+  color: var(--danger, #d23);
+}
+
+/* Predefined picker dialog */
+.team-picker-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.team-picker-dialog {
+  width: min(640px, 92vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+.team-picker-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.team-picker-title {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.team-picker-refresh,
+.team-picker-close {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.team-picker-close {
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 8px;
+}
+.team-picker-refresh:hover,
+.team-picker-close:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.team-picker-refresh:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.team-picker-status {
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.team-picker-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.team-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.team-picker-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.team-picker-row-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.team-picker-row-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.team-picker-add-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  background: var(--accent);
+  color: var(--accent-fg, #fff);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.team-picker-add-btn:hover {
+  filter: brightness(1.1);
+}
+.team-picker-add-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border-color: var(--border);
+  filter: none;
+}

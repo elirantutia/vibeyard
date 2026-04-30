@@ -186,6 +186,28 @@ describe('buildArgs', () => {
     const args = provider.buildArgs({ cliSessionId: 'sid-1', isResume: false, extraArgs: '', initialPrompt: 'fix the linter' });
     expect(args).toEqual(['--session-id', 'sid-1', 'fix the linter']);
   });
+
+  it('passes systemPrompt as --append-system-prompt argv pair', () => {
+    const args = provider.buildArgs({ cliSessionId: null, isResume: false, extraArgs: '', systemPrompt: 'You are the CMO.' });
+    expect(args).toEqual(['--append-system-prompt', 'You are the CMO.']);
+  });
+
+  it('preserves multi-line systemPrompt as a single argv element', () => {
+    const prompt = 'You are the CMO.\n\nFocus on:\n- growth\n- retention';
+    const args = provider.buildArgs({ cliSessionId: null, isResume: false, extraArgs: '', systemPrompt: prompt });
+    expect(args).toEqual(['--append-system-prompt', prompt]);
+  });
+
+  it('puts systemPrompt before initialPrompt and extra args', () => {
+    const args = provider.buildArgs({
+      cliSessionId: 'sid-1',
+      isResume: false,
+      extraArgs: '--verbose',
+      initialPrompt: 'hello',
+      systemPrompt: 'be concise',
+    });
+    expect(args).toEqual(['--session-id', 'sid-1', '--append-system-prompt', 'be concise', 'hello', '--verbose']);
+  });
 });
 
 describe('getShiftEnterSequence', () => {

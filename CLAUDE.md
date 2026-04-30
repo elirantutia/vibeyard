@@ -56,6 +56,7 @@ CLI-specific behavior is encapsulated behind a `CliProvider` interface (`src/mai
 - **Provider per-session**: Each `SessionRecord` has a `providerId` (defaults to `'claude'`). A project can contain sessions from multiple providers.
 - **Capabilities pattern**: Providers declare what they support via `CliProviderCapabilities`. UI can conditionally enable features per-session.
 - **Current providers**: `ClaudeProvider` (`src/main/providers/claude-provider.ts`) — extracts all Claude-specific logic from `pty-manager.ts`, `prerequisites.ts`, `claude-cli.ts`, and `hook-status.ts`.
+- **System prompt**: `buildArgs` accepts `systemPrompt?: string` and every provider must honor it (used by the Team feature). Claude maps it to `--append-system-prompt`; Codex to `-c instructions=<value>`; Copilot/Gemini to `--system-prompt`. The renderer passes it via the transient `pendingSystemPrompt` field on `SessionRecord`, which is consumed once on the first PTY spawn and stripped from `state.json` so it is never re-injected on resume.
 
 ### Key Components
 
@@ -70,6 +71,9 @@ CLI-specific behavior is encapsulated behind a `CliProvider` interface (`src/mai
 - `board-session-sync.ts` — Listens to session lifecycle events and auto-moves board tasks (e.g. to Done on session complete).
 - `components/board/` — Board UI: `board-view.ts` (container + tag row + search), `board-column.ts` (column with header/rename), `board-card.ts` (card with run/resume/focus), `board-task-modal.ts` (create/edit dialog with tags), `board-dnd.ts` (drag-and-drop with injected DOM drop targets), `board-context-menu.ts`.
 - `styles/kanban.css` — All kanban board styles including cards, columns, DnD drop targets, tag pills, and filter UI.
+- `components/team/` — Team tab: `instance.ts` + `pane.ts` (tab plumbing mirroring kanban), `team-view.ts` (header + card grid + empty state), `member-card.ts` (Chat/Edit/Share/Delete actions), `member-modal.ts` (create/edit form using the shared `showModal`), `predefined-picker.ts` (fetches suggestions from the GitHub repo, marks already-installed members), `github-fetcher.ts` (Contents API + raw download, 1 hour cache), `frontmatter.ts` (Markdown ↔ `TeamMember` round-trip parser), `share-flow.ts` (clipboard + GitHub "new file" URL).
+- `styles/team.css` — Team grid, cards, predefined-picker dialog. Uses CSS variables only.
+- Team state lives at the top level of `~/.vibeyard/state.json` as `state.team.members` (global, not per-project). Predefined suggestions cache at `state.team.predefinedCache`. The source repo is configured by the single constant `TEAM_MEMBERS_REPO` in `src/shared/team-config.ts`.
 
 ### Platform Checks
 

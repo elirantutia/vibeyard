@@ -198,6 +198,11 @@ describe('buildArgs', () => {
     const args = provider.buildArgs({ cliSessionId: 'sid-1', isResume: true, extraArgs: '--model gpt-4o' });
     expect(args).toEqual(['resume', 'sid-1', '--model', 'gpt-4o']);
   });
+
+  it('passes systemPrompt via -c instructions config override', () => {
+    const args = provider.buildArgs({ cliSessionId: null, isResume: false, extraArgs: '', systemPrompt: 'You are the CMO.' });
+    expect(args).toEqual(['-c', 'instructions=You are the CMO.']);
+  });
 });
 
 describe('getShiftEnterSequence', () => {
