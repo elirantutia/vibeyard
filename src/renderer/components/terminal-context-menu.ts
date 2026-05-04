@@ -4,6 +4,29 @@ import { wrapBracketedPaste } from './terminal-utils.js';
 
 let activeMenu: HTMLElement | null = null;
 
+function makeItem(label: string, shortcut?: string): HTMLDivElement {
+  const item = document.createElement('div');
+  item.className = 'tab-context-menu-item';
+  const labelSpan = document.createElement('span');
+  labelSpan.textContent = label;
+  item.appendChild(labelSpan);
+  if (shortcut) {
+    const hint = document.createElement('span');
+    hint.className = 'shortcut-hint';
+    hint.textContent = shortcut;
+    item.appendChild(hint);
+  }
+  return item;
+}
+
+function onDocumentClick(): void {
+  hideTerminalContextMenu();
+}
+
+function onDocumentKeydown(e: KeyboardEvent): void {
+  if (e.key === 'Escape') hideTerminalContextMenu();
+}
+
 export function showTerminalContextMenu(
   x: number,
   y: number,
@@ -19,24 +42,19 @@ export function showTerminalContextMenu(
 
   const hasSelection = terminal.hasSelection();
 
-  // Copy
-  const copyItem = document.createElement('div');
-  copyItem.className = 'tab-context-menu-item' + (hasSelection ? '' : ' disabled');
-  copyItem.innerHTML = `<span>Copy</span><span class="shortcut-hint">${isMac ? '⇧⌘C' : 'Ctrl+Shift+C'}</span>`;
+  const copyItem = makeItem('Copy', isMac ? '⇧⌘C' : 'Ctrl+Shift+C');
+  if (!hasSelection) copyItem.classList.add('disabled');
   if (hasSelection) {
     copyItem.addEventListener('click', (e) => {
       e.stopPropagation();
       hideTerminalContextMenu();
       const selection = terminal.getSelection();
-      if (selection) navigator.clipboard.writeText(selection).catch((err) => console.warn('Clipboard write failed:', err));
+      if (selection) navigator.clipboard.writeText(selection).catch(() => {});
     });
   }
   menu.appendChild(copyItem);
 
-  // Paste
-  const pasteItem = document.createElement('div');
-  pasteItem.className = 'tab-context-menu-item';
-  pasteItem.innerHTML = `<span>Paste</span><span class="shortcut-hint">${isMac ? '⌘V' : 'Ctrl+V'}</span>`;
+  const pasteItem = makeItem('Paste', isMac ? '⌘V' : 'Ctrl+V');
   pasteItem.addEventListener('click', (e) => {
     e.stopPropagation();
     hideTerminalContextMenu();
@@ -47,15 +65,11 @@ export function showTerminalContextMenu(
   });
   menu.appendChild(pasteItem);
 
-  // Separator
   const sep1 = document.createElement('div');
   sep1.className = 'tab-context-menu-separator';
   menu.appendChild(sep1);
 
-  // Select All
-  const selectAllItem = document.createElement('div');
-  selectAllItem.className = 'tab-context-menu-item';
-  selectAllItem.textContent = 'Select All';
+  const selectAllItem = makeItem('Select All');
   selectAllItem.addEventListener('click', (e) => {
     e.stopPropagation();
     hideTerminalContextMenu();
@@ -63,15 +77,11 @@ export function showTerminalContextMenu(
   });
   menu.appendChild(selectAllItem);
 
-  // Separator
   const sep2 = document.createElement('div');
   sep2.className = 'tab-context-menu-separator';
   menu.appendChild(sep2);
 
-  // Clear Terminal
-  const clearItem = document.createElement('div');
-  clearItem.className = 'tab-context-menu-item';
-  clearItem.textContent = 'Clear Terminal';
+  const clearItem = makeItem('Clear Terminal');
   clearItem.addEventListener('click', (e) => {
     e.stopPropagation();
     hideTerminalContextMenu();
@@ -82,19 +92,19 @@ export function showTerminalContextMenu(
   document.body.appendChild(menu);
   activeMenu = menu;
 
-  // Adjust if menu goes off-screen
   const rect = menu.getBoundingClientRect();
   if (rect.right > window.innerWidth) menu.style.left = `${window.innerWidth - rect.width - 4}px`;
   if (rect.bottom > window.innerHeight) menu.style.top = `${window.innerHeight - rect.height - 4}px`;
+
+  document.addEventListener('click', onDocumentClick);
+  document.addEventListener('keydown', onDocumentKeydown);
 }
 
 export function hideTerminalContextMenu(): void {
   if (activeMenu) {
     activeMenu.remove();
     activeMenu = null;
+    document.removeEventListener('click', onDocumentClick);
+    document.removeEventListener('keydown', onDocumentKeydown);
   }
 }
-
-// Global dismiss listeners
-document.addEventListener('click', hideTerminalContextMenu);
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideTerminalContextMenu(); });
