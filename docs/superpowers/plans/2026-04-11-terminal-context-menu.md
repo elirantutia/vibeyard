@@ -100,10 +100,10 @@ export function showTerminalContextMenu(
 
   const hasSelection = terminal.hasSelection();
 
-  // Copy
-  const copyItem = document.createElement('div');
-  copyItem.className = 'tab-context-menu-item' + (hasSelection ? '' : ' disabled');
-  copyItem.innerHTML = `<span>Copy</span><span class="shortcut-hint">${isMac ? '⇧⌘C' : 'Ctrl+Shift+C'}</span>`;
+  // Items use a `makeItem(label, shortcut?)` helper that builds a div with
+  // textContent + child <span>s (no innerHTML) — see implementation file.
+  const copyItem = makeItem('Copy', isMac ? '⇧⌘C' : 'Ctrl+Shift+C');
+  if (!hasSelection) copyItem.classList.add('disabled');
   if (hasSelection) {
     copyItem.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -114,10 +114,7 @@ export function showTerminalContextMenu(
   }
   menu.appendChild(copyItem);
 
-  // Paste
-  const pasteItem = document.createElement('div');
-  pasteItem.className = 'tab-context-menu-item';
-  pasteItem.innerHTML = `<span>Paste</span><span class="shortcut-hint">${isMac ? '⌘V' : 'Ctrl+V'}</span>`;
+  const pasteItem = makeItem('Paste', isMac ? '⌘V' : 'Ctrl+V');
   pasteItem.addEventListener('click', (e) => {
     e.stopPropagation();
     hideTerminalContextMenu();
@@ -178,9 +175,10 @@ export function hideTerminalContextMenu(): void {
   }
 }
 
-// Global dismiss listeners
-document.addEventListener('click', hideTerminalContextMenu);
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideTerminalContextMenu(); });
+// Global dismiss listeners are registered inside showTerminalContextMenu()
+// (after appending the menu) and removed inside hideTerminalContextMenu(),
+// so they only exist while a menu is open. Use named handlers so
+// removeEventListener can unbind them.
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
