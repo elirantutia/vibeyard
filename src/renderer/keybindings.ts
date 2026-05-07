@@ -103,6 +103,9 @@ export function initKeybindings(): void {
   shortcutManager.registerHandler('zoom-in', zoomIn);
   shortcutManager.registerHandler('zoom-out', zoomOut);
   shortcutManager.registerHandler('zoom-reset', zoomReset);
+  shortcutManager.registerHandler('toggle-subway-banner', () => {
+    document.getElementById('subway-banner')?.classList.toggle('subway-banner-hidden');
+  });
 
   document.addEventListener('keydown', (e) => {
     shortcutManager.matchEvent(e);
