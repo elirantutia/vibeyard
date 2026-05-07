@@ -52,4 +52,9 @@ copyDir(
   path.join(dist, 'assets', 'providers')
 );
 
+copyFile(
+  path.join(root, 'assets', 'subway.mp4'),
+  path.join(dist, 'assets', 'subway.mp4')
+);
+
 console.log('Assets copied.');

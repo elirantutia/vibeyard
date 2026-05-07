@@ -402,16 +402,3 @@
   object-fit: cover;
   display: block;
 }
-
-.subway-banner-placeholder {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  color: var(--text-muted);
-  text-align: center;
-  padding: 8px;
-  pointer-events: none;
-}
