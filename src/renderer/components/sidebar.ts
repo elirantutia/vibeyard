@@ -600,6 +600,21 @@ function showProjectContextMenu(x: number, y: number, project: ProjectRecord): v
   const separator = document.createElement('div');
   separator.className = 'tab-context-menu-separator';
 
+  // Project Settings — currently just the default profile, shown only when
+  // the user has Claude profiles to choose from.
+  const claudeProfiles = appState.profiles.filter((p) => p.providerId === 'claude');
+  let settingsItem: HTMLDivElement | null = null;
+  if (claudeProfiles.length > 0) {
+    settingsItem = document.createElement('div');
+    settingsItem.className = 'tab-context-menu-item';
+    settingsItem.textContent = 'Project Settings…';
+    settingsItem.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hideProjectContextMenu();
+      promptProjectSettings(project);
+    });
+  }
+
   const removeItem = document.createElement('div');
   removeItem.className = 'tab-context-menu-item';
   removeItem.textContent = 'Remove Project';
@@ -611,6 +626,7 @@ function showProjectContextMenu(x: number, y: number, project: ProjectRecord): v
 
   menu.appendChild(renameItem);
   menu.appendChild(closeAllItem);
+  if (settingsItem) menu.appendChild(settingsItem);
   menu.appendChild(separator);
   menu.appendChild(removeItem);
   document.body.appendChild(menu);
@@ -626,6 +642,26 @@ function hideProjectContextMenu(): void {
     activeProjectContextMenu.remove();
     activeProjectContextMenu = null;
   }
+}
+
+/** Project-level settings dialog. Currently just the default Claude profile. */
+function promptProjectSettings(project: ProjectRecord): void {
+  const claudeProfiles = appState.profiles.filter((p) => p.providerId === 'claude');
+  showModal('Project Settings', [
+    {
+      label: 'Default profile',
+      id: 'profile',
+      type: 'select',
+      defaultValue: project.defaultProfileId ?? '',
+      options: [
+        { value: '', label: 'Default (~/.claude)' },
+        ...claudeProfiles.map((p) => ({ value: p.id, label: p.name })),
+      ],
+    },
+  ], (values) => {
+    appState.setProjectDefaultProfile(project.id, values['profile'] || undefined);
+    closeModal();
+  });
 }
 
 let lastDiscussionsCount = -1;

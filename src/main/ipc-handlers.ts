@@ -28,6 +28,7 @@ import { listProfiles as listChromeProfiles, runImport as runChromeImport, clear
 import type { ChromeImportOptions, ChromeImportProgress } from '../shared/types';
 import { shouldWarnStatusLine } from './settings-guard';
 import { setCloseConfirmed } from './close-state';
+import { provisionProfileDir } from './profiles';
 
 /**
  * Check if a resolved path is within one of the known project directories.
@@ -114,7 +115,7 @@ export function resetHookWatcher(): void {
 }
 
 export function registerIpcHandlers(): void {
-  ipcMain.handle('pty:create', async (_event, sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs: string, providerId: ProviderId = 'claude', initialPrompt?: string, systemPrompt?: string) => {
+  ipcMain.handle('pty:create', async (_event, sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs: string, providerId: ProviderId = 'claude', initialPrompt?: string, systemPrompt?: string, configDir?: string) => {
     const win = BrowserWindow.getAllWindows()[0];
     if (!win) return;
 
@@ -155,13 +156,14 @@ export function registerIpcHandlers(): void {
         if (w && !w.isDestroyed()) {
           w.webContents.send('pty:exit', sessionId, exitCode, signal);
         }
-      }
+      },
+      configDir
     );
 
     // Validate after spawnPty — Copilot installs per-project hooks there, so
     // validating earlier would see an empty config on a project's first spawn.
     if (provider.meta.capabilities.hookStatus) {
-      const validation = provider.validateSettings(cwd);
+      const validation = provider.validateSettings(cwd, configDir);
       const prefs = loadState().preferences;
       const statusLineIssue = shouldWarnStatusLine(
         validation.statusLine,
@@ -265,6 +267,13 @@ export function registerIpcHandlers(): void {
     saveState(state);
   });
 
+  // Provision (create) a profile's config dir. Returns the resolved absolute
+  // path and whether it is the auto-managed location.
+  ipcMain.handle('profiles:provision', (_event, profileId: string, customPath?: string) => {
+    const configDir = provisionProfileDir(profileId, customPath);
+    return { configDir, managed: !customPath?.trim() };
+  });
+
   ipcMain.handle('menu:rebuild', (_event, debugMode: boolean) => {
     createAppMenu(debugMode);
   });
@@ -307,13 +316,14 @@ export function registerIpcHandlers(): void {
     sourceCliSessionId: string | null,
     projectPath: string,
     sessionName: string,
+    configDir?: string,
   ) => {
     const sourceProvider = getProvider(sourceProviderId);
     const fromProviderLabel = sourceProvider.meta.displayName;
     let transcriptPath: string | null = null;
     if (sourceCliSessionId && sourceProvider.getTranscriptPath) {
       try {
-        transcriptPath = sourceProvider.getTranscriptPath(sourceCliSessionId, projectPath);
+        transcriptPath = sourceProvider.getTranscriptPath(sourceCliSessionId, projectPath, configDir);
       } catch (err) {
         console.warn('getTranscriptPath failed:', err);
       }

@@ -13,12 +13,16 @@ vi.mock('../config-watcher', () => ({ startConfigWatcher: () => {}, stopConfigWa
 vi.mock('../claude-cli', () => ({ installHooksOnly: () => {}, installStatusLine: () => {}, getClaudeConfig: async () => ({}) }));
 vi.mock('../settings-guard', () => ({ guardedInstall: async () => {}, validateSettings: () => ({}), reinstallSettings: () => {} }));
 vi.mock('./resolve-binary', () => ({ resolveBinary: () => '', validateBinaryExists: () => true }));
+vi.mock('../store', () => ({ loadState: vi.fn(() => ({ profiles: [] })) }));
 
 import * as fs from 'fs';
+import * as path from 'path';
 import { ClaudeProvider } from './claude-provider';
+import { loadState } from '../store';
 
 const mockReadFile = vi.mocked(fs.promises.readFile);
 const mockReaddir = vi.mocked(fs.promises.readdir);
+const mockLoadState = vi.mocked(loadState);
 
 const FAKE_UUID = '550e8400-e29b-41d4-a716-446655440000';
 
@@ -31,6 +35,7 @@ function makeJsonl(entries: object[]): string {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockLoadState.mockReturnValue({ profiles: [] } as any);
 });
 
 describe('ClaudeProvider.discoverTranscripts()', () => {
@@ -71,6 +76,29 @@ describe('ClaudeProvider.discoverTranscripts()', () => {
     const out = await new ClaudeProvider().discoverTranscripts();
     expect(out).toHaveLength(1);
     expect(out[0].projectSlug).toBe('ok');
+  });
+
+  it('unions the default config dir with every claude profile config dir', async () => {
+    mockLoadState.mockReturnValue({
+      profiles: [
+        { id: 'work', name: 'Work', providerId: 'claude', configDir: '/mock/home/.vibeyard/profiles/work', managed: true, createdAt: 0 },
+        // Non-claude profile is ignored.
+        { id: 'cdx', name: 'Codex', providerId: 'codex', configDir: '/mock/home/.vibeyard/profiles/cdx', managed: true, createdAt: 0 },
+      ],
+    } as any);
+    // Default root, then its slug files; then the profile root, then its slug files.
+    mockReaddir
+      .mockResolvedValueOnce([dir('proj-default')] as any)
+      .mockResolvedValueOnce([`${FAKE_UUID}.jsonl`] as any)
+      .mockResolvedValueOnce([dir('proj-work')] as any)
+      .mockResolvedValueOnce([`${FAKE_UUID}.jsonl`] as any);
+
+    const out = await new ClaudeProvider().discoverTranscripts();
+    expect(out).toHaveLength(2);
+    const def = out.find(d => d.transcriptPath.includes('proj-default'));
+    const work = out.find(d => d.transcriptPath.includes(path.join('profiles', 'work')));
+    expect(def?.profileId).toBeUndefined();   // default root carries no profile
+    expect(work?.profileId).toBe('work');     // profile root tags its profileId
   });
 });
 

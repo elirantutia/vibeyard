@@ -1,4 +1,4 @@
-import type { CliProviderCapabilities, Preferences, ProjectRecord, ProviderId, SessionRecord } from '../../shared/types.js';
+import type { CliProviderCapabilities, Preferences, Profile, ProjectRecord, ProviderId, SessionRecord } from '../../shared/types.js';
 
 /** Resolve the provider id for a plan session: override → active session's → default → claude. */
 export function resolvePlanProvider(
@@ -24,6 +24,25 @@ export function buildPlanSessionArgs(
 /** Resolve the providerId used when creating a plain CLI session. */
 export function resolveCliProvider(prefs: Preferences, override: ProviderId | undefined): ProviderId {
   return override ?? prefs.defaultProvider ?? 'claude';
+}
+
+/**
+ * Resolve the effective Profile for a session: session > project default > global
+ * default > none. Only applies when the profile targets the session's provider
+ * (returns undefined on mismatch, so the session uses the default config dir).
+ */
+export function resolveProfile(
+  session: Pick<SessionRecord, 'profileId'> | undefined,
+  project: Pick<ProjectRecord, 'defaultProfileId'> | undefined,
+  prefs: Pick<Preferences, 'defaultProfileId'>,
+  providerId: ProviderId,
+  profiles: Profile[],
+): Profile | undefined {
+  const id = session?.profileId ?? project?.defaultProfileId ?? prefs.defaultProfileId;
+  if (!id) return undefined;
+  const profile = profiles.find((p) => p.id === id);
+  if (!profile || profile.providerId !== providerId) return undefined;
+  return profile;
 }
 
 export function findExistingDiffViewer(

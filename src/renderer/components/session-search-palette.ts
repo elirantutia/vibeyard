@@ -253,7 +253,7 @@ function openResult(r: ResolvedResult): void {
       project = appState.addProject(name, r.projectCwd);
     }
     const name = r.sessionName ?? r.derivedName ?? r.cliSessionId.slice(0, 8) + '\u2026';
-    appState.openCliSession(project.id, r.cliSessionId, name, r.providerId);
+    appState.openCliSession(project.id, r.cliSessionId, name, r.providerId, r.profileId);
   }
   hidePalette();
 }

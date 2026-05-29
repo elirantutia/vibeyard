@@ -24,6 +24,8 @@ interface TerminalInstance {
   cliSessionId: string | null;
   providerId: ProviderId;
   args: string;
+  /** Resolved profile config dir (CLAUDE_CONFIG_DIR), or undefined for the default ~/.claude. */
+  configDir?: string;
   isResume: boolean;
   wasResumed: boolean;
   spawned: boolean;
@@ -43,7 +45,8 @@ export function createTerminalPane(
   isResume: boolean = false,
   args: string = '',
   providerId: ProviderId = 'claude',
-  projectId?: string
+  projectId?: string,
+  configDir?: string
 ): TerminalInstance {
   if (instances.has(sessionId)) {
     return instances.get(sessionId)!;
@@ -122,6 +125,7 @@ export function createTerminalPane(
     cliSessionId,
     providerId,
     args,
+    configDir,
     isResume,
     wasResumed: isResume,
     spawned: false,
@@ -274,7 +278,7 @@ export async function spawnTerminal(sessionId: string): Promise<void> {
     systemPrompt = instance.pendingSystemPrompt;
     instance.pendingSystemPrompt = null;
   }
-  await window.vibeyard.pty.create(sessionId, instance.projectPath, instance.cliSessionId, instance.isResume, instance.args, instance.providerId, initialPrompt, systemPrompt);
+  await window.vibeyard.pty.create(sessionId, instance.projectPath, instance.cliSessionId, instance.isResume, instance.args, instance.providerId, initialPrompt, systemPrompt, instance.configDir);
   instance.isResume = true; // subsequent spawns (e.g. Restart Session) should resume
 }
 

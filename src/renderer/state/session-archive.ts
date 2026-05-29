@@ -18,6 +18,7 @@ export function archiveSession(project: ProjectRecord, session: SessionRecord): 
     createdAt: session.createdAt,
     closedAt: new Date().toISOString(),
     teamMemberId: session.teamMemberId,
+    profileId: session.profileId,
     cost: costInfo ? {
       totalCostUsd: costInfo.totalCostUsd,
       totalInputTokens: costInfo.totalInputTokens,
@@ -40,6 +41,8 @@ export function archiveSession(project: ProjectRecord, session: SessionRecord): 
     if (archived.teamMemberId) {
       project.sessionHistory[existingIndex].teamMemberId = archived.teamMemberId;
     }
+    // Always sync (not just when truthy) so clearing a session's profile is reflected.
+    project.sessionHistory[existingIndex].profileId = archived.profileId;
   } else {
     project.sessionHistory.push(archived);
   }
@@ -63,16 +66,18 @@ export function buildResumedSession(archived: ArchivedSession): SessionRecord {
     cliSessionId: archived.cliSessionId,
     createdAt: new Date().toISOString(),
     teamMemberId: archived.teamMemberId,
+    profileId: archived.profileId,
   };
 }
 
 /** Build a fresh SessionRecord from a bare cliSessionId (no Vibeyard history entry required). */
-export function buildResumedSessionFromCliId(cliSessionId: string, name: string, providerId: ProviderId = 'claude'): SessionRecord {
+export function buildResumedSessionFromCliId(cliSessionId: string, name: string, providerId: ProviderId = 'claude', profileId?: string): SessionRecord {
   return {
     id: crypto.randomUUID(),
     name,
     providerId,
     cliSessionId,
     createdAt: new Date().toISOString(),
+    ...(profileId ? { profileId } : {}),
   };
 }

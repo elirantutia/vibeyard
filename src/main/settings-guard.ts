@@ -25,8 +25,8 @@ function getExpectedHookEvents(): string[] {
   return CANDIDATE_HOOK_EVENTS.filter(e => supported.has(e));
 }
 
-function readClaudeSettings(): Record<string, unknown> {
-  return readJsonSafe(path.join(homedir(), '.claude', 'settings.json')) ?? {};
+function readClaudeSettings(configDir: string = path.join(homedir(), '.claude')): Record<string, unknown> {
+  return readJsonSafe(path.join(configDir, 'settings.json')) ?? {};
 }
 
 export function isVibeyardStatusLine(statusLine: unknown): boolean {
@@ -41,8 +41,8 @@ export function isVibeyardStatusLine(statusLine: unknown): boolean {
   return false;
 }
 
-export function validateSettings(): SettingsValidationResult {
-  const settings = readClaudeSettings();
+export function validateSettings(configDir?: string): SettingsValidationResult {
+  const settings = readClaudeSettings(configDir);
   const expectedHookEvents = getExpectedHookEvents();
 
   let statusLine: SettingsValidationResult['statusLine'] = 'missing';

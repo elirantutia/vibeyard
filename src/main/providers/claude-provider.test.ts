@@ -150,6 +150,16 @@ describe('buildEnv', () => {
     expect(env.CLAUDE_CODE).toBeUndefined();
     expect(env.OTHER).toBe('val');
   });
+
+  it('sets CLAUDE_CONFIG_DIR when a profile configDir is given', () => {
+    const env = provider.buildEnv('sess-123', {}, { configDir: '/mock/home/.vibeyard/profiles/work' });
+    expect(env.CLAUDE_CONFIG_DIR).toBe('/mock/home/.vibeyard/profiles/work');
+  });
+
+  it('does not set CLAUDE_CONFIG_DIR when no configDir is given', () => {
+    expect(provider.buildEnv('sess-123', {}).CLAUDE_CONFIG_DIR).toBeUndefined();
+    expect(provider.buildEnv('sess-123', {}, {}).CLAUDE_CONFIG_DIR).toBeUndefined();
+  });
 });
 
 describe('buildArgs', () => {
@@ -235,6 +245,12 @@ describe('getTranscriptPath', () => {
     const out = provider.getTranscriptPath('sid', 'C:\\Users\\me\\proj');
     // ':' and '\' each collapse to '-', producing 'C--Users-me-proj'
     expect(out).toBe(path.join('/mock/home', '.claude', 'projects', 'C--Users-me-proj', 'sid.jsonl'));
+  });
+
+  it('resolves under a profile config dir when given', () => {
+    mockExistsSync.mockReturnValue(true);
+    const out = provider.getTranscriptPath('abc-123', '/tmp/proj', '/mock/home/.vibeyard/profiles/work');
+    expect(out).toBe(path.join('/mock/home/.vibeyard/profiles/work', 'projects', '-tmp-proj', 'abc-123.jsonl'));
   });
 });
 

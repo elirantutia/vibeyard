@@ -33,7 +33,7 @@ vi.mock('./hook-commands', () => ({
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { getClaudeConfig, installHooks } from './claude-cli';
+import { getClaudeConfig, installHooks, installHooksOnly, installStatusLine } from './claude-cli';
 import { installEventScript } from './hook-commands';
 
 const mockReadFileSync = vi.mocked(fs.readFileSync);
@@ -361,6 +361,34 @@ describe('getClaudeConfig', () => {
     expect(config.skills).toEqual([
       { name: 'MySkill', description: 'Does stuff', scope: 'user', filePath: path.join('/mock/home', '.claude', 'skills', 'my-skill', 'SKILL.md') },
     ]);
+  });
+});
+
+describe('install into a profile config dir', () => {
+  const profileDir = path.join('/mock/home', '.vibeyard', 'profiles', 'work');
+
+  it('installHooksOnly writes to the given config dir, not ~/.claude', () => {
+    installHooksOnly(profileDir);
+    expect(mockMkdirSync).toHaveBeenCalledWith(profileDir, { recursive: true });
+    expect(mockWriteFileSync).toHaveBeenCalledTimes(1);
+    expect(n(String(mockWriteFileSync.mock.calls[0][0]))).toBe(n(path.join(profileDir, 'settings.json')));
+    // Default ~/.claude/settings.json must not be touched.
+    const touchedDefault = mockWriteFileSync.mock.calls.some(
+      (c) => n(String(c[0])) === '/mock/home/.claude/settings.json',
+    );
+    expect(touchedDefault).toBe(false);
+  });
+
+  it('installStatusLine writes to the given config dir', () => {
+    installStatusLine(profileDir);
+    expect(n(String(mockWriteFileSync.mock.calls[0][0]))).toBe(n(path.join(profileDir, 'settings.json')));
+    const written = JSON.parse(String(mockWriteFileSync.mock.calls[0][1]));
+    expect(written.statusLine.type).toBe('command');
+  });
+
+  it('defaults to ~/.claude when no config dir is given', () => {
+    installHooksOnly();
+    expect(n(String(mockWriteFileSync.mock.calls[0][0]))).toBe('/mock/home/.claude/settings.json');
   });
 });
 

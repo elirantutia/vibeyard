@@ -3,7 +3,7 @@ import type { CostData, ProviderConfig, GitWorktree, McpResult, ProviderId, CliP
 
 export interface VibeyardApi {
   pty: {
-    create(sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs?: string, providerId?: ProviderId, initialPrompt?: string, systemPrompt?: string): Promise<void>;
+    create(sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs?: string, providerId?: ProviderId, initialPrompt?: string, systemPrompt?: string, configDir?: string): Promise<void>;
     createShell(sessionId: string, cwd: string): Promise<void>;
     write(sessionId: string, data: string): void;
     resize(sessionId: string, cols: number, rows: number): void;
@@ -36,6 +36,9 @@ export interface VibeyardApi {
   store: {
     load(): Promise<unknown>;
     save(state: unknown): Promise<void>;
+  };
+  profiles: {
+    provision(profileId: string, customPath?: string): Promise<{ configDir: string; managed: boolean }>;
   };
   provider: {
     getConfig(providerId: ProviderId, projectPath: string): Promise<ProviderConfig>;

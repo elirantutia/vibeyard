@@ -41,7 +41,7 @@ export class GeminiProvider implements CliProvider {
     return validateBinaryExists('gemini');
   }
 
-  buildEnv(sessionId: string, baseEnv: Record<string, string>): Record<string, string> {
+  buildEnv(sessionId: string, baseEnv: Record<string, string>, _opts?: { configDir?: string }): Record<string, string> {
     const env = { ...baseEnv };
     env[SESSION_ID_VAR] = sessionId;
     env.PATH = getFullPath();

@@ -3,9 +3,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockLoad = vi.fn();
 const mockSave = vi.fn();
 
+const mockProvision = vi.fn(async (id: string) => ({ configDir: `/cfg/${id}`, managed: true }));
+
 vi.stubGlobal('window', {
   vibeyard: {
     store: { load: mockLoad, save: mockSave },
+    profiles: { provision: mockProvision },
   },
 });
 
@@ -30,8 +33,15 @@ vi.mock('../provider-availability.js', () => ({
 }));
 
 import { appState, _resetForTesting } from '../state';
+import { resolveProfile } from './specialized-sessions.js';
+import type { Profile } from '../../shared/types.js';
 import { getCost } from '../session-cost.js';
 const mockGetCost = vi.mocked(getCost);
+
+const PROFILES: Profile[] = [
+  { id: 'work', name: 'Work', providerId: 'claude', configDir: '/cfg/work', managed: true, createdAt: 0 },
+  { id: 'cdx', name: 'Codex', providerId: 'codex', configDir: '/cfg/cdx', managed: true, createdAt: 0 },
+];
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -196,6 +206,80 @@ describe('addPlanSession()', () => {
 
   it('returns undefined for nonexistent project', () => {
     expect(appState.addPlanSession('no-such-project', 'Plan', true, 'claude')).toBeUndefined();
+  });
+});
+
+describe('resolveProfile()', () => {
+  it('prefers the session profile over project and prefs', () => {
+    const r = resolveProfile({ profileId: 'work' }, { defaultProfileId: undefined }, { defaultProfileId: undefined }, 'claude', PROFILES);
+    expect(r?.id).toBe('work');
+  });
+
+  it('falls back to the project default when the session has none', () => {
+    const r = resolveProfile({ profileId: undefined }, { defaultProfileId: 'work' }, { defaultProfileId: undefined }, 'claude', PROFILES);
+    expect(r?.id).toBe('work');
+  });
+
+  it('falls back to the global default when neither session nor project specify one', () => {
+    const r = resolveProfile(undefined, undefined, { defaultProfileId: 'work' }, 'claude', PROFILES);
+    expect(r?.id).toBe('work');
+  });
+
+  it('returns undefined when nothing specifies a profile', () => {
+    expect(resolveProfile(undefined, undefined, {}, 'claude', PROFILES)).toBeUndefined();
+  });
+
+  it('returns undefined when the profile targets a different provider', () => {
+    // 'work' is a claude profile, but the session provider is gemini.
+    expect(resolveProfile({ profileId: 'work' }, undefined, {}, 'gemini', PROFILES)).toBeUndefined();
+  });
+
+  it('returns undefined when the referenced profile no longer exists', () => {
+    expect(resolveProfile({ profileId: 'gone' }, undefined, {}, 'claude', PROFILES)).toBeUndefined();
+  });
+});
+
+describe('addSession profile pinning', () => {
+  it('pins an explicitly chosen profile onto the session', async () => {
+    const project = addProject();
+    const profile = await appState.addProfile({ name: 'Work', providerId: 'claude' });
+    const session = appState.addSession(project.id, 'S', undefined, 'claude', profile.id)!;
+    expect(session.profileId).toBe(profile.id);
+  });
+
+  it('pins the project default profile when none is passed (sticky resolution)', async () => {
+    const project = addProject();
+    const profile = await appState.addProfile({ name: 'Work', providerId: 'claude' });
+    appState.setProjectDefaultProfile(project.id, profile.id);
+    const session = appState.addSession(project.id, 'S')!;
+    expect(session.profileId).toBe(profile.id);
+  });
+
+  it('does not pin a claude profile onto a non-claude session', async () => {
+    const project = addProject();
+    const profile = await appState.addProfile({ name: 'Work', providerId: 'claude' });
+    appState.setProjectDefaultProfile(project.id, profile.id);
+    const session = appState.addSession(project.id, 'S', undefined, 'gemini')!;
+    expect(session.profileId).toBeUndefined();
+  });
+});
+
+describe('removeProfile reference cleanup', () => {
+  it('clears the profile from sessions, projects, prefs, and history', async () => {
+    const project = addProject();
+    const profile = await appState.addProfile({ name: 'Work', providerId: 'claude' });
+    appState.setProjectDefaultProfile(project.id, profile.id);
+    appState.setPreference('defaultProfileId', profile.id);
+    const session = appState.addSession(project.id, 'S', undefined, 'claude', profile.id)!;
+    project.sessionHistory = [{ id: 'a', name: 'old', providerId: 'claude', cliSessionId: 'c', createdAt: '0', closedAt: '0', profileId: profile.id, cost: null }];
+
+    appState.removeProfile(profile.id);
+
+    expect(appState.getProfile(profile.id)).toBeUndefined();
+    expect(session.profileId).toBeUndefined();
+    expect(project.defaultProfileId).toBeUndefined();
+    expect(appState.preferences.defaultProfileId).toBeUndefined();
+    expect(project.sessionHistory![0].profileId).toBeUndefined();
   });
 });
 

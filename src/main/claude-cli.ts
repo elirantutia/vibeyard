@@ -146,6 +146,11 @@ function getEnabledPlugins(): Set<string> {
 
 export const HOOK_MARKER = '# vibeyard-hook';
 
+/** The default Claude config dir (~/.claude). Profiles override this via CLAUDE_CONFIG_DIR. */
+export function defaultClaudeDir(): string {
+  return path.join(homedir(), '.claude');
+}
+
 /**
  * Return the set of Claude Code hook events supported by the currently
  * installed `claude` CLI binary. If the version cannot be detected, returns
@@ -176,8 +181,8 @@ function isIdeHook(h: HookHandler): boolean {
 /**
  * Read and clean Claude settings, returning the settings object and cleaned hooks.
  */
-function prepareSettings(): { settings: Record<string, unknown>; cleaned: HooksConfig } {
-  const settingsPath = path.join(homedir(), '.claude', 'settings.json');
+function prepareSettings(configDir: string = defaultClaudeDir()): { settings: Record<string, unknown>; cleaned: HooksConfig } {
+  const settingsPath = path.join(configDir, 'settings.json');
   let settings: Record<string, unknown> = {};
   try {
     settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
@@ -204,17 +209,18 @@ function prepareSettings(): { settings: Record<string, unknown>; cleaned: HooksC
   return { settings, cleaned };
 }
 
-function writeSettings(settings: Record<string, unknown>): void {
-  const settingsPath = path.join(homedir(), '.claude', 'settings.json');
+function writeSettings(settings: Record<string, unknown>, configDir: string = defaultClaudeDir()): void {
+  const settingsPath = path.join(configDir, 'settings.json');
   fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
 }
 
 /**
  * Install only the hooks portion of Claude Code settings (additive, non-destructive).
+ * Pass `configDir` to target a profile's config dir instead of the default ~/.claude.
  */
-export function installHooksOnly(): void {
-  const { settings, cleaned } = prepareSettings();
+export function installHooksOnly(configDir: string = defaultClaudeDir()): void {
+  const { settings, cleaned } = prepareSettings(configDir);
 
   const supportedEvents = getSupportedHookEvents();
 
@@ -360,14 +366,15 @@ with open(os.path.join(status_dir,sid+".events"),"a") as f:
   }
 
   settings.hooks = cleaned;
-  writeSettings(settings);
+  writeSettings(settings, configDir);
 }
 
 /**
  * Install only the statusLine setting (exclusive — overwrites any existing value).
+ * Pass `configDir` to target a profile's config dir instead of the default ~/.claude.
  */
-export function installStatusLine(): void {
-  const settingsPath = path.join(homedir(), '.claude', 'settings.json');
+export function installStatusLine(configDir: string = defaultClaudeDir()): void {
+  const settingsPath = path.join(configDir, 'settings.json');
   let settings: Record<string, unknown> = {};
   try {
     settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
@@ -380,7 +387,7 @@ export function installStatusLine(): void {
     command: getStatusLineScriptPath(),
   };
 
-  writeSettings(settings);
+  writeSettings(settings, configDir);
 }
 
 /**

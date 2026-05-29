@@ -198,7 +198,7 @@ describe('terminal pending prompt injection', () => {
     setPendingPrompt('claude-1', 'fix the bug');
     await spawnTerminal('claude-1');
 
-    expect(mockPtyCreate).toHaveBeenCalledWith('claude-1', '/project', null, false, '', 'claude', 'fix the bug', undefined);
+    expect(mockPtyCreate).toHaveBeenCalledWith('claude-1', '/project', null, false, '', 'claude', 'fix the bug', undefined, undefined);
     expect(mockPtyWrite).not.toHaveBeenCalled();
   });
 
@@ -210,7 +210,7 @@ describe('terminal pending prompt injection', () => {
     setPendingPrompt('codex-1', 'fix the bug');
     await spawnTerminal('codex-1');
 
-    expect(mockPtyCreate).toHaveBeenCalledWith('codex-1', '/project', null, false, '', 'codex', 'fix the bug', undefined);
+    expect(mockPtyCreate).toHaveBeenCalledWith('codex-1', '/project', null, false, '', 'codex', 'fix the bug', undefined, undefined);
     expect(mockPtyWrite).not.toHaveBeenCalled();
   });
 
@@ -221,7 +221,7 @@ describe('terminal pending prompt injection', () => {
     createTerminalPane('claude-2', '/project', null, false, '', 'claude');
     await spawnTerminal('claude-2');
 
-    expect(mockPtyCreate).toHaveBeenCalledWith('claude-2', '/project', null, false, '', 'claude', undefined, undefined);
+    expect(mockPtyCreate).toHaveBeenCalledWith('claude-2', '/project', null, false, '', 'claude', undefined, undefined, undefined);
   });
 
   it('does not inject pending prompt from PTY output', async () => {

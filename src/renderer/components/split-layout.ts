@@ -1,5 +1,12 @@
 import { appState, ProjectRecord } from '../state.js';
 import { isUnread, onChange as onUnreadChange } from '../session-unread.js';
+import type { ProviderId, SessionRecord } from '../../shared/types.js';
+
+/** Config dir for a session's pinned profile (provider-matched), or undefined for default ~/.claude. */
+function sessionConfigDir(session: SessionRecord, providerId: ProviderId): string | undefined {
+  if (!session.profileId) return undefined;
+  return appState.profiles.find((p) => p.id === session.profileId && p.providerId === providerId)?.configDir;
+}
 import {
   createTerminalPane,
   attachToContainer,
@@ -155,7 +162,9 @@ function onSessionAdded(data: unknown): void {
     renderLayout();
   } else {
     // Create and spawn immediately
-    createTerminalPane(session.id, project.path, session.cliSessionId, !!session.cliSessionId, session.args || '', (session.providerId as import('../../shared/types').ProviderId) || 'claude', project.id);
+    const cliProviderId = (session.providerId as ProviderId) || 'claude';
+    const configDir = sessionConfigDir(session, cliProviderId);
+    createTerminalPane(session.id, project.path, session.cliSessionId, !!session.cliSessionId, session.args || '', cliProviderId, project.id, configDir);
     const pending = appState.consumePendingInitialPrompt(project.id, session.id);
     if (pending) {
       setPendingPrompt(session.id, pending);
@@ -255,7 +264,9 @@ export function renderLayout(): void {
       }
     } else {
       if (!getTerminalInstance(session.id)) {
-        createTerminalPane(session.id, project.path, session.cliSessionId, !!session.cliSessionId, session.args || '', session.providerId || 'claude', project.id);
+        const cliProviderId = session.providerId || 'claude';
+        const configDir = sessionConfigDir(session, cliProviderId);
+        createTerminalPane(session.id, project.path, session.cliSessionId, !!session.cliSessionId, session.args || '', cliProviderId, project.id, configDir);
       }
     }
   }

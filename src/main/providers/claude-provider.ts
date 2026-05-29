@@ -12,8 +12,38 @@ import { guardedInstall, validateSettings, reinstallSettings } from '../settings
 import { resolveBinary, validateBinaryExists } from './resolve-binary';
 import { MAX_INDEX_CHARS_PER_SESSION, TRANSCRIPT_TEXT_SEPARATOR, UUID_RE } from './transcript-utils';
 import { writeAgentFile, deleteAgentFile } from './agent-files';
+import { loadState } from '../store';
 
 const binaryCache = { path: null as string | null };
+
+/** Enumerate every on-disk transcript under one `.../projects` root, tagged with its profile. */
+async function scanProjectsRoot(root: string, profileId?: string): Promise<TranscriptDescriptor[]> {
+  let entries: fs.Dirent[];
+  try {
+    entries = await fs.promises.readdir(root, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const out: TranscriptDescriptor[] = [];
+  for (const slugEntry of entries) {
+    if (!slugEntry.isDirectory()) continue;
+    const slug = slugEntry.name;
+    const slugPath = path.join(root, slug);
+    let files: string[];
+    try {
+      files = await fs.promises.readdir(slugPath);
+    } catch {
+      continue;
+    }
+    for (const file of files) {
+      if (!file.endsWith('.jsonl')) continue;
+      const cliSessionId = file.slice(0, -6);
+      if (!UUID_RE.test(cliSessionId)) continue;
+      out.push({ cliSessionId, transcriptPath: path.join(slugPath, file), projectSlug: slug, profileId });
+    }
+  }
+  return out;
+}
 
 export class ClaudeProvider implements CliProvider {
   readonly meta: CliProviderMeta = {
@@ -42,11 +72,14 @@ export class ClaudeProvider implements CliProvider {
     return validateBinaryExists('claude');
   }
 
-  buildEnv(sessionId: string, baseEnv: Record<string, string>): Record<string, string> {
+  buildEnv(sessionId: string, baseEnv: Record<string, string>, opts?: { configDir?: string }): Record<string, string> {
     const env = { ...baseEnv };
     delete env.CLAUDE_CODE; // avoid subprocess detection conflicts
     env.CLAUDE_IDE_SESSION_ID = sessionId;
     env.PATH = getFullPath();
+    // Profile support: point Claude Code at an isolated config dir (separate
+    // credentials/license, settings, hooks, transcripts). Absent = default ~/.claude.
+    if (opts?.configDir) env.CLAUDE_CONFIG_DIR = opts.configDir;
     return env;
   }
 
@@ -96,8 +129,10 @@ export class ClaudeProvider implements CliProvider {
     return getClaudeConfig(projectPath);
   }
 
-  validateSettings(): SettingsValidationResult {
-    return validateSettings();
+  validateSettings(_projectPath?: string, configDir?: string): SettingsValidationResult {
+    // For a profile session, validate the profile's config dir (where spawnPty
+    // installed hooks + statusLine), not the default ~/.claude.
+    return validateSettings(configDir);
   }
 
   reinstallSettings(): void {
@@ -109,38 +144,34 @@ export class ClaudeProvider implements CliProvider {
     return '\x1b[13;2u';
   }
 
-  getTranscriptPath(cliSessionId: string, projectPath: string): string | null {
+  getTranscriptPath(cliSessionId: string, projectPath: string, configDir?: string): string | null {
     // Claude encodes the project path by replacing any non-alphanumeric char with '-'
     const slug = projectPath.replace(/[^a-zA-Z0-9]/g, '-');
-    const filePath = path.join(os.homedir(), '.claude', 'projects', slug, `${cliSessionId}.jsonl`);
+    const root = configDir ?? path.join(os.homedir(), '.claude');
+    const filePath = path.join(root, 'projects', slug, `${cliSessionId}.jsonl`);
     return fs.existsSync(filePath) ? filePath : null;
   }
 
   async discoverTranscripts(): Promise<TranscriptDescriptor[]> {
-    const root = path.join(os.homedir(), '.claude', 'projects');
-    let entries: fs.Dirent[];
+    // Search the default config dir plus every claude profile's config dir, so
+    // global session search surfaces transcripts created under an isolated profile.
+    // Each root carries its profileId (undefined = default ~/.claude) so resume
+    // can reopen against the right config dir.
+    const defaultRoot = path.join(os.homedir(), '.claude', 'projects');
+    const roots = new Map<string, string | undefined>([[defaultRoot, undefined]]);
     try {
-      entries = await fs.promises.readdir(root, { withFileTypes: true });
+      for (const profile of loadState().profiles ?? []) {
+        if (profile.providerId === 'claude') {
+          const root = path.join(profile.configDir, 'projects');
+          if (!roots.has(root)) roots.set(root, profile.id);
+        }
+      }
     } catch {
-      return [];
+      // Profiles unavailable — fall back to the default root only.
     }
     const out: TranscriptDescriptor[] = [];
-    for (const slugEntry of entries) {
-      if (!slugEntry.isDirectory()) continue;
-      const slug = slugEntry.name;
-      const slugPath = path.join(root, slug);
-      let files: string[];
-      try {
-        files = await fs.promises.readdir(slugPath);
-      } catch {
-        continue;
-      }
-      for (const file of files) {
-        if (!file.endsWith('.jsonl')) continue;
-        const cliSessionId = file.slice(0, -6);
-        if (!UUID_RE.test(cliSessionId)) continue;
-        out.push({ cliSessionId, transcriptPath: path.join(slugPath, file), projectSlug: slug });
-      }
+    for (const [root, profileId] of roots) {
+      out.push(...await scanProjectsRoot(root, profileId));
     }
     return out;
   }

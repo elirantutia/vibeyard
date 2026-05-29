@@ -16,6 +16,14 @@
   display: none;
 }
 
+/* The shared modal overlay (showModal / showConfirmDialog) must layer above
+   createModalShell-based overlays (e.g. Preferences, which is appended to <body>
+   later at the same z-index) so dialogs opened from within them — like Add
+   Profile in the Preferences "Profiles" section — are actually visible. */
+#modal-overlay {
+  z-index: 340;
+}
+
 #modal, .modal-box {
   background: var(--bg-secondary);
   border: 1px solid var(--border);

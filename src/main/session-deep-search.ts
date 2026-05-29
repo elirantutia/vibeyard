@@ -118,6 +118,7 @@ async function searchOneProvider(provider: CliProvider, query: string): Promise<
       snippet: extractSnippet(entry.text, entry.textLower, query),
       score,
       derivedName: deriveName(entry.text),
+      profileId: desc.profileId,
     });
   }
   return out;

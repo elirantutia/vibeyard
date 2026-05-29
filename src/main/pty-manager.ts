@@ -5,6 +5,7 @@ import * as path from 'path';
 import type { ProviderId } from '../shared/types';
 import { getProvider } from './providers/registry';
 import { registerSession } from './hook-status';
+import { installHooksOnly, installStatusLine } from './claude-cli';
 import { isWin, pathSep } from './platform';
 import { nvmDefaultNodeBinDir } from './providers/nvm';
 
@@ -166,7 +167,8 @@ export async function spawnPty(
   initialPrompt: string | undefined,
   systemPrompt: string | undefined,
   onData: (data: string) => void,
-  onExit: (exitCode: number, signal?: number) => void
+  onExit: (exitCode: number, signal?: number) => void,
+  configDir?: string
 ): Promise<void> {
   if (ptys.has(sessionId)) {
     // Silence the old PTY's exit event so it doesn't remove the new session
@@ -189,7 +191,22 @@ export async function spawnPty(
     }
   }
 
-  const env = provider.buildEnv(sessionId, { ...process.env } as Record<string, string>);
+  // Profile support: a Claude session bound to a profile uses an isolated
+  // config dir, so Vibeyard's hooks + statusLine (boot-installed into ~/.claude)
+  // must also be installed there or cost/activity tracking silently breaks.
+  // Fresh profile dirs have no foreign statusLine, so install directly (the
+  // guarded/consent flow stays bound to the shared ~/.claude). Both calls are
+  // idempotent, mirroring the per-spawn Copilot install above.
+  if (providerId === 'claude' && configDir) {
+    try {
+      installHooksOnly(configDir);
+      installStatusLine(configDir);
+    } catch (err) {
+      console.warn('Failed to install hooks into profile config dir:', configDir, err);
+    }
+  }
+
+  const env = provider.buildEnv(sessionId, { ...process.env } as Record<string, string>, { configDir });
   const args = provider.buildArgs({ cliSessionId, isResume, extraArgs, initialPrompt, systemPrompt });
   const resolvedShell = provider.resolveBinaryPath();
   const { shell, args: spawnArgs } = resolveWindowsShell(resolvedShell, args);

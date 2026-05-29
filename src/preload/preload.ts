@@ -6,7 +6,7 @@ export type { CostData } from '../shared/types';
 
 export interface VibeyardApi {
   pty: {
-    create(sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs?: string, providerId?: ProviderId, initialPrompt?: string, systemPrompt?: string): Promise<void>;
+    create(sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs?: string, providerId?: ProviderId, initialPrompt?: string, systemPrompt?: string, configDir?: string): Promise<void>;
     createShell(sessionId: string, cwd: string): Promise<void>;
     write(sessionId: string, data: string): void;
     resize(sessionId: string, cols: number, rows: number): void;
@@ -16,7 +16,7 @@ export interface VibeyardApi {
     onExit(callback: (sessionId: string, exitCode: number, signal?: number) => void): () => void;
   };
   session: {
-    buildResumeWithPrompt(sourceProviderId: ProviderId, sourceCliSessionId: string | null, projectPath: string, sessionName: string): Promise<string>;
+    buildResumeWithPrompt(sourceProviderId: ProviderId, sourceCliSessionId: string | null, projectPath: string, sessionName: string, configDir?: string): Promise<string>;
     deepSearch(query: string): Promise<DeepSearchResult[]>;
     onHookStatus(callback: (sessionId: string, status: 'working' | 'waiting' | 'completed' | 'input', hookName: string) => void): () => void;
     onCliSessionId(callback: (sessionId: string, cliSessionId: string) => void): () => void;
@@ -47,6 +47,9 @@ export interface VibeyardApi {
   store: {
     load(): Promise<unknown>;
     save(state: unknown): Promise<void>;
+  };
+  profiles: {
+    provision(profileId: string, customPath?: string): Promise<{ configDir: string; managed: boolean }>;
   };
   provider: {
     getConfig(providerId: ProviderId, projectPath: string): Promise<ProviderConfig>;
@@ -164,8 +167,8 @@ function onChannel(channel: string, callback: (...args: unknown[]) => void): () 
 
 const api: VibeyardApi = {
   pty: {
-    create: (sessionId, cwd, cliSessionId, isResume, extraArgs, providerId, initialPrompt, systemPrompt) =>
-      ipcRenderer.invoke('pty:create', sessionId, cwd, cliSessionId, isResume, extraArgs || '', providerId || 'claude', initialPrompt, systemPrompt),
+    create: (sessionId, cwd, cliSessionId, isResume, extraArgs, providerId, initialPrompt, systemPrompt, configDir) =>
+      ipcRenderer.invoke('pty:create', sessionId, cwd, cliSessionId, isResume, extraArgs || '', providerId || 'claude', initialPrompt, systemPrompt, configDir),
     createShell: (sessionId, cwd) =>
       ipcRenderer.invoke('pty:createShell', sessionId, cwd),
     write: (sessionId, data) =>
@@ -183,8 +186,8 @@ const api: VibeyardApi = {
         callback(sessionId as string, exitCode as number, signal as number | undefined)),
   },
   session: {
-    buildResumeWithPrompt: (sourceProviderId, sourceCliSessionId, projectPath, sessionName) =>
-      ipcRenderer.invoke('session:buildResumeWithPrompt', sourceProviderId, sourceCliSessionId, projectPath, sessionName),
+    buildResumeWithPrompt: (sourceProviderId, sourceCliSessionId, projectPath, sessionName, configDir) =>
+      ipcRenderer.invoke('session:buildResumeWithPrompt', sourceProviderId, sourceCliSessionId, projectPath, sessionName, configDir),
     deepSearch: (query) =>
       ipcRenderer.invoke('session:deepSearch', query),
     onHookStatus: (callback) =>
@@ -240,6 +243,9 @@ const api: VibeyardApi = {
   store: {
     load: () => ipcRenderer.invoke('store:load'),
     save: (state) => ipcRenderer.invoke('store:save', state),
+  },
+  profiles: {
+    provision: (profileId, customPath) => ipcRenderer.invoke('profiles:provision', profileId, customPath),
   },
   git: {
     getStatus: (path) => ipcRenderer.invoke('git:getStatus', path),

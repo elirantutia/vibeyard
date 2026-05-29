@@ -862,6 +862,21 @@ export async function promptNewSession(onCreated?: (session: SessionRecord) => v
     });
   }
 
+  // Profile picker (Claude only for now). Defaults to the project/global default.
+  const claudeProfiles = appState.profiles.filter(p => p.providerId === 'claude');
+  if (claudeProfiles.length > 0) {
+    fields.push({
+      label: 'Profile',
+      id: 'profile',
+      type: 'select',
+      defaultValue: project.defaultProfileId ?? appState.preferences.defaultProfileId ?? '',
+      options: [
+        { value: '', label: 'Default (~/.claude)' },
+        ...claudeProfiles.map(p => ({ value: p.id, label: p.name })),
+      ],
+    });
+  }
+
   showModal('New Session', fields, (values) => {
     const name = values['session-name']?.trim();
     if (name) {
@@ -870,7 +885,9 @@ export async function promptNewSession(onCreated?: (session: SessionRecord) => v
       const keepArgs = values['keep-args'] === 'true';
       project.defaultArgs = keepArgs ? (args || undefined) : undefined;
       const providerId = (values['provider'] || 'claude') as ProviderId;
-      const session = appState.addSession(project.id, name, args, providerId);
+      // Profiles only apply to Claude; ignore the field for other providers.
+      const profileId = providerId === 'claude' ? (values['profile'] || undefined) : undefined;
+      const session = appState.addSession(project.id, name, args, providerId, profileId);
       if (session && onCreated) onCreated(session);
     }
   });

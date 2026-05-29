@@ -109,6 +109,8 @@ export interface SessionRecord {
   browserIsolated?: boolean;
   /** Persisted: identifies which TeamMember spawned this session, if any. */
   teamMemberId?: string;
+  /** Persisted, sticky: which Profile backs this session's CLI config dir. Resume must reuse it. */
+  profileId?: string;
   /** Transient: initial prompt to inject on first spawn. Not persisted. */
   pendingInitialPrompt?: string;
   /** Transient: system prompt to attach on first spawn. Not persisted (resume must not re-inject). */
@@ -139,6 +141,25 @@ export interface TeamData {
   predefinedCache?: { fetchedAt: number; suggestions: TeamMember[] };
 }
 
+// --- CLI Provider Profiles ---
+
+/**
+ * A named CLI-provider profile backed by a separate config directory, injected
+ * via the provider's config-dir env var (e.g. CLAUDE_CONFIG_DIR). Lets a user
+ * isolate multiple licenses/logins (work vs personal). Currently only the
+ * 'claude' provider injects it; the interface stays uniform for future providers.
+ */
+export interface Profile {
+  id: string;
+  name: string;
+  providerId: ProviderId;
+  /** Absolute, resolved config dir (managed under ~/.vibeyard/profiles/<id> or a custom path). */
+  configDir: string;
+  /** True when configDir is the auto-managed path; false when the user supplied a custom path. */
+  managed: boolean;
+  createdAt: number;
+}
+
 export interface ArchivedSession {
   id: string;
   name: string;
@@ -148,6 +169,8 @@ export interface ArchivedSession {
   closedAt: string;
   bookmarked?: boolean;
   teamMemberId?: string;
+  /** Preserved so a resumed session reuses the same profile config dir (CLAUDE_CONFIG_DIR). */
+  profileId?: string;
   cost: {
     totalCostUsd: number;
     totalInputTokens: number;
@@ -173,6 +196,8 @@ export interface DeepSearchResult {
   score: number;
   /** Title derived from the first user message — fallback when Vibeyard has no name for this session. */
   derivedName?: string;
+  /** Profile whose config dir holds this transcript, so resume reopens under the right CLAUDE_CONFIG_DIR. */
+  profileId?: string;
 }
 
 export interface ProjectInsightsData {
@@ -235,6 +260,8 @@ export interface ProjectRecord {
   sessionHistory?: ArchivedSession[];
   insights?: ProjectInsightsData;
   defaultArgs?: string;
+  /** Default profile applied to new sessions in this project (overridden per-session). */
+  defaultProfileId?: string;
   terminalPanelOpen?: boolean;
   terminalPanelHeight?: number;
   readiness?: ReadinessResult;
@@ -313,6 +340,8 @@ export interface Preferences {
   confirmCloseWorkingSession: boolean;
   zoomFactor?: number;
   defaultProvider?: ProviderId;
+  /** Global fallback profile applied when neither the session nor the project specifies one. */
+  defaultProfileId?: string;
   statusLineConsent?: 'granted' | 'declined' | null;
   // The foreign statusLine command the user was asked about when they made
   // the consent decision. Used to detect new conflicts (different command)
@@ -400,6 +429,8 @@ export interface PersistedState {
   starPromptDismissed?: boolean;
   discussionsLastSeen?: string;
   team?: TeamData;
+  /** Global, provider-scoped CLI profiles (e.g. Claude work/personal config dirs). */
+  profiles?: Profile[];
 }
 
 // --- AI Readiness ---
