@@ -30,19 +30,14 @@
   gap: 10px;
 }
 
-.sidebar-title {
-  font-weight: 700;
-  font-size: 14.5px;
-  letter-spacing: -0.145px;
-  color: var(--text-primary);
-  flex: 1;
-  min-width: 0;
-}
-
 .sidebar-header-actions {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+#sidebar-header .icon-btn svg {
+  display: block;
 }
 
 /* Primary header action (the + new-project button) — accent-tinted pill. */
@@ -64,7 +59,6 @@
   max-width: 44px;
 }
 
-#sidebar.collapsed .sidebar-title,
 #sidebar.collapsed .sidebar-header-actions,
 #sidebar.collapsed .sidebar-section-label,
 #sidebar.collapsed #sidebar-footer,
