@@ -53,6 +53,21 @@
   filter: brightness(1.15);
 }
 
+/* Preferences gear — borderless rounded-square with a soft fill on hover
+   (matches the toolbar reference look and the adjacent + button's radius). */
+#sidebar-header .icon-btn:not(.primary) {
+  border: none;
+  border-radius: var(--radius-sm);
+}
+
+#sidebar-header .icon-btn:not(.primary):hover,
+#sidebar-header .icon-btn:not(.primary):focus-visible {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border: none;
+  outline: none;
+}
+
 /* Collapsed rail — a 58px vertical strip: expand button, divider, active
    project avatar, nav icons, then Discussions pinned to the bottom. */
 #sidebar.collapsed {
