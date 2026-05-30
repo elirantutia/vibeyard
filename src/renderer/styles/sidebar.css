@@ -40,13 +40,6 @@
   display: block;
 }
 
-/* The Help icon comes from the shared 14px STROKE_ICON; bump it to 16px so it
-   matches the inline gear/+ icons in the header. */
-#sidebar-header #btn-help svg {
-  width: 16px;
-  height: 16px;
-}
-
 /* Primary header action (the + new-project button) — accent-tinted pill. */
 #sidebar-header .icon-btn.primary {
   background: var(--accent-soft);

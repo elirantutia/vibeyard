@@ -4,7 +4,7 @@ import { promptNewProject, toggleSidebar } from './components/sidebar.js';
 import { quickNewSession } from './components/tab-bar.js';
 import { toggleProjectTerminal } from './components/project-terminal.js';
 import { toggleDebugPanel } from './components/debug-panel.js';
-import { showHelpDialog } from './components/help-dialog.js';
+import { showPreferencesModal } from './components/preferences-modal.js';
 import { getFocusedSessionId } from './components/terminal-pane.js';
 import { showSearchBar, TerminalSearchBackend, ShellTerminalSearchBackend } from './components/search-bar.js';
 import { getActiveShellSessionId } from './components/project-terminal.js';
@@ -95,7 +95,7 @@ export function initKeybindings(): void {
       showGoToLineBar(session.id);
     }
   });
-  shortcutManager.registerHandler('help', showHelpDialog);
+  shortcutManager.registerHandler('help', () => showPreferencesModal('help'));
   shortcutManager.registerHandler('close-session', handleCloseSession);
   shortcutManager.registerHandler('toggle-inspector', toggleInspector);
   shortcutManager.registerHandler('zoom-in', zoomIn);

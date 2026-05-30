@@ -21,9 +21,6 @@ export const ICON_TEAM = STROKE_ICON('<circle cx="9" cy="9" r="3"/><path d="M3.5
 
 export const ICON_FILES = STROKE_ICON('<path d="M4 6a1.5 1.5 0 0 1 1.5-1.5H9l2 2h6.5A1.5 1.5 0 0 1 19 8v9.5a1.5 1.5 0 0 1-1.5 1.5h-12A1.5 1.5 0 0 1 4 17.5z"/>');
 
-// Toolbar action icons (tab bar).
-export const ICON_HELP = STROKE_ICON('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>');
-
 export const ICON_TERMINAL = STROKE_ICON('<path d="m4 17 6-6-6-6"/><path d="M12 19h8"/>');
 
 export const ICON_MENU = STROKE_ICON('<line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/>');

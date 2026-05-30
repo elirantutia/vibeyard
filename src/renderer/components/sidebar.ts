@@ -16,8 +16,7 @@ import {
   clearProjectState as clearSessionHistoryState,
 } from './session-history.js';
 import { attachHoverCard } from './hover-card.js';
-import { showHelpDialog } from './help-dialog.js';
-import { ICON_KANBAN, ICON_TEAM, ICON_OVERVIEW, ICON_SESSIONS, ICON_FILES, ICON_HELP } from '../icons.js';
+import { ICON_KANBAN, ICON_TEAM, ICON_OVERVIEW, ICON_SESSIONS, ICON_FILES } from '../icons.js';
 
 type ProjectPanel = 'history' | 'files' | null;
 const projectPanelOpen = new Map<string, ProjectPanel>();
@@ -26,7 +25,6 @@ const projectListEl = document.getElementById('project-list')!;
 let activeProjectContextMenu: HTMLElement | null = null;
 let renamingProjectId: string | null = null;
 const btnAddProject = document.getElementById('btn-add-project')!;
-const btnHelp = document.getElementById('btn-help')!;
 const btnPreferences = document.getElementById('btn-preferences')!;
 const sidebarEl = document.getElementById('sidebar')!;
 const resizeHandle = document.getElementById('sidebar-resize-handle')!;
@@ -52,9 +50,7 @@ function applySidebarCollapsed(): void {
 
 export function initSidebar(): void {
   btnAddProject.addEventListener('click', promptNewProject);
-  btnHelp.innerHTML = ICON_HELP;
-  btnHelp.addEventListener('click', () => showHelpDialog());
-  btnPreferences.addEventListener('click', showPreferencesModal);
+  btnPreferences.addEventListener('click', () => showPreferencesModal());
   btnToggleSidebar.addEventListener('click', toggleSidebar);
 
   renderDiscussions();
