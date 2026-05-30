@@ -141,6 +141,13 @@ export function getGitStatus(projectId: string): GitStatus | null {
   return cache.get(projectId) ?? null;
 }
 
+/** Total uncommitted changes for a project, or null when it's not a git repo. */
+export function gitChangeCount(projectId: string): number | null {
+  const status = getGitStatus(projectId);
+  if (!status || !status.isGitRepo) return null;
+  return status.staged + status.modified + status.untracked + status.conflicted;
+}
+
 export function getWorktrees(projectId: string): GitWorktree[] | null {
   return worktreeCache.get(projectId) ?? null;
 }

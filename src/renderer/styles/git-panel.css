@@ -1,26 +1,10 @@
-/* Git panel */
-#git-panel {
-  border-top: 1px solid var(--border);
-}
-
-/* Align the "Changes" section header + count to the Foundation sidebar look,
-   scoped to #git-panel so the shared .config-section component is untouched. */
-#git-panel .config-section-count {
-  margin-left: auto;
-  padding: 1px 8px;
-  border-radius: 20px;
-  background: var(--border-subtle);
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-#git-panel.hidden {
-  display: none;
-}
-
-#git-panel:empty {
-  border-top: none;
+/* Git panel — rendered inside the active project card as the "Git" panel tab.
+   The persistent .git-panel-mount node is reparented into .project-panel-git on
+   open; .git-panel-body caps height so a big diff scrolls internally rather than
+   pushing the "All projects" list off-screen. */
+.git-panel-body {
+  max-height: 320px;
+  overflow-y: auto;
 }
 
 /* Cold-load indicator (first load / project switch) — composes .config-loading

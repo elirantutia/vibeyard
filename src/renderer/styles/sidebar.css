@@ -509,6 +509,7 @@
 }
 
 .project-action-btn {
+  position: relative;
   flex: 1;
   min-width: 0;
   height: 30px;
@@ -522,6 +523,27 @@
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
+}
+
+/* Change-count pill overlaid on the Git tab for passive awareness. */
+.project-action-badge {
+  position: absolute;
+  top: 1px;
+  right: 4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+}
+
+.project-action-badge.hidden {
+  display: none;
 }
 
 .action-icon {
@@ -579,6 +601,10 @@
 }
 
 .project-panel-history {
+  padding-bottom: 4px;
+}
+
+.project-panel-git {
   padding-bottom: 4px;
 }
 

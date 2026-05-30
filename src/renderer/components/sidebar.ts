@@ -16,9 +16,11 @@ import {
   clearProjectState as clearSessionHistoryState,
 } from './session-history.js';
 import { attachHoverCard } from './hover-card.js';
-import { ICON_KANBAN, ICON_TEAM, ICON_OVERVIEW, ICON_SESSIONS, ICON_FILES } from '../icons.js';
+import { mountGitPanel, closeGitPanel } from './git-panel.js';
+import { gitChangeCount, onChange as onGitStatusChange } from '../git-status.js';
+import { ICON_KANBAN, ICON_TEAM, ICON_OVERVIEW, ICON_SESSIONS, ICON_FILES, ICON_GIT } from '../icons.js';
 
-type ProjectPanel = 'history' | 'files' | null;
+type ProjectPanel = 'history' | 'files' | 'git' | null;
 const projectPanelOpen = new Map<string, ProjectPanel>();
 
 const projectListEl = document.getElementById('project-list')!;
@@ -92,6 +94,25 @@ export function initSidebar(): void {
   });
 
   onUnreadChange(render);
+  // Keep the active project's Git tab badge in sync. Surgical when the button is
+  // already present; a full render only when repo-ness first becomes known (the
+  // button needs to appear/disappear).
+  onGitStatusChange((projectId) => {
+    if (projectId !== appState.activeProjectId) return;
+    const gitBtn = projectListEl.querySelector('.project-row.active .project-action-btn.git-toggle');
+    const count = gitChangeCount(projectId);
+    const gitEnabled = appState.preferences.sidebarViews?.gitPanel ?? true;
+    if (!gitBtn) {
+      if (count !== null && gitEnabled) render();
+      return;
+    }
+    if (count === null || !gitEnabled) { render(); return; } // repo went away / disabled
+    const badge = gitBtn.querySelector('.project-action-badge');
+    if (badge) {
+      badge.textContent = String(count);
+      badge.classList.toggle('hidden', count === 0);
+    }
+  });
   // Status ticks are frequent — update just the affected row's dot rather than
   // rebuilding the whole list (mirrors the tab-bar's surgical update).
   onActivityChange((sessionId) => {
@@ -117,6 +138,7 @@ export function initSidebar(): void {
 interface RenderOpts {
   fileTreeEnabled: boolean;
   historyEnabled: boolean;
+  gitEnabled: boolean;
 }
 
 function render(): void {
@@ -129,6 +151,7 @@ function render(): void {
     historyEnabled:
       (appState.preferences.sidebarViews?.sessionHistory ?? true) &&
       appState.preferences.sessionHistoryEnabled,
+    gitEnabled: appState.preferences.sidebarViews?.gitPanel ?? true,
   };
 
   // The active project is pinned to the top as a card; the rest follow under an
@@ -153,7 +176,7 @@ function render(): void {
 }
 
 function buildProjectRow(project: ProjectRecord, isActive: boolean, opts: RenderOpts): HTMLElement {
-  const { fileTreeEnabled, historyEnabled } = opts;
+  const { fileTreeEnabled, historyEnabled, gitEnabled } = opts;
 
   const wrapper = document.createElement('div');
   // The wrapper carries `.active` so CSS can style the whole row (header + tabs
@@ -254,8 +277,10 @@ function buildProjectRow(project: ProjectRecord, isActive: boolean, opts: Render
   wrapper.appendChild(el);
 
   if (isActive) {
-    const openPanel = projectPanelOpen.get(project.id) ?? null;
-    const actions = buildProjectActions(project, openPanel, { fileTreeEnabled, historyEnabled });
+    // A 'git' panel only stays open while the git view is enabled in prefs.
+    let openPanel = projectPanelOpen.get(project.id) ?? null;
+    if (openPanel === 'git' && !gitEnabled) openPanel = null;
+    const actions = buildProjectActions(project, openPanel, { fileTreeEnabled, historyEnabled, gitEnabled });
     wrapper.appendChild(actions);
 
     if (openPanel !== null) {
@@ -264,6 +289,9 @@ function buildProjectRow(project: ProjectRecord, isActive: boolean, opts: Render
       if (openPanel === 'files') {
         panelContainer.classList.add('project-panel-files', 'project-file-tree');
         renderFileTree(project, panelContainer);
+      } else if (openPanel === 'git') {
+        panelContainer.classList.add('project-panel-git');
+        mountGitPanel(project, panelContainer);
       } else {
         panelContainer.classList.add('project-panel-history');
         renderSessionHistory(project, panelContainer);
@@ -278,7 +306,7 @@ function buildProjectRow(project: ProjectRecord, isActive: boolean, opts: Render
 function buildProjectActions(
   project: ProjectRecord,
   openPanel: ProjectPanel,
-  opts: { fileTreeEnabled: boolean; historyEnabled: boolean },
+  opts: { fileTreeEnabled: boolean; historyEnabled: boolean; gitEnabled: boolean },
 ): HTMLElement {
   const actions = document.createElement('div');
   actions.className = 'project-actions';
@@ -327,6 +355,23 @@ function buildProjectActions(
     actions.appendChild(filesBtn);
   }
 
+  // Git changes — only for git repos. The badge surfaces the change count so the
+  // tab still gives passive awareness without expanding (mirrors the old panel).
+  const gitCount = gitChangeCount(project.id);
+  if (opts.gitEnabled && gitCount !== null) {
+    const gitBtn = makeActionButton('Git', ICON_GIT, openPanel === 'git');
+    gitBtn.classList.add('panel-toggle', 'git-toggle');
+    const badge = document.createElement('span');
+    badge.className = 'project-action-badge' + (gitCount === 0 ? ' hidden' : '');
+    badge.textContent = String(gitCount);
+    gitBtn.appendChild(badge);
+    gitBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setProjectPanel(project.id, openPanel === 'git' ? null : 'git');
+    });
+    actions.appendChild(gitBtn);
+  }
+
   return actions;
 }
 
@@ -343,12 +388,23 @@ function setProjectPanel(projectId: string, next: ProjectPanel): void {
   const current = projectPanelOpen.get(projectId) ?? null;
   if (current === 'files' && next !== 'files') closeFileTree(projectId);
   if (current === 'history' && next !== 'history') closeSessionHistory(projectId);
+  if (current === 'git' && next !== 'git') closeGitPanel();
   if (next === null) {
     projectPanelOpen.delete(projectId);
   } else {
     projectPanelOpen.set(projectId, next);
   }
   render();
+}
+
+/** Toggle the Git changes panel on the active project (Cmd/Ctrl+Shift+G). */
+export function toggleGitPanel(): void {
+  const project = appState.activeProject;
+  if (!project) return;
+  if (!(appState.preferences.sidebarViews?.gitPanel ?? true)) return;
+  if (gitChangeCount(project.id) === null) return; // not a git repo
+  const current = projectPanelOpen.get(project.id) ?? null;
+  setProjectPanel(project.id, current === 'git' ? null : 'git');
 }
 
 export function promptNewProject(): void {

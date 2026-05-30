@@ -4,10 +4,10 @@ import type { GitFileEntry } from '../../shared/types';
 
 // git-panel pulls in a lot of unrelated modules at import time; stub them so the
 // only behavior under test is loadFiles().
-vi.mock('../state.js', () => ({ appState: { on: vi.fn(), activeProjectId: null } }));
+vi.mock('../state.js', () => ({ appState: { on: vi.fn(), activeProjectId: null, activeProject: null } }));
 vi.mock('../git-status.js', () => ({
   onChange: vi.fn(),
-  getGitStatus: vi.fn(),
+  gitChangeCount: vi.fn(),
   getActiveGitPath: vi.fn(),
   getWorktrees: vi.fn(),
   setActiveWorktree: vi.fn(),
@@ -17,7 +17,9 @@ vi.mock('../session-activity.js', () => ({ onChange: vi.fn() }));
 vi.mock('./file-viewer.js', () => ({ showFileViewer: vi.fn() }));
 vi.mock('../dom-utils.js', () => ({ areaLabel: (area: string) => area }));
 
-import { _test, _resetForTesting } from './git-panel.js';
+import { _test, _resetForTesting, mountGitPanel, closeGitPanel } from './git-panel.js';
+import { appState } from '../state.js';
+import { gitChangeCount, getActiveGitPath, getWorktrees } from '../git-status.js';
 
 const { loadFiles } = _test;
 
@@ -156,5 +158,61 @@ describe('git-panel loadFiles — cold-load vs refresh', () => {
     d.resolve(FILES_A);
     await p;
     expect(body.textContent).toContain('a.ts');
+  });
+});
+
+describe('git-panel mountGitPanel — reload gating', () => {
+  const project = { id: 'p1' } as never;
+
+  // Detached on purpose: the sidebar mounts the panel during buildProjectRow,
+  // before the row is appended to the document — so refreshMounted must render
+  // without depending on DOM connectivity.
+  function makeContainer(): HTMLElement {
+    return document.createElement('div');
+  }
+
+  beforeEach(() => {
+    (appState as { activeProject: unknown }).activeProject = project;
+    (appState as { activeProjectId: string }).activeProjectId = 'p1';
+    vi.mocked(gitChangeCount).mockReturnValue(2);
+    vi.mocked(getActiveGitPath).mockReturnValue('/repo');
+    vi.mocked(getWorktrees).mockReturnValue(null);
+    getFiles.mockResolvedValue(FILES_A);
+  });
+
+  it('loads files on first mount but not on a same-project re-mount', () => {
+    const c1 = makeContainer();
+    mountGitPanel(project, c1);
+    expect(getFiles).toHaveBeenCalledTimes(1);
+
+    // A plain sidebar re-render reparents the panel into a fresh container —
+    // this must NOT trigger another getFiles IPC.
+    const c2 = makeContainer();
+    mountGitPanel(project, c2);
+    expect(getFiles).toHaveBeenCalledTimes(1);
+    // The persistent node was moved, not duplicated.
+    expect(c1.querySelector('.git-panel-mount')).toBeNull();
+    expect(c2.querySelector('.git-panel-mount')).not.toBeNull();
+  });
+
+  it('reloads when the active project switches', () => {
+    mountGitPanel(project, makeContainer());
+    expect(getFiles).toHaveBeenCalledTimes(1);
+
+    const other = { id: 'p2' } as never;
+    (appState as { activeProject: unknown }).activeProject = other;
+    (appState as { activeProjectId: string }).activeProjectId = 'p2';
+    vi.mocked(getActiveGitPath).mockReturnValue('/repoB');
+    mountGitPanel(other, makeContainer());
+    expect(getFiles).toHaveBeenCalledTimes(2);
+  });
+
+  it('reloads on the next open after close', () => {
+    mountGitPanel(project, makeContainer());
+    expect(getFiles).toHaveBeenCalledTimes(1);
+
+    closeGitPanel();
+    mountGitPanel(project, makeContainer());
+    expect(getFiles).toHaveBeenCalledTimes(2);
   });
 });
