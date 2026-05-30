@@ -463,6 +463,9 @@ function updateSwarmPaneStyles(project: ProjectRecord): void {
   }
 }
 
+const plusIcon =
+  '<svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="2.5" x2="7" y2="11.5"/><line x1="2.5" y1="7" x2="11.5" y2="7"/></svg>';
+
 function showEmptyState(project: ProjectRecord | undefined): void {
   removeEmptyState();
   const el = document.createElement('div');
@@ -473,10 +476,23 @@ function showEmptyState(project: ProjectRecord | undefined): void {
       <div class="hint">Create a project with the + button in the sidebar</div>
     `;
   } else {
-    el.innerHTML = `
-      <div>No sessions in "${project.name}"</div>
-      <div class="hint">Create a session with the + button in the tab bar</div>
-    `;
+    const title = document.createElement('div');
+    title.className = 'empty-state-title';
+    title.textContent = 'Ready when you are';
+
+    const hint = document.createElement('div');
+    hint.className = 'hint';
+    const name = document.createElement('span');
+    name.className = 'empty-state-project';
+    name.textContent = project.name;
+    hint.append('No sessions running in ', name, ' yet.');
+
+    const cta = document.createElement('button');
+    cta.className = 'btn-primary empty-state-cta';
+    cta.innerHTML = `${plusIcon}<span>Start a session</span>`;
+    cta.addEventListener('click', () => quickNewSession());
+
+    el.append(title, hint, cta);
   }
   container.appendChild(el);
 }
