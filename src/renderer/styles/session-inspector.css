@@ -51,7 +51,6 @@
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
@@ -79,29 +78,33 @@
 
 .inspector-tabs {
   display: flex;
-  border-bottom: 1px solid var(--border);
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 8px;
   flex-shrink: 0;
 }
 
 .inspector-tab {
-  flex: 1;
-  padding: 6px 8px;
+  padding: 5px 12px;
   background: none;
   border: none;
-  border-bottom: 2px solid transparent;
+  border-radius: 6px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
 
 .inspector-tab:hover {
   color: var(--text-secondary);
+  background: var(--bg-hover);
 }
 
-.inspector-tab.active {
-  color: var(--text-primary);
-  border-bottom-color: var(--accent);
+.inspector-tab.active,
+.inspector-tab.active:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 500;
 }
 
 .inspector-autoscroll-toggle {
