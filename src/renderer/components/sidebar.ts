@@ -290,13 +290,10 @@ function buildProjectActions(
   const actions = document.createElement('div');
   actions.className = 'project-actions';
 
-  // Highlight the nav button matching the project's currently-open tab. This
-  // only runs for the active project (buildProjectRow gates it on isActive), so
-  // appState.activeSession is this project's open tab. render() re-runs on
-  // 'layout-changed', so the highlight follows tab switches.
-  const activeType = appState.activeSession?.type;
-
-  const overviewBtn = makeActionButton('Overview', ICON_OVERVIEW, activeType === 'project-tab');
+  // Only the panel toggles (Files, Sessions) reflect a selected state, derived
+  // from openPanel below. The tab buttons (Overview, Kanban, Team) never mark
+  // themselves selected from the open tab — opening a tab leaves them inert.
+  const overviewBtn = makeActionButton('Overview', ICON_OVERVIEW, false);
   const readinessScore = project.readiness?.overallScore;
   if (typeof readinessScore === 'number') {
     overviewBtn.classList.add('has-readiness');
@@ -308,7 +305,7 @@ function buildProjectActions(
   });
   actions.appendChild(overviewBtn);
 
-  const kanbanBtn = makeActionButton('Kanban', ICON_KANBAN, activeType === 'kanban');
+  const kanbanBtn = makeActionButton('Kanban', ICON_KANBAN, false);
   kanbanBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     appState.openKanbanTab(project.id);
@@ -325,7 +322,7 @@ function buildProjectActions(
     actions.appendChild(historyBtn);
   }
 
-  const teamBtn = makeActionButton('Team', ICON_TEAM, activeType === 'team');
+  const teamBtn = makeActionButton('Team', ICON_TEAM, false);
   teamBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     appState.openTeamTab(project.id);
