@@ -75,24 +75,6 @@
   color: var(--text-muted);
 }
 
-.board-add-task {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border: none;
-  border-radius: var(--radius-md);
-  background: var(--accent);
-  color: var(--accent-fg);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.board-add-task:hover {
-  background: var(--accent-dim);
-}
-
 /* Columns */
 .board-columns {
   display: flex;
@@ -138,7 +120,7 @@
 }
 
 .board-column[data-behavior="active"] .board-column-header {
-  color: var(--status-working, #34d399);
+  color: var(--status-working);
 }
 
 .column-title {
@@ -313,7 +295,7 @@
   flex-shrink: 0;
 }
 .card-status-dot.working {
-  background: var(--accent);
+  background: var(--status-working);
   animation: pulse 1.5s ease-in-out infinite;
 }
 .card-status-dot.waiting { background: var(--status-waiting); }

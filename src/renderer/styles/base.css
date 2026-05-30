@@ -48,7 +48,7 @@
   --border-strong: rgba(255, 255, 255, 0.16);
 
   /* status / semantic (harmonised with the Studio palette) */
-  --status-working: #5fc193;
+  --status-working: var(--accent); /* single source of truth for the "working" state */
   --status-waiting: #f4b400;
   --status-input: #e67e22;
   --status-completed: #34a853;
@@ -88,7 +88,7 @@
   --border: rgba(255, 255, 255, 0.10);
   --border-subtle: rgba(255, 255, 255, 0.055);
   --border-strong: rgba(255, 255, 255, 0.16);
-  --status-working: #5fc193;
+  --status-working: var(--accent);
   --status-waiting: #f4b400;
   --status-input: #e67e22;
   --status-completed: #34a853;
@@ -117,7 +117,7 @@
   --border: rgba(20, 22, 40, 0.12);
   --border-subtle: rgba(20, 22, 40, 0.07);
   --border-strong: rgba(20, 22, 40, 0.20);
-  --status-working: #2f9e6b;
+  --status-working: var(--accent);
   --status-waiting: #f4b400;
   --status-input: #e67e22;
   --status-completed: #34a853;
@@ -173,6 +173,74 @@ body.debug-panel-open #app {
   gap: 12px;
 }
 
+.empty-state-title {
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 700;
+}
+
 .empty-state .hint {
-  font-size: 12px;
+  font-size: 13px;
+}
+
+.empty-state-project {
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+
+.empty-state-cta {
+  margin-top: 4px;
+  padding: 10px 20px;
+  font-size: 14px;
+  border-radius: var(--radius-lg);
+}
+
+/* Shared primary button — canonical look from the kanban "New task" (.board-add-task).
+   .btn-sm / .btn-xs = compact variants for dense card/row contexts. */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-primary:hover:not(:disabled) { background: var(--accent-dim); }
+.btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* Single-class (0,1,0) so a context's geometry class — same specificity, later in
+   source order — still wins for padding/font-size on split-button chevrons. */
+.btn-sm { gap: 4px; padding: 4px 10px; font-size: 12px; border-radius: var(--radius-sm); }
+.btn-xs { gap: 4px; padding: 2px 8px;  font-size: 11px; border-radius: var(--radius-sm); }
+
+/* Shared secondary button — neutral/bordered counterpart to .btn-primary, same box.
+   Normal weight (not 600). Works with the same .btn-sm / .btn-xs modifiers. */
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.btn-secondary:hover:not(:disabled) { background: var(--bg-hover); }
+.btn-secondary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* Danger variant — red text + red-tint hover (absorbs the old .modal-btn.danger
+   and .team-card-btn-danger destructive treatments into one rule). */
+.btn-secondary.danger { color: #ff6b6b; }
+.btn-secondary.danger:hover:not(:disabled) {
+  background: rgba(255, 107, 107, 0.1);
+  border-color: rgba(255, 107, 107, 0.4);
 }
