@@ -90,10 +90,6 @@
   position: relative;
 }
 
-.terminal-pane.focused {
-  border-color: var(--pane-focus);
-}
-
 .terminal-pane.swarm-unread {
   border-color: var(--accent);
 }
