@@ -142,7 +142,7 @@
   margin-top: auto;
 }
 
-/* Structural only — look/size come from .btn-secondary .btn-sm; flex fills the action row. */
+/* Structural only — look/size come from .btn-secondary (full app-wide size); flex fills the action row. */
 .team-card-btn {
   flex: 1;
   min-width: 64px;

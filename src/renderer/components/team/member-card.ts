@@ -48,19 +48,19 @@ export function createMemberCard(member: TeamMember, projectId: string): HTMLEle
   actions.className = 'team-card-actions';
 
   const sessionsBtn = document.createElement('button');
-  sessionsBtn.className = 'btn-secondary btn-sm team-card-btn';
+  sessionsBtn.className = 'btn-secondary team-card-btn';
   sessionsBtn.textContent = 'Sessions';
   sessionsBtn.addEventListener('click', () => showMemberSessionsModal(member, projectId));
   actions.appendChild(sessionsBtn);
 
   const editBtn = document.createElement('button');
-  editBtn.className = 'btn-secondary btn-sm team-card-btn';
+  editBtn.className = 'btn-secondary team-card-btn';
   editBtn.textContent = 'Edit';
   editBtn.addEventListener('click', () => showTeamMemberModal('edit', member));
   actions.appendChild(editBtn);
 
   const deleteBtn = document.createElement('button');
-  deleteBtn.className = 'btn-secondary btn-sm danger team-card-btn';
+  deleteBtn.className = 'btn-secondary danger team-card-btn';
   deleteBtn.textContent = 'Delete';
   deleteBtn.addEventListener('click', () => {
     showConfirmModal(
@@ -83,7 +83,7 @@ function buildChatControl(projectId: string, member: TeamMember): HTMLElement {
   const teamProviders = getTeamChatProviderMetas();
 
   const chatBtn = document.createElement('button');
-  chatBtn.className = 'btn-primary btn-sm team-card-btn-primary';
+  chatBtn.className = 'btn-primary team-card-btn-primary';
   chatBtn.textContent = 'Chat';
 
   if (teamProviders.length === 0) {
@@ -101,7 +101,7 @@ function buildChatControl(projectId: string, member: TeamMember): HTMLElement {
   chatBtn.classList.add('team-card-chat-main');
 
   const chevronBtn = document.createElement('button');
-  chevronBtn.className = 'btn-primary btn-sm team-card-chat-dropdown';
+  chevronBtn.className = 'btn-primary team-card-chat-dropdown';
   chevronBtn.setAttribute('aria-label', 'Chat with another provider');
   chevronBtn.setAttribute('aria-haspopup', 'menu');
   chevronBtn.textContent = '▼';
