@@ -141,36 +141,10 @@
   margin-top: 16px;
 }
 
-.share-btn {
-  padding: 6px 16px;
-  border: none;
-  border-radius: 4px;
-  font-size: 13px;
-  cursor: pointer;
-  background: var(--accent);
-  color: #fff;
-}
-
-.share-btn:hover {
-  opacity: 0.9;
-}
-
-.share-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
+/* Look/size from .btn-primary / .btn-secondary; .share-btn is kept only as the
+   marker class for the .hidden visibility toggle (no global .hidden utility exists). */
 .share-btn.hidden {
   display: none;
-}
-
-.share-btn-secondary {
-  background: var(--bg-tertiary, #333);
-  color: var(--text-primary);
-}
-
-.share-btn-secondary:hover {
-  background: var(--bg-hover, #444);
 }
 
 /* Tab sharing indicator */

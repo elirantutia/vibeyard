@@ -245,7 +245,7 @@ function buildCard(member: TeamMember, isInstalled: boolean): HTMLElement {
   }
 
   const addBtn = document.createElement('button');
-  addBtn.className = 'team-picker-card-add';
+  addBtn.className = 'btn-primary btn-sm team-picker-card-add';
   applyAddState(addBtn, isInstalled, 'Add', 'Added');
   addBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -307,7 +307,7 @@ function showMemberDetail(member: TeamMember, onAdd: () => void, isInstalled: bo
   footer.className = 'team-picker-detail-footer';
 
   const addBtn = document.createElement('button');
-  addBtn.className = 'team-picker-card-add';
+  addBtn.className = 'btn-primary btn-sm team-picker-card-add';
   applyAddState(addBtn, isInstalled, 'Add to team', 'Already added');
   addBtn.addEventListener('click', () => {
     onAdd();

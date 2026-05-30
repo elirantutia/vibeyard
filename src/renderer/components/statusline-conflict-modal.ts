@@ -16,8 +16,8 @@ function getOverlay(): HTMLElement {
       <div class="modal-title">Settings Conflict</div>
       <div class="modal-body statusline-conflict-body"></div>
       <div class="modal-actions">
-        <button id="statusline-conflict-keep" class="modal-btn">Keep Existing</button>
-        <button id="statusline-conflict-replace" class="modal-btn primary">Replace</button>
+        <button id="statusline-conflict-keep" class="btn-secondary">Keep Existing</button>
+        <button id="statusline-conflict-replace" class="btn-primary">Replace</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);

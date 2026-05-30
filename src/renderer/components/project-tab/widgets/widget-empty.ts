@@ -7,7 +7,7 @@ export function createWidgetEmpty(label: string, ctaLabel: string, onCta: () => 
   empty.appendChild(text);
 
   const cta = document.createElement('button');
-  cta.className = 'widget-empty-action';
+  cta.className = 'btn-secondary btn-sm';
   cta.textContent = ctaLabel;
   cta.addEventListener('click', onCta);
   empty.appendChild(cta);

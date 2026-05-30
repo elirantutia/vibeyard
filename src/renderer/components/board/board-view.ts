@@ -126,7 +126,7 @@ export function createBoardView(): HTMLElement {
   searchWrap.appendChild(searchInput);
 
   const addBtn = document.createElement('button');
-  addBtn.className = 'board-add-task';
+  addBtn.className = 'btn-primary';
   addBtn.innerHTML = `${svgIcon('<line x1="7" y1="2.5" x2="7" y2="11.5"/><line x1="2.5" y1="7" x2="11.5" y2="7"/>')}<span>New task</span>`;
   addBtn.addEventListener('click', () => showTaskModal('create'));
 

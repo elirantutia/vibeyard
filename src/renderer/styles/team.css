@@ -50,28 +50,6 @@
   gap: 8px;
 }
 
-.team-header-btn {
-  padding: 6px 10px;
-  font-size: 12px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-}
-.team-header-btn:hover {
-  border-color: var(--accent);
-}
-.team-header-btn-primary {
-  background: var(--accent);
-  color: var(--accent-fg, #fff);
-  border-color: var(--accent);
-}
-.team-header-btn-primary:hover {
-  filter: brightness(1.1);
-}
-
 .team-grid {
   flex: 1;
   display: grid;
@@ -164,33 +142,13 @@
   margin-top: auto;
 }
 
+/* Structural only — look/size come from .btn-secondary .btn-sm; flex fills the action row. */
 .team-card-btn {
   flex: 1;
   min-width: 64px;
-  padding: 6px 10px;
-  font-size: 12px;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-}
-.team-card-btn:hover {
-  border-color: var(--accent);
 }
 .team-card-btn-primary {
   flex-basis: 100%;
-  background: var(--accent);
-  color: var(--accent-fg, #fff);
-  border-color: var(--accent);
-}
-.team-card-btn-primary:hover {
-  filter: brightness(1.1);
-}
-.team-card-btn-danger:hover {
-  border-color: var(--danger, #d23);
-  color: var(--danger, #d23);
 }
 
 /* Chat split button: main button + provider chevron */
@@ -406,18 +364,10 @@
   box-shadow: 0 0 0 2px var(--accent);
 }
 
+/* Structural only — look/size come from .btn-primary .btn-sm; keeps the disabled
+   "already installed" greyed treatment and pins the button to the card bottom. */
 .team-picker-card-add {
   margin-top: auto;
-  padding: 6px 10px;
-  font-size: 12px;
-  background: var(--accent);
-  color: var(--accent-fg, #fff);
-  border: 1px solid var(--accent);
-  border-radius: 4px;
-  cursor: pointer;
-}
-.team-picker-card-add:hover:not(:disabled) {
-  filter: brightness(1.1);
 }
 .team-picker-card-add:disabled {
   opacity: 0.6;

@@ -51,7 +51,7 @@ export function createModalShell({ id, title, wide }: ModalShellOptions): ModalS
 
 export function createModalButton(label: string, primary: boolean): HTMLButtonElement {
   const btn = document.createElement('button');
-  btn.className = primary ? 'modal-btn primary' : 'modal-btn';
+  btn.className = primary ? 'btn-primary' : 'btn-secondary';
   btn.textContent = label;
   return btn;
 }

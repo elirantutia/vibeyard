@@ -291,30 +291,6 @@
   margin-top: 16px;
 }
 
-.modal-btn {
-  padding: 6px 16px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  cursor: pointer;
-  font-size: 13px;
-}
-
-.modal-btn:hover {
-  background: var(--bg-hover);
-}
-
-.modal-btn.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: white;
-}
-
-.modal-btn.primary:hover {
-  background: var(--accent-dim);
-}
-
 /* Config sections */
 #config-sections {
   border-top: 1px solid var(--border);

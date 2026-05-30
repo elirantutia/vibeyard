@@ -309,7 +309,7 @@ function buildIssueActions(
   fixGroup.className = 'widget-github-fix-group';
 
   const fixBtn = document.createElement('button');
-  fixBtn.className = 'widget-github-row-action-btn widget-github-row-action-btn-primary widget-github-fix-main';
+  fixBtn.className = 'btn-primary btn-xs widget-github-fix-main';
   fixBtn.textContent = 'Fix';
   fixBtn.title = `Plan a solution for #${item.number} in a new session`;
   fixBtn.addEventListener('click', onAction(() => startFixSession(projectId, item)));
@@ -317,7 +317,7 @@ function buildIssueActions(
 
   if (planProviders.length > 1) {
     const chevron = document.createElement('button');
-    chevron.className = 'widget-github-row-action-btn widget-github-row-action-btn-primary widget-github-fix-dropdown';
+    chevron.className = 'btn-primary btn-xs widget-github-fix-dropdown';
     chevron.textContent = '▼';
     chevron.title = 'Plan in another provider';
     chevron.setAttribute('aria-label', 'Plan in another provider');
@@ -345,7 +345,7 @@ function buildIssueActions(
   actions.appendChild(fixGroup);
 
   const kanbanBtn = document.createElement('button');
-  kanbanBtn.className = 'widget-github-row-action-btn widget-github-row-action-btn-primary';
+  kanbanBtn.className = 'btn-primary btn-xs';
   kanbanBtn.textContent = 'Add to Kanban';
   kanbanBtn.title = 'Create a board task from this issue';
   kanbanBtn.addEventListener('click', onAction(() => addIssueToKanban(item)));
@@ -383,7 +383,7 @@ function buildPRActions(
   reviewGroup.className = 'widget-github-fix-group';
 
   const reviewBtn = document.createElement('button');
-  reviewBtn.className = 'widget-github-row-action-btn widget-github-row-action-btn-primary widget-github-fix-main';
+  reviewBtn.className = 'btn-primary btn-xs widget-github-fix-main';
   reviewBtn.textContent = 'Review';
   reviewBtn.title = `Review PR #${item.number} in a new session`;
   reviewBtn.addEventListener('click', onAction(() => startReviewSession(projectId, item)));
@@ -391,7 +391,7 @@ function buildPRActions(
 
   if (reviewProviders.length > 1) {
     const chevron = document.createElement('button');
-    chevron.className = 'widget-github-row-action-btn widget-github-row-action-btn-primary widget-github-fix-dropdown';
+    chevron.className = 'btn-primary btn-xs widget-github-fix-dropdown';
     chevron.textContent = '▼';
     chevron.title = 'Review in another provider';
     chevron.setAttribute('aria-label', 'Review in another provider');
@@ -419,7 +419,7 @@ function buildPRActions(
   actions.appendChild(reviewGroup);
 
   const kanbanBtn = document.createElement('button');
-  kanbanBtn.className = 'widget-github-row-action-btn widget-github-row-action-btn-primary';
+  kanbanBtn.className = 'btn-primary btn-xs';
   kanbanBtn.textContent = 'Add to Kanban';
   kanbanBtn.title = 'Create a board task from this PR';
   kanbanBtn.addEventListener('click', onAction(() => addPRToKanban(item)));

@@ -477,7 +477,7 @@ export function showPreferencesModal(): void {
     container.appendChild(actionsRow);
 
     const importButton = document.createElement('button');
-    importButton.className = 'modal-btn primary';
+    importButton.className = 'btn-primary';
     importButton.textContent = 'Import from Chrome…';
     importButton.addEventListener('click', () => {
       showChromeImportModal(() => { refreshSummary(); });
@@ -485,7 +485,7 @@ export function showPreferencesModal(): void {
     actionsRow.appendChild(importButton);
 
     const clearCookiesBtn = document.createElement('button');
-    clearCookiesBtn.className = 'modal-btn';
+    clearCookiesBtn.className = 'btn-secondary';
     clearCookiesBtn.textContent = 'Clear imported cookies';
     clearCookiesBtn.addEventListener('click', async () => {
       if (!confirm('Clear all cookies from the shared browser session? Imported logins will be lost.')) return;

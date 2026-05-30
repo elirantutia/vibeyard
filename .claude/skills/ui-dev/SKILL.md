@@ -85,11 +85,16 @@ Use existing CSS classes — do not create new button styles:
 
 | Class | Use for |
 |-------|---------|
+| `.btn-primary` | **Canonical primary/CTA button** (accent fill, `--accent-dim` hover, `--radius-md`). Use for every solid-accent action. Defined in `base.css`. |
+| `.btn-secondary` | **Canonical secondary button** (bordered, neutral `--bg-primary` fill, `--bg-hover` hover, same `--radius-md` + size as primary, normal weight). Use for Cancel and every neutral action. Add `.danger` for destructive (red). Defined in `base.css`. |
+| `.btn-sm` / `.btn-xs` | Compact size modifiers — pair with `.btn-primary` **or** `.btn-secondary`. `btn-sm` for dense card/toolbar rows; `btn-xs` for tight github rows. Single-class so a context's geometry class still wins. |
 | `.icon-btn` | Small 26×26px icon buttons (tab bar, sidebar actions) |
-| `.modal-btn` | Standard modal action buttons |
-| `.modal-btn.primary` | Primary/confirm modal button (accent color) |
 | `.modal-field-btn` | Inline button next to a modal field (e.g., "Browse") |
 | `.config-section-add-btn` | Add button in config sections |
+
+A modal footer is `.btn-secondary` (Cancel) next to `.btn-primary` (Confirm) — they share size and corner radius so the pair lines up.
+
+For split buttons (main + chevron), add `.btn-primary`/`.btn-secondary` plus the context's geometry-only class (e.g. `.widget-github-fix-main`, `.team-card-chat-dropdown`) which is defined later in source order so it correctly overrides the corner-radius/padding without redefining the fill. The same applies to structural-only classes kept on consolidated buttons (`.team-card-btn`, `.widget-team-card-btn`, `.project-tab-toolbar-btn` for its `.active` state, `.share-btn` for its `.hidden` toggle).
 
 ## Badges
 
