@@ -7,6 +7,7 @@ import { onChange as onGitStatusChange, getGitStatus, getActiveGitPath, refreshG
 import { isUnread, onChange as onUnreadChange } from '../session-unread.js';
 import { hasUnreadInProject as hasGithubUnread, onChange as onGithubUnreadChange } from '../github-unread.js';
 import { showHelpDialog } from './help-dialog.js';
+import { ICON_HELP, ICON_TERMINAL, ICON_MENU, ICON_KANBAN, ICON_TEAM, ICON_OVERVIEW } from '../icons.js';
 import { showShareDialog } from './share-dialog.js';
 import { showJoinDialog } from './join-dialog.js';
 import { isSharing } from '../sharing/peer-host.js';
@@ -27,10 +28,11 @@ const tabListEl = document.getElementById('tab-list')!;
 const gitStatusEl = document.getElementById('git-status')!;
 const btnAddSession = document.getElementById('btn-add-session')!;
 const btnAddSessionMenu = document.getElementById('btn-add-session-menu')!;
-const btnAddMcpInspector = document.getElementById('btn-add-mcp-inspector')!;
-const btnToggleSwarm = document.getElementById('btn-toggle-swarm')!;
 const btnAddBrowserTab = document.getElementById('btn-add-browser-tab')!;
 const btnHelp = document.getElementById('btn-help')!;
+const btnMore = document.getElementById('btn-more')!;
+// Terminal toggle is wired in project-terminal.ts; we only own its icon here.
+const btnToggleTerminal = document.getElementById('btn-toggle-terminal')!;
 
 let activeContextMenu: HTMLElement | null = null;
 const prevStatus = new Map<string, SessionStatus>();
@@ -41,23 +43,31 @@ function buildTooltip(status: SessionStatus, cliSessionId?: string): string {
 }
 
 export function initTabBar(): void {
+  btnHelp.innerHTML = ICON_HELP;
+  btnToggleTerminal.innerHTML = ICON_TERMINAL;
+  btnMore.innerHTML = ICON_MENU;
+  // Browser button keeps its CSS-drawn .toolbar-icon-browser glyph from index.html.
+
   btnAddSession.addEventListener('click', () => quickNewSession());
   btnAddSession.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    showAddSessionContextMenu(e.clientX, e.clientY);
+    showMoreMenu(e.clientX, e.clientY);
   });
+  // The pill's caret opens a custom-session dialog; the More button owns the menu.
   btnAddSessionMenu.addEventListener('click', (e) => {
     e.stopPropagation();
-    const rect = btnAddSessionMenu.getBoundingClientRect();
-    showAddSessionContextMenu(rect.right, rect.bottom + 2);
+    promptNewSession();
   });
-  btnAddMcpInspector.addEventListener('click', addMcpInspector);
-  btnToggleSwarm.addEventListener('click', () => appState.toggleSwarm());
+  btnMore.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const rect = btnMore.getBoundingClientRect();
+    showMoreMenu(rect.left, rect.bottom + 4);
+  });
+  btnHelp.addEventListener('click', () => showHelpDialog());
   btnAddBrowserTab.addEventListener('click', () => {
     const project = appState.activeProject;
     if (project) appState.addBrowserTabSession(project.id);
   });
-  btnHelp.addEventListener('click', () => showHelpDialog());
   gitStatusEl.addEventListener('click', (e) => showBranchContextMenu(e));
 
   // Icons only distinguish providers when multiple are installed
@@ -409,7 +419,7 @@ function render(): void {
     tab.title = isDiff ? `Diff: ${session.diffFilePath || session.name}` : isMcp ? `MCP Inspector` : isFileReader ? `File: ${session.fileReaderPath || session.name}` : isRemoteTab ? `Remote: ${session.remoteHostName || session.name}` : isBrowserTab ? `Browser: ${session.browserTabUrl || 'New Tab'}` : isProjectTab ? 'Project tools' : isKanban ? 'Kanban board' : isTeam ? 'Team' : buildTooltip(getStatus(session.id), session.cliSessionId);
     const providerId = session.providerId || 'claude';
     const providerIcon = hasMultipleAvailableProviders() ? `<img class="tab-provider-icon" src="assets/providers/${providerId}.png" alt="${providerId}" onerror="this.style.display='none'"> ` : '';
-    const namePrefix = isDiff ? '<span class="tab-diff-badge">DIFF</span> ' : isMcp ? '<span class="tab-mcp-badge">MCP</span> ' : isFileReader ? '<span class="tab-file-badge">FILE</span> ' : isRemoteTab ? '<span class="tab-remote-badge">P2P</span> ' : isBrowserTab ? '<span class="tab-browser-badge">WEB</span> ' : isProjectTab ? '<span class="tab-project-badge">&#x2699;</span> ' : isKanban ? '<span class="tab-kanban-badge">&#x25A6;</span> ' : isTeam ? '<span class="tab-team-badge">TEAM</span> ' : !isSpecial ? providerIcon : '';
+    const namePrefix = isDiff ? '<span class="tab-diff-badge">DIFF</span> ' : isMcp ? '<span class="tab-mcp-badge">MCP</span> ' : isFileReader ? '<span class="tab-file-badge">FILE</span> ' : isRemoteTab ? '<span class="tab-remote-badge">P2P</span> ' : isBrowserTab ? '<span class="tab-browser-badge">WEB</span> ' : isProjectTab ? `<span class="tab-project-badge">${ICON_OVERVIEW}</span> ` : isKanban ? `<span class="tab-kanban-badge">${ICON_KANBAN}</span> ` : isTeam ? `<span class="tab-team-badge">${ICON_TEAM}</span> ` : !isSpecial ? providerIcon : '';
     const shareIndicator = sharing ? '<span class="tab-share-indicator" title="Sharing"></span>' : '';
     const statusDot = isSpecial ? '' : `<span class="tab-status ${getStatus(session.id)}"></span>`;
     tab.innerHTML = `
@@ -502,9 +512,6 @@ function render(): void {
 
     tabListEl.appendChild(tab);
   }
-
-  // Update swarm toggle button visual
-  btnToggleSwarm.style.color = project.layout.mode === 'swarm' ? 'var(--accent)' : '';
 }
 
 function renderGitStatus(): void {
@@ -761,7 +768,10 @@ export function quickNewSession(): void {
   appState.addSession(project.id, `Session ${sessionNum}`);
 }
 
-function showAddSessionContextMenu(x: number, y: number): void {
+// "More" overflow menu. Deliberately excludes actions that have their own
+// toolbar icon (Help, Terminal, Browser) and the New/Custom Session actions
+// (those live on the pill + its caret).
+function showMoreMenu(x: number, y: number): void {
   hideTabContextMenu();
 
   const menu = document.createElement('div');
@@ -769,51 +779,31 @@ function showAddSessionContextMenu(x: number, y: number): void {
   menu.style.left = `${x}px`;
   menu.style.top = `${y}px`;
 
-  const quickItem = document.createElement('div');
-  quickItem.className = 'tab-context-menu-item';
-  quickItem.textContent = 'New Session';
-  quickItem.addEventListener('click', (e) => {
-    e.stopPropagation();
-    hideTabContextMenu();
-    quickNewSession();
-  });
+  const addItem = (label: string, onClick: () => void): void => {
+    const item = document.createElement('div');
+    item.className = 'tab-context-menu-item';
+    item.textContent = label;
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hideTabContextMenu();
+      onClick();
+    });
+    menu.appendChild(item);
+  };
 
-  const customItem = document.createElement('div');
-  customItem.className = 'tab-context-menu-item';
-  customItem.textContent = 'New Custom Session\u2026';
-  customItem.addEventListener('click', (e) => {
-    e.stopPropagation();
-    hideTabContextMenu();
-    promptNewSession();
-  });
+  const addSeparator = (): void => {
+    const sep = document.createElement('div');
+    sep.className = 'tab-context-menu-separator';
+    menu.appendChild(sep);
+  };
 
-  const joinSeparator = document.createElement('div');
-  joinSeparator.className = 'tab-context-menu-separator';
+  const swarmActive = appState.activeProject?.layout.mode === 'swarm';
+  addItem(swarmActive ? 'Swarm Layout \u2713' : 'Swarm Layout', () => appState.toggleSwarm());
+  addItem('MCP Inspector', () => addMcpInspector());
 
-  const joinItem = document.createElement('div');
-  joinItem.className = 'tab-context-menu-item';
-  joinItem.textContent = 'Join Remote Session\u2026';
-  joinItem.addEventListener('click', (e) => {
-    e.stopPropagation();
-    hideTabContextMenu();
-    showJoinDialog();
-  });
+  addSeparator();
+  addItem('Join Remote Session\u2026', () => showJoinDialog());
 
-  const browserItem = document.createElement('div');
-  browserItem.className = 'tab-context-menu-item';
-  browserItem.textContent = 'New Browser Tab';
-  browserItem.addEventListener('click', (e) => {
-    e.stopPropagation();
-    hideTabContextMenu();
-    const project = appState.activeProject;
-    if (project) appState.addBrowserTabSession(project.id);
-  });
-
-  menu.appendChild(quickItem);
-  menu.appendChild(customItem);
-  menu.appendChild(browserItem);
-  menu.appendChild(joinSeparator);
-  menu.appendChild(joinItem);
   document.body.appendChild(menu);
   activeContextMenu = menu;
 
