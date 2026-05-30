@@ -3,21 +3,21 @@ import { darkTerminalTheme, lightTerminalTheme, getTerminalTheme } from './termi
 
 describe('darkTerminalTheme', () => {
   it('has the correct background', () => {
-    expect(darkTerminalTheme.background).toBe('#000000');
+    expect(darkTerminalTheme.background).toBe('#0e0f13');
   });
 
   it('has the correct foreground', () => {
-    expect(darkTerminalTheme.foreground).toBe('#e0e0e0');
+    expect(darkTerminalTheme.foreground).toBe('#e9eaf1');
   });
 });
 
 describe('lightTerminalTheme', () => {
   it('has the correct background', () => {
-    expect(lightTerminalTheme.background).toBe('#fafaf8');
+    expect(lightTerminalTheme.background).toBe('#f7f7fb');
   });
 
   it('has the correct foreground', () => {
-    expect(lightTerminalTheme.foreground).toBe('#2c2c2c');
+    expect(lightTerminalTheme.foreground).toBe('#1c1e26');
   });
 
   it('keeps ansi white visible against the background', () => {
@@ -38,8 +38,8 @@ describe('getTerminalTheme()', () => {
 });
 
 describe('cursor color', () => {
-  it('dark and light themes share the same cursor color', () => {
-    expect(darkTerminalTheme.cursor).toBe('#e94560');
-    expect(lightTerminalTheme.cursor).toBe('#e94560');
+  it('uses the iris accent per theme', () => {
+    expect(darkTerminalTheme.cursor).toBe('#8588f2');
+    expect(lightTerminalTheme.cursor).toBe('#5a5ee6');
   });
 });

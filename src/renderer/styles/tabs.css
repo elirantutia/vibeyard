@@ -89,15 +89,15 @@
 }
 
 .tab-status.waiting {
-  background: #f4b400;
+  background: var(--status-waiting);
 }
 
 .tab-status.completed {
-  background: #34a853;
+  background: var(--status-completed);
 }
 
 .tab-status.input {
-  background: #e67e22;
+  background: var(--status-input);
   animation: pulse 1.2s ease-in-out infinite;
 }
 

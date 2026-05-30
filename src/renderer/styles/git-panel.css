@@ -3,6 +3,18 @@
   border-top: 1px solid var(--border);
 }
 
+/* Align the "Changes" section header + count to the Foundation sidebar look,
+   scoped to #git-panel so the shared .config-section component is untouched. */
+#git-panel .config-section-count {
+  margin-left: auto;
+  padding: 1px 8px;
+  border-radius: 20px;
+  background: var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
 #git-panel.hidden {
   display: none;
 }
@@ -71,8 +83,8 @@
   justify-content: center;
   font-size: 10px;
   font-weight: 700;
-  border-radius: 3px;
-  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace;
+  border-radius: 5px;
+  font-family: var(--font-mono);
 }
 
 .git-file-badge.added { color: #34a853; }

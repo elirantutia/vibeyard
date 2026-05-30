@@ -3,6 +3,8 @@ import { showModal, setModalError, closeModal, showConfirmDialog } from './modal
 import { showPreferencesModal } from './preferences-modal.js';
 import { onChange as onCostChange, getAggregateCost } from '../session-cost.js';
 import { hasUnreadInProject, onChange as onUnreadChange } from '../session-unread.js';
+import { onChange as onActivityChange } from '../session-activity.js';
+import { getProjectStatus, projectInitial } from '../project-status.js';
 import { init as initDiscussionsBadge, getNewCount as getDiscussionsNewCount, markSeen as markDiscussionsSeen, onChange as onDiscussionsChange, DISCUSSIONS_URL } from '../discussions-badge.js';
 import { basename, lastSeparatorIndex } from '../../shared/platform.js';
 import { deriveProjectName } from '../../shared/project-name.js';
@@ -97,6 +99,16 @@ export function initSidebar(): void {
   });
 
   onUnreadChange(render);
+  // Status ticks are frequent — update just the affected row's dot rather than
+  // rebuilding the whole list (mirrors the tab-bar's surgical update).
+  onActivityChange((sessionId) => {
+    const project = appState.projects.find((p) => p.sessions.some((s) => s.id === sessionId));
+    if (!project || project.id === appState.activeProjectId) return;
+    const dot = projectListEl.querySelector(
+      `.project-item[data-project-id="${project.id}"] .project-status`,
+    );
+    if (dot) dot.className = `project-status ${getProjectStatus(project)}`;
+  });
   appState.on('preferences-changed', () => {
     applyCostFooterVisibility();
     applyDiscussionsVisibility();
@@ -109,126 +121,165 @@ export function initSidebar(): void {
   render();
 }
 
+interface RenderOpts {
+  fileTreeEnabled: boolean;
+  historyEnabled: boolean;
+}
+
 function render(): void {
   if (renamingProjectId) return;
   hideProjectContextMenu();
   projectListEl.innerHTML = '';
 
-  const fileTreeEnabled = appState.preferences.sidebarViews?.fileTree ?? true;
-  const historyEnabled =
-    (appState.preferences.sidebarViews?.sessionHistory ?? true) &&
-    appState.preferences.sessionHistoryEnabled;
+  const opts: RenderOpts = {
+    fileTreeEnabled: appState.preferences.sidebarViews?.fileTree ?? true,
+    historyEnabled:
+      (appState.preferences.sidebarViews?.sessionHistory ?? true) &&
+      appState.preferences.sessionHistoryEnabled,
+  };
 
-  for (const project of appState.projects) {
-    const isActive = project.id === appState.activeProjectId;
+  // The active project is pinned to the top as a card; the rest follow under an
+  // "All projects" label (mirroring the Foundation sidebar layout).
+  const active = appState.projects.find((p) => p.id === appState.activeProjectId);
+  const others = appState.projects.filter((p) => p.id !== appState.activeProjectId);
 
-    const wrapper = document.createElement('div');
-    wrapper.className = 'project-row';
-
-    const el = document.createElement('div');
-    el.className = 'project-item' + (isActive ? ' active' : '');
-    el.dataset.projectId = project.id;
-    el.draggable = true;
-    el.innerHTML = `
-      <div style="flex:1;min-width:0">
-        <div class="project-name${hasUnreadInProject(project.id) ? ' unread' : ''}">${esc(project.name)}${project.sessions.length ? ` <span class="project-session-count">(${project.sessions.length})</span>` : ''}</div>
-        <div class="project-path">${esc(project.path)}</div>
-      </div>
-      <span class="project-delete" title="Remove project">&times;</span>
-    `;
-
-    el.addEventListener('click', (e) => {
-      const target = e.target as HTMLElement;
-      if (target.classList.contains('project-delete')) return;
-      if (isActive) return;
-      appState.setActiveProject(project.id);
-    });
-
-    el.querySelector('.project-delete')!.addEventListener('click', () => {
-      confirmRemoveProject(project);
-    });
-
-    el.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      showProjectContextMenu(e.clientX, e.clientY, project);
-    });
-
-    el.addEventListener('dragstart', (e) => {
-      if (renamingProjectId === project.id) {
-        e.preventDefault();
-        return;
-      }
-      e.dataTransfer!.effectAllowed = 'move';
-      e.dataTransfer!.setData('text/plain', project.id);
-      el.classList.add('dragging');
-    });
-
-    el.addEventListener('dragover', (e) => {
-      if (el.classList.contains('dragging')) return;
-      e.preventDefault();
-      e.dataTransfer!.dropEffect = 'move';
-      const rect = el.getBoundingClientRect();
-      const midY = rect.top + rect.height / 2;
-      el.classList.remove('drag-over-top', 'drag-over-bottom');
-      if (e.clientY < midY) {
-        el.classList.add('drag-over-top');
-      } else {
-        el.classList.add('drag-over-bottom');
-      }
-    });
-
-    el.addEventListener('dragleave', () => {
-      el.classList.remove('drag-over-top', 'drag-over-bottom');
-    });
-
-    el.addEventListener('drop', (e) => {
-      e.preventDefault();
-      el.classList.remove('drag-over-top', 'drag-over-bottom');
-      const draggedId = e.dataTransfer!.getData('text/plain');
-      if (!draggedId || draggedId === project.id) return;
-
-      const fromIndex = appState.projects.findIndex(p => p.id === draggedId);
-      if (fromIndex === -1) return;
-
-      const rect = el.getBoundingClientRect();
-      const midY = rect.top + rect.height / 2;
-      let targetIndex = appState.projects.findIndex(p => p.id === project.id);
-      if (e.clientY >= midY) targetIndex++;
-      // Adjust for the fact that removing the dragged item shifts indices
-      if (fromIndex < targetIndex) targetIndex--;
-
-      appState.reorderProject(fromIndex, targetIndex);
-    });
-
-    el.addEventListener('dragend', () => {
-      projectListEl.querySelectorAll('.project-item.dragging, .project-item.drag-over-top, .project-item.drag-over-bottom').forEach(node => {
-        node.classList.remove('dragging', 'drag-over-top', 'drag-over-bottom');
-      });
-    });
-
-    wrapper.appendChild(el);
-
-    if (isActive) {
-      const openPanel = projectPanelOpen.get(project.id) ?? null;
-      const actions = buildProjectActions(project, openPanel, { fileTreeEnabled, historyEnabled });
-      wrapper.appendChild(actions);
-
-      if (openPanel !== null) {
-        const panelContainer = document.createElement('div');
-        panelContainer.className = 'project-panel';
-        if (openPanel === 'files') {
-          panelContainer.classList.add('project-panel-files', 'project-file-tree');
-          renderFileTree(project, panelContainer);
-        } else {
-          panelContainer.classList.add('project-panel-history');
-          renderSessionHistory(project, panelContainer);
-        }
-        wrapper.appendChild(panelContainer);
-      }
-    }
-
-    projectListEl.appendChild(wrapper);
+  if (active) {
+    projectListEl.appendChild(buildProjectRow(active, true, opts));
   }
+  if (others.length) {
+    if (active) {
+      const label = document.createElement('div');
+      label.className = 'sidebar-section-label';
+      label.textContent = 'All projects';
+      projectListEl.appendChild(label);
+    }
+    for (const project of others) {
+      projectListEl.appendChild(buildProjectRow(project, false, opts));
+    }
+  }
+}
+
+function buildProjectRow(project: ProjectRecord, isActive: boolean, opts: RenderOpts): HTMLElement {
+  const { fileTreeEnabled, historyEnabled } = opts;
+
+  const wrapper = document.createElement('div');
+  // The wrapper carries `.active` so CSS can style the whole row (header + tabs
+  // + panel) as one card without a `:has()` selector.
+  wrapper.className = 'project-row' + (isActive ? ' active' : '');
+
+  const el = document.createElement('div');
+  el.className = 'project-item' + (isActive ? ' active' : '');
+  el.dataset.projectId = project.id;
+  el.draggable = true;
+  // Leading glyph: the active project shows an avatar initial; others show a
+  // status dot reflecting their aggregate session activity.
+  const lead = isActive
+    ? `<div class="project-avatar" aria-hidden="true">${esc(projectInitial(project.name))}</div>`
+    : `<span class="project-status ${getProjectStatus(project)}" aria-hidden="true"></span>`;
+  const countPill = project.sessions.length
+    ? `<span class="project-session-count">${project.sessions.length}</span>`
+    : '';
+  el.innerHTML = `
+    ${lead}
+    <div class="project-main">
+      <div class="project-name${hasUnreadInProject(project.id) ? ' unread' : ''}">${esc(project.name)}</div>
+      <div class="project-path">${esc(project.path)}</div>
+    </div>
+    ${countPill}
+    <span class="project-delete" title="Remove project">&times;</span>
+  `;
+
+  el.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    if (target.classList.contains('project-delete')) return;
+    if (isActive) return;
+    appState.setActiveProject(project.id);
+  });
+
+  el.querySelector('.project-delete')!.addEventListener('click', () => {
+    confirmRemoveProject(project);
+  });
+
+  el.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    showProjectContextMenu(e.clientX, e.clientY, project);
+  });
+
+  el.addEventListener('dragstart', (e) => {
+    if (renamingProjectId === project.id) {
+      e.preventDefault();
+      return;
+    }
+    e.dataTransfer!.effectAllowed = 'move';
+    e.dataTransfer!.setData('text/plain', project.id);
+    el.classList.add('dragging');
+  });
+
+  el.addEventListener('dragover', (e) => {
+    if (el.classList.contains('dragging')) return;
+    e.preventDefault();
+    e.dataTransfer!.dropEffect = 'move';
+    const rect = el.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    el.classList.remove('drag-over-top', 'drag-over-bottom');
+    if (e.clientY < midY) {
+      el.classList.add('drag-over-top');
+    } else {
+      el.classList.add('drag-over-bottom');
+    }
+  });
+
+  el.addEventListener('dragleave', () => {
+    el.classList.remove('drag-over-top', 'drag-over-bottom');
+  });
+
+  el.addEventListener('drop', (e) => {
+    e.preventDefault();
+    el.classList.remove('drag-over-top', 'drag-over-bottom');
+    const draggedId = e.dataTransfer!.getData('text/plain');
+    if (!draggedId || draggedId === project.id) return;
+
+    const fromIndex = appState.projects.findIndex(p => p.id === draggedId);
+    if (fromIndex === -1) return;
+
+    const rect = el.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    let targetIndex = appState.projects.findIndex(p => p.id === project.id);
+    if (e.clientY >= midY) targetIndex++;
+    // Adjust for the fact that removing the dragged item shifts indices
+    if (fromIndex < targetIndex) targetIndex--;
+
+    appState.reorderProject(fromIndex, targetIndex);
+  });
+
+  el.addEventListener('dragend', () => {
+    projectListEl.querySelectorAll('.project-item.dragging, .project-item.drag-over-top, .project-item.drag-over-bottom').forEach(node => {
+      node.classList.remove('dragging', 'drag-over-top', 'drag-over-bottom');
+    });
+  });
+
+  wrapper.appendChild(el);
+
+  if (isActive) {
+    const openPanel = projectPanelOpen.get(project.id) ?? null;
+    const actions = buildProjectActions(project, openPanel, { fileTreeEnabled, historyEnabled });
+    wrapper.appendChild(actions);
+
+    if (openPanel !== null) {
+      const panelContainer = document.createElement('div');
+      panelContainer.className = 'project-panel';
+      if (openPanel === 'files') {
+        panelContainer.classList.add('project-panel-files', 'project-file-tree');
+        renderFileTree(project, panelContainer);
+      } else {
+        panelContainer.classList.add('project-panel-history');
+        renderSessionHistory(project, panelContainer);
+      }
+      wrapper.appendChild(panelContainer);
+    }
+  }
+
+  return wrapper;
 }
 
 function buildProjectActions(
@@ -494,7 +545,9 @@ function renderCostFooter(): void {
   }
   const agg = getAggregateCost();
   if (agg.totalCostUsd > 0) {
-    sidebarFooterEl.textContent = `Total: $${agg.totalCostUsd.toFixed(4)}`;
+    sidebarFooterEl.innerHTML =
+      `<span class="footer-label">Total spend</span>` +
+      `<span class="footer-value">$${agg.totalCostUsd.toFixed(4)}</span>`;
     sidebarFooterEl.classList.remove('hidden');
   } else {
     sidebarFooterEl.classList.add('hidden');

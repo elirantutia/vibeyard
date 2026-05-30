@@ -1,6 +1,6 @@
 /* Sidebar */
 #sidebar {
-  width: 200px;
+  width: 264px;
   min-width: 150px;
   max-width: 500px;
   background: var(--bg-secondary);
@@ -26,17 +26,15 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-  gap: 8px;
+  padding: 16px 16px 12px;
+  gap: 10px;
 }
 
 .sidebar-title {
-  font-weight: 600;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary);
+  font-weight: 700;
+  font-size: 14.5px;
+  letter-spacing: -0.145px;
+  color: var(--text-primary);
   flex: 1;
   min-width: 0;
 }
@@ -44,7 +42,20 @@
 .sidebar-header-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
+}
+
+/* Primary header action (the + new-project button) — accent-tinted pill. */
+#sidebar-header .icon-btn.primary {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: var(--radius-sm);
+}
+
+#sidebar-header .icon-btn.primary:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+  filter: brightness(1.15);
 }
 
 #sidebar.collapsed {
@@ -55,12 +66,27 @@
 
 #sidebar.collapsed .sidebar-title,
 #sidebar.collapsed .sidebar-header-actions,
+#sidebar.collapsed .sidebar-section-label,
 #sidebar.collapsed #sidebar-footer,
 #sidebar.collapsed #git-panel,
 #sidebar.collapsed .project-item,
 #sidebar.collapsed .project-panel,
 #sidebar.collapsed .project-action-btn.panel-toggle {
   display: none;
+}
+
+#sidebar.collapsed #project-list {
+  padding: 4px;
+}
+
+/* Flatten the active-project card in collapsed mode — only the icon stack shows. */
+#sidebar.collapsed .project-row.active {
+  margin: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
 }
 
 #sidebar.collapsed #sidebar-header {
@@ -72,7 +98,9 @@
 #sidebar.collapsed .project-actions {
   flex-direction: column;
   gap: 4px;
-  padding: 6px 4px;
+  margin: 0;
+  padding: 6px 0;
+  background: transparent;
   align-items: stretch;
 }
 
@@ -94,7 +122,11 @@
 }
 
 #sidebar.collapsed #sidebar-discussions {
+  margin: 0;
   padding: 8px 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -116,21 +148,35 @@
 }
 
 #sidebar-footer {
-  border-top: 1px solid var(--border);
-  padding: 6px 12px;
-  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--border-subtle);
+  padding: 11px 16px;
+  font-size: 12px;
   color: var(--text-secondary);
   user-select: none;
   flex-shrink: 0;
+}
+
+#sidebar-footer .footer-value {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 #sidebar-footer.hidden {
   display: none;
 }
 
+/* Discussions card. */
 #sidebar-discussions {
-  border-top: 1px solid var(--border);
-  padding: 10px 12px;
+  margin: 4px 12px 8px;
+  padding: 13px 14px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -144,30 +190,29 @@
 }
 
 #sidebar-discussions .discussions-title {
-  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 
 #sidebar-discussions .discussions-badge {
   display: inline-block;
   background: var(--accent);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 600;
+  color: var(--accent-fg);
+  font-size: 10.5px;
+  font-weight: 700;
   min-width: 16px;
-  height: 16px;
-  line-height: 16px;
   text-align: center;
-  border-radius: 8px;
-  padding: 0 4px;
-  margin-left: 4px;
-  vertical-align: middle;
+  border-radius: 20px;
+  padding: 1px 7px;
 }
 
 #sidebar-discussions .discussions-desc {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--text-muted);
 }
 
@@ -183,41 +228,121 @@
 }
 
 #project-list {
-  padding: 4px 0;
+  padding: 4px 10px 8px;
 }
 
+/* Section divider label (e.g. "All projects"). */
+.sidebar-section-label {
+  padding: 14px 6px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Inactive project = compact row. */
 .project-item {
-  padding: 8px 12px;
+  position: relative;
+  margin-top: 2px;
+  padding: 9px 10px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: var(--bg-tertiary);
+  gap: 11px;
   color: var(--text-secondary);
   font-size: 13px;
-  border-top: 1px solid var(--border);
-  border-left: 3px solid transparent;
-}
-
-.project-row:first-child .project-item {
-  border-top: none;
+  border-radius: var(--radius-md);
 }
 
 .project-item:hover {
   background: var(--bg-hover);
 }
 
+/* Active project = card. The whole row wrapper becomes the card so the header,
+   the segmented tabs, and any open panel read as one surface. */
+.project-row.active {
+  margin: 6px 0 2px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 10px 30px -18px rgba(0, 0, 0, 0.9),
+    inset 0 1px 0 0 color-mix(in srgb, var(--text-primary) 4%, transparent);
+  overflow: hidden;
+}
+
 .project-item.active {
+  margin-top: 0;
+  padding: 14px 14px 12px;
+  gap: 9px;
   color: var(--text-primary);
-  border-left-color: var(--accent);
+  background: transparent;
+  cursor: default;
+}
+
+.project-item.active:hover {
+  background: transparent;
+}
+
+/* Avatar initial for the active project. */
+.project-avatar {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+  color: var(--accent-fg);
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* Aggregate session status dot on inactive rows. */
+.project-status {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.project-status.working {
+  background: var(--status-working);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-working) 15%, transparent);
+}
+
+.project-status.waiting {
+  background: var(--status-waiting);
+}
+
+.project-status.input {
+  background: var(--status-input);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-input) 15%, transparent);
+}
+
+.project-status.completed {
+  background: var(--status-completed);
+}
+
+.project-main {
+  flex: 1;
+  min-width: 0;
 }
 
 .project-item .project-name {
-  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 600;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.project-item.active .project-name {
+  font-weight: 700;
 }
 
 .project-item .project-name.unread {
@@ -227,7 +352,7 @@
 .project-item .project-name input {
   background: transparent;
   border: 1px solid var(--accent);
-  border-radius: 2px;
+  border-radius: 4px;
   color: inherit;
   font: inherit;
   padding: 0 2px;
@@ -237,18 +362,29 @@
 }
 
 .project-item .project-path {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  opacity: 0.85;
   font-weight: 400;
 }
 
+/* Session-count pill on inactive rows. */
 .project-session-count {
-  opacity: 0.6;
-  font-size: 0.85em;
+  flex-shrink: 0;
+  min-width: 20px;
+  padding: 2px 7px;
+  border-radius: 20px;
+  background: var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.project-item.active .project-session-count {
+  display: none;
 }
 
 .project-item.dragging {
@@ -279,26 +415,30 @@
   color: var(--accent);
 }
 
+/* Segmented icon-only tab control inside the active card. */
 .project-actions {
   display: flex;
   gap: 4px;
-  padding: 4px 12px 6px;
+  padding: 4px;
+  margin: 0 14px 14px;
+  background: var(--border-subtle);
+  border-radius: var(--radius-md);
 }
 
 .project-action-btn {
   flex: 1;
   min-width: 0;
-  padding: 4px 6px;
-  font-size: 11px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   font-family: inherit;
   background: transparent;
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-  border-radius: 3px;
+  color: var(--text-secondary);
+  border: none;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .action-icon {
@@ -315,6 +455,16 @@
   display: block;
 }
 
+/* Labels are hidden in the segmented control — icons carry the meaning, with a
+   hover-card tooltip per button. */
+.project-action-btn .action-icon {
+  display: flex;
+}
+
+.project-action-btn .action-label {
+  display: none;
+}
+
 .action-label {
   display: inline-block;
   overflow: hidden;
@@ -326,28 +476,28 @@
 
 .project-action-btn:hover {
   color: var(--text-primary);
-  border-color: var(--border-strong, var(--border));
   background: var(--bg-hover);
 }
 
-.project-action-btn.active {
-  color: var(--accent);
-  border-color: var(--accent-dim);
-  background: var(--bg-hover);
+.project-action-btn.active,
+.project-action-btn.active:hover {
+  color: var(--accent-fg);
+  background: var(--accent);
+  box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 .project-action-btn.has-readiness {
-  background-color: color-mix(in srgb, var(--readiness-color) 15%, transparent);
-  border-color: color-mix(in srgb, var(--readiness-color) 50%, transparent);
+  background: color-mix(in srgb, var(--readiness-color) 18%, transparent);
+  color: var(--readiness-color);
 }
 
 .project-action-btn.has-readiness:hover {
-  background-color: color-mix(in srgb, var(--readiness-color) 25%, transparent);
+  background: color-mix(in srgb, var(--readiness-color) 28%, transparent);
 }
 
 .project-panel {
-  background: var(--bg-secondary);
-  border-left: 3px solid transparent;
+  background: transparent;
+  margin: 0 6px 8px;
 }
 
 .project-panel.hidden {
@@ -381,7 +531,7 @@
   background: var(--accent);
   border: none;
   border-radius: 4px;
-  color: white;
+  color: var(--accent-fg);
   font-size: 12px;
   cursor: pointer;
   font-weight: 600;
