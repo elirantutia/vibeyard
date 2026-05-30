@@ -145,6 +145,33 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* App-wide slim themed scrollbar — replaces the native browser/OS scrollbar
+   everywhere. The thumb is transparent by default and only paints while the
+   scrollable area is hovered, mimicking the macOS overlay auto-hide behaviour.
+   Per-component ::-webkit-scrollbar rules still override this. */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*:hover::-webkit-scrollbar-thumb {
+  background: var(--border);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
 /* Paths, costs, branch & git status ride the mono face. */
 .mono,
 .project-path,
