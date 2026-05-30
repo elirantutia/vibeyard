@@ -80,19 +80,6 @@ export function showTerminalContextMenu(
   });
   menu.appendChild(selectAllItem);
 
-  const sep2 = document.createElement('div');
-  sep2.className = 'tab-context-menu-separator';
-  menu.appendChild(sep2);
-
-  const clearItem = makeItem('Clear Terminal');
-  clearItem.addEventListener('click', (e) => {
-    e.stopPropagation();
-    hideTerminalContextMenu();
-    terminal.focus();
-    terminal.clear();
-  });
-  menu.appendChild(clearItem);
-
   document.body.appendChild(menu);
   activeMenu = menu;
 

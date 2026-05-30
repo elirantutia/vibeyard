@@ -2,12 +2,6 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
-
-### Features
-
-- Right-click context menu for terminal panes (Copy, Paste, Select All, Clear Terminal)
-
 ## [0.3.0] - 2026-05-30
 
 ### Features

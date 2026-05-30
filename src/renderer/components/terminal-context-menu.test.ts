@@ -7,7 +7,6 @@ function makeMockTerminal(hasSelection = false, selection = '') {
     hasSelection: vi.fn(() => hasSelection),
     getSelection: vi.fn(() => selection),
     selectAll: vi.fn(),
-    clear: vi.fn(),
     focus: vi.fn(),
   } as any;
 }
@@ -23,7 +22,7 @@ describe('terminal-context-menu', () => {
     hideTerminalContextMenu();
   });
 
-  it('renders menu with four items', () => {
+  it('renders menu with three items', () => {
     const terminal = makeMockTerminal();
     showTerminalContextMenu(100, 100, terminal, writeToPty);
 
@@ -31,11 +30,10 @@ describe('terminal-context-menu', () => {
     expect(menu).toBeTruthy();
 
     const items = menu.querySelectorAll('.tab-context-menu-item');
-    expect(items).toHaveLength(4);
+    expect(items).toHaveLength(3);
     expect(items[0].textContent).toContain('Copy');
     expect(items[1].textContent).toContain('Paste');
     expect(items[2].textContent).toContain('Select All');
-    expect(items[3].textContent).toContain('Clear Terminal');
   });
 
   it('positions menu at given coordinates', () => {
@@ -107,15 +105,6 @@ describe('terminal-context-menu', () => {
     const items = document.querySelectorAll('.tab-context-menu-item');
     (items[2] as HTMLElement).click();
     expect(terminal.selectAll).toHaveBeenCalled();
-  });
-
-  it('Clear Terminal calls terminal.clear()', () => {
-    const terminal = makeMockTerminal();
-    showTerminalContextMenu(100, 100, terminal, writeToPty);
-
-    const items = document.querySelectorAll('.tab-context-menu-item');
-    (items[3] as HTMLElement).click();
-    expect(terminal.clear).toHaveBeenCalled();
   });
 
   it('Copy click writes selection to clipboard', () => {
