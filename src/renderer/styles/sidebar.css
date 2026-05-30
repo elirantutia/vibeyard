@@ -53,27 +53,44 @@
   filter: brightness(1.15);
 }
 
+/* Collapsed rail — a 58px vertical strip: expand button, divider, active
+   project avatar, nav icons, then Discussions pinned to the bottom. */
 #sidebar.collapsed {
-  width: 44px !important;
-  min-width: 44px;
-  max-width: 44px;
+  width: 58px !important;
+  min-width: 58px;
+  max-width: 58px;
 }
 
 #sidebar.collapsed .sidebar-header-actions,
 #sidebar.collapsed .sidebar-section-label,
 #sidebar.collapsed #sidebar-footer,
 #sidebar.collapsed #git-panel,
-#sidebar.collapsed .project-item,
+#sidebar.collapsed .project-row:not(.active),
+#sidebar.collapsed .project-main,
+#sidebar.collapsed .project-session-count,
+#sidebar.collapsed .project-delete,
 #sidebar.collapsed .project-panel,
 #sidebar.collapsed .project-action-btn.panel-toggle {
   display: none;
 }
 
 #sidebar.collapsed #project-list {
-  padding: 4px;
+  padding: 7px 6px;
 }
 
-/* Flatten the active-project card in collapsed mode — only the icon stack shows. */
+/* Short centered divider between the expand button and the avatar (the mock's
+   `.rdiv`) — drawn as a pseudo-element to avoid touching the markup. */
+#sidebar.collapsed #project-list::before {
+  content: '';
+  display: block;
+  width: 26px;
+  height: 1px;
+  background: var(--border);
+  margin: 2px auto 12px;
+}
+
+/* Flatten the active-project card in collapsed mode — only the avatar + icon
+   stack show. */
 #sidebar.collapsed .project-row.active {
   margin: 0;
   background: transparent;
@@ -83,28 +100,80 @@
   overflow: visible;
 }
 
+#sidebar.collapsed .project-item {
+  padding: 0;
+  background: transparent;
+  justify-content: center;
+}
+
+/* Project avatar — the mock's `.rav`: gradient tile with a soft purple glow. */
+#sidebar.collapsed .project-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: linear-gradient(160deg, var(--accent), var(--accent-dim));
+  font-size: 20px;
+  box-shadow: 0 6px 18px -4px rgba(133, 136, 242, 0.45);
+  margin: 0 auto;
+}
+
 #sidebar.collapsed #sidebar-header {
   border-bottom: none;
-  padding: 10px 6px;
+  padding: 10px 0 4px;
   justify-content: center;
+}
+
+/* Rail buttons (the mock's `.rbtn`): expand button, nav icons, Discussions —
+   shared 44px hit area, muted icon, hover lift. */
+#sidebar.collapsed #btn-toggle-sidebar,
+#sidebar.collapsed .project-action-btn,
+#sidebar.collapsed #sidebar-discussions {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#sidebar.collapsed #btn-toggle-sidebar:hover,
+#sidebar.collapsed .project-action-btn:hover,
+#sidebar.collapsed #sidebar-discussions:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* The rail reuses the compact 14px sidebar icons — scale them up to fill the
+   larger rail buttons. */
+#sidebar.collapsed #btn-toggle-sidebar svg,
+#sidebar.collapsed .project-action-btn .action-icon svg,
+#sidebar.collapsed #sidebar-discussions .action-icon svg {
+  width: 22px;
+  height: 22px;
 }
 
 #sidebar.collapsed .project-actions {
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
   margin: 0;
-  padding: 6px 0;
+  padding: 4px 0;
   background: transparent;
-  align-items: stretch;
+  align-items: center;
 }
 
 #sidebar.collapsed .project-action-btn {
   flex: 0 0 auto;
-  height: 32px;
   padding: 0;
-  justify-content: center;
-  display: flex;
-  align-items: center;
+}
+
+/* Active nav button uses a soft accent tint in the rail (`.rbtn.on`), not the
+   solid accent the expanded sidebar uses. */
+#sidebar.collapsed .project-action-btn.active,
+#sidebar.collapsed .project-action-btn.active:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: none;
 }
 
 #sidebar.collapsed .project-action-btn .action-label {
@@ -115,15 +184,12 @@
   display: flex;
 }
 
+/* Discussions — pinned to the bottom by #sidebar-content's flex:1 (footer hidden). */
 #sidebar.collapsed #sidebar-discussions {
-  margin: 0;
-  padding: 8px 0;
+  margin: 6px auto;
+  padding: 0;
   background: transparent;
   border: none;
-  border-radius: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 #sidebar.collapsed #sidebar-discussions .discussions-text {
@@ -133,6 +199,14 @@
 #sidebar.collapsed #sidebar-discussions .action-icon {
   display: flex;
   position: relative;
+}
+
+/* Unread dot (the mock's `.rdot`) — base .discussions-icon-dot already supplies
+   position/color/radius; the rail just drops the ring and bumps the size. */
+#sidebar.collapsed .discussions-icon-dot {
+  width: 8px;
+  height: 8px;
+  border: none;
 }
 
 #sidebar-content {
