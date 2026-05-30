@@ -78,7 +78,6 @@
 
 #sidebar.collapsed .sidebar-header-actions,
 #sidebar.collapsed .sidebar-section-label,
-#sidebar.collapsed #sidebar-footer,
 #sidebar.collapsed #git-panel,
 #sidebar.collapsed .project-row:not(.active),
 #sidebar.collapsed .project-main,
@@ -228,29 +227,6 @@
   flex: 1;
   overflow-y: auto;
   min-height: 0;
-}
-
-#sidebar-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-top: 1px solid var(--border-subtle);
-  padding: 11px 16px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  user-select: none;
-  flex-shrink: 0;
-}
-
-#sidebar-footer .footer-value {
-  color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-#sidebar-footer.hidden {
-  display: none;
 }
 
 /* Discussions card. */

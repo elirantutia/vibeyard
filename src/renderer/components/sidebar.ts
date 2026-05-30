@@ -1,7 +1,6 @@
 import { appState, MAX_PROJECT_NAME_LENGTH, ProjectRecord } from '../state.js';
 import { showModal, setModalError, closeModal, showConfirmDialog } from './modal.js';
 import { showPreferencesModal } from './preferences-modal.js';
-import { onChange as onCostChange, getAggregateCost } from '../session-cost.js';
 import { hasUnreadInProject, onChange as onUnreadChange } from '../session-unread.js';
 import { onChange as onActivityChange } from '../session-activity.js';
 import { getProjectStatus, projectInitial } from '../project-status.js';
@@ -31,7 +30,6 @@ const btnPreferences = document.getElementById('btn-preferences')!;
 const sidebarEl = document.getElementById('sidebar')!;
 const resizeHandle = document.getElementById('sidebar-resize-handle')!;
 
-const sidebarFooterEl = document.getElementById('sidebar-footer')!;
 const sidebarDiscussionsEl = document.getElementById('sidebar-discussions')!;
 const btnToggleSidebar = document.getElementById('btn-toggle-sidebar')!;
 
@@ -88,11 +86,6 @@ export function initSidebar(): void {
   appState.on('layout-changed', render);
   appState.on('readiness-changed', render);
 
-
-  onCostChange(() => {
-    renderCostFooter();
-  });
-
   onUnreadChange(render);
   // Keep the active project's Git tab badge in sync. Surgical when the button is
   // already present; a full render only when repo-ness first becomes known (the
@@ -124,7 +117,6 @@ export function initSidebar(): void {
     if (dot) dot.className = `project-status ${getProjectStatus(project)}`;
   });
   appState.on('preferences-changed', () => {
-    applyCostFooterVisibility();
     applyDiscussionsVisibility();
     render();
   });
@@ -570,35 +562,9 @@ function initResizeHandle(): void {
   });
 }
 
-function applyCostFooterVisibility(): void {
-  const visible = appState.preferences.sidebarViews?.costFooter ?? true;
-  if (!visible) {
-    sidebarFooterEl.classList.add('hidden');
-  } else {
-    renderCostFooter();
-  }
-}
-
 function applyDiscussionsVisibility(): void {
   const visible = appState.preferences.sidebarViews?.discussions ?? true;
   sidebarDiscussionsEl.classList.toggle('hidden', !visible);
-}
-
-function renderCostFooter(): void {
-  const costVisible = appState.preferences.sidebarViews?.costFooter ?? true;
-  if (!costVisible) {
-    sidebarFooterEl.classList.add('hidden');
-    return;
-  }
-  const agg = getAggregateCost();
-  if (agg.totalCostUsd > 0) {
-    sidebarFooterEl.innerHTML =
-      `<span class="footer-label">Total spend</span>` +
-      `<span class="footer-value">$${agg.totalCostUsd.toFixed(4)}</span>`;
-    sidebarFooterEl.classList.remove('hidden');
-  } else {
-    sidebarFooterEl.classList.add('hidden');
-  }
 }
 
 function confirmRemoveProject(project: ProjectRecord): void {

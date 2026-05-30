@@ -82,7 +82,7 @@ export function showPreferencesModal(initialSection: Section = 'general'): void 
   let zoomSelect: CustomSelectInstance | null = null;
   let zoomPrefUnsub: (() => void) | null = null;
   let debugModeCheckbox: HTMLInputElement | null = null;
-  let sidebarCheckboxes: { gitPanel: HTMLInputElement; sessionHistory: HTMLInputElement; costFooter: HTMLInputElement; discussions: HTMLInputElement; fileTree: HTMLInputElement } | null = null;
+  let sidebarCheckboxes: { gitPanel: HTMLInputElement; sessionHistory: HTMLInputElement; discussions: HTMLInputElement; fileTree: HTMLInputElement } | null = null;
   let boardCardMetricsCheckbox: HTMLInputElement | null = null;
   let activeRecorder: { cleanup: () => void } | null = null;
   const originalTheme = appState.preferences.theme ?? 'dark';
@@ -296,12 +296,11 @@ export function showPreferencesModal(initialSection: Section = 'general'): void 
       sidebarViewsHeading.textContent = 'Sidebar Views';
       content.appendChild(sidebarViewsHeading);
 
-      const views = appState.preferences.sidebarViews ?? { gitPanel: true, sessionHistory: true, costFooter: true, discussions: true, fileTree: true };
+      const views = appState.preferences.sidebarViews ?? { gitPanel: true, sessionHistory: true, discussions: true, fileTree: true };
       const toggles: { key: keyof typeof views; label: string }[] = [
         { key: 'fileTree', label: 'Project File Tree' },
         { key: 'gitPanel', label: 'Git Panel' },
         { key: 'sessionHistory', label: 'Session History' },
-        { key: 'costFooter', label: 'Cost Footer' },
         { key: 'discussions', label: 'Discussions' },
       ];
 
@@ -901,7 +900,6 @@ export function showPreferencesModal(initialSection: Section = 'general'): void 
       appState.setPreference('sidebarViews', {
         gitPanel: sidebarCheckboxes.gitPanel.checked,
         sessionHistory: sidebarCheckboxes.sessionHistory.checked,
-        costFooter: sidebarCheckboxes.costFooter.checked,
         discussions: sidebarCheckboxes.discussions.checked,
         fileTree: sidebarCheckboxes.fileTree.checked,
       });

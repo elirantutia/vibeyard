@@ -325,7 +325,6 @@ export interface Preferences {
   sidebarViews?: {
     gitPanel: boolean;
     sessionHistory: boolean;
-    costFooter: boolean;
     discussions: boolean;
     fileTree: boolean;
   };
