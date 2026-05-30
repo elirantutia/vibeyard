@@ -8,7 +8,7 @@ import { getProjectStatus, projectInitial } from '../project-status.js';
 import { init as initDiscussionsBadge, getNewCount as getDiscussionsNewCount, markSeen as markDiscussionsSeen, onChange as onDiscussionsChange, DISCUSSIONS_URL } from '../discussions-badge.js';
 import { basename, lastSeparatorIndex } from '../../shared/platform.js';
 import { deriveProjectName } from '../../shared/project-name.js';
-import { esc, scoreColor } from '../dom-utils.js';
+import { esc } from '../dom-utils.js';
 import { renderFileTree, clearProjectState as clearFileTreeState, closeFileTree } from './file-tree.js';
 import {
   renderSessionHistory,
@@ -294,11 +294,6 @@ function buildProjectActions(
   // from openPanel below. The tab buttons (Overview, Kanban, Team) never mark
   // themselves selected from the open tab — opening a tab leaves them inert.
   const overviewBtn = makeActionButton('Overview', ICON_OVERVIEW, false);
-  const readinessScore = project.readiness?.overallScore;
-  if (typeof readinessScore === 'number') {
-    overviewBtn.classList.add('has-readiness');
-    overviewBtn.style.setProperty('--readiness-color', scoreColor(readinessScore));
-  }
   overviewBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     appState.openProjectTab(project.id);

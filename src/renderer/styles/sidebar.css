@@ -554,15 +554,6 @@
   box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
-.project-action-btn.has-readiness {
-  background: color-mix(in srgb, var(--readiness-color) 18%, transparent);
-  color: var(--readiness-color);
-}
-
-.project-action-btn.has-readiness:hover {
-  background: color-mix(in srgb, var(--readiness-color) 28%, transparent);
-}
-
 .project-panel {
   background: transparent;
   margin: 0 6px 8px;
