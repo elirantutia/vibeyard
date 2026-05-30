@@ -17,7 +17,7 @@ import {
 } from './session-history.js';
 import { attachHoverCard } from './hover-card.js';
 import { showHelpDialog } from './help-dialog.js';
-import { ICON_KANBAN, ICON_TEAM, ICON_OVERVIEW, ICON_HELP } from '../icons.js';
+import { ICON_KANBAN, ICON_TEAM, ICON_OVERVIEW, ICON_SESSIONS, ICON_FILES, ICON_HELP } from '../icons.js';
 
 type ProjectPanel = 'history' | 'files' | null;
 const projectPanelOpen = new Map<string, ProjectPanel>();
@@ -38,11 +38,6 @@ const btnToggleSidebar = document.getElementById('btn-toggle-sidebar')!;
 const SIDEBAR_MIN = 150;
 const SIDEBAR_MAX = 500;
 
-const svgIcon = (inner: string): string =>
-  `<svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
-
-const ICON_SESSIONS = svgIcon('<circle cx="7" cy="7" r="5.5"/><path d="M7 4v3l2 1.5"/>');
-const ICON_FILES = svgIcon('<path d="M1.5 3.5a1 1 0 0 1 1-1h3l1.5 1.5h4.5a1 1 0 0 1 1 1V11a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1z"/>');
 const ICON_DISCUSSIONS = '<svg viewBox="0 -960 960 960" width="14" height="14" fill="currentColor"><path d="m240-240-92 92q-19 19-43.5 8.5T80-177v-623q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240Zm-34-80h594v-480H160v525l46-45Zm-46 0v-480 480Zm120-80h240q17 0 28.5-11.5T560-440q0-17-11.5-28.5T520-480H280q-17 0-28.5 11.5T240-440q0 17 11.5 28.5T280-400Zm0-120h400q17 0 28.5-11.5T720-560q0-17-11.5-28.5T680-600H280q-17 0-28.5 11.5T240-560q0 17 11.5 28.5T280-520Zm0-120h400q17 0 28.5-11.5T720-680q0-17-11.5-28.5T680-720H280q-17 0-28.5 11.5T240-680q0 17 11.5 28.5T280-640Z"/></svg>';
 
 export function toggleSidebar(): void {
