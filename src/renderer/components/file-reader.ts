@@ -58,7 +58,7 @@ function renderFileContent(content: string): HTMLElement {
 
 export function renderMarkdownContent(content: string): HTMLElement {
   const wrapper = document.createElement('div');
-  wrapper.className = 'file-reader-content file-reader-markdown';
+  wrapper.className = 'file-reader-markdown';
   const rawHtml = marked.parse(content, { async: false }) as string;
   wrapper.innerHTML = DOMPurify.sanitize(rawHtml);
   return wrapper;
