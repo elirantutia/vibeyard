@@ -6,8 +6,7 @@ import { onChange as onGitStatusChange, getGitStatus, getActiveGitPath, refreshG
 
 import { isUnread, onChange as onUnreadChange } from '../session-unread.js';
 import { hasUnreadInProject as hasGithubUnread, onChange as onGithubUnreadChange } from '../github-unread.js';
-import { showHelpDialog } from './help-dialog.js';
-import { ICON_HELP, ICON_TERMINAL, ICON_MENU, ICON_KANBAN, ICON_TEAM, ICON_OVERVIEW } from '../icons.js';
+import { ICON_TERMINAL, ICON_MENU, ICON_KANBAN, ICON_TEAM, ICON_OVERVIEW } from '../icons.js';
 import { showShareDialog } from './share-dialog.js';
 import { showJoinDialog } from './join-dialog.js';
 import { isSharing } from '../sharing/peer-host.js';
@@ -29,7 +28,6 @@ const gitStatusEl = document.getElementById('git-status')!;
 const btnAddSession = document.getElementById('btn-add-session')!;
 const btnAddSessionMenu = document.getElementById('btn-add-session-menu')!;
 const btnAddBrowserTab = document.getElementById('btn-add-browser-tab')!;
-const btnHelp = document.getElementById('btn-help')!;
 const btnMore = document.getElementById('btn-more')!;
 // Terminal toggle is wired in project-terminal.ts; we only own its icon here.
 const btnToggleTerminal = document.getElementById('btn-toggle-terminal')!;
@@ -43,7 +41,6 @@ function buildTooltip(status: SessionStatus, cliSessionId?: string): string {
 }
 
 export function initTabBar(): void {
-  btnHelp.innerHTML = ICON_HELP;
   btnToggleTerminal.innerHTML = ICON_TERMINAL;
   btnMore.innerHTML = ICON_MENU;
   // Browser button keeps its CSS-drawn .toolbar-icon-browser glyph from index.html.
@@ -60,10 +57,13 @@ export function initTabBar(): void {
   });
   btnMore.addEventListener('click', (e) => {
     e.stopPropagation();
+    if (activeContextMenu) {
+      hideTabContextMenu();
+      return;
+    }
     const rect = btnMore.getBoundingClientRect();
     showMoreMenu(rect.left, rect.bottom + 4);
   });
-  btnHelp.addEventListener('click', () => showHelpDialog());
   btnAddBrowserTab.addEventListener('click', () => {
     const project = appState.activeProject;
     if (project) appState.addBrowserTabSession(project.id);
@@ -769,7 +769,7 @@ export function quickNewSession(): void {
 }
 
 // "More" overflow menu. Deliberately excludes actions that have their own
-// toolbar icon (Help, Terminal, Browser) and the New/Custom Session actions
+// toolbar icon (Terminal, Browser) and the New/Custom Session actions
 // (those live on the pill + its caret).
 function showMoreMenu(x: number, y: number): void {
   hideTabContextMenu();
