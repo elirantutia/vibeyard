@@ -48,6 +48,7 @@ export function showTerminalContextMenu(
     copyItem.addEventListener('click', (e) => {
       e.stopPropagation();
       hideTerminalContextMenu();
+      terminal.focus();
       const selection = terminal.getSelection();
       if (selection) navigator.clipboard.writeText(selection).catch(() => {});
     });
@@ -58,6 +59,7 @@ export function showTerminalContextMenu(
   pasteItem.addEventListener('click', (e) => {
     e.stopPropagation();
     hideTerminalContextMenu();
+    terminal.focus();
     navigator.clipboard.readText().then((text) => {
       if (!text) return;
       writeToPty(wrapBracketedPaste(terminal, text));
@@ -73,6 +75,7 @@ export function showTerminalContextMenu(
   selectAllItem.addEventListener('click', (e) => {
     e.stopPropagation();
     hideTerminalContextMenu();
+    terminal.focus();
     terminal.selectAll();
   });
   menu.appendChild(selectAllItem);
@@ -85,6 +88,7 @@ export function showTerminalContextMenu(
   clearItem.addEventListener('click', (e) => {
     e.stopPropagation();
     hideTerminalContextMenu();
+    terminal.focus();
     terminal.clear();
   });
   menu.appendChild(clearItem);

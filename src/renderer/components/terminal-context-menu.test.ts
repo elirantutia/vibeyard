@@ -8,6 +8,7 @@ function makeMockTerminal(hasSelection = false, selection = '') {
     getSelection: vi.fn(() => selection),
     selectAll: vi.fn(),
     clear: vi.fn(),
+    focus: vi.fn(),
   } as any;
 }
 
@@ -117,7 +118,7 @@ describe('terminal-context-menu', () => {
     expect(terminal.clear).toHaveBeenCalled();
   });
 
-  it('Copy click writes selection to clipboard', async () => {
+  it('Copy click writes selection to clipboard', () => {
     const mockWriteText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText: mockWriteText, readText: vi.fn() } });
 
@@ -145,5 +146,14 @@ describe('terminal-context-menu', () => {
     await vi.waitFor(() => {
       expect(writeToPty).toHaveBeenCalledWith('pasted text');
     });
+  });
+
+  it('restores focus to the terminal after an action', () => {
+    const terminal = makeMockTerminal();
+    showTerminalContextMenu(100, 100, terminal, writeToPty);
+
+    const items = document.querySelectorAll('.tab-context-menu-item');
+    (items[1] as HTMLElement).click(); // Paste
+    expect(terminal.focus).toHaveBeenCalled();
   });
 });
