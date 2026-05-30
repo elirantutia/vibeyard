@@ -200,6 +200,7 @@ body.debug-panel-open #app {
 .btn-primary {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 7px 14px;
   border: none;
@@ -224,6 +225,7 @@ body.debug-panel-open #app {
 .btn-secondary {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 7px 14px;
   border: 1px solid var(--border);
