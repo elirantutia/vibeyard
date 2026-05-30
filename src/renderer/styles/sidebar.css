@@ -110,9 +110,9 @@
 #sidebar.collapsed .project-avatar {
   width: 44px;
   height: 44px;
-  border-radius: 14px;
+  border-radius: 13px;
   background: linear-gradient(160deg, var(--accent), var(--accent-dim));
-  font-size: 20px;
+  font-size: 18px;
   box-shadow: 0 6px 18px -4px rgba(133, 136, 242, 0.45);
   margin: 0 auto;
 }
