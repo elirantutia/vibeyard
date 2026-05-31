@@ -67,11 +67,11 @@ export function createProfilesSection(ctx: PreferencesContext): SectionControlle
         const actions = document.createElement('div');
         actions.className = 'profile-row-actions';
         const editBtn = document.createElement('button');
-        editBtn.className = 'modal-btn';
+        editBtn.className = 'btn-secondary btn-sm';
         editBtn.textContent = 'Rename';
         editBtn.addEventListener('click', () => promptEditProfile(profile.id, profile.name));
         const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'modal-btn';
+        deleteBtn.className = 'btn-secondary btn-sm danger';
         deleteBtn.textContent = 'Delete';
         deleteBtn.addEventListener('click', () => {
           showConfirmDialog(
