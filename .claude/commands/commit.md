@@ -48,8 +48,6 @@ Create a git commit for the current staged (or unstaged) changes using a structu
    ```
    git commit -m "$(cat <<'EOF'
    <prefix> <description>
-
-   Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
    EOF
    )"
    ```

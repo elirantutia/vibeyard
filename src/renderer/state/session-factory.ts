@@ -5,14 +5,15 @@ interface BaseOpts {
   createdAt?: string;
 }
 
-export function buildCliSession(opts: BaseOpts & { name: string; providerId: ProviderId; args?: string; profileId?: string }): SessionRecord {
-  const { name, providerId, args, profileId, id = crypto.randomUUID(), createdAt = new Date().toISOString() } = opts;
+export function buildCliSession(opts: BaseOpts & { name: string; providerId: ProviderId; args?: string; profileId?: string; envVars?: string }): SessionRecord {
+  const { name, providerId, args, profileId, envVars, id = crypto.randomUUID(), createdAt = new Date().toISOString() } = opts;
   return {
     id,
     name,
     providerId,
     ...(args ? { args } : {}),
     ...(profileId ? { profileId } : {}),
+    ...(envVars ? { envVars } : {}),
     cliSessionId: null,
     createdAt,
   };

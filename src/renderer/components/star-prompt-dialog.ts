@@ -35,12 +35,12 @@ function showStarPromptDialog(): void {
   innerActions.className = 'star-prompt-actions';
 
   const starBtn = document.createElement('button');
-  starBtn.className = 'modal-btn primary';
+  starBtn.className = 'btn-primary';
   starBtn.textContent = 'Star on GitHub';
   innerActions.appendChild(starBtn);
 
   const laterBtn = document.createElement('button');
-  laterBtn.className = 'modal-btn';
+  laterBtn.className = 'btn-secondary';
   laterBtn.textContent = 'Maybe Later';
   innerActions.appendChild(laterBtn);
 

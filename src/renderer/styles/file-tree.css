@@ -12,7 +12,7 @@
   gap: 4px;
   padding: 2px 8px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -30,7 +30,7 @@
   align-items: center;
   justify-content: center;
   width: 10px;
-  font-size: 9px;
+  font-size: 11px;
   color: var(--text-muted);
   transition: transform 0.15s;
   flex-shrink: 0;
@@ -45,7 +45,7 @@
 }
 
 .file-tree-icon {
-  font-size: 11px;
+  font-size: 13px;
   opacity: 0.75;
   flex-shrink: 0;
 }

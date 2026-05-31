@@ -110,7 +110,7 @@ const defaultPreferences: Preferences = {
   copyOnSelect: false,
   zoomFactor: 1.0,
   readinessExcludedProviders: [],
-  sidebarViews: { gitPanel: true, sessionHistory: true, costFooter: true, discussions: true, fileTree: true },
+  sidebarViews: { gitPanel: true, sessionHistory: true, discussions: true, fileTree: true },
   boardCardMetrics: true,
 };
 
@@ -343,7 +343,7 @@ class AppState {
     return this.addSession(projectId, name, args, providerId);
   }
 
-  addSession(projectId: string, name: string, args?: string, providerId?: ProviderId, profileId?: string): SessionRecord | undefined {
+  addSession(projectId: string, name: string, args?: string, providerId?: ProviderId, profileId?: string, envVars?: string): SessionRecord | undefined {
     const project = this.state.projects.find((p) => p.id === projectId);
     if (!project) return undefined;
 
@@ -357,6 +357,7 @@ class AppState {
       providerId: cliProviderId,
       args: args ?? project.defaultArgs,
       profileId: pinnedProfileId,
+      envVars: envVars ?? project.defaultEnv,
     });
     attachSessionToProject(project, session, { addToSwarm: true });
     this.commitNewSession(projectId, session);

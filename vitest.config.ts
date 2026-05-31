@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'url';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
@@ -5,6 +6,13 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/**/*.test.ts'],
+    alias: {
+      // CI installs with ELECTRON_SKIP_BINARY_DOWNLOAD=1, so importing the real
+      // `electron` module throws ("Electron failed to install correctly").
+      // Redirect it to a test stub for suites that transitively load a module
+      // which value-imports from 'electron' (e.g. hook-status.ts).
+      electron: fileURLToPath(new URL('./test/electron-stub.ts', import.meta.url)),
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'text-summary', 'html', 'lcov'],

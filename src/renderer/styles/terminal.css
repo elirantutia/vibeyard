@@ -79,8 +79,8 @@
   left: 0;
   right: 0;
   bottom: 0;
-  border: 2px solid var(--pane-unfocus);
-  border-radius: 2px;
+  border: 2px solid transparent;
+  border-radius: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -88,10 +88,6 @@
 
 .terminal-pane.split {
   position: relative;
-}
-
-.terminal-pane.focused {
-  border-color: var(--pane-focus);
 }
 
 .terminal-pane.swarm-unread {

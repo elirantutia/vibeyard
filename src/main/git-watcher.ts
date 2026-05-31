@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import type { BrowserWindow } from 'electron';
+import { isLinux } from './platform';
 
 const DEBOUNCE_MS = 300;
 const MAX_WATCHES = 2000;
@@ -34,6 +35,36 @@ function notify(): void {
 
 function isIgnored(name: string): boolean {
   return IGNORE_SEGMENTS.has(name);
+}
+
+/** True if any segment of a watched-root-relative path is an ignored dir. */
+function hasIgnoredSegment(filename: string): boolean {
+  return filename.split(path.sep).some(isIgnored);
+}
+
+/**
+ * Watch the whole working tree with a single recursive watch (macOS + Windows
+ * only — Linux uses walkAndWatch). One FSEvents stream / ReadDirectoryChangesW
+ * handle covers the entire tree, so project-switch teardown closes ~1 handle
+ * instead of up to MAX_WATCHES — avoiding the synchronous FSEvents
+ * re-registration storm that froze the UI (#142). `.git` is in IGNORE_SEGMENTS,
+ * so git internals are filtered out here and handled by the fine-grained `.git`
+ * watches in setupWatchers instead.
+ */
+function watchRecursiveWorkingTree(root: string): void {
+  try {
+    const watcher = fs.watch(root, { recursive: true }, (_event, filename) => {
+      // filename is relative to root (incl. subpath) or null when the OS
+      // coalesces events — notify conservatively when we can't classify it.
+      if (!filename || !hasIgnoredSegment(filename)) notify();
+    });
+    watcher.on('error', () => {}); // ignore (dir deleted, etc.)
+    dirWatchers.push(watcher);
+  } catch {
+    // Recursive watch unavailable/failed — fall back to per-dir BFS so we still
+    // get some signal (the 60s git-status poll is the ultimate backstop).
+    walkAndWatch(root);
+  }
 }
 
 function watchOne(dirPath: string, onEvent: (filename: string | null) => void): void {
@@ -108,8 +139,15 @@ function stopAll(): void {
 async function setupWatchers(projectPath: string): Promise<void> {
   const gitDir = await resolveGitDir(projectPath);
 
-  // Working tree: walk-time-filtered, non-recursive, capped.
-  walkAndWatch(projectPath);
+  // Working tree. macOS + Windows support a single recursive watch (one OS-level
+  // handle), which keeps project-switch teardown cheap (#142). Linux does not
+  // support recursive fs.watch (and the old recursive path leaked inotify
+  // watches, #139), so it keeps the walk-time-filtered, non-recursive, capped BFS.
+  if (isLinux) {
+    walkAndWatch(projectPath);
+  } else {
+    watchRecursiveWorkingTree(projectPath);
+  }
 
   // Git internals: non-recursive watch on .git/ itself, only react to a small allow-list
   // of files (index/HEAD/ORIG_HEAD/MERGE_HEAD/packed-refs/FETCH_HEAD). This catches

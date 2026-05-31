@@ -1,59 +1,132 @@
+/* ============================================================================
+   Vibeyard — "Studio" foundation tokens
+   The chosen design direction (Claude Design handoff): calm cool-slate surfaces,
+   a single iris accent (replacing the generic coral), hairline alpha borders,
+   softer radii, and a real type system — Hanken Grotesk (UI) + JetBrains Mono.
+   These map onto the app's existing variable names, so every surface that reads
+   them is re-themed automatically.
+   ============================================================================ */
+
+/* Self-hosted variable fonts (CSP is font-src 'self' — no external @import). */
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('../assets/fonts/hanken-grotesk.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url('../assets/fonts/jetbrains-mono.woff2') format('woff2');
+}
+
 :root {
-  --bg-primary: #000000;
-  --bg-secondary: #0a0a0a;
-  --bg-tertiary: #1a1a1a;
-  --bg-hover: #222222;
-  --text-primary: #e0e0e0;
-  --text-secondary: #a0a0b0;
-  --text-muted: #606070;
-  --accent: #e94560;
-  --accent-dim: #c73e55;
-  --border: #333333;
-  --tab-active: #000000;
-  --tab-inactive: #0a0a0a;
-  --pane-focus: #333333;
-  --pane-unfocus: #333333;
+  /* surfaces — toned cool-slate instead of pure #000 for depth */
+  --bg-primary: #0e0f13;   /* main canvas            */
+  --bg-secondary: #101116; /* sidebar                */
+  --bg-tertiary: #171922;  /* cards / raised panels  */
+  --bg-hover: #1b1d27;
+
+  /* text */
+  --text-primary: #e9eaf1;
+  --text-secondary: #969aac;
+  --text-muted: #5d6172;
+
+  /* accent — iris replaces the generic coral #e94560 */
+  --accent: #8588f2;
+  --accent-dim: #6d70e6;
+  --accent-soft: rgba(133, 136, 242, 0.15); /* tints, active fills */
+  --accent-fg: #ffffff;   /* text/icons on an accent fill */
+  --accent-text: #ffffff;
+
+  /* borders — hairline alpha rather than a solid #333 slab */
+  --border: rgba(255, 255, 255, 0.10);
+  --border-subtle: rgba(255, 255, 255, 0.055); /* inner dividers */
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  /* status / semantic (harmonised with the Studio palette) */
+  --status-working: var(--accent); /* single source of truth for the "working" state */
+  --status-waiting: #f4b400;
+  --status-input: #e67e22;
+  --status-completed: #34a853;
   --bookmark: #e8a317;
-  --color-warning: #f4b400;
+  --color-warning: #e2b65f;
+
+  --tab-active: #0e0f13;
+  --tab-inactive: #101116;
+  --pane-focus: var(--accent);
+  --pane-unfocus: var(--border);
+
+  /* type system — a real UI sans + the mono the app already half-uses */
+  --font-ui: 'Hanken Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+
+  /* radii — softer, consistent */
+  --radius-sm: 7px;
+  --radius-md: 10px;
+  --radius-lg: 13px;
+
   --debug-panel-height: 300px;
 }
 
 [data-theme="dark"] {
-  --bg-primary: #000000;
-  --bg-secondary: #0a0a0a;
-  --bg-tertiary: #1a1a1a;
-  --bg-hover: #222222;
-  --text-primary: #e0e0e0;
-  --text-secondary: #a0a0b0;
-  --text-muted: #606070;
-  --accent: #e94560;
-  --accent-dim: #c73e55;
-  --border: #333333;
-  --tab-active: #000000;
-  --tab-inactive: #0a0a0a;
-  --pane-focus: #333333;
-  --pane-unfocus: #333333;
+  --bg-primary: #0e0f13;
+  --bg-secondary: #101116;
+  --bg-tertiary: #171922;
+  --bg-hover: #1b1d27;
+  --text-primary: #e9eaf1;
+  --text-secondary: #969aac;
+  --text-muted: #5d6172;
+  --accent: #8588f2;
+  --accent-dim: #6d70e6;
+  --accent-soft: rgba(133, 136, 242, 0.15);
+  --accent-fg: #ffffff;
+  --accent-text: #ffffff;
+  --border: rgba(255, 255, 255, 0.10);
+  --border-subtle: rgba(255, 255, 255, 0.055);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --status-working: var(--accent);
+  --status-waiting: #f4b400;
+  --status-input: #e67e22;
+  --status-completed: #34a853;
   --bookmark: #e8a317;
-  --color-warning: #f4b400;
+  --color-warning: #e2b65f;
+  --tab-active: #0e0f13;
+  --tab-inactive: #101116;
+  --pane-focus: var(--accent);
+  --pane-unfocus: var(--border);
 }
 
+/* Light theme — same hues, inverted lightness. */
 [data-theme="light"] {
-  --bg-primary: #fafaf8;
-  --bg-secondary: #f0efe9;
-  --bg-tertiary: #e4e3dd;
-  --bg-hover: #d8d7d1;
-  --text-primary: #2c2c2c;
-  --text-secondary: #6e6d68;
-  --text-muted: #a0a098;
-  --accent: #e94560;
-  --accent-dim: #c73e55;
-  --border: #d8d6d0;
-  --tab-active: #fafaf8;
-  --tab-inactive: #f0efe9;
-  --pane-focus: #b8b5ad;
-  --pane-unfocus: #d8d6d0;
-  --bookmark: #e8a317;
-  --color-warning: #f4b400;
+  --bg-primary: #f7f7fb;
+  --bg-secondary: #f0f1f6;
+  --bg-tertiary: #ffffff;
+  --bg-hover: #e9eaf2;
+  --text-primary: #1c1e26;
+  --text-secondary: #5c6072;
+  --text-muted: #9498aa;
+  --accent: #5a5ee6;
+  --accent-dim: #4a4ed6;
+  --accent-soft: rgba(90, 94, 230, 0.12);
+  --accent-fg: #ffffff;
+  --accent-text: #ffffff;
+  --border: rgba(20, 22, 40, 0.12);
+  --border-subtle: rgba(20, 22, 40, 0.07);
+  --border-strong: rgba(20, 22, 40, 0.20);
+  --status-working: var(--accent);
+  --status-waiting: #f4b400;
+  --status-input: #e67e22;
+  --status-completed: #34a853;
+  --bookmark: #c98a13;
+  --color-warning: #c5912f;
+  --tab-active: #f7f7fb;
+  --tab-inactive: #f0f1f6;
+  --pane-focus: var(--accent);
+  --pane-unfocus: var(--border);
 }
 
 * {
@@ -65,10 +138,46 @@
 html, body {
   height: 100%;
   overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-family: var(--font-ui);
   font-size: 13px;
   color: var(--text-primary);
   background: var(--bg-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* App-wide slim themed scrollbar — replaces the native browser/OS scrollbar
+   everywhere. The thumb is transparent by default and only paints while the
+   scrollable area is hovered, mimicking the macOS overlay auto-hide behaviour.
+   Per-component ::-webkit-scrollbar rules still override this. */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*:hover::-webkit-scrollbar-thumb {
+  background: var(--border);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Paths, costs, branch & git status ride the mono face. */
+.mono,
+.project-path,
+.git-group-header,
+.git-file-badge {
+  font-family: var(--font-mono);
 }
 
 #app {
@@ -91,6 +200,76 @@ body.debug-panel-open #app {
   gap: 12px;
 }
 
+.empty-state-title {
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 700;
+}
+
 .empty-state .hint {
-  font-size: 12px;
+  font-size: 13px;
+}
+
+.empty-state-project {
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+
+.empty-state-cta {
+  margin-top: 4px;
+  padding: 10px 20px;
+  font-size: 14px;
+  border-radius: var(--radius-lg);
+}
+
+/* Shared primary button — canonical look from the kanban "New task" (.board-add-task).
+   .btn-sm / .btn-xs = compact variants for dense card/row contexts. */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-primary:hover:not(:disabled) { background: var(--accent-dim); }
+.btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* Single-class (0,1,0) so a context's geometry class — same specificity, later in
+   source order — still wins for padding/font-size on split-button chevrons. */
+.btn-sm { gap: 4px; padding: 4px 10px; font-size: 12px; border-radius: var(--radius-sm); }
+.btn-xs { gap: 4px; padding: 2px 8px;  font-size: 11px; border-radius: var(--radius-sm); }
+
+/* Shared secondary button — neutral/bordered counterpart to .btn-primary, same box.
+   Normal weight (not 600). Works with the same .btn-sm / .btn-xs modifiers. */
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.btn-secondary:hover:not(:disabled) { background: var(--bg-hover); }
+.btn-secondary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* Danger variant — red text + red-tint hover (absorbs the old .modal-btn.danger
+   and .team-card-btn-danger destructive treatments into one rule). */
+.btn-secondary.danger { color: #ff6b6b; }
+.btn-secondary.danger:hover:not(:disabled) {
+  background: rgba(255, 107, 107, 0.1);
+  border-color: rgba(255, 107, 107, 0.4);
 }

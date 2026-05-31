@@ -14,7 +14,6 @@ const mockState = vi.hoisted(() => ({
       configSections: true,
       gitPanel: true,
       sessionHistory: true,
-      costFooter: true,
       readinessSection: true,
       discussions: true,
     },
@@ -303,5 +302,25 @@ describe('showPreferencesModal theme preference', () => {
 
     expect(selectState.instances.get('pref-theme')?.destroyCount).toBe(1);
     expect(selectState.instances.get('pref-zoom')?.destroyCount).toBe(1);
+  });
+
+  it('lists the Help menu item directly above About', async () => {
+    const { showPreferencesModal } = await import('./preferences-modal.js');
+
+    showPreferencesModal();
+
+    const overlay = getElement('preferences-overlay');
+    const menu = findInTree(overlay, (node) => node.className === 'preferences-menu')!;
+    const order = (menu.children as Record<string, any>[]).map((c) => c.dataset?.section);
+    expect(order.indexOf('help')).toBe(order.indexOf('about') - 1);
+  });
+
+  it('opens directly on the Help section and renders the legend', async () => {
+    const { showPreferencesModal } = await import('./preferences-modal.js');
+
+    showPreferencesModal('help');
+
+    const overlay = getElement('preferences-overlay');
+    expect(findInTree(overlay, (node) => node.className === 'help-container')).not.toBeNull();
   });
 });

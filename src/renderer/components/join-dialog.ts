@@ -70,7 +70,7 @@ export function showJoinDialog(): void {
   answerSection.appendChild(answerTextarea);
 
   const copyAnswerBtn = document.createElement('button');
-  copyAnswerBtn.className = 'share-btn share-btn-secondary';
+  copyAnswerBtn.className = 'btn-secondary share-btn';
   copyAnswerBtn.textContent = 'Copy Response';
   copyAnswerBtn.addEventListener('click', () => {
     navigator.clipboard.writeText(answerTextarea.value);
@@ -85,11 +85,11 @@ export function showJoinDialog(): void {
   actions.className = 'share-actions';
 
   const joinBtn = document.createElement('button');
-  joinBtn.className = 'share-btn';
+  joinBtn.className = 'btn-primary share-btn';
   joinBtn.textContent = 'Join';
 
   const closeBtn = document.createElement('button');
-  closeBtn.className = 'share-btn share-btn-secondary';
+  closeBtn.className = 'btn-secondary share-btn';
   closeBtn.textContent = 'Cancel';
   closeBtn.addEventListener('click', closeJoinDialog);
 

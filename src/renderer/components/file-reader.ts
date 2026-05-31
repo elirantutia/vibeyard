@@ -4,7 +4,7 @@ import { appState } from '../state.js';
 import { closeSessionIfFileMissing } from '../session-close.js';
 import { destroySearchBar } from './search-bar.js';
 import { escapeHtml } from './dom-search-backend.js';
-import { isAbsolutePath } from '../../shared/platform.js';
+import { isAbsolutePath, dirname, samePath } from '../../shared/platform.js';
 import { estimateTokens, TOKEN_COUNT_MAX_CHARS } from '../../shared/token-estimate.js';
 
 interface FileReaderInstance {
@@ -58,7 +58,7 @@ function renderFileContent(content: string): HTMLElement {
 
 export function renderMarkdownContent(content: string): HTMLElement {
   const wrapper = document.createElement('div');
-  wrapper.className = 'file-reader-content file-reader-markdown';
+  wrapper.className = 'file-reader-markdown';
   const rawHtml = marked.parse(content, { async: false }) as string;
   wrapper.innerHTML = DOMPurify.sanitize(rawHtml);
   return wrapper;
@@ -177,10 +177,13 @@ function hideTokenBadge(instance: FileReaderInstance): void {
 
 function ensureFileChangedListener(): void {
   if (unwatchFileChanged) return;
-  unwatchFileChanged = window.vibeyard.fs.onFileChanged((changedPath: string) => {
-    for (const [sessionId, instance] of instances) {
-      if (instance.resolvedPath === changedPath && instance.loaded) {
-        reloadFileReader(sessionId);
+  unwatchFileChanged = window.vibeyard.fs.onFsChange((changes) => {
+    for (const change of changes) {
+      for (const [sessionId, instance] of instances) {
+        if (instance.resolvedPath && samePath(instance.resolvedPath, change.path) && instance.loaded) {
+          // reloadFileReader -> loadFile -> closeSessionIfFileMissing handles deletes.
+          reloadFileReader(sessionId);
+        }
       }
     }
   });
@@ -277,7 +280,7 @@ export function destroyFileReaderPane(sessionId: string): void {
   const instance = instances.get(sessionId);
   if (!instance) return;
   if (instance.resolvedPath) {
-    window.vibeyard.fs.unwatchFile(instance.resolvedPath);
+    window.vibeyard.fs.unwatchDir(dirname(instance.resolvedPath));
   }
   destroySearchBar(sessionId);
   destroyGoToLineBar(sessionId);
@@ -292,12 +295,13 @@ export function showFileReaderPane(sessionId: string, isSplit: boolean): void {
   if (isSplit) instance.element.classList.add('split');
   else instance.element.classList.remove('split');
 
-  // Start watching the file for external changes
+  // Watch the parent directory (not the file inode) so atomic save/replace —
+  // which swaps the inode and would kill a direct file watch — is still caught.
   if (!instance.resolvedPath) {
     const fullPath = resolveFilePath(instance);
     instance.resolvedPath = fullPath;
     ensureFileChangedListener();
-    window.vibeyard.fs.watchFile(fullPath);
+    window.vibeyard.fs.watchDir(dirname(fullPath));
   }
 
   loadFile(instance, sessionId);

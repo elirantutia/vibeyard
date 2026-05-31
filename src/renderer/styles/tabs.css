@@ -89,15 +89,15 @@
 }
 
 .tab-status.waiting {
-  background: #f4b400;
+  background: var(--status-waiting);
 }
 
 .tab-status.completed {
-  background: #34a853;
+  background: var(--status-completed);
 }
 
 .tab-status.input {
-  background: #e67e22;
+  background: var(--status-input);
   animation: pulse 1.2s ease-in-out infinite;
 }
 
@@ -187,8 +187,8 @@
 #tab-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 0 8px;
+  gap: 6px;
+  padding: 0 10px;
 }
 
 .icon-btn {
@@ -211,11 +211,36 @@
   border-color: var(--border);
 }
 
+/* Toolbar icon buttons — soft rounded-square with a borderless highlight on
+   hover/focus (the reference look). Scoped to #tab-actions so the sidebar and
+   github-row .icon-btn users keep their own treatment. */
+#tab-actions .icon-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-md);
+}
+
+#tab-actions .icon-btn svg {
+  width: 19px;
+  height: 19px;
+}
+
+#tab-actions .icon-btn:hover,
+#tab-actions .icon-btn:focus-visible {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border: none;
+  outline: none;
+}
+
+/* CSS-drawn browser-window glyph for the New Browser Tab button — thin 1px
+   strokes, sized to sit alongside the stroke icons. */
 .toolbar-icon {
   position: relative;
   display: block;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   color: currentColor;
 }
 
@@ -229,7 +254,7 @@
   content: '';
   position: absolute;
   left: -1px;
-  top: 3px;
+  top: 4px;
   width: calc(100% + 2px);
   border-top: 1px solid currentColor;
 }
@@ -250,17 +275,39 @@
   align-items: center;
 }
 
-.split-btn-group .split-btn-main {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
+/* "+ New session" pill — a split .btn-primary (main label + caret that opens
+   the custom-session dialog). Geometry-only classes; the accent fill comes
+   from .btn-primary in base.css, which this file overrides (loaded later). */
+.new-session-group {
+  margin-left: 4px;
 }
 
-.split-btn-group .split-btn-caret {
-  width: 16px;
-  font-size: 10px;
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-  margin-left: -1px;
+.new-session-main,
+.new-session-caret {
+  height: 26px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.new-session-main {
+  gap: 8px;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+
+.new-session-main .new-session-icon {
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.new-session-caret {
+  width: 24px;
+  padding: 0;
+  font-size: 11px;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  /* hairline divider between label and caret without breaking the fill */
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.18);
 }
 
 /* Tab context menu */
@@ -276,6 +323,9 @@
 }
 
 .tab-context-menu-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   padding: 6px 14px;
   font-size: 12px;
   color: var(--text-primary);
@@ -296,10 +346,24 @@
   cursor: default;
 }
 
+.tab-context-menu-item.danger {
+  color: #e94560;
+}
+
+.tab-context-menu-item.danger:hover {
+  background: rgba(233, 69, 96, 0.15);
+}
+
 .tab-context-menu-separator {
   height: 1px;
   background: var(--border);
   margin: 4px 0;
+}
+
+.tab-context-menu-item .shortcut-hint {
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-left: 24px;
 }
 
 /* Branch search input */

@@ -14,19 +14,22 @@
   <div id="app">
     <div id="sidebar">
       <div id="sidebar-header">
-        <button id="btn-toggle-sidebar" class="icon-btn" title="Toggle Sidebar (Cmd+B)" style="font-size:13px;">&#x25E7;</button>
-        <span class="sidebar-title">Projects</span>
+        <button id="btn-toggle-sidebar" class="icon-btn" title="Toggle Sidebar (Cmd+B)">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2.4"/><line x1="9" y1="4" x2="9" y2="20"/></svg>
+        </button>
         <div class="sidebar-header-actions">
-          <button id="btn-preferences" class="icon-btn" title="Preferences">&#x2699;</button>
-          <button id="btn-add-project" class="icon-btn" title="New Project (Ctrl+Shift+P)">+</button>
+          <button id="btn-preferences" class="icon-btn" title="Preferences">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+          <button id="btn-add-project" class="icon-btn primary" title="New Project (Ctrl+Shift+P)">
+            <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="3.5" x2="8" y2="12.5"/><line x1="3.5" y1="8" x2="12.5" y2="8"/></svg>
+          </button>
         </div>
       </div>
       <div id="sidebar-content">
         <div id="project-list"></div>
-        <div id="git-panel"></div>
       </div>
       <div id="sidebar-discussions"></div>
-      <div id="sidebar-footer"></div>
     </div>
     <div id="sidebar-resize-handle"></div>
     <div id="main-area">
@@ -34,16 +37,16 @@
         <div id="tab-list"></div>
         <div id="git-status"></div>
         <div id="tab-actions">
-          <button id="btn-help" class="icon-btn" title="Session Indicators Help (F1)" style="font-size:13px;">?</button>
-          <button id="btn-toggle-terminal" class="icon-btn" title="Toggle Terminal (Ctrl+`)" style="font-size:13px;">&#x2588;</button>
-          <button id="btn-add-mcp-inspector" class="icon-btn" title="MCP Inspector" style="font-size:11px;font-weight:600;">MCP</button>
-          <button id="btn-toggle-swarm" class="icon-btn" title="Toggle Swarm Mode (Ctrl+\)">&#x229E;</button>
+          <button id="btn-toggle-terminal" class="icon-btn" title="Toggle Terminal (Ctrl+`)" aria-label="Toggle Terminal"></button>
           <button id="btn-add-browser-tab" class="icon-btn" title="New Browser Tab" aria-label="New Browser Tab">
             <span class="toolbar-icon toolbar-icon-browser" aria-hidden="true"></span>
           </button>
-          <div class="split-btn-group">
-            <button id="btn-add-session" class="icon-btn split-btn-main" title="New Session (Ctrl+Shift+N)">+</button>
-            <button id="btn-add-session-menu" class="icon-btn split-btn-caret" title="More session options" aria-haspopup="menu">&#x25BE;</button>
+          <button id="btn-more" class="icon-btn" title="More" aria-haspopup="menu" aria-label="More"></button>
+          <div class="split-btn-group new-session-group">
+            <button id="btn-add-session" class="btn-primary new-session-main" title="New Session (Ctrl+Shift+N)">
+              <span class="new-session-icon" aria-hidden="true">+</span>New session
+            </button>
+            <button id="btn-add-session-menu" class="btn-primary new-session-caret" title="New Custom Session" aria-label="New Custom Session">&#x25BE;</button>
           </div>
         </div>
       </div>
@@ -70,8 +73,8 @@
       <div id="modal-title"></div>
       <div id="modal-body"></div>
       <div id="modal-actions">
-        <button id="modal-cancel" class="modal-btn">Cancel</button>
-        <button id="modal-confirm" class="modal-btn primary">Create</button>
+        <button id="modal-cancel" class="btn-secondary">Cancel</button>
+        <button id="modal-confirm" class="btn-primary">Create</button>
       </div>
     </div>
   </div>

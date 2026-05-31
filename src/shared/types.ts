@@ -91,6 +91,8 @@ export interface SessionRecord {
   type?: SessionType;
   providerId?: ProviderId;
   args?: string;
+  /** Custom environment variables (raw `KEY=VALUE` lines) injected into the PTY on spawn. */
+  envVars?: string;
   cliSessionId: string | null;
   mcpServerUrl?: string;
   diffFilePath?: string;
@@ -262,6 +264,7 @@ export interface ProjectRecord {
   defaultArgs?: string;
   /** Default profile applied to new sessions in this project (overridden per-session). */
   defaultProfileId?: string;
+  defaultEnv?: string;
   terminalPanelOpen?: boolean;
   terminalPanelHeight?: number;
   readiness?: ReadinessResult;
@@ -354,7 +357,6 @@ export interface Preferences {
   sidebarViews?: {
     gitPanel: boolean;
     sessionHistory: boolean;
-    costFooter: boolean;
     discussions: boolean;
     fileTree: boolean;
   };
@@ -597,6 +599,17 @@ export interface StatsCache {
 }
 
 // --- Filesystem IPC ---
+
+/** A single filesystem change emitted by the directory watcher (chokidar-backed). */
+export type FsChangeType = 'add' | 'addDir' | 'change' | 'unlink' | 'unlinkDir';
+
+export interface FsChange {
+  /** Absolute path of the entry that changed. */
+  path: string;
+  /** Absolute path of the parent directory (the watched dir the change belongs to). */
+  dir: string;
+  type: FsChangeType;
+}
 
 export type ReadFileResult =
   | { ok: true; content: string }

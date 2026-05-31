@@ -12,6 +12,16 @@ vi.mock('child_process', () => ({
   execFile: vi.fn(),
 }));
 
+// Mutable platform flag so tests can exercise the recursive (macOS/Windows) vs
+// per-dir BFS (Linux) working-tree branch. Getters keep the live `import { isLinux }`
+// binding in git-watcher in sync with reassignments.
+const platform = vi.hoisted(() => ({ isLinux: false }));
+vi.mock('./platform', () => ({
+  get isLinux() { return platform.isLinux; },
+  get isMac() { return !platform.isLinux; },
+  get isWin() { return false; },
+}));
+
 import * as fs from 'fs';
 import { execFile } from 'child_process';
 import * as path from 'path';
@@ -85,6 +95,7 @@ function makeWin() {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.useFakeTimers();
+  platform.isLinux = false; // default to the recursive (macOS/Windows) branch
 });
 
 afterEach(() => {
@@ -93,7 +104,8 @@ afterEach(() => {
 });
 
 describe('startGitWatcher', () => {
-  it('never passes { recursive: true } to fs.watch', async () => {
+  it('(Linux) never passes { recursive: true } to fs.watch', async () => {
+    platform.isLinux = true;
     const root = path.join('/proj');
     installTree({ [root]: [] });
     installWatch();
@@ -110,7 +122,8 @@ describe('startGitWatcher', () => {
     }
   });
 
-  it('does not descend into ignored directories', async () => {
+  it('(Linux) does not descend into ignored directories', async () => {
+    platform.isLinux = true;
     const root = path.join('/proj');
     const tree: Tree = {
       [root]: ['src', 'node_modules', '.venv', '.git', 'target', '__pycache__', 'lib'],
@@ -145,7 +158,8 @@ describe('startGitWatcher', () => {
     expect(mockReaddirSync).not.toHaveBeenCalledWith(path.join(root, '.git'), expect.anything());
   });
 
-  it('caps the number of working-tree watches', async () => {
+  it('(Linux) caps the number of working-tree watches', async () => {
+    platform.isLinux = true;
     const root = path.join('/proj');
     // Build a fan-out tree with > MAX_WATCHES (2000) total dirs
     const tree: Tree = { [root]: [] };
@@ -252,6 +266,61 @@ describe('startGitWatcher', () => {
     // Second call with the same path is a no-op (no extra watchers, no extra git rev-parse)
     await startGitWatcher(win as never, root);
     expect(mockWatch.mock.calls.length).toBe(firstCallCount);
+  });
+});
+
+describe('startGitWatcher (macOS/Windows recursive working tree)', () => {
+  it('uses a single recursive watch for the working tree (no BFS walk)', async () => {
+    const root = path.join('/proj');
+    installTree({ [root]: ['src', 'lib'] }); // would be walked on Linux; must be ignored here
+    installWatch();
+    stubGitRevParse(path.join(root, '.git'));
+
+    await startGitWatcher(makeWin() as never, root);
+
+    const rootCalls = mockWatch.mock.calls.filter((c) => String(c[0]) === root);
+    expect(rootCalls.length).toBe(1);
+    const opts = rootCalls[0][1] as { recursive?: boolean };
+    expect(opts.recursive).toBe(true);
+    // No per-dir BFS: the tree is never read, and subdirs are never watched.
+    expect(mockReaddirSync).not.toHaveBeenCalled();
+    expect(mockWatch.mock.calls.map((c) => String(c[0]))).not.toContain(path.join(root, 'src'));
+  });
+
+  it('filters ignored segments, notifies on tracked paths and on null (coalesced)', async () => {
+    const root = path.join('/proj');
+    installTree({ [root]: [] });
+    const watchers = installWatch();
+    stubGitRevParse(path.join(root, '.git'));
+
+    const win = makeWin();
+    await startGitWatcher(win as never, root);
+    const tree = watchers.find((w) => w.path === root)!;
+
+    tree.listener('change', path.join('node_modules', 'foo.js'));
+    vi.advanceTimersByTime(300);
+    expect(win.webContents.send).not.toHaveBeenCalled();
+
+    tree.listener('change', path.join('src', 'app.ts'));
+    vi.advanceTimersByTime(300);
+    expect(win.webContents.send).toHaveBeenCalledWith('git:changed');
+
+    (win.webContents.send as ReturnType<typeof vi.fn>).mockClear();
+    tree.listener('change', null as never); // OS coalesced — notify conservatively
+    vi.advanceTimersByTime(300);
+    expect(win.webContents.send).toHaveBeenCalledWith('git:changed');
+  });
+
+  it('closes the recursive handle on stop', async () => {
+    const root = path.join('/proj');
+    installTree({ [root]: [] });
+    const watchers = installWatch();
+    stubGitRevParse(path.join(root, '.git'));
+
+    await startGitWatcher(makeWin() as never, root);
+    stopGitWatcher();
+
+    for (const w of watchers) expect(w.close).toHaveBeenCalled();
   });
 });
 

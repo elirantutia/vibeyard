@@ -54,12 +54,12 @@ export function createProjectTabPane(sessionId: string, projectId: string): void
   toolbar.className = 'project-tab-toolbar';
 
   const addBtn = document.createElement('button');
-  addBtn.className = 'project-tab-toolbar-btn';
+  addBtn.className = 'btn-secondary btn-sm project-tab-toolbar-btn';
   addBtn.textContent = '+ Add Widget';
   toolbar.appendChild(addBtn);
 
   const editBtn = document.createElement('button');
-  editBtn.className = 'project-tab-toolbar-btn project-tab-edit-btn';
+  editBtn.className = 'btn-secondary btn-sm project-tab-toolbar-btn';
   editBtn.textContent = 'Edit layout';
   editBtn.title = 'Toggle drag and resize';
   toolbar.appendChild(editBtn);

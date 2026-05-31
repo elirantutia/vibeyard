@@ -37,12 +37,12 @@ function buildTeamShell(): HTMLElement {
   actions.className = 'team-header-actions';
 
   const browseBtn = document.createElement('button');
-  browseBtn.className = 'team-header-btn';
+  browseBtn.className = 'btn-secondary btn-sm';
   browseBtn.textContent = 'Browse';
   browseBtn.addEventListener('click', () => { void showPredefinedPicker(); });
 
   const addBtn = document.createElement('button');
-  addBtn.className = 'team-header-btn team-header-btn-primary';
+  addBtn.className = 'btn-primary btn-sm';
   addBtn.textContent = '+ New member';
   addBtn.addEventListener('click', () => showTeamMemberModal('create'));
 

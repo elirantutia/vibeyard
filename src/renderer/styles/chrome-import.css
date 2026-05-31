@@ -134,14 +134,6 @@
   margin-top: 12px;
 }
 
-.modal-btn.danger {
-  color: #ff6b6b;
-}
-
-.modal-btn.danger:hover:not(:disabled) {
-  background: rgba(255, 107, 107, 0.1);
-}
-
 /* Browser tab toolbar additions */
 .browser-isolation-btn,
 .browser-import-btn {

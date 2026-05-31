@@ -1,6 +1,6 @@
 /* Sidebar */
 #sidebar {
-  width: 200px;
+  width: 264px;
   min-width: 150px;
   max-width: 500px;
   background: var(--bg-secondary);
@@ -26,63 +26,168 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-  gap: 8px;
-}
-
-.sidebar-title {
-  font-weight: 600;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary);
-  flex: 1;
-  min-width: 0;
+  padding: 16px 16px 12px;
+  gap: 10px;
 }
 
 .sidebar-header-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
 }
 
+#sidebar-header .icon-btn svg {
+  display: block;
+}
+
+/* Primary header action (the + new-project button) — accent-tinted pill. */
+#sidebar-header .icon-btn.primary {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: var(--radius-sm);
+}
+
+#sidebar-header .icon-btn.primary:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+  filter: brightness(1.15);
+}
+
+/* Preferences gear — borderless rounded-square with a soft fill on hover
+   (matches the toolbar reference look and the adjacent + button's radius). */
+#sidebar-header .icon-btn:not(.primary) {
+  border: none;
+  border-radius: var(--radius-sm);
+}
+
+#sidebar-header .icon-btn:not(.primary):hover,
+#sidebar-header .icon-btn:not(.primary):focus-visible {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border: none;
+  outline: none;
+}
+
+/* Collapsed rail — a 58px vertical strip: expand button, divider, active
+   project avatar, nav icons, then Discussions pinned to the bottom. */
 #sidebar.collapsed {
-  width: 44px !important;
-  min-width: 44px;
-  max-width: 44px;
+  width: 58px !important;
+  min-width: 58px;
+  max-width: 58px;
 }
 
-#sidebar.collapsed .sidebar-title,
 #sidebar.collapsed .sidebar-header-actions,
-#sidebar.collapsed #sidebar-footer,
+#sidebar.collapsed .sidebar-section-label,
 #sidebar.collapsed #git-panel,
-#sidebar.collapsed .project-item,
+#sidebar.collapsed .project-row:not(.active),
+#sidebar.collapsed .project-main,
+#sidebar.collapsed .project-session-count,
+#sidebar.collapsed .project-delete,
 #sidebar.collapsed .project-panel,
 #sidebar.collapsed .project-action-btn.panel-toggle {
   display: none;
 }
 
+#sidebar.collapsed #project-list {
+  padding: 7px 6px;
+}
+
+/* Short centered divider between the expand button and the avatar (the mock's
+   `.rdiv`) — drawn as a pseudo-element to avoid touching the markup. */
+#sidebar.collapsed #project-list::before {
+  content: '';
+  display: block;
+  width: 26px;
+  height: 1px;
+  background: var(--border);
+  margin: 2px auto 12px;
+}
+
+/* Flatten the active-project card in collapsed mode — only the avatar + icon
+   stack show. */
+#sidebar.collapsed .project-row.active {
+  margin: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+
+#sidebar.collapsed .project-item {
+  padding: 0;
+  background: transparent;
+  justify-content: center;
+}
+
+/* Project avatar — the mock's `.rav`: gradient tile with a soft purple glow. */
+#sidebar.collapsed .project-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  background: linear-gradient(160deg, var(--accent), var(--accent-dim));
+  font-size: 18px;
+  box-shadow: 0 6px 18px -4px rgba(133, 136, 242, 0.45);
+  margin: 0 auto;
+}
+
 #sidebar.collapsed #sidebar-header {
   border-bottom: none;
-  padding: 10px 6px;
+  padding: 10px 0 4px;
   justify-content: center;
+}
+
+/* Rail buttons (the mock's `.rbtn`): expand button, nav icons, Discussions —
+   shared 44px hit area, muted icon, hover lift. */
+#sidebar.collapsed #btn-toggle-sidebar,
+#sidebar.collapsed .project-action-btn,
+#sidebar.collapsed #sidebar-discussions {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#sidebar.collapsed #btn-toggle-sidebar:hover,
+#sidebar.collapsed .project-action-btn:hover,
+#sidebar.collapsed #sidebar-discussions:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* The rail reuses the compact 14px sidebar icons — scale them up to fill the
+   larger rail buttons. */
+#sidebar.collapsed #btn-toggle-sidebar svg,
+#sidebar.collapsed .project-action-btn .action-icon svg,
+#sidebar.collapsed #sidebar-discussions .action-icon svg {
+  width: 22px;
+  height: 22px;
 }
 
 #sidebar.collapsed .project-actions {
   flex-direction: column;
-  gap: 4px;
-  padding: 6px 4px;
-  align-items: stretch;
+  gap: 8px;
+  margin: 0;
+  padding: 4px 0;
+  background: transparent;
+  align-items: center;
 }
 
 #sidebar.collapsed .project-action-btn {
   flex: 0 0 auto;
-  height: 32px;
   padding: 0;
-  justify-content: center;
-  display: flex;
-  align-items: center;
+}
+
+/* Active nav button uses a soft accent tint in the rail (`.rbtn.on`), not the
+   solid accent the expanded sidebar uses. */
+#sidebar.collapsed .project-action-btn.active,
+#sidebar.collapsed .project-action-btn.active:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: none;
 }
 
 #sidebar.collapsed .project-action-btn .action-label {
@@ -93,11 +198,12 @@
   display: flex;
 }
 
+/* Discussions — pinned to the bottom by #sidebar-content's flex:1 (footer hidden). */
 #sidebar.collapsed #sidebar-discussions {
-  padding: 8px 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  margin: 6px auto;
+  padding: 0;
+  background: transparent;
+  border: none;
 }
 
 #sidebar.collapsed #sidebar-discussions .discussions-text {
@@ -109,28 +215,27 @@
   position: relative;
 }
 
+/* Unread dot (the mock's `.rdot`) — base .discussions-icon-dot already supplies
+   position/color/radius; the rail just drops the ring and bumps the size. */
+#sidebar.collapsed .discussions-icon-dot {
+  width: 8px;
+  height: 8px;
+  border: none;
+}
+
 #sidebar-content {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
 }
 
-#sidebar-footer {
-  border-top: 1px solid var(--border);
-  padding: 6px 12px;
-  font-size: 11px;
-  color: var(--text-secondary);
-  user-select: none;
-  flex-shrink: 0;
-}
-
-#sidebar-footer.hidden {
-  display: none;
-}
-
+/* Discussions card. */
 #sidebar-discussions {
-  border-top: 1px solid var(--border);
-  padding: 10px 12px;
+  margin: 4px 12px 8px;
+  padding: 13px 14px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -144,30 +249,29 @@
 }
 
 #sidebar-discussions .discussions-title {
-  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 
 #sidebar-discussions .discussions-badge {
   display: inline-block;
   background: var(--accent);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 600;
+  color: var(--accent-fg);
+  font-size: 10.5px;
+  font-weight: 700;
   min-width: 16px;
-  height: 16px;
-  line-height: 16px;
   text-align: center;
-  border-radius: 8px;
-  padding: 0 4px;
-  margin-left: 4px;
-  vertical-align: middle;
+  border-radius: 20px;
+  padding: 1px 7px;
 }
 
 #sidebar-discussions .discussions-desc {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--text-muted);
 }
 
@@ -183,41 +287,121 @@
 }
 
 #project-list {
-  padding: 4px 0;
+  padding: 4px 10px 8px;
 }
 
+/* Section divider label (e.g. "All projects"). */
+.sidebar-section-label {
+  padding: 14px 6px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Inactive project = compact row. */
 .project-item {
-  padding: 8px 12px;
+  position: relative;
+  margin-top: 2px;
+  padding: 9px 10px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: var(--bg-tertiary);
+  gap: 11px;
   color: var(--text-secondary);
   font-size: 13px;
-  border-top: 1px solid var(--border);
-  border-left: 3px solid transparent;
-}
-
-.project-row:first-child .project-item {
-  border-top: none;
+  border-radius: var(--radius-md);
 }
 
 .project-item:hover {
   background: var(--bg-hover);
 }
 
+/* Active project = card. The whole row wrapper becomes the card so the header,
+   the segmented tabs, and any open panel read as one surface. */
+.project-row.active {
+  margin: 6px 0 2px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 10px 30px -18px rgba(0, 0, 0, 0.9),
+    inset 0 1px 0 0 color-mix(in srgb, var(--text-primary) 4%, transparent);
+  overflow: hidden;
+}
+
 .project-item.active {
+  margin-top: 0;
+  padding: 14px 14px 12px;
+  gap: 9px;
   color: var(--text-primary);
-  border-left-color: var(--accent);
+  background: transparent;
+  cursor: default;
+}
+
+.project-item.active:hover {
+  background: transparent;
+}
+
+/* Avatar initial for the active project. */
+.project-avatar {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+  color: var(--accent-fg);
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* Aggregate session status dot on inactive rows. */
+.project-status {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.project-status.working {
+  background: var(--status-working);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-working) 15%, transparent);
+}
+
+.project-status.waiting {
+  background: var(--status-waiting);
+}
+
+.project-status.input {
+  background: var(--status-input);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-input) 15%, transparent);
+}
+
+.project-status.completed {
+  background: var(--status-completed);
+}
+
+.project-main {
+  flex: 1;
+  min-width: 0;
 }
 
 .project-item .project-name {
-  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 600;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.project-item.active .project-name {
+  font-weight: 700;
 }
 
 .project-item .project-name.unread {
@@ -227,7 +411,7 @@
 .project-item .project-name input {
   background: transparent;
   border: 1px solid var(--accent);
-  border-radius: 2px;
+  border-radius: 4px;
   color: inherit;
   font: inherit;
   padding: 0 2px;
@@ -237,18 +421,29 @@
 }
 
 .project-item .project-path {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  opacity: 0.85;
   font-weight: 400;
 }
 
+/* Session-count pill on inactive rows. */
 .project-session-count {
-  opacity: 0.6;
-  font-size: 0.85em;
+  flex-shrink: 0;
+  min-width: 20px;
+  padding: 2px 7px;
+  border-radius: 20px;
+  background: var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.project-item.active .project-session-count {
+  display: none;
 }
 
 .project-item.dragging {
@@ -279,26 +474,52 @@
   color: var(--accent);
 }
 
+/* Segmented icon-only tab control inside the active card. */
 .project-actions {
   display: flex;
   gap: 4px;
-  padding: 4px 12px 6px;
+  padding: 4px;
+  margin: 0 14px 14px;
+  background: var(--border-subtle);
+  border-radius: var(--radius-md);
 }
 
 .project-action-btn {
+  position: relative;
   flex: 1;
   min-width: 0;
-  padding: 4px 6px;
-  font-size: 11px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   font-family: inherit;
   background: transparent;
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-  border-radius: 3px;
+  color: var(--text-secondary);
+  border: none;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+/* Change-count pill overlaid on the Git tab for passive awareness. */
+.project-action-badge {
+  position: absolute;
+  top: 1px;
+  right: 4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+}
+
+.project-action-badge.hidden {
+  display: none;
 }
 
 .action-icon {
@@ -315,6 +536,23 @@
   display: block;
 }
 
+/* Labels are hidden in the segmented control — icons carry the meaning, with a
+   hover-card tooltip per button. */
+.project-action-btn .action-icon {
+  display: flex;
+  width: 18px;
+  height: 18px;
+}
+
+.project-action-btn .action-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.project-action-btn .action-label {
+  display: none;
+}
+
 .action-label {
   display: inline-block;
   overflow: hidden;
@@ -326,28 +564,19 @@
 
 .project-action-btn:hover {
   color: var(--text-primary);
-  border-color: var(--border-strong, var(--border));
   background: var(--bg-hover);
 }
 
-.project-action-btn.active {
-  color: var(--accent);
-  border-color: var(--accent-dim);
-  background: var(--bg-hover);
-}
-
-.project-action-btn.has-readiness {
-  background-color: color-mix(in srgb, var(--readiness-color) 15%, transparent);
-  border-color: color-mix(in srgb, var(--readiness-color) 50%, transparent);
-}
-
-.project-action-btn.has-readiness:hover {
-  background-color: color-mix(in srgb, var(--readiness-color) 25%, transparent);
+.project-action-btn.active,
+.project-action-btn.active:hover {
+  color: var(--accent-fg);
+  background: var(--accent);
+  box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 .project-panel {
-  background: var(--bg-secondary);
-  border-left: 3px solid transparent;
+  background: transparent;
+  margin: 0 6px 8px;
 }
 
 .project-panel.hidden {
@@ -355,6 +584,10 @@
 }
 
 .project-panel-history {
+  padding-bottom: 4px;
+}
+
+.project-panel-git {
   padding-bottom: 4px;
 }
 
@@ -381,7 +614,7 @@
   background: var(--accent);
   border: none;
   border-radius: 4px;
-  color: white;
+  color: var(--accent-fg);
   font-size: 12px;
   cursor: pointer;
   font-weight: 600;

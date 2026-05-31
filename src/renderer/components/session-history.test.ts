@@ -138,14 +138,25 @@ class FakeElement {
     return child;
   }
 
+  remove(): void {
+    const parent = this.parentNode;
+    if (!parent) return;
+    parent.children = parent.children.filter(c => c !== this);
+    this.parentNode = null;
+  }
+
   addEventListener(event: string, cb: () => void): void {
     const existing = this.listeners.get(event) ?? [];
     existing.push(cb);
     this.listeners.set(event, existing);
   }
 
-  dispatch(event: string): void {
-    for (const cb of this.listeners.get(event) ?? []) cb();
+  dispatch(event: string, payload?: unknown): void {
+    for (const cb of this.listeners.get(event) ?? []) (cb as (e?: unknown) => void)(payload);
+  }
+
+  getBoundingClientRect(): { right: number; bottom: number; width: number; height: number } {
+    return { right: 0, bottom: 0, width: 0, height: 0 };
   }
 
   querySelector(selector: string): FakeElement | null {
@@ -242,6 +253,33 @@ describe('renderSessionHistory', () => {
     expect(container.querySelector('.history-search')).not.toBeNull();
     expect(container.querySelector('.history-bookmark-filter')).not.toBeNull();
     expect(container.querySelector('.history-clear-btn')).not.toBeNull();
+  });
+
+  it('does not render a per-row remove button', async () => {
+    const container = await renderHistory();
+    expect(container.querySelector('.history-item')).not.toBeNull();
+    expect(container.querySelector('.history-remove-btn')).toBeNull();
+  });
+
+  it('offers Remove from history in the right-click menu which removes the entry', async () => {
+    vi.resetModules();
+    const doc = new FakeDocument();
+    const container = doc.createElement('div');
+    vi.stubGlobal('document', doc);
+    vi.stubGlobal('window', { innerWidth: 1000, innerHeight: 800 });
+
+    const { renderSessionHistory } = await import('./session-history.js');
+    renderSessionHistory(mockAppState.activeProject as never, container as never);
+
+    const item = container.querySelector('.history-item');
+    expect(item).not.toBeNull();
+    item!.dispatch('contextmenu', { preventDefault() {}, stopPropagation() {}, clientX: 10, clientY: 10 });
+
+    const removeItem = doc.body.querySelector('.danger');
+    expect(removeItem?.textContent).toBe('Remove from history');
+
+    removeItem!.dispatch('click', { stopPropagation() {} });
+    expect(mockAppState.removeHistoryEntry).toHaveBeenCalledWith('p1', 'h1');
   });
 
   it('isolates panel instances so closing one key keeps the other live', async () => {

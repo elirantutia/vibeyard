@@ -1,12 +1,12 @@
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron';
-import type { CostData, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, ToolFailureData, SettingsWarningData, SettingsValidationResult, StatusLineConflictData, InspectorEvent, ProviderConfig, ReadFileResult, FileStatResult, TopFilesResult, DeepSearchResult, GithubFetchResult, GithubRepo, ChromeProfile, ChromeImportOptions, ChromeImportProgress, ChromeImportResult } from '../shared/types';
+import type { CostData, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, ToolFailureData, SettingsWarningData, SettingsValidationResult, StatusLineConflictData, InspectorEvent, ProviderConfig, ReadFileResult, FileStatResult, TopFilesResult, FsChange, DeepSearchResult, GithubFetchResult, GithubRepo, ChromeProfile, ChromeImportOptions, ChromeImportProgress, ChromeImportResult } from '../shared/types';
 import { ZOOM_MIN, ZOOM_MAX } from '../shared/types';
 
 export type { CostData } from '../shared/types';
 
 export interface VibeyardApi {
   pty: {
-    create(sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs?: string, providerId?: ProviderId, initialPrompt?: string, systemPrompt?: string, configDir?: string): Promise<void>;
+    create(sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs?: string, providerId?: ProviderId, initialPrompt?: string, systemPrompt?: string, envVars?: string, configDir?: string): Promise<void>;
     createShell(sessionId: string, cwd: string): Promise<void>;
     write(sessionId: string, data: string): void;
     resize(sessionId: string, cols: number, rows: number): void;
@@ -39,9 +39,9 @@ export interface VibeyardApi {
     stat(filePath: string): Promise<FileStatResult>;
     readImage(filePath: string): Promise<{ dataUrl: string } | null>;
     trashItem(filePath: string): Promise<{ ok: boolean; error?: string }>;
-    watchFile(filePath: string): void;
-    unwatchFile(filePath: string): void;
-    onFileChanged(callback: (filePath: string) => void): () => void;
+    watchDir(dirPath: string): void;
+    unwatchDir(dirPath: string): void;
+    onFsChange(callback: (changes: FsChange[]) => void): () => void;
     getDroppedFilePath(file: File): string;
   };
   store: {
@@ -167,8 +167,8 @@ function onChannel(channel: string, callback: (...args: unknown[]) => void): () 
 
 const api: VibeyardApi = {
   pty: {
-    create: (sessionId, cwd, cliSessionId, isResume, extraArgs, providerId, initialPrompt, systemPrompt, configDir) =>
-      ipcRenderer.invoke('pty:create', sessionId, cwd, cliSessionId, isResume, extraArgs || '', providerId || 'claude', initialPrompt, systemPrompt, configDir),
+    create: (sessionId, cwd, cliSessionId, isResume, extraArgs, providerId, initialPrompt, systemPrompt, envVars, configDir) =>
+      ipcRenderer.invoke('pty:create', sessionId, cwd, cliSessionId, isResume, extraArgs || '', providerId || 'claude', initialPrompt, systemPrompt, envVars || '', configDir),
     createShell: (sessionId, cwd) =>
       ipcRenderer.invoke('pty:createShell', sessionId, cwd),
     write: (sessionId, data) =>
@@ -222,9 +222,9 @@ const api: VibeyardApi = {
     stat: (filePath: string) => ipcRenderer.invoke('fs:stat', filePath),
     readImage: (filePath: string) => ipcRenderer.invoke('fs:readImage', filePath),
     trashItem: (filePath: string) => ipcRenderer.invoke('fs:trashItem', filePath),
-    watchFile: (filePath: string) => ipcRenderer.send('fs:watchFile', filePath),
-    unwatchFile: (filePath: string) => ipcRenderer.send('fs:unwatchFile', filePath),
-    onFileChanged: (callback: (filePath: string) => void) => onChannel('fs:fileChanged', (filePath) => callback(filePath as string)),
+    watchDir: (dirPath: string) => ipcRenderer.send('fs:watchDir', dirPath),
+    unwatchDir: (dirPath: string) => ipcRenderer.send('fs:unwatchDir', dirPath),
+    onFsChange: (callback: (changes: FsChange[]) => void) => onChannel('fs:changed', (changes) => callback(changes as FsChange[])),
     getDroppedFilePath: (file: File) => webUtils.getPathForFile(file),
   },
   provider: {

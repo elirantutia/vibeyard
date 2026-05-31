@@ -169,7 +169,7 @@ function createPanel(): HTMLElement {
 
   const title = document.createElement('div');
   title.className = 'inspector-title';
-  title.textContent = 'Session Inspector';
+  title.textContent = 'Inspector';
   header.appendChild(title);
 
   const closeBtn = document.createElement('button');

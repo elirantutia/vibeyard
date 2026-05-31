@@ -1,7 +1,7 @@
 /* Session History */
 .history-search {
-  width: calc(100% - 32px);
-  margin: 4px 12px 4px 20px;
+  width: calc(100% - 16px);
+  margin: 4px 8px;
   padding: 4px 8px;
   font-size: 12px;
   background: var(--bg-tertiary);
@@ -42,7 +42,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 12px 4px 20px;
+  padding: 4px 8px;
   cursor: default;
 }
 
@@ -73,32 +73,6 @@
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
-}
-
-.history-remove-btn {
-  flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  font-size: 13px;
-  line-height: 18px;
-  text-align: center;
-  background: transparent;
-  color: var(--text-dim);
-  border: none;
-  border-radius: 3px;
-  cursor: pointer;
-  font-family: inherit;
-  opacity: 0;
-}
-
-.history-item:hover .history-remove-btn {
-  opacity: 1;
-}
-
-.history-remove-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--text);
 }
 
 .history-bookmark-btn {
@@ -135,7 +109,7 @@
 .history-actions {
   display: flex;
   gap: 6px;
-  padding: 2px 12px 4px 20px;
+  padding: 2px 8px 4px;
 }
 
 .history-bookmark-filter {
@@ -161,10 +135,36 @@
 }
 
 .history-empty {
-  padding: 8px 12px 8px 20px;
+  padding: 8px;
   font-size: 11px;
   color: var(--text-dim);
   font-style: italic;
+}
+
+/* Sidebar panel size overrides — scoped to .project-panel-history so the
+   full-screen session-search dialog keeps its own sizing. */
+.project-panel-history .history-search {
+  font-size: 13px;
+}
+
+.project-panel-history .history-item-name {
+  font-size: 13px;
+}
+
+.project-panel-history .history-item-details {
+  font-size: 12px;
+}
+
+.project-panel-history .history-clear-btn,
+.project-panel-history .history-bookmark-filter {
+  font-size: 12px;
+}
+
+.project-panel-history .history-bookmark-btn {
+  width: 20px;
+  height: 20px;
+  font-size: 14px;
+  line-height: 20px;
 }
 
 .session-history-dialog {
@@ -200,7 +200,6 @@
   padding: 8px 0;
 }
 
-.session-history-dialog .history-bookmark-btn,
-.session-history-dialog .history-remove-btn {
+.session-history-dialog .history-bookmark-btn {
   opacity: 1;
 }

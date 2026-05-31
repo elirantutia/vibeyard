@@ -119,7 +119,7 @@ function buildCard(member: TeamMember, projectId: string): HTMLElement {
   actions.appendChild(buildChatControl(projectId, member));
 
   const sessionsBtn = document.createElement('button');
-  sessionsBtn.className = 'widget-team-card-btn';
+  sessionsBtn.className = 'btn-secondary btn-sm widget-team-card-btn';
   sessionsBtn.textContent = 'Sessions';
   sessionsBtn.addEventListener('click', () => showMemberSessionsModal(member, projectId));
   actions.appendChild(sessionsBtn);
@@ -133,7 +133,7 @@ function buildChatControl(projectId: string, member: TeamMember): HTMLElement {
   const teamProviders = getTeamChatProviderMetas();
 
   const chatBtn = document.createElement('button');
-  chatBtn.className = 'widget-team-card-btn widget-team-card-btn-primary';
+  chatBtn.className = 'btn-primary btn-sm';
   chatBtn.textContent = 'Chat';
 
   if (teamProviders.length === 0) {
@@ -151,7 +151,7 @@ function buildChatControl(projectId: string, member: TeamMember): HTMLElement {
   chatBtn.classList.add('widget-team-card-chat-main');
 
   const chevronBtn = document.createElement('button');
-  chevronBtn.className = 'widget-team-card-btn widget-team-card-btn-primary widget-team-card-chat-dropdown';
+  chevronBtn.className = 'btn-primary btn-sm widget-team-card-chat-dropdown';
   chevronBtn.setAttribute('aria-label', 'Chat with another provider');
   chevronBtn.setAttribute('aria-haspopup', 'menu');
   chevronBtn.textContent = '▼';

@@ -17,6 +17,9 @@ import { onChange as onCostChange, getCost } from '../../session-cost.js';
 import { onChange as onContextChange, getContext } from '../../session-context.js';
 import { STATUS_LABELS, updateMetricsRow } from './board-card.js';
 
+const svgIcon = (inner: string): string =>
+  `<svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
+
 let boardEl: HTMLElement | null = null;
 let pendingRender = false;
 let offDragEnd: (() => void) | null = null;
@@ -97,13 +100,41 @@ export function createBoardView(): HTMLElement {
   titleGroup.appendChild(title);
   titleGroup.appendChild(helpBtn);
 
+  const actions = document.createElement('div');
+  actions.className = 'board-header-actions';
+
+  // Search box (rounded, with magnifier icon)
+  const searchWrap = document.createElement('div');
+  searchWrap.className = 'board-search';
+
+  const searchIcon = document.createElement('span');
+  searchIcon.className = 'board-search-icon';
+  searchIcon.innerHTML = svgIcon('<circle cx="6" cy="6" r="4.25"/><line x1="9.25" y1="9.25" x2="12.5" y2="12.5"/>');
+
+  const searchInput = document.createElement('input');
+  searchInput.className = 'board-search-input';
+  searchInput.placeholder = 'Search tasks';
+  searchInput.value = getSearchQuery();
+
+  let searchDebounce: ReturnType<typeof setTimeout>;
+  searchInput.addEventListener('input', () => {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => setSearchQuery(searchInput.value), 150);
+  });
+
+  searchWrap.appendChild(searchIcon);
+  searchWrap.appendChild(searchInput);
+
   const addBtn = document.createElement('button');
-  addBtn.className = 'board-add-task';
-  addBtn.textContent = '+ Add Task';
+  addBtn.className = 'btn-primary';
+  addBtn.innerHTML = `${svgIcon('<line x1="7" y1="2.5" x2="7" y2="11.5"/><line x1="2.5" y1="7" x2="11.5" y2="7"/>')}<span>New task</span>`;
   addBtn.addEventListener('click', () => showTaskModal('create'));
 
+  actions.appendChild(searchWrap);
+  actions.appendChild(addBtn);
+
   header.appendChild(titleGroup);
-  header.appendChild(addBtn);
+  header.appendChild(actions);
 
   const tagRow = document.createElement('div');
   tagRow.className = 'board-tag-row';
@@ -148,8 +179,7 @@ export function renderBoard(target?: HTMLElement): void {
   columnsContainer.innerHTML = '';
 
   const tagRow = boardEl.querySelector('#board-tag-row') as HTMLElement;
-  const searchFocused = tagRow?.querySelector('.board-search-input') === document.activeElement;
-  if (tagRow && !searchFocused) renderTagRow(tagRow, board);
+  if (tagRow) renderTagRow(tagRow, board);
 
   const sortedColumns = [...board.columns].sort((a, b) => a.order - b.order);
   const tasks = board.tasks;
@@ -196,29 +226,11 @@ function renderTagRow(container: HTMLElement, board: BoardData): void {
   container.innerHTML = '';
   container.style.display = '';
 
-  // Search input
-  const searchInput = document.createElement('input');
-  searchInput.className = 'board-search-input';
-  searchInput.placeholder = '\u{1F50D} Search tasks...';
-  searchInput.value = getSearchQuery();
-
-  let debounceTimer: ReturnType<typeof setTimeout>;
-  searchInput.addEventListener('input', () => {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => setSearchQuery(searchInput.value), 150);
-  });
-
-  container.appendChild(searchInput);
-
-  // Separator + tags (only if tags exist)
+  // Tags (only if tags exist)
   if (board.tags && board.tags.length > 0) {
-    const sep = document.createElement('div');
-    sep.className = 'board-filter-separator';
-    container.appendChild(sep);
-
     const label = document.createElement('span');
     label.className = 'board-tag-row-label';
-    label.textContent = 'Tags';
+    label.textContent = 'Filter';
     container.appendChild(label);
 
     const pillsContainer = document.createElement('div');

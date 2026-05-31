@@ -16,8 +16,8 @@ function getOverlay(): HTMLElement {
       <div class="modal-title">Add MCP Server</div>
       <div id="mcp-add-body" class="modal-body mcp-add-body"></div>
       <div class="modal-actions">
-        <button id="mcp-add-cancel" class="modal-btn">Cancel</button>
-        <button id="mcp-add-confirm" class="modal-btn primary">Add</button>
+        <button id="mcp-add-cancel" class="btn-secondary">Cancel</button>
+        <button id="mcp-add-confirm" class="btn-primary">Add</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);

@@ -13,6 +13,7 @@ import { appState } from '../state.js';
 import { FilePathLinkProvider, GithubLinkProvider } from './terminal-link-provider.js';
 import { attachClipboardCopyHandler, attachCopyOnSelect, loadWebglWithFallback, wrapBracketedPaste } from './terminal-utils.js';
 import { FILE_PATH_DRAG_TYPE, NATIVE_FILES_DRAG_TYPE } from '../drag-types.js';
+import { showTerminalContextMenu } from './terminal-context-menu.js';
 
 interface TerminalInstance {
   terminal: Terminal;
@@ -24,6 +25,7 @@ interface TerminalInstance {
   cliSessionId: string | null;
   providerId: ProviderId;
   args: string;
+  envVars: string;
   /** Resolved profile config dir (CLAUDE_CONFIG_DIR), or undefined for the default ~/.claude. */
   configDir?: string;
   isResume: boolean;
@@ -46,6 +48,7 @@ export function createTerminalPane(
   args: string = '',
   providerId: ProviderId = 'claude',
   projectId?: string,
+  envVars: string = '',
   configDir?: string
 ): TerminalInstance {
   if (instances.has(sessionId)) {
@@ -125,6 +128,7 @@ export function createTerminalPane(
     cliSessionId,
     providerId,
     args,
+    envVars,
     configDir,
     isResume,
     wasResumed: isResume,
@@ -186,6 +190,11 @@ export function createTerminalPane(
     if (injectTextIntoRunningSession(sessionId, paths.join(' ') + ' ')) {
       terminal.focus();
     }
+  });
+
+  xtermWrap.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    showTerminalContextMenu(e.clientX, e.clientY, terminal, writeToPty);
   });
 
   return instance;
@@ -278,7 +287,7 @@ export async function spawnTerminal(sessionId: string): Promise<void> {
     systemPrompt = instance.pendingSystemPrompt;
     instance.pendingSystemPrompt = null;
   }
-  await window.vibeyard.pty.create(sessionId, instance.projectPath, instance.cliSessionId, instance.isResume, instance.args, instance.providerId, initialPrompt, systemPrompt, instance.configDir);
+  await window.vibeyard.pty.create(sessionId, instance.projectPath, instance.cliSessionId, instance.isResume, instance.args, instance.providerId, initialPrompt, systemPrompt, instance.envVars, instance.configDir);
   instance.isResume = true; // subsequent spawns (e.g. Restart Session) should resume
 }
 

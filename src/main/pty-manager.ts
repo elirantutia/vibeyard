@@ -3,6 +3,7 @@ import { execSync, execFile } from 'child_process';
 import * as os from 'os';
 import * as path from 'path';
 import type { ProviderId } from '../shared/types';
+import { parseEnvVars } from '../shared/env-vars';
 import { getProvider } from './providers/registry';
 import { registerSession } from './hook-status';
 import { installHooksOnly, installStatusLine } from './claude-cli';
@@ -166,6 +167,7 @@ export async function spawnPty(
   providerId: ProviderId,
   initialPrompt: string | undefined,
   systemPrompt: string | undefined,
+  envVars: string,
   onData: (data: string) => void,
   onExit: (exitCode: number, signal?: number) => void,
   configDir?: string
@@ -207,6 +209,9 @@ export async function spawnPty(
   }
 
   const env = provider.buildEnv(sessionId, { ...process.env } as Record<string, string>, { configDir });
+  // User-provided env vars are merged last so they can override anything,
+  // including provider-set vars like PATH (see plan: "user vars win").
+  Object.assign(env, parseEnvVars(envVars));
   const args = provider.buildArgs({ cliSessionId, isResume, extraArgs, initialPrompt, systemPrompt });
   const resolvedShell = provider.resolveBinaryPath();
   const { shell, args: spawnArgs } = resolveWindowsShell(resolvedShell, args);

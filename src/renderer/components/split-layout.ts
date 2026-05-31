@@ -1,9 +1,9 @@
 import { appState, ProjectRecord } from '../state.js';
 import { isUnread, onChange as onUnreadChange } from '../session-unread.js';
-import type { ProviderId, SessionRecord } from '../../shared/types.js';
+import type { ProviderId } from '../../shared/types.js';
 
 /** Config dir for a session's pinned profile (provider-matched), or undefined for default ~/.claude. */
-function sessionConfigDir(session: SessionRecord, providerId: ProviderId): string | undefined {
+function sessionConfigDir(session: { profileId?: string }, providerId: ProviderId): string | undefined {
   if (!session.profileId) return undefined;
   return appState.profiles.find((p) => p.id === session.profileId && p.providerId === providerId)?.configDir;
 }
@@ -132,7 +132,7 @@ export function initSplitLayout(): void {
 }
 
 function onSessionAdded(data: unknown): void {
-  const { projectId, session } = data as { projectId: string; session: { id: string; type?: string; cliSessionId: string | null; providerId?: string; args?: string; cwd?: string; diffFilePath?: string; diffArea?: string; worktreePath?: string; fileReaderPath?: string; fileReaderLine?: number; browserTabUrl?: string } };
+  const { projectId, session } = data as { projectId: string; session: { id: string; type?: string; cliSessionId: string | null; providerId?: string; args?: string; envVars?: string; profileId?: string; cwd?: string; diffFilePath?: string; diffArea?: string; worktreePath?: string; fileReaderPath?: string; fileReaderLine?: number; browserTabUrl?: string } };
   const project = appState.activeProject;
   if (!project) return;
 
@@ -164,7 +164,7 @@ function onSessionAdded(data: unknown): void {
     // Create and spawn immediately
     const cliProviderId = (session.providerId as ProviderId) || 'claude';
     const configDir = sessionConfigDir(session, cliProviderId);
-    createTerminalPane(session.id, project.path, session.cliSessionId, !!session.cliSessionId, session.args || '', cliProviderId, project.id, configDir);
+    createTerminalPane(session.id, project.path, session.cliSessionId, !!session.cliSessionId, session.args || '', cliProviderId, project.id, session.envVars || '', configDir);
     const pending = appState.consumePendingInitialPrompt(project.id, session.id);
     if (pending) {
       setPendingPrompt(session.id, pending);
@@ -266,7 +266,7 @@ export function renderLayout(): void {
       if (!getTerminalInstance(session.id)) {
         const cliProviderId = session.providerId || 'claude';
         const configDir = sessionConfigDir(session, cliProviderId);
-        createTerminalPane(session.id, project.path, session.cliSessionId, !!session.cliSessionId, session.args || '', cliProviderId, project.id, configDir);
+        createTerminalPane(session.id, project.path, session.cliSessionId, !!session.cliSessionId, session.args || '', cliProviderId, project.id, session.envVars || '', configDir);
       }
     }
   }
@@ -474,6 +474,9 @@ function updateSwarmPaneStyles(project: ProjectRecord): void {
   }
 }
 
+const plusIcon =
+  '<svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="2.5" x2="7" y2="11.5"/><line x1="2.5" y1="7" x2="11.5" y2="7"/></svg>';
+
 function showEmptyState(project: ProjectRecord | undefined): void {
   removeEmptyState();
   const el = document.createElement('div');
@@ -484,10 +487,23 @@ function showEmptyState(project: ProjectRecord | undefined): void {
       <div class="hint">Create a project with the + button in the sidebar</div>
     `;
   } else {
-    el.innerHTML = `
-      <div>No sessions in "${project.name}"</div>
-      <div class="hint">Create a session with the + button in the tab bar</div>
-    `;
+    const title = document.createElement('div');
+    title.className = 'empty-state-title';
+    title.textContent = 'Ready when you are';
+
+    const hint = document.createElement('div');
+    hint.className = 'hint';
+    const name = document.createElement('span');
+    name.className = 'empty-state-project';
+    name.textContent = project.name;
+    hint.append('No sessions running in ', name, ' yet.');
+
+    const cta = document.createElement('button');
+    cta.className = 'btn-primary empty-state-cta';
+    cta.innerHTML = `${plusIcon}<span>Start a session</span>`;
+    cta.addEventListener('click', () => quickNewSession());
+
+    el.append(title, hint, cta);
   }
   container.appendChild(el);
 }

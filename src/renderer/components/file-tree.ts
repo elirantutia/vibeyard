@@ -4,6 +4,7 @@ import { showContextMenu, MenuOption } from './board/board-context-menu.js';
 import { showConfirmModal, showPropertiesDialog } from './modal.js';
 import { FILE_PATH_DRAG_TYPE } from '../drag-types.js';
 import { estimateTokens, TOKEN_COUNT_MAX_CHARS } from '../../shared/token-estimate.js';
+import { isPathUnder } from '../../shared/platform.js';
 
 export interface DirEntry {
   name: string;
@@ -31,34 +32,76 @@ function watchFolder(projectId: string, folderPath: string): void {
   const set = getWatchedSet(projectId);
   if (set.has(folderPath)) return;
   set.add(folderPath);
-  window.vibeyard.fs.watchFile(folderPath);
+  window.vibeyard.fs.watchDir(folderPath);
 }
 
-function unwatchFolder(projectId: string, folderPath: string): void {
+/**
+ * Stop watching `folderPath` and every watched directory nested beneath it, and
+ * drop their cached listings. Used on collapse (keeps expansion state so a
+ * re-expand restores the subtree) and on deletion (`clearExpanded`).
+ */
+function unwatchSubtree(projectId: string, folderPath: string, clearExpanded = false): void {
   const set = watchedByProject.get(projectId);
-  if (!set || !set.has(folderPath)) return;
-  set.delete(folderPath);
-  window.vibeyard.fs.unwatchFile(folderPath);
+  if (set) {
+    for (const p of [...set]) {
+      if (!isPathUnder(p, folderPath)) continue;
+      set.delete(p);
+      window.vibeyard.fs.unwatchDir(p);
+    }
+  }
+  for (const p of [...entryCache.keys()]) {
+    if (isPathUnder(p, folderPath)) entryCache.delete(p);
+  }
+  if (clearExpanded) {
+    const exp = expandedFolders.get(projectId);
+    if (exp) for (const p of [...exp]) if (isPathUnder(p, folderPath)) exp.delete(p);
+  }
 }
 
-function ensureChangeSubscription(): void {
-  if (unsubFileChanged) return;
-  unsubFileChanged = window.vibeyard.fs.onFileChanged((changedPath) => {
+// Coalesce filesystem-change bursts: collect the affected directories and
+// reconcile each once per animation frame, so an agent writing 50 files in a
+// watched folder triggers a single batched DOM pass rather than 50.
+const pendingDirs = new Set<string>();
+let flushScheduled = false;
+
+function scheduleFlush(): void {
+  if (flushScheduled) return;
+  flushScheduled = true;
+  requestAnimationFrame(flushPendingDirs);
+}
+
+function flushPendingDirs(): void {
+  flushScheduled = false;
+  const dirs = [...pendingDirs];
+  pendingDirs.clear();
+  for (const dir of dirs) {
+    entryCache.delete(dir);
+    inflight.delete(dir);
     for (const [projectId, paths] of watchedByProject) {
-      if (!paths.has(changedPath)) continue;
-      entryCache.delete(changedPath);
-      inflight.delete(changedPath);
+      if (!paths.has(dir)) continue;
       const reg = activeTrees.get(projectId);
       if (!reg) continue;
-      const selector = `[data-folder-path="${CSS.escape(changedPath)}"]`;
+      const selector = `[data-folder-path="${CSS.escape(dir)}"]`;
       const target = reg.container.matches(selector)
         ? reg.container
         : reg.container.querySelector(selector);
       if (target instanceof HTMLElement) {
         const depth = Number(target.dataset.depth ?? '0');
-        renderChildren(projectId, changedPath, depth, target);
+        reconcileChildren(projectId, dir, depth, target);
       }
     }
+  }
+}
+
+function ensureChangeSubscription(): void {
+  if (unsubFileChanged) return;
+  unsubFileChanged = window.vibeyard.fs.onFsChange((changes) => {
+    if (changes.length === 0) return;
+    // flushPendingDirs filters to dirs actually rendered in a tree; collecting
+    // every changed dir here (dirs from open reader/viewer panes included) is
+    // harmless and avoids an O(changes × projects) membership scan on this path.
+    for (const change of changes) pendingDirs.add(change.dir);
+    scheduleFlush();
   });
 }
 
@@ -100,7 +143,7 @@ export function clearProjectState(projectId: string): void {
 export function closeFileTree(projectId: string): void {
   const watched = watchedByProject.get(projectId);
   if (watched) {
-    for (const p of watched) window.vibeyard.fs.unwatchFile(p);
+    for (const p of watched) window.vibeyard.fs.unwatchDir(p);
     watched.clear();
   }
   activeTrees.delete(projectId);
@@ -113,6 +156,8 @@ export function _resetForTesting(): void {
   expandedFolders.clear();
   watchedByProject.clear();
   activeTrees.clear();
+  pendingDirs.clear();
+  flushScheduled = false;
   if (unsubFileChanged) {
     unsubFileChanged();
     unsubFileChanged = null;
@@ -167,6 +212,83 @@ function makeRow(depth: number, entry: DirEntry, projectId: string): HTMLElement
   return row;
 }
 
+function appendEmpty(container: HTMLElement, depth: number): void {
+  const empty = document.createElement('div');
+  empty.className = 'file-tree-empty';
+  empty.style.paddingLeft = `${20 + depth * 14}px`;
+  empty.textContent = '(empty)';
+  container.appendChild(empty);
+}
+
+/**
+ * Build the DOM nodes for one entry: a row, plus (for directories) its adjacent
+ * `.file-tree-children` subcontainer. The row carries `data-entry-path` so the
+ * reconciler can locate it; a directory row's subcontainer is always its
+ * immediate next sibling.
+ */
+function createEntry(projectId: string, depth: number, entry: DirEntry): HTMLElement[] {
+  const row = makeRow(depth, entry, projectId);
+  row.dataset.entryPath = entry.path;
+
+  if (entry.isDirectory) {
+    const subContainer = document.createElement('div');
+    subContainer.className = 'file-tree-children';
+
+    if (isExpanded(projectId, entry.path)) {
+      renderChildren(projectId, entry.path, depth + 1, subContainer);
+    }
+
+    row.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const nowExpanded = toggleFolder(projectId, entry.path);
+      row.querySelector('.file-tree-chevron')!.classList.toggle('expanded', nowExpanded);
+      if (nowExpanded) {
+        renderChildren(projectId, entry.path, depth + 1, subContainer);
+      } else {
+        unwatchSubtree(projectId, entry.path);
+        subContainer.innerHTML = '';
+      }
+    });
+    row.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showContextMenu(e.clientX, e.clientY, [deleteMenuOption(entry)]);
+    });
+    return [row, subContainer];
+  }
+
+  row.draggable = true;
+  row.addEventListener('dragstart', (e) => {
+    if (!e.dataTransfer) return;
+    e.dataTransfer.effectAllowed = 'copy';
+    e.dataTransfer.setData(FILE_PATH_DRAG_TYPE, entry.path);
+    e.dataTransfer.setData('text/plain', entry.path);
+  });
+  row.addEventListener('click', (e) => {
+    e.stopPropagation();
+    appState.addFileReaderSession(projectId, entry.path);
+  });
+  row.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    showContextMenu(e.clientX, e.clientY, [
+      {
+        label: 'Open in Browser',
+        action: () => {
+          appState.addBrowserTabSession(projectId, pathToFileURL(entry.path));
+        },
+      },
+      {
+        label: 'Properties',
+        action: () => { showFileProperties(entry); },
+      },
+      deleteMenuOption(entry),
+    ]);
+  });
+  return [row];
+}
+
+/** Full (re)build of a folder's children. Used for initial render and expand. */
 async function renderChildren(
   projectId: string,
   folderPath: string,
@@ -180,73 +302,82 @@ async function renderChildren(
   container.innerHTML = '';
 
   if (entries.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'file-tree-empty';
-    empty.style.paddingLeft = `${20 + depth * 14}px`;
-    empty.textContent = '(empty)';
-    container.appendChild(empty);
+    appendEmpty(container, depth);
     return;
   }
 
   for (const entry of entries) {
-    const row = makeRow(depth, entry, projectId);
-    container.appendChild(row);
+    for (const node of createEntry(projectId, depth, entry)) container.appendChild(node);
+  }
+}
 
-    if (entry.isDirectory) {
-      const subContainer = document.createElement('div');
-      subContainer.className = 'file-tree-children';
-      container.appendChild(subContainer);
+/**
+ * Incrementally update a folder's children against the current disk state:
+ * remove vanished entries (unwatching their subtree), insert new entries at the
+ * correct sorted position, and leave unchanged rows — and their expanded
+ * subtrees, scroll, and selection — untouched. Far cheaper and less disruptive
+ * than rebuilding, which is what makes live agent edits feel smooth.
+ */
+async function reconcileChildren(
+  projectId: string,
+  folderPath: string,
+  depth: number,
+  container: HTMLElement
+): Promise<void> {
+  const entries = await loadEntries(folderPath);
+  const newByPath = new Map(entries.map((e) => [e.path, e] as const));
 
-      if (isExpanded(projectId, entry.path)) {
-        renderChildren(projectId, entry.path, depth + 1, subContainer);
-      }
-
-      row.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const nowExpanded = toggleFolder(projectId, entry.path);
-        row.querySelector('.file-tree-chevron')!.classList.toggle('expanded', nowExpanded);
-        if (nowExpanded) {
-          renderChildren(projectId, entry.path, depth + 1, subContainer);
-        } else {
-          unwatchFolder(projectId, entry.path);
-          subContainer.innerHTML = '';
-        }
-      });
-      row.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        showContextMenu(e.clientX, e.clientY, [deleteMenuOption(entry)]);
-      });
-    } else {
-      row.draggable = true;
-      row.addEventListener('dragstart', (e) => {
-        if (!e.dataTransfer) return;
-        e.dataTransfer.effectAllowed = 'copy';
-        e.dataTransfer.setData(FILE_PATH_DRAG_TYPE, entry.path);
-        e.dataTransfer.setData('text/plain', entry.path);
-      });
-      row.addEventListener('click', (e) => {
-        e.stopPropagation();
-        appState.addFileReaderSession(projectId, entry.path);
-      });
-      row.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        showContextMenu(e.clientX, e.clientY, [
-          {
-            label: 'Open in Browser',
-            action: () => {
-              appState.addBrowserTabSession(projectId, pathToFileURL(entry.path));
-            },
-          },
-          {
-            label: 'Properties',
-            action: () => { showFileProperties(entry); },
-          },
-          deleteMenuOption(entry),
-        ]);
-      });
+  // Index the rows currently rendered in this container (rows only; their
+  // subcontainers are reached via nextElementSibling).
+  const existing = new Map<string, HTMLElement>();
+  for (const child of Array.from(container.children)) {
+    if (child instanceof HTMLElement && child.dataset.entryPath) {
+      existing.set(child.dataset.entryPath, child);
     }
+  }
+
+  if (entries.length === 0) {
+    for (const [p, row] of existing) {
+      if (row.classList.contains('is-dir')) unwatchSubtree(projectId, p, true);
+    }
+    container.innerHTML = '';
+    appendEmpty(container, depth);
+    return;
+  }
+  const emptyEl = container.querySelector(':scope > .file-tree-empty');
+  if (emptyEl) emptyEl.remove();
+
+  // Remove rows that vanished, or whose kind flipped (file <-> dir) — those get
+  // recreated by the insertion pass below.
+  for (const [p, row] of existing) {
+    const next = newByPath.get(p);
+    const kindMatches = next && next.isDirectory === row.classList.contains('is-dir');
+    if (kindMatches) continue;
+    const isDir = row.classList.contains('is-dir');
+    const sub = isDir ? row.nextElementSibling : null;
+    if (isDir) unwatchSubtree(projectId, p, true);
+    row.remove();
+    if (sub instanceof HTMLElement && sub.classList.contains('file-tree-children')) sub.remove();
+    existing.delete(p);
+  }
+
+  // Insert added entries before the first following entry that already exists,
+  // preserving sorted order without disturbing unchanged rows. Anchors are
+  // precomputed in one backward pass so a burst of N new files in a folder is
+  // O(N) rather than O(N²).
+  const anchors: (HTMLElement | null)[] = new Array(entries.length);
+  let nextExisting: HTMLElement | null = null;
+  for (let i = entries.length - 1; i >= 0; i--) {
+    anchors[i] = nextExisting;
+    const found = existing.get(entries[i].path);
+    if (found) nextExisting = found;
+  }
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    if (existing.has(entry.path)) continue;
+    const nodes = createEntry(projectId, depth, entry);
+    for (const node of nodes) container.insertBefore(node, anchors[i]);
+    existing.set(entry.path, nodes[0]);
   }
 }
 

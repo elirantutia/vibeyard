@@ -13,14 +13,18 @@
 }
 
 .tab-team-badge {
-  font-size: 10px;
-  padding: 0 3px;
-  border-radius: 3px;
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
   vertical-align: middle;
   margin-right: 4px;
-  line-height: 1;
+  color: var(--text-secondary);
+  position: relative;
+  top: -1px;
+}
+
+.tab-team-badge svg {
+  width: 13px;
+  height: 13px;
 }
 
 .team-view {
@@ -48,28 +52,6 @@
 .team-header-actions {
   display: flex;
   gap: 8px;
-}
-
-.team-header-btn {
-  padding: 6px 10px;
-  font-size: 12px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-}
-.team-header-btn:hover {
-  border-color: var(--accent);
-}
-.team-header-btn-primary {
-  background: var(--accent);
-  color: var(--accent-fg, #fff);
-  border-color: var(--accent);
-}
-.team-header-btn-primary:hover {
-  filter: brightness(1.1);
 }
 
 .team-grid {
@@ -164,33 +146,13 @@
   margin-top: auto;
 }
 
+/* Structural only — look/size come from .btn-secondary (full app-wide size); flex fills the action row. */
 .team-card-btn {
   flex: 1;
   min-width: 64px;
-  padding: 6px 10px;
-  font-size: 12px;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-}
-.team-card-btn:hover {
-  border-color: var(--accent);
 }
 .team-card-btn-primary {
   flex-basis: 100%;
-  background: var(--accent);
-  color: var(--accent-fg, #fff);
-  border-color: var(--accent);
-}
-.team-card-btn-primary:hover {
-  filter: brightness(1.1);
-}
-.team-card-btn-danger:hover {
-  border-color: var(--danger, #d23);
-  color: var(--danger, #d23);
 }
 
 /* Chat split button: main button + provider chevron */
@@ -229,13 +191,13 @@
 }
 
 .team-picker-dialog {
-  width: min(640px, 92vw);
+  width: min(920px, 94vw);
   height: 80vh;
   display: flex;
   flex-direction: column;
   background: var(--bg-primary);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
   overflow: hidden;
 }
@@ -244,13 +206,13 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 14px;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--border);
 }
 
 .team-picker-title {
   flex: 1;
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -271,7 +233,7 @@
 }
 
 .team-picker-status {
-  padding: 8px 14px;
+  padding: 8px 20px;
   font-size: 12px;
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border);
@@ -282,26 +244,40 @@
 
 .team-picker-filter {
   display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.team-picker-search-wrap {
+  display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 14px;
-  border-bottom: 1px solid var(--border);
-  flex-wrap: wrap;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.team-picker-search-wrap:focus-within {
+  border-color: var(--accent);
+}
+
+.team-picker-search-icon {
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
 }
 
 .team-picker-search {
   flex: 1;
-  min-width: 160px;
-  padding: 4px 8px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 4px;
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 15px;
   outline: none;
-}
-.team-picker-search:focus {
-  border-color: var(--accent);
 }
 .team-picker-search::placeholder {
   color: var(--text-muted);
@@ -309,22 +285,24 @@
 
 .team-picker-domain-chips {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .team-picker-chip {
-  padding: 3px 10px;
+  padding: 8px 16px;
   border-radius: 999px;
-  font-size: 11px;
-  background: var(--bg-secondary);
+  font-size: 14px;
+  background: transparent;
   color: var(--text-secondary);
   border: 1px solid var(--border);
   cursor: pointer;
   line-height: 1.4;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
 .team-picker-chip:hover {
   color: var(--text-primary);
+  border-color: var(--border-strong);
 }
 .team-picker-chip.active {
   background: var(--accent);
@@ -357,10 +335,27 @@
 .team-picker-list {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 14px 14px;
+  padding: 18px 20px 20px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 24px;
+}
+
+.team-picker-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.team-picker-footer-count {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.team-picker-footer-count strong {
+  color: var(--text-primary);
+  font-weight: 600;
 }
 
 .team-picker-section {
@@ -381,19 +376,19 @@
 
 .team-picker-section-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 16px;
   align-content: start;
 }
 
 .team-picker-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px;
+  gap: 14px;
+  padding: 18px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
   transition: border-color 0.15s, transform 0.15s;
 }
@@ -406,18 +401,33 @@
   box-shadow: 0 0 0 2px var(--accent);
 }
 
-.team-picker-card-add {
-  margin-top: auto;
-  padding: 6px 10px;
-  font-size: 12px;
-  background: var(--accent);
-  color: var(--accent-fg, #fff);
-  border: 1px solid var(--accent);
-  border-radius: 4px;
-  cursor: pointer;
+/* Picker-only card scale-ups — leave the main Team-tab cards untouched. */
+.team-picker-card .team-card-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: transparent;
+  font-size: 16px;
 }
-.team-picker-card-add:hover:not(:disabled) {
-  filter: brightness(1.1);
+.team-picker-card .team-card-name {
+  font-size: 17px;
+}
+.team-picker-card .team-card-role {
+  font-size: 13px;
+}
+.team-picker-card .team-card-description {
+  font-size: 14px;
+}
+
+/* Structural only — look/size come from .btn-primary; keeps the disabled
+   "already installed" greyed treatment and pins the full-width button to the card bottom. */
+.team-picker-card-add {
+  width: 100%;
+  margin-top: auto;
+  justify-content: center;
+  padding: 12px;
 }
 .team-picker-card-add:disabled {
   opacity: 0.6;

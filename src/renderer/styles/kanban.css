@@ -48,19 +48,31 @@
   color: var(--accent);
 }
 
-.board-add-task {
-  padding: 4px 12px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 12px;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
+.board-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-.board-add-task:hover {
+
+.board-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  width: 240px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: border-color 0.15s;
+}
+.board-search:focus-within {
   border-color: var(--accent);
-  color: var(--accent);
+}
+
+.board-search-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--text-muted);
 }
 
 /* Columns */
@@ -74,12 +86,12 @@
 }
 
 .board-column {
-  min-width: 240px;
-  width: 240px;
+  min-width: 268px;
+  width: 268px;
   max-height: 100%;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
 }
@@ -87,16 +99,28 @@
 .board-column-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
+  gap: 8px;
+  padding: 12px 14px 10px;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
+.board-column-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.board-column[data-behavior="active"] .board-column-dot {
+  background: var(--status-working);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-working) 22%, transparent);
+}
+
 .board-column[data-behavior="active"] .board-column-header {
-  color: var(--status-working, #34d399);
+  color: var(--status-working);
 }
 
 .column-title {
@@ -116,11 +140,14 @@
 }
 
 .column-count {
+  margin-left: auto;
+  min-width: 20px;
+  text-align: center;
   background: var(--bg-hover);
-  padding: 1px 6px;
-  border-radius: 10px;
+  padding: 1px 7px;
+  border-radius: 20px;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-secondary);
 }
 
@@ -152,17 +179,18 @@
 
 /* Cards */
 .board-card {
-  background: var(--bg-tertiary);
+  background: linear-gradient(180deg, var(--bg-tertiary), var(--bg-hover));
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  padding: 11px 12px;
   cursor: pointer;
   touch-action: none;
+  box-shadow: 0 6px 18px -14px rgba(0, 0, 0, 0.9);
   transition: border-color 0.15s;
 }
 .board-card:hover {
-  border-color: var(--text-muted);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border-color: var(--accent);
+  box-shadow: 0 6px 18px -10px rgba(0, 0, 0, 0.9);
 }
 .board-card.dragging {
   opacity: 0.4;
@@ -186,10 +214,6 @@
   gap: 8px;
 }
 
-.board-card-top .card-run-btn {
-  flex-shrink: 0;
-}
-
 .board-card-tags {
   display: flex;
   gap: 3px;
@@ -199,8 +223,9 @@
 
 .tag-pill {
   font-size: 10px;
-  padding: 1px 6px;
-  border-radius: 8px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-weight: 500;
   white-space: nowrap;
   cursor: default;
 }
@@ -236,22 +261,31 @@
 .board-card-status-inline {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   flex-shrink: 0;
+  color: var(--status-working);
 }
 
 .card-run-btn {
-  padding: 2px 8px;
-  border-radius: 3px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-secondary);
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--accent-soft);
+  color: var(--accent);
   font-size: 11px;
+  line-height: 1;
   cursor: pointer;
+  transition: background 0.15s;
 }
 .card-run-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-fg);
 }
 
 .card-status-dot {
@@ -261,13 +295,13 @@
   flex-shrink: 0;
 }
 .card-status-dot.working {
-  background: var(--accent);
+  background: var(--status-working);
   animation: pulse 1.5s ease-in-out infinite;
 }
-.card-status-dot.waiting { background: #f4b400; }
-.card-status-dot.completed { background: #34a853; }
+.card-status-dot.waiting { background: var(--status-waiting); }
+.card-status-dot.completed { background: var(--status-completed); }
 .card-status-dot.input {
-  background: #e67e22;
+  background: var(--status-input);
   animation: pulse 1.2s ease-in-out infinite;
 }
 .card-status-dot.idle { background: var(--text-muted); }
@@ -388,14 +422,18 @@
 
 /* Tab-bar badge for kanban sessions */
 .tab-kanban-badge {
-  font-size: 10px;
-  padding: 0 3px;
-  border-radius: 3px;
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
   vertical-align: middle;
   margin-right: 4px;
-  line-height: 1;
+  color: var(--text-secondary);
+  position: relative;
+  top: -1px;
+}
+
+.tab-kanban-badge svg {
+  width: 13px;
+  height: 13px;
 }
 
 /* Tag row */
@@ -409,10 +447,8 @@
 }
 
 .board-tag-row-label {
-  font-size: 10px;
+  font-size: 13px;
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
   flex-shrink: 0;
 }
 
@@ -426,8 +462,8 @@
 
 .tag-pill-header {
   cursor: pointer;
-  font-size: 10px;
-  padding: 2px 8px;
+  font-size: 12px;
+  padding: 4px 12px;
   border-radius: 10px;
   transition: opacity 0.15s;
 }
@@ -539,30 +575,17 @@
 }
 
 .board-search-input {
-  padding: 4px 8px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-primary);
-  font-size: 12px;
-  width: 140px;
-  flex-shrink: 0;
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
   outline: none;
-}
-
-.board-search-input:focus {
-  border-color: var(--accent);
+  color: var(--text-primary);
+  font-size: 13px;
 }
 
 .board-search-input::placeholder {
   color: var(--text-muted);
-}
-
-.board-filter-separator {
-  width: 1px;
-  height: 16px;
-  background: var(--border);
-  flex-shrink: 0;
 }
 
 .board-filter-count {

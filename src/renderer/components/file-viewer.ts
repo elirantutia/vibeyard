@@ -2,7 +2,7 @@ import { appState } from '../state.js';
 import { areaLabel } from '../dom-utils.js';
 import { closeSessionIfFileMissing } from '../session-close.js';
 import { destroySearchBar } from './search-bar.js';
-import { isAbsolutePath } from '../../shared/platform.js';
+import { isAbsolutePath, dirname, samePath } from '../../shared/platform.js';
 
 interface FileViewerInstance {
   element: HTMLElement;
@@ -140,10 +140,12 @@ async function loadDiff(instance: FileViewerInstance, sessionId: string): Promis
 
 function ensureFileChangedListener(): void {
   if (unwatchFileChanged) return;
-  unwatchFileChanged = window.vibeyard.fs.onFileChanged((changedPath: string) => {
-    for (const [sessionId, instance] of instances) {
-      if (instance.resolvedPath === changedPath && instance.loaded) {
-        reloadFileViewer(sessionId);
+  unwatchFileChanged = window.vibeyard.fs.onFsChange((changes) => {
+    for (const change of changes) {
+      for (const [sessionId, instance] of instances) {
+        if (instance.resolvedPath && samePath(instance.resolvedPath, change.path) && instance.loaded) {
+          reloadFileViewer(sessionId);
+        }
       }
     }
   });
@@ -187,7 +189,7 @@ export function destroyFileViewerPane(sessionId: string): void {
   const instance = instances.get(sessionId);
   if (!instance) return;
   if (instance.resolvedPath) {
-    window.vibeyard.fs.unwatchFile(instance.resolvedPath);
+    window.vibeyard.fs.unwatchDir(dirname(instance.resolvedPath));
   }
   pendingReloads.delete(sessionId);
   if (pendingReloads.size === 0 && removeSelectionListener) {
@@ -206,12 +208,13 @@ export function showFileViewerPane(sessionId: string, isSplit: boolean): void {
   if (isSplit) instance.element.classList.add('split');
   else instance.element.classList.remove('split');
 
-  // Start watching the file for external changes
+  // Watch the parent directory (not the file inode) so atomic save/replace is
+  // still caught — a direct file watch dies when the inode is swapped.
   if (!instance.resolvedPath) {
     const fullPath = resolveFilePath(instance);
     instance.resolvedPath = fullPath;
     ensureFileChangedListener();
-    window.vibeyard.fs.watchFile(fullPath);
+    window.vibeyard.fs.watchDir(dirname(fullPath));
   }
 
   loadDiff(instance, sessionId);

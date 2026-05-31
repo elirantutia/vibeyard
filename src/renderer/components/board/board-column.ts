@@ -16,6 +16,9 @@ export function createColumnElement(column: BoardColumn, tasks: BoardTask[], tot
   const header = document.createElement('div');
   header.className = 'board-column-header';
 
+  const dotSpan = document.createElement('span');
+  dotSpan.className = 'board-column-dot';
+
   const titleSpan = document.createElement('span');
   titleSpan.className = 'column-title';
   titleSpan.textContent = column.title;
@@ -27,6 +30,7 @@ export function createColumnElement(column: BoardColumn, tasks: BoardTask[], tot
     ? `${tasks.length}/${totalCount}`
     : String(tasks.length);
 
+  header.appendChild(dotSpan);
   header.appendChild(titleSpan);
   header.appendChild(countSpan);
 

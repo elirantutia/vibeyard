@@ -1,14 +1,31 @@
-/* Git panel */
-#git-panel {
-  border-top: 1px solid var(--border);
+/* Git panel — rendered inside the active project card as the "Git" panel tab.
+   The persistent .git-panel-mount node is reparented into .project-panel-git on
+   open; .git-panel-body caps height so a big diff scrolls internally rather than
+   pushing the "All projects" list off-screen. */
+.git-panel-body {
+  max-height: 320px;
+  overflow-y: auto;
 }
 
-#git-panel.hidden {
-  display: none;
+/* Cold-load indicator (first load / project switch) — composes .config-loading
+   for padding/font/color, adds the spinner row layout. */
+.git-loading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-#git-panel:empty {
-  border-top: none;
+.git-loading-spinner {
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid var(--border);
+  border-top-color: var(--text-secondary);
+  border-radius: 50%;
+  animation: git-loading-spin 0.7s linear infinite;
+}
+
+@keyframes git-loading-spin {
+  to { transform: rotate(360deg); }
 }
 
 .git-worktree-selector {
@@ -43,15 +60,19 @@
 
 .git-file-badge {
   flex-shrink: 0;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
-  border-radius: 3px;
-  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace;
+  border-radius: 5px;
+  font-family: var(--font-mono);
+}
+
+.git-panel-body .config-item-detail {
+  font-size: 13px;
 }
 
 .git-file-badge.added { color: #34a853; }

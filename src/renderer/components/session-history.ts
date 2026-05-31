@@ -59,7 +59,22 @@ function showHistoryContextMenu(x: number, y: number, project: ProjectRecord, ar
   );
   for (const el of resumeWithItems) menu.appendChild(el);
 
-  if (!menu.firstChild) return;
+  if (menu.firstChild) {
+    const separator = document.createElement('div');
+    separator.className = 'tab-context-menu-separator';
+    menu.appendChild(separator);
+  }
+
+  const removeItem = document.createElement('div');
+  removeItem.className = 'tab-context-menu-item danger';
+  removeItem.textContent = 'Remove from history';
+  removeItem.addEventListener('click', (e) => {
+    e.stopPropagation();
+    hideHistoryContextMenu();
+    appState.removeHistoryEntry(project.id, archived.id);
+  });
+  menu.appendChild(removeItem);
+
   document.body.appendChild(menu);
   historyContextMenu = menu;
   const rect = menu.getBoundingClientRect();
@@ -265,16 +280,6 @@ function renderList(
       appState.toggleBookmark(project.id, archived.id);
     });
     actions.appendChild(bookmarkBtn);
-
-    const removeBtn = document.createElement('button');
-    removeBtn.className = 'history-remove-btn';
-    removeBtn.innerHTML = '&times;';
-    removeBtn.title = 'Remove from history';
-    removeBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      appState.removeHistoryEntry(project.id, archived.id);
-    });
-    actions.appendChild(removeBtn);
 
     item.appendChild(actions);
 

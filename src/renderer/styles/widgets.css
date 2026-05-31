@@ -9,21 +9,7 @@
   flex-shrink: 0;
 }
 
-.project-tab-toolbar-btn {
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  padding: 4px 10px;
-  border-radius: 4px;
-  font-size: 11px;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.project-tab-toolbar-btn:hover {
-  background: var(--bg-hover);
-}
-
+/* Look/size from .btn-secondary .btn-sm; only the accent "edit layout" toggle is bespoke. */
 .project-tab-toolbar-btn.active {
   background: var(--accent);
   color: var(--bg-primary);
@@ -242,34 +228,6 @@
   flex-shrink: 0;
 }
 
-.widget-github-row-action-btn {
-  padding: 2px 8px;
-  font-size: 11px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, filter 0.15s ease;
-}
-
-.widget-github-row-action-btn:hover {
-  border-color: var(--accent);
-  background: var(--bg-hover);
-}
-
-.widget-github-row-action-btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-fg, #fff);
-  font-weight: 500;
-}
-
-.widget-github-row-action-btn-primary:hover {
-  background: var(--accent);
-  filter: brightness(1.1);
-}
-
 .widget-github-fix-group {
   display: flex;
 }
@@ -450,19 +408,6 @@
   text-align: center;
 }
 
-.widget-empty-action {
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  padding: 4px 12px;
-  border-radius: 4px;
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.widget-empty-action:hover {
-  border-color: var(--accent);
-}
 
 /* Team widget */
 .widget-team {
@@ -586,36 +531,10 @@
   margin-top: auto;
 }
 
+/* Structural only — look/size from .btn-secondary .btn-sm; flex fills the action row. */
 .widget-team-card-btn {
   flex: 1;
   min-width: 64px;
-  padding: 6px 10px;
-  font-size: 12px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.widget-team-card-btn:hover:not(:disabled) {
-  border-color: var(--accent);
-}
-
-.widget-team-card-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.widget-team-card-btn-primary {
-  background: var(--accent);
-  color: var(--accent-fg, #fff);
-  border-color: var(--accent);
-}
-
-.widget-team-card-btn-primary:hover:not(:disabled) {
-  filter: brightness(1.1);
 }
 
 .widget-team-card-chat-group {
@@ -872,4 +791,10 @@
   font-variant-numeric: tabular-nums;
   color: var(--accent);
   font-weight: 500;
+}
+
+.widget-top-files-row-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 4px;
 }

@@ -4,8 +4,6 @@
   left: 0;
   right: 0;
   bottom: 0;
-  border: 2px solid var(--pane-unfocus);
-  border-radius: 2px;
   background: var(--bg-primary);
   display: flex;
   flex-direction: column;
@@ -366,12 +364,16 @@
 
 /* Tab-bar badge for project-tab sessions */
 .tab-project-badge {
-  font-size: 10px;
-  padding: 0 3px;
-  border-radius: 3px;
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
   vertical-align: middle;
   margin-right: 4px;
-  line-height: 1;
+  color: var(--text-secondary);
+  position: relative;
+  top: -1px;
+}
+
+.tab-project-badge svg {
+  width: 13px;
+  height: 13px;
 }

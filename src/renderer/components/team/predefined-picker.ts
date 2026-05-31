@@ -10,6 +10,7 @@ interface DialogState {
   list: HTMLDivElement;
   status: HTMLDivElement;
   searchInput: HTMLInputElement;
+  footerCount: HTMLDivElement;
   chips: Map<DomainFilter, HTMLButtonElement>;
   allSuggestions: TeamMember[];
   query: string;
@@ -40,7 +41,7 @@ function buildDialog(): DialogState {
   header.className = 'team-picker-header';
   const title = document.createElement('div');
   title.className = 'team-picker-title';
-  title.textContent = 'Browse predefined team members';
+  title.textContent = 'Browse team members';
 
   const closeBtn = document.createElement('button');
   closeBtn.className = 'team-picker-close';
@@ -56,10 +57,18 @@ function buildDialog(): DialogState {
   const filterRow = document.createElement('div');
   filterRow.className = 'team-picker-filter';
 
+  const searchWrap = document.createElement('div');
+  searchWrap.className = 'team-picker-search-wrap';
+  const searchIcon = document.createElement('span');
+  searchIcon.className = 'team-picker-search-icon';
+  searchIcon.innerHTML =
+    '<svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="4.25"/><line x1="9.25" y1="9.25" x2="12.5" y2="12.5"/></svg>';
   const searchInput = document.createElement('input');
   searchInput.type = 'text';
   searchInput.className = 'team-picker-search';
   searchInput.placeholder = 'Search by name, role, description…';
+  searchWrap.appendChild(searchIcon);
+  searchWrap.appendChild(searchInput);
 
   const chipsWrap = document.createElement('div');
   chipsWrap.className = 'team-picker-domain-chips';
@@ -76,16 +85,27 @@ function buildDialog(): DialogState {
     chipsWrap.appendChild(chip);
   }
 
-  filterRow.appendChild(searchInput);
+  filterRow.appendChild(searchWrap);
   filterRow.appendChild(chipsWrap);
 
   const list = document.createElement('div');
   list.className = 'team-picker-list';
 
+  const footer = document.createElement('div');
+  footer.className = 'team-picker-footer';
+  const footerCount = document.createElement('div');
+  footerCount.className = 'team-picker-footer-count';
+  const doneBtn = document.createElement('button');
+  doneBtn.className = 'btn-primary';
+  doneBtn.textContent = 'Done';
+  footer.appendChild(footerCount);
+  footer.appendChild(doneBtn);
+
   dialog.appendChild(header);
   dialog.appendChild(status);
   dialog.appendChild(filterRow);
   dialog.appendChild(list);
+  dialog.appendChild(footer);
   overlay.appendChild(dialog);
 
   const state: DialogState = {
@@ -93,11 +113,13 @@ function buildDialog(): DialogState {
     list,
     status,
     searchInput,
+    footerCount,
     chips,
     allSuggestions: [],
     query: '',
     activeDomain: 'all',
   };
+  updateFooterCount(state);
 
   for (const [filter, chip] of chips) {
     chip.addEventListener('click', () => selectDomain(state, filter));
@@ -122,6 +144,7 @@ function buildDialog(): DialogState {
     document.removeEventListener('keydown', escListener);
   };
   closeBtn.addEventListener('click', dispose);
+  doneBtn.addEventListener('click', dispose);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) dispose(); });
   document.addEventListener('keydown', escListener);
 
@@ -146,6 +169,19 @@ async function load(state: DialogState): Promise<void> {
   } catch (err) {
     state.status.textContent = `Failed to load: ${err instanceof Error ? err.message : String(err)}`;
   }
+}
+
+function updateFooterCount(state: DialogState): void {
+  const count = appState.getTeamMembers().length;
+  const projectName = appState.activeProject?.name;
+  const noun = count === 1 ? 'member' : 'members';
+  state.footerCount.innerHTML = '';
+  const strong = document.createElement('strong');
+  strong.textContent = String(count);
+  state.footerCount.appendChild(strong);
+  state.footerCount.appendChild(
+    document.createTextNode(projectName ? ` ${noun} on the ${projectName} team` : ` ${noun} on the team`),
+  );
 }
 
 function rerender(state: DialogState): void {
@@ -188,7 +224,7 @@ function rerender(state: DialogState): void {
     const cards = document.createElement('div');
     cards.className = 'team-picker-section-cards';
     for (const member of members) {
-      cards.appendChild(buildCard(member, installed.has(member.id)));
+      cards.appendChild(buildCard(state, member, installed.has(member.id)));
     }
     section.appendChild(cards);
 
@@ -220,7 +256,7 @@ function buildEmptyState(state: DialogState): HTMLElement {
   return wrap;
 }
 
-function buildCard(member: TeamMember, isInstalled: boolean): HTMLElement {
+function buildCard(state: DialogState, member: TeamMember, isInstalled: boolean): HTMLElement {
   const card = document.createElement('div');
   card.className = 'team-picker-card';
   card.setAttribute('role', 'button');
@@ -245,20 +281,21 @@ function buildCard(member: TeamMember, isInstalled: boolean): HTMLElement {
   }
 
   const addBtn = document.createElement('button');
-  addBtn.className = 'team-picker-card-add';
-  applyAddState(addBtn, isInstalled, 'Add', 'Added');
+  addBtn.className = 'btn-primary team-picker-card-add';
+  applyAddState(addBtn, isInstalled, 'Add to team', 'Added');
+  const onAdd = (): void => {
+    addMember(member);
+    applyAddState(addBtn, true, 'Add to team', 'Added');
+    updateFooterCount(state);
+  };
   addBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    addMember(member);
-    applyAddState(addBtn, true, 'Add', 'Added');
+    onAdd();
   });
   card.appendChild(addBtn);
 
   const open = (): void => {
-    showMemberDetail(member, () => {
-      addMember(member);
-      applyAddState(addBtn, true, 'Add', 'Added');
-    }, addBtn.disabled);
+    showMemberDetail(member, onAdd, addBtn.disabled);
   };
   card.addEventListener('click', open);
   card.addEventListener('keydown', (e) => {
@@ -307,7 +344,7 @@ function showMemberDetail(member: TeamMember, onAdd: () => void, isInstalled: bo
   footer.className = 'team-picker-detail-footer';
 
   const addBtn = document.createElement('button');
-  addBtn.className = 'team-picker-card-add';
+  addBtn.className = 'btn-primary btn-sm team-picker-card-add';
   applyAddState(addBtn, isInstalled, 'Add to team', 'Already added');
   addBtn.addEventListener('click', () => {
     onAdd();
@@ -366,7 +403,7 @@ function addMember(member: TeamMember): void {
 
 function applyAddState(btn: HTMLButtonElement, isInstalled: boolean, addLabel: string, addedLabel: string): void {
   btn.disabled = isInstalled;
-  btn.textContent = isInstalled ? addedLabel : addLabel;
+  btn.textContent = isInstalled ? `✓  ${addedLabel}` : `+  ${addLabel}`;
 }
 
 function initials(name: string): string {
