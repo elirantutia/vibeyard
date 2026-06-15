@@ -10,6 +10,7 @@ import {
 } from '../../provider-availability.js';
 import { appState } from '../../state.js';
 import { runTask } from './board-card.js';
+import { t } from '../../i18n.js';
 
 export interface TaskModalPrefill {
   title?: string;
@@ -33,25 +34,25 @@ export function showTaskModal(
 
   const fields: FieldDef[] = [
     {
-      label: 'Title',
+      label: t('board.taskModal.titleLabel'),
       id: 'taskTitle',
-      placeholder: 'Task title',
+      placeholder: t('board.taskModal.titlePlaceholder'),
       defaultValue: task?.title ?? prefill?.title ?? '',
     },
     {
-      label: 'Prompt',
+      label: t('board.taskModal.promptLabel'),
       id: 'prompt',
       type: 'textarea',
-      placeholder: 'Instructions for Claude...',
+      placeholder: t('board.taskModal.promptPlaceholder'),
       defaultValue: task?.prompt ?? prefill?.prompt ?? '',
       rows: 4,
       maxLength: 10000,
     },
     {
-      label: 'Notes',
+      label: t('board.taskModal.notesLabel'),
       id: 'notes',
       type: 'textarea',
-      placeholder: 'Context, reasoning, acceptance criteria...',
+      placeholder: t('board.taskModal.notesPlaceholder'),
       defaultValue: task?.notes ?? prefill?.notes ?? '',
       rows: 3,
     },
@@ -59,7 +60,7 @@ export function showTaskModal(
 
   if (mode === 'edit') {
     fields.push({
-      label: 'Column',
+      label: t('board.taskModal.columnLabel'),
       id: 'columnId',
       type: 'select',
       options: columnOptions,
@@ -67,9 +68,9 @@ export function showTaskModal(
     });
   }
 
-  const title = mode === 'create' ? 'New Task' : 'Edit Task';
+  const title = mode === 'create' ? t('board.taskModal.titleCreate') : t('board.taskModal.titleEdit');
 
-  const confirmLabel = mode === 'create' ? 'Create' : 'Update';
+  const confirmLabel = mode === 'create' ? t('board.taskModal.confirmCreate') : t('board.taskModal.confirmEdit');
 
   const currentTags: string[] = [...(task?.tags ?? prefill?.tags ?? [])];
 
@@ -86,7 +87,7 @@ export function showTaskModal(
     const taskTitle = values.taskTitle?.trim() ?? '';
 
     if (!taskTitle) {
-      setModalError('taskTitle', 'Title is required');
+      setModalError('taskTitle', t('board.taskModal.titleRequired'));
       return;
     }
 
@@ -131,7 +132,7 @@ export function showTaskModal(
   tagFieldDiv.className = 'modal-field';
 
   const tagLabel = document.createElement('label');
-  tagLabel.textContent = 'Tags';
+  tagLabel.textContent = t('board.taskModal.tagsLabel');
   tagFieldDiv.appendChild(tagLabel);
 
   // Current tags as removable pills
@@ -168,7 +169,7 @@ export function showTaskModal(
 
   const tagInput = document.createElement('input');
   tagInput.className = 'board-modal-tag-input';
-  tagInput.placeholder = 'Add tag...';
+  tagInput.placeholder = t('board.taskModal.tagInputPlaceholder');
 
   const autocompleteList = document.createElement('div');
   autocompleteList.className = 'tag-autocomplete';
@@ -236,7 +237,7 @@ export function showTaskModal(
   const providerFieldDiv = document.createElement('div');
   providerFieldDiv.className = 'modal-field';
   const providerLabel = document.createElement('label');
-  providerLabel.textContent = 'Provider';
+  providerLabel.textContent = t('board.taskModal.providerLabel');
   providerFieldDiv.appendChild(providerLabel);
 
   const buildProviderOptions = () =>
@@ -247,7 +248,7 @@ export function showTaskModal(
     const supported = !!caps?.planModeArg;
     planModeCheckbox.disabled = !supported;
     if (!supported) planModeCheckbox.checked = false;
-    planModeRow.title = supported ? '' : 'Provider does not support plan mode';
+    planModeRow.title = supported ? '' : t('board.taskModal.planModeUnsupportedTooltip');
   }
 
   const onProviderChange = (value: string) => {
@@ -260,7 +261,7 @@ export function showTaskModal(
     'taskProvider',
     initialProviderOptions.length > 0
       ? initialProviderOptions
-      : [{ value: currentProviderId, label: 'Loading…' }],
+      : [{ value: currentProviderId, label: t('board.taskModal.providerLoading') }],
     currentProviderId,
     onProviderChange,
   );
@@ -303,7 +304,7 @@ export function showTaskModal(
       runBtn.className = 'board-modal-run-btn';
       const hasActiveSession = !!task.sessionId;
       const canResume = !hasActiveSession && !!task.cliSessionId;
-      runBtn.textContent = hasActiveSession ? 'Focus Session' : canResume ? 'Resume' : 'Run';
+      runBtn.textContent = hasActiveSession ? t('board.taskModal.focusSessionButton') : canResume ? t('board.taskModal.resumeButton') : t('board.taskModal.runButton');
       runBtn.addEventListener('click', () => {
         // Save current edits before running
         const prompt = (document.getElementById('modal-prompt') as HTMLTextAreaElement)?.value?.trim() ?? '';

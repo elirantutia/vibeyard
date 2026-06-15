@@ -21,6 +21,7 @@ const mockState = vi.hoisted(() => ({
   },
   on: vi.fn(() => () => {}),
   setPreference: vi.fn(),
+  setLocale: vi.fn(),
 }));
 
 const selectState = vi.hoisted(() => {

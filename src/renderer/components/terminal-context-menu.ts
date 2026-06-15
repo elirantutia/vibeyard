@@ -1,6 +1,7 @@
 import type { Terminal } from '@xterm/xterm';
 import { isMac } from '../platform.js';
 import { wrapBracketedPaste } from './terminal-utils.js';
+import { t } from '../i18n.js';
 
 let activeMenu: HTMLElement | null = null;
 
@@ -42,7 +43,7 @@ export function showTerminalContextMenu(
 
   const hasSelection = terminal.hasSelection();
 
-  const copyItem = makeItem('Copy', isMac ? '⇧⌘C' : 'Ctrl+Shift+C');
+  const copyItem = makeItem(t('contextMenu.terminal.copy'), isMac ? '⇧⌘C' : 'Ctrl+Shift+C');
   if (!hasSelection) copyItem.classList.add('disabled');
   if (hasSelection) {
     copyItem.addEventListener('click', (e) => {
@@ -55,7 +56,7 @@ export function showTerminalContextMenu(
   }
   menu.appendChild(copyItem);
 
-  const pasteItem = makeItem('Paste', isMac ? '⌘V' : 'Ctrl+V');
+  const pasteItem = makeItem(t('contextMenu.terminal.paste'), isMac ? '⌘V' : 'Ctrl+V');
   pasteItem.addEventListener('click', (e) => {
     e.stopPropagation();
     hideTerminalContextMenu();
@@ -71,7 +72,7 @@ export function showTerminalContextMenu(
   sep1.className = 'tab-context-menu-separator';
   menu.appendChild(sep1);
 
-  const selectAllItem = makeItem('Select All');
+  const selectAllItem = makeItem(t('contextMenu.terminal.selectAll'));
   selectAllItem.addEventListener('click', (e) => {
     e.stopPropagation();
     hideTerminalContextMenu();

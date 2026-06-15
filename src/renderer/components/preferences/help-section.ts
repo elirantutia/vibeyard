@@ -1,4 +1,5 @@
 import { buildSection, dot, badge, mono } from '../help-shared.js';
+import { t } from '../../i18n.js';
 import type { SectionController } from './section.js';
 
 export function createHelpSection(): SectionController {
@@ -7,32 +8,32 @@ export function createHelpSection(): SectionController {
       const helpContainer = document.createElement('div');
       helpContainer.className = 'help-container';
 
-      helpContainer.appendChild(buildSection('Tab Status Dot', [
-        { visual: () => dot('var(--accent)', true), label: 'Working', description: 'Claude is actively generating a response' },
-        { visual: () => dot('var(--status-waiting)'), label: 'Waiting', description: 'Claude is not actively working' },
-        { visual: () => dot('var(--status-completed)'), label: 'Completed', description: 'Claude has finished the task' },
-        { visual: () => dot('var(--status-input)', true), label: 'Input', description: 'Claude is waiting for user input' },
-        { visual: () => dot('var(--text-muted)'), label: 'Idle', description: 'Session is inactive (CLI exited)' },
+      helpContainer.appendChild(buildSection(t('help.tabStatusDot'), [
+        { visual: () => dot('var(--accent)', true), label: t('help.status.working'), description: t('help.status.workingDesc') },
+        { visual: () => dot('var(--status-waiting)'), label: t('help.status.waiting'), description: t('help.status.waitingDesc') },
+        { visual: () => dot('var(--status-completed)'), label: t('help.status.completed'), description: t('help.status.completedDesc') },
+        { visual: () => dot('var(--status-input)', true), label: t('help.status.input'), description: t('help.status.inputDesc') },
+        { visual: () => dot('var(--text-muted)'), label: t('help.status.idle'), description: t('help.status.idleDesc') },
       ]));
 
-      helpContainer.appendChild(buildSection('Tab Badges', [
-        { visual: () => badge('Session 1', 'var(--accent)'), label: 'Unread', description: 'Background session needs attention' },
+      helpContainer.appendChild(buildSection(t('help.tabBadges'), [
+        { visual: () => badge(t('help.tabBadgeSample'), 'var(--accent)'), label: t('help.tabBadgeUnreadLabel'), description: t('help.tabBadgeUnreadDesc') },
       ]));
 
-      helpContainer.appendChild(buildSection('Status Bar', [
-        { visual: () => mono('$1.23 · 5k in / 2k out'), label: 'Cost details', description: 'Detailed cost with token counts' },
-        { visual: () => mono('[====------] 50%'), label: 'Context usage', description: 'How full the context window is' },
-        { visual: () => mono('[=======---] 75%', '#f4b400'), label: 'Context warning', description: 'Context usage above 70%' },
-        { visual: () => mono('[=========‐] 95%', '#e94560'), label: 'Context critical', description: 'Context usage above 90%' },
+      helpContainer.appendChild(buildSection(t('help.statusBar'), [
+        { visual: () => mono(t('help.statusBarSample1')), label: t('help.statusBarCostLabel'), description: t('help.statusBarCostDesc') },
+        { visual: () => mono(t('help.statusBarSample2')), label: t('help.statusBarCtxLabel'), description: t('help.statusBarCtxDesc') },
+        { visual: () => mono(t('help.statusBarSample3'), '#f4b400'), label: t('help.statusBarWarnLabel'), description: t('help.statusBarWarnDesc') },
+        { visual: () => mono(t('help.statusBarSample4'), '#e94560'), label: t('help.statusBarCritLabel'), description: t('help.statusBarCritDesc') },
       ]));
 
-      helpContainer.appendChild(buildSection('Git Status', [
-        { visual: () => mono('⎇ main', '#a0a0b0'), label: 'Branch', description: 'Current git branch' },
-        { visual: () => mono('+3', '#34a853'), label: 'Staged', description: 'Files staged for commit' },
-        { visual: () => mono('~2', '#f4b400'), label: 'Modified', description: 'Modified tracked files' },
-        { visual: () => mono('?1', '#606070'), label: 'Untracked', description: 'New untracked files' },
-        { visual: () => mono('!1', '#e94560'), label: 'Conflicted', description: 'Files with merge conflicts' },
-        { visual: () => mono('↑2 ↓3', '#606070'), label: 'Ahead/Behind', description: 'Commits ahead/behind remote' },
+      helpContainer.appendChild(buildSection(t('help.gitStatus'), [
+        { visual: () => mono(t('help.gitSampleBranch'), '#a0a0b0'), label: t('help.gitBranchLabel'), description: t('help.gitBranchDesc') },
+        { visual: () => mono(t('help.gitSampleStaged'), '#34a853'), label: t('help.gitStagedLabel'), description: t('help.gitStagedDesc') },
+        { visual: () => mono(t('help.gitSampleModified'), '#f4b400'), label: t('help.gitModifiedLabel'), description: t('help.gitModifiedDesc') },
+        { visual: () => mono(t('help.gitSampleUntracked'), '#606070'), label: t('help.gitUntrackedLabel'), description: t('help.gitUntrackedDesc') },
+        { visual: () => mono(t('help.gitSampleConflicted'), '#e94560'), label: t('help.gitConflictedLabel'), description: t('help.gitConflictedDesc') },
+        { visual: () => mono(t('help.gitSampleAhead'), '#606070'), label: t('help.gitAheadLabel'), description: t('help.gitAheadDesc') },
       ]));
 
       container.appendChild(helpContainer);

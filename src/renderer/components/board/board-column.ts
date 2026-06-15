@@ -5,6 +5,7 @@ import { showTaskModal } from './board-task-modal.js';
 import { showContextMenu } from './board-context-menu.js';
 import { showConfirmModal } from '../modal.js';
 import { renderBoard } from './board-view.js';
+import { t } from '../../i18n.js';
 
 export function createColumnElement(column: BoardColumn, tasks: BoardTask[], totalCount?: number): HTMLElement {
   const el = document.createElement('div');
@@ -50,12 +51,12 @@ export function createColumnElement(column: BoardColumn, tasks: BoardTask[], tot
     const hint = document.createElement('div');
     hint.className = 'board-column-empty-hint';
     const hintMap: Record<string, string> = {
-      inbox: 'New tasks land here',
-      active: 'Tasks run here',
-      terminal: 'Completed tasks',
-      none: 'Drop tasks here',
+      inbox: t('board.columnHint.inbox'),
+      active: t('board.columnHint.active'),
+      terminal: t('board.columnHint.terminal'),
+      none: t('board.columnHint.none'),
     };
-    hint.textContent = hintMap[column.behavior] || 'Drop tasks here';
+    hint.textContent = hintMap[column.behavior] || t('board.columnHint.fallback');
     cardsArea.appendChild(hint);
   }
 
@@ -66,7 +67,7 @@ export function createColumnElement(column: BoardColumn, tasks: BoardTask[], tot
   // Add task button at bottom
   const addBtn = document.createElement('button');
   addBtn.className = 'board-column-add';
-  addBtn.textContent = '+ Add task';
+  addBtn.textContent = t('board.addTaskButton');
   addBtn.addEventListener('click', () => {
     showTaskModal('create', undefined, column.id);
   });
@@ -89,16 +90,16 @@ function showColumnContextMenu(x: number, y: number, column: BoardColumn): void 
   const canDelete = column.behavior === 'none' && board.columns.length > 1;
 
   showContextMenu(x, y, [
-    { label: 'Rename', action: () => {
+    { label: t('contextMenu.column.rename'), action: () => {
       // Trigger inline rename on the column title
       const colEl = document.querySelector(`.board-column[data-column-id="${column.id}"]`);
       const titleSpan = colEl?.querySelector('.column-title') as HTMLElement | null;
       if (titleSpan) startInlineRename(titleSpan, column);
     }},
-    { label: 'Add Column After', action: () => addColumn('New Column', column.id) },
-    { label: 'Move Left', action: () => moveColumn(column.id, -1), disabled: isFirst },
-    { label: 'Move Right', action: () => moveColumn(column.id, 1), disabled: isLast },
-    { label: 'Delete Column', danger: true, action: () => confirmDeleteColumn(column), disabled: !canDelete },
+    { label: t('contextMenu.column.addAfter'), action: () => addColumn(t('board.newColumnDefaultTitle'), column.id) },
+    { label: t('contextMenu.column.moveLeft'), action: () => moveColumn(column.id, -1), disabled: isFirst },
+    { label: t('contextMenu.column.moveRight'), action: () => moveColumn(column.id, 1), disabled: isLast },
+    { label: t('contextMenu.column.delete'), danger: true, action: () => confirmDeleteColumn(column), disabled: !canDelete },
   ]);
 }
 
@@ -120,11 +121,11 @@ function moveColumn(columnId: string, direction: -1 | 1): void {
 function confirmDeleteColumn(column: BoardColumn): void {
   const board = getBoard();
   const taskCount = board?.tasks.filter(t => t.columnId === column.id).length ?? 0;
-  const inboxTitle = getColumnByBehavior('inbox')?.title ?? 'Backlog';
+  const inboxTitle = getColumnByBehavior('inbox')?.title ?? t('board.columnHint.backlogFallback');
   const message = taskCount > 0
-    ? `Delete column "${column.title}"? Its ${taskCount} task(s) will be moved to ${inboxTitle}.`
-    : `Delete column "${column.title}"?`;
-  showConfirmModal('Delete Column', message, () => deleteColumn(column.id));
+    ? t('board.deleteColumnConfirmWithTasks', { title: column.title, taskCount, inboxTitle })
+    : t('board.deleteColumnConfirmEmpty', { title: column.title });
+  showConfirmModal(t('board.deleteColumnConfirmTitle'), message, () => deleteColumn(column.id));
 }
 
 function startInlineRename(titleSpan: HTMLElement, column: BoardColumn): void {

@@ -1,4 +1,5 @@
 import { hasProviderIssue, type ProviderStatus } from '../setup-checks.js';
+import { t } from '../../i18n.js';
 import type { PreferencesContext, SectionController } from './section.js';
 
 function renderCheckItem(parent: HTMLElement, opts: {
@@ -14,7 +15,7 @@ function renderCheckItem(parent: HTMLElement, opts: {
 
   const icon = document.createElement('span');
   icon.className = opts.ok ? 'setup-check-icon ok' : 'setup-check-icon error';
-  icon.textContent = opts.ok ? '✓' : '✗';
+  icon.textContent = opts.ok ? t('setup.iconOk') : t('setup.iconFail');
 
   const info = document.createElement('div');
   info.className = 'setup-check-info';
@@ -49,15 +50,15 @@ function renderCheckItem(parent: HTMLElement, opts: {
   if (onFix) {
     const btn = document.createElement('button');
     btn.className = 'setup-fix-btn';
-    btn.textContent = 'Fix';
+    btn.textContent = t('setup.fixButton');
     btn.addEventListener('click', async () => {
       btn.disabled = true;
-      btn.textContent = 'Fixing…';
+      btn.textContent = t('setup.fixingButton');
       try {
         await onFix();
       } catch {
         btn.disabled = false;
-        btn.textContent = 'Fix';
+        btn.textContent = t('setup.fixButton');
       }
     });
     row.appendChild(btn);
@@ -104,7 +105,7 @@ export function createSetupSection(ctx: PreferencesContext): SectionController {
 
       const loading = document.createElement('div');
       loading.className = 'setup-loading';
-      loading.textContent = 'Checking configuration…';
+      loading.textContent = t('setup.checking');
       section.appendChild(loading);
       container.appendChild(section);
 
@@ -121,10 +122,10 @@ export function createSetupSection(ctx: PreferencesContext): SectionController {
 
         renderCheckItem(section, {
           label: meta.displayName,
-          description: `The ${meta.binaryName} binary must be installed for sessions to work.`,
+          description: t('setup.binaryDescription', { binaryName: meta.binaryName }),
           ok: binaryOk,
-          statusText: binaryOk ? 'Installed' : 'Not found',
-          helpText: binaryOk ? undefined : `${meta.binaryName} not found.`,
+          statusText: binaryOk ? t('setup.installed') : t('setup.notFound'),
+          helpText: binaryOk ? undefined : t('setup.binaryNotFoundHelp', { binaryName: meta.binaryName }),
         });
 
         if (!binaryOk) continue;
@@ -133,13 +134,13 @@ export function createSetupSection(ctx: PreferencesContext): SectionController {
 
         if (capabilities.costTracking || capabilities.contextWindow) {
           const slOk = validation.statusLine === 'vibeyard';
-          let slStatus = 'Configured';
-          if (validation.statusLine === 'missing') slStatus = 'Not configured';
-          else if (validation.statusLine === 'foreign') slStatus = 'Overwritten by another tool';
+          let slStatus = t('setup.statusLineConfigured');
+          if (validation.statusLine === 'missing') slStatus = t('setup.statusLineMissing');
+          else if (validation.statusLine === 'foreign') slStatus = t('setup.statusLineForeign');
 
           renderCheckItem(section, {
-            label: 'Status Line',
-            description: 'Required for cost tracking and context window monitoring.',
+            label: t('setup.statusLineLabel'),
+            description: t('setup.statusLineDescription'),
             ok: slOk,
             statusText: slStatus,
             onFix: slOk ? undefined : () => fixAndRerender(meta.id),
@@ -148,13 +149,13 @@ export function createSetupSection(ctx: PreferencesContext): SectionController {
 
         if (capabilities.hookStatus) {
           const hooksOk = validation.hooks === 'complete';
-          let hooksStatus = 'All hooks installed';
-          if (validation.hooks === 'missing') hooksStatus = 'No hooks installed';
-          else if (validation.hooks === 'partial') hooksStatus = 'Some hooks missing';
+          let hooksStatus = t('setup.hooksComplete');
+          if (validation.hooks === 'missing') hooksStatus = t('setup.hooksMissing');
+          else if (validation.hooks === 'partial') hooksStatus = t('setup.hooksPartial');
 
           renderCheckItem(section, {
-            label: 'Session Hooks',
-            description: 'Required for session activity tracking.',
+            label: t('setup.hooksLabel'),
+            description: t('setup.hooksDescription'),
             ok: hooksOk,
             statusText: hooksStatus,
             onFix: hooksOk ? undefined : () => fixAndRerender(meta.id),
@@ -167,7 +168,7 @@ export function createSetupSection(ctx: PreferencesContext): SectionController {
             item.className = 'setup-hook-item';
             const icon = document.createElement('span');
             icon.className = installed ? 'setup-check-icon ok' : 'setup-check-icon error';
-            icon.textContent = installed ? '✓' : '✗';
+            icon.textContent = installed ? t('setup.iconOk') : t('setup.iconFail');
             const name = document.createElement('span');
             name.className = 'setup-hook-name';
             name.textContent = event;
@@ -183,15 +184,15 @@ export function createSetupSection(ctx: PreferencesContext): SectionController {
 
             const fixAllBtn = document.createElement('button');
             fixAllBtn.className = 'setup-fix-btn';
-            fixAllBtn.textContent = 'Fix All';
+            fixAllBtn.textContent = t('setup.fixAllButton');
             fixAllBtn.addEventListener('click', async () => {
               fixAllBtn.disabled = true;
-              fixAllBtn.textContent = 'Fixing…';
+              fixAllBtn.textContent = t('setup.fixingButton');
               try {
                 await fixAndRerender(meta.id);
               } catch {
                 fixAllBtn.disabled = false;
-                fixAllBtn.textContent = 'Fix All';
+                fixAllBtn.textContent = t('setup.fixAllButton');
               }
             });
 

@@ -3,6 +3,7 @@ import { instances } from './instance.js';
 import { createMemberCard } from './member-card.js';
 import { showTeamMemberModal } from './member-modal.js';
 import { showPredefinedPicker } from './predefined-picker.js';
+import { t } from '../../i18n.js';
 
 let teamEl: HTMLElement | null = null;
 
@@ -31,19 +32,19 @@ function buildTeamShell(): HTMLElement {
 
   const title = document.createElement('span');
   title.className = 'team-title';
-  title.textContent = 'Team';
+  title.textContent = t('team.title');
 
   const actions = document.createElement('div');
   actions.className = 'team-header-actions';
 
   const browseBtn = document.createElement('button');
   browseBtn.className = 'btn-secondary btn-sm';
-  browseBtn.textContent = 'Browse';
+  browseBtn.textContent = t('team.browseButton');
   browseBtn.addEventListener('click', () => { void showPredefinedPicker(); });
 
   const addBtn = document.createElement('button');
   addBtn.className = 'btn-primary btn-sm';
-  addBtn.textContent = '+ New member';
+  addBtn.textContent = t('team.newMemberButton');
   addBtn.addEventListener('click', () => showTeamMemberModal('create'));
 
   actions.appendChild(browseBtn);
@@ -83,7 +84,7 @@ export function renderTeam(target?: HTMLElement): void {
   if (!projectId) {
     const empty = document.createElement('div');
     empty.className = 'team-empty';
-    empty.textContent = 'Select a project to chat with team members.';
+    empty.textContent = t('team.emptyNoProject');
     grid.appendChild(empty);
     return;
   }
@@ -91,7 +92,7 @@ export function renderTeam(target?: HTMLElement): void {
   if (members.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'team-empty';
-    empty.innerHTML = 'No team members yet. Click <strong>+ New member</strong> to create one, or <strong>Browse</strong> to add a suggestion.';
+    empty.innerHTML = t('team.emptyNoMembers');
     grid.appendChild(empty);
     return;
   }

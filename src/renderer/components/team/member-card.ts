@@ -5,6 +5,7 @@ import { showContextMenu } from '../board/board-context-menu.js';
 import { showConfirmModal } from '../modal.js';
 import { showTeamMemberModal } from './member-modal.js';
 import { showMemberSessionsModal } from './member-sessions-modal.js';
+import { t } from '../../i18n.js';
 
 export function createMemberCard(member: TeamMember, projectId: string): HTMLElement {
   const card = document.createElement('div');
@@ -49,25 +50,25 @@ export function createMemberCard(member: TeamMember, projectId: string): HTMLEle
 
   const sessionsBtn = document.createElement('button');
   sessionsBtn.className = 'btn-secondary team-card-btn';
-  sessionsBtn.textContent = 'Sessions';
+  sessionsBtn.textContent = t('team.card.sessionsButton');
   sessionsBtn.addEventListener('click', () => showMemberSessionsModal(member, projectId));
   actions.appendChild(sessionsBtn);
 
   const editBtn = document.createElement('button');
   editBtn.className = 'btn-secondary team-card-btn';
-  editBtn.textContent = 'Edit';
+  editBtn.textContent = t('team.card.editButton');
   editBtn.addEventListener('click', () => showTeamMemberModal('edit', member));
   actions.appendChild(editBtn);
 
   const deleteBtn = document.createElement('button');
   deleteBtn.className = 'btn-secondary danger team-card-btn';
-  deleteBtn.textContent = 'Delete';
+  deleteBtn.textContent = t('team.card.deleteButton');
   deleteBtn.addEventListener('click', () => {
     showConfirmModal(
-      'Delete team member',
-      `Remove "${member.name}" from your team? This does not affect any chat sessions you've already started.`,
+      t('team.card.deleteTitle'),
+      t('team.card.deleteMessage', { name: member.name }),
       () => appState.removeTeamMember(member.id),
-      { confirmLabel: 'Delete' },
+      { confirmLabel: t('team.card.deleteConfirm') },
     );
   });
   actions.appendChild(deleteBtn);
@@ -84,11 +85,11 @@ function buildChatControl(projectId: string, member: TeamMember): HTMLElement {
 
   const chatBtn = document.createElement('button');
   chatBtn.className = 'btn-primary team-card-btn-primary';
-  chatBtn.textContent = 'Chat';
+  chatBtn.textContent = t('team.card.chatButton');
 
   if (teamProviders.length === 0) {
     chatBtn.disabled = true;
-    chatBtn.title = 'No installed CLI supports team personas. Install Claude or Codex.';
+    chatBtn.title = t('team.card.chatUnsupportedTooltip');
     return chatBtn;
   }
 
@@ -102,9 +103,9 @@ function buildChatControl(projectId: string, member: TeamMember): HTMLElement {
 
   const chevronBtn = document.createElement('button');
   chevronBtn.className = 'btn-primary team-card-chat-dropdown';
-  chevronBtn.setAttribute('aria-label', 'Chat with another provider');
+  chevronBtn.setAttribute('aria-label', t('team.card.chatProviderAriaLabel'));
   chevronBtn.setAttribute('aria-haspopup', 'menu');
-  chevronBtn.textContent = '▼';
+  chevronBtn.textContent = t('team.card.chatChevronGlyph');
   chevronBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     const r = chevronBtn.getBoundingClientRect();

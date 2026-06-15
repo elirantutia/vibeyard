@@ -343,6 +343,12 @@ export interface Preferences {
   confirmCloseWorkingSession: boolean;
   zoomFactor?: number;
   defaultProvider?: ProviderId;
+  /**
+   * UI language. Defined here (rather than imported from `renderer/i18n.ts`)
+   * because `shared/` is the lowest common denominator between main and
+   * renderer; the renderer is the source of truth for the actual catalog.
+   */
+  locale?: 'en' | 'zh-CN';
   /** Global fallback profile applied when neither the session nor the project specifies one. */
   defaultProfileId?: string;
   statusLineConsent?: 'granted' | 'declined' | null;
