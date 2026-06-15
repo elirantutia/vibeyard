@@ -32,7 +32,7 @@ export class AntigravityProvider implements CliProvider {
       pendingPromptTrigger: 'startup-arg',
       systemPromptInjection: false, // confirmed: `agy` has no system-prompt flag (matches Copilot/Gemini)
     },
-    defaultContextWindowSize: 1_000_000, // Gemini-3-class context (assumption)
+    defaultContextWindowSize: 1_000_000, // mirrors Gemini CLI; inert while the contextWindow capability is off
   };
 
   resolveBinaryPath(): string {

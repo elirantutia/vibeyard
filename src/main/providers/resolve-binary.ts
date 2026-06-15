@@ -11,7 +11,7 @@ const COMMON_BIN_DIRS = isWin
       path.join(os.homedir(), 'AppData', 'Roaming', 'npm'),
       path.join(os.homedir(), 'AppData', 'Local', 'Programs'),
       path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'claude'),
-      // Antigravity CLI (agy) installs here on Windows (ASSUMPTION — verify after install).
+      // Antigravity CLI (agy) default install location on Windows: %LOCALAPPDATA%\agy\bin.
       path.join(os.homedir(), 'AppData', 'Local', 'agy', 'bin'),
       path.join(os.homedir(), '.local', 'bin'),
       path.join(os.homedir(), 'scoop', 'shims'),
