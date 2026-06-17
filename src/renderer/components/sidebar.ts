@@ -149,25 +149,24 @@ function render(): void {
     gitEnabled: appState.preferences.sidebarViews?.gitPanel ?? true,
   };
 
-  // The active project is pinned to the top as a card; the rest follow under an
-  // "All projects" label (mirroring the Foundation sidebar layout).
-  const active = appState.projects.find((p) => p.id === appState.activeProjectId);
-  const others = appState.projects.filter((p) => p.id !== appState.activeProjectId);
+  // Projects keep their user-controlled order (drag-and-drop reorderable); the
+  // active one is marked as a card in place rather than pinned to the top.
+  for (const { project, isActive } of projectRenderOrder(appState.projects, appState.activeProjectId)) {
+    projectListEl.appendChild(buildProjectRow(project, isActive, opts));
+  }
+}
 
-  if (active) {
-    projectListEl.appendChild(buildProjectRow(active, true, opts));
-  }
-  if (others.length) {
-    if (active) {
-      const label = document.createElement('div');
-      label.className = 'sidebar-section-label';
-      label.textContent = 'All projects';
-      projectListEl.appendChild(label);
-    }
-    for (const project of others) {
-      projectListEl.appendChild(buildProjectRow(project, false, opts));
-    }
-  }
+/**
+ * Render plan for the project list: every project in its stored
+ * (user-reorderable) order, each flagged `isActive` when it is the current
+ * project. The active project is marked **in place** — it is never pinned to
+ * the top, so selecting a project does not reorder the list.
+ */
+export function projectRenderOrder(
+  projects: ProjectRecord[],
+  activeProjectId: string | null,
+): Array<{ project: ProjectRecord; isActive: boolean }> {
+  return projects.map((project) => ({ project, isActive: project.id === activeProjectId }));
 }
 
 /**

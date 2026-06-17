@@ -86,3 +86,46 @@ describe('projectProfileLabel', () => {
     expect(projectProfileLabel({ defaultProfileId: 'work' } as any)).toBeUndefined();
   });
 });
+
+describe('projectRenderOrder', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    stubDom();
+  });
+
+  async function load() {
+    const sidebar = await import('./sidebar.js');
+    return sidebar.projectRenderOrder;
+  }
+
+  function proj(id: string) {
+    return { id } as any;
+  }
+
+  it('preserves project order — the active project is not pinned to the top', async () => {
+    const projectRenderOrder = await load();
+    const projects = [proj('a'), proj('b'), proj('c')];
+    const plan = projectRenderOrder(projects, 'c');
+    expect(plan.map((e) => e.project.id)).toEqual(['a', 'b', 'c']);
+    expect(plan.map((e) => e.isActive)).toEqual([false, false, true]);
+  });
+
+  it('flags exactly the active project in place', async () => {
+    const projectRenderOrder = await load();
+    const plan = projectRenderOrder([proj('a'), proj('b'), proj('c')], 'b');
+    expect(plan.map((e) => e.project.id)).toEqual(['a', 'b', 'c']);
+    expect(plan.find((e) => e.isActive)?.project.id).toBe('b');
+    expect(plan.filter((e) => e.isActive)).toHaveLength(1);
+  });
+
+  it('marks nothing active when activeProjectId is null or unknown', async () => {
+    const projectRenderOrder = await load();
+    expect(projectRenderOrder([proj('a'), proj('b')], null).some((e) => e.isActive)).toBe(false);
+    expect(projectRenderOrder([proj('a'), proj('b')], 'ghost').some((e) => e.isActive)).toBe(false);
+  });
+
+  it('returns an empty plan for no projects', async () => {
+    const projectRenderOrder = await load();
+    expect(projectRenderOrder([], null)).toEqual([]);
+  });
+});

@@ -77,7 +77,6 @@
 }
 
 #sidebar.collapsed .sidebar-header-actions,
-#sidebar.collapsed .sidebar-section-label,
 #sidebar.collapsed #git-panel,
 #sidebar.collapsed .project-row:not(.active),
 #sidebar.collapsed .project-main,
@@ -289,16 +288,6 @@
 
 #project-list {
   padding: 4px 10px 8px;
-}
-
-/* Section divider label (e.g. "All projects"). */
-.sidebar-section-label {
-  padding: 14px 6px 6px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  color: var(--text-muted);
 }
 
 /* Inactive project = compact row. */
