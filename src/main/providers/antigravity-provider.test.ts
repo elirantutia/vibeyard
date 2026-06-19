@@ -23,7 +23,6 @@ import * as fs from 'fs';
 import { execSync } from 'child_process';
 import { AntigravityProvider, _resetCachedPath } from './antigravity-provider';
 
-const mockExistsSync = vi.mocked(fs.existsSync);
 const mockStatSync = vi.mocked(fs.statSync);
 const mockExecSync = vi.mocked(execSync);
 const fileStat = { isFile: () => true } as fs.Stats;
@@ -97,13 +96,12 @@ describe('resolveBinaryPath', () => {
 
 describe('validatePrerequisites', () => {
   it('returns true when binary found via which', () => {
-    mockExistsSync.mockReturnValue(false);
     mockExecSync.mockReturnValue('/resolved/agy\n' as any);
     expect(provider.validatePrerequisites()).toBe(true);
   });
 
   it('returns false when binary not found anywhere', () => {
-    mockExistsSync.mockReturnValue(false);
+    // beforeEach makes statSync throw, so no candidate dir matches; which/where also fails below.
     mockExecSync.mockImplementation(() => { throw new Error('not found'); });
     expect(provider.validatePrerequisites()).toBe(false);
   });
