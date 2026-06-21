@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.2] - 2026-06-18
+
+### Features
+
+- Open-in-browser button for html files in file viewer
+
+### Fixes
+
+- Exclude empty sessions without transcripts from history
+- Microphone access for CLI tools in embedded terminal on macOS
+
+### Changes
+
+- Keep sidebar project order with active marked in place
+- New session dialog to show profile selector only for claude
+
 ## [0.3.1] - 2026-06-01
 
 ### Features
