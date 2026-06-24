@@ -10,6 +10,13 @@ export const ZOOM_MAX = 2.0;
 export type ProviderId = 'claude' | 'codex' | 'copilot' | 'gemini';
 export type PendingPromptTrigger = 'session-start' | 'first-output' | 'startup-arg';
 
+/**
+ * UI language tag. Defined here (rather than imported from `renderer/i18n.ts`)
+ * because `shared/` is the lowest common denominator between main and
+ * renderer; the renderer is the source of truth for the actual catalog.
+ */
+export type Locale = 'en' | 'zh-CN';
+
 export interface CliProviderCapabilities {
   sessionResume: boolean;
   costTracking: boolean;
@@ -343,6 +350,8 @@ export interface Preferences {
   confirmCloseWorkingSession: boolean;
   zoomFactor?: number;
   defaultProvider?: ProviderId;
+  /** UI language tag. See `Locale` for the supported set. */
+  locale?: Locale;
   /** Global fallback profile applied when neither the session nor the project specifies one. */
   defaultProfileId?: string;
   statusLineConsent?: 'granted' | 'declined' | null;

@@ -5,6 +5,7 @@ import { renderMarkdownContent } from '../file-reader.js';
 import { fetchPredefinedMembers, isCacheFresh } from './github-fetcher.js';
 import { filterMembers, type DomainFilter } from './predefined-filter.js';
 import { bindModalDismiss } from '../modal-manager.js';
+import { t } from '../../i18n.js';
 
 interface DialogState {
   overlay: HTMLDivElement;
@@ -42,12 +43,12 @@ function buildDialog(): DialogState {
   header.className = 'team-picker-header';
   const title = document.createElement('div');
   title.className = 'team-picker-title';
-  title.textContent = 'Browse team members';
+  title.textContent = t('team.picker.title');
 
   const closeBtn = document.createElement('button');
   closeBtn.className = 'team-picker-close';
   closeBtn.textContent = '×';
-  closeBtn.setAttribute('aria-label', 'Close');
+  closeBtn.setAttribute('aria-label', t('team.picker.closeAriaLabel'));
 
   header.appendChild(title);
   header.appendChild(closeBtn);
@@ -67,7 +68,7 @@ function buildDialog(): DialogState {
   const searchInput = document.createElement('input');
   searchInput.type = 'text';
   searchInput.className = 'team-picker-search';
-  searchInput.placeholder = 'Search by name, role, description…';
+  searchInput.placeholder = t('team.picker.searchPlaceholder');
   searchWrap.appendChild(searchIcon);
   searchWrap.appendChild(searchInput);
 
@@ -80,7 +81,7 @@ function buildDialog(): DialogState {
     const chip = document.createElement('button');
     chip.type = 'button';
     chip.className = 'team-picker-chip';
-    chip.textContent = filter === 'all' ? 'All' : TEAM_DOMAIN_LABELS[filter];
+    chip.textContent = filter === 'all' ? t('team.picker.allChip') : TEAM_DOMAIN_LABELS[filter];
     if (filter === 'all') chip.classList.add('active');
     chips.set(filter, chip);
     chipsWrap.appendChild(chip);
@@ -98,7 +99,7 @@ function buildDialog(): DialogState {
   footerCount.className = 'team-picker-footer-count';
   const doneBtn = document.createElement('button');
   doneBtn.className = 'btn-primary';
-  doneBtn.textContent = 'Done';
+  doneBtn.textContent = t('team.picker.doneButton');
   footer.appendChild(footerCount);
   footer.appendChild(doneBtn);
 
@@ -154,7 +155,7 @@ function selectDomain(state: DialogState, filter: DomainFilter): void {
 }
 
 async function load(state: DialogState): Promise<void> {
-  state.status.textContent = 'Loading suggestions from GitHub…';
+  state.status.textContent = t('team.picker.loading');
   state.list.innerHTML = '';
   try {
     const suggestions = await fetchPredefinedMembers();
@@ -162,27 +163,29 @@ async function load(state: DialogState): Promise<void> {
     state.allSuggestions = suggestions;
     rerender(state);
   } catch (err) {
-    state.status.textContent = `Failed to load: ${err instanceof Error ? err.message : String(err)}`;
+    state.status.textContent = t('team.picker.loadError', { err: err instanceof Error ? err.message : String(err) });
   }
 }
 
 function updateFooterCount(state: DialogState): void {
   const count = appState.getTeamMembers().length;
   const projectName = appState.activeProject?.name;
-  const noun = count === 1 ? 'member' : 'members';
+  const noun = count === 1 ? t('team.picker.memberNounSingular') : t('team.picker.memberNounPlural');
   state.footerCount.innerHTML = '';
   const strong = document.createElement('strong');
   strong.textContent = String(count);
   state.footerCount.appendChild(strong);
   state.footerCount.appendChild(
-    document.createTextNode(projectName ? ` ${noun} on the ${projectName} team` : ` ${noun} on the team`),
+    document.createTextNode(projectName
+      ? t('team.picker.footerCountWithProject', { noun, projectName })
+      : t('team.picker.footerCountGeneric', { noun })),
   );
 }
 
 function rerender(state: DialogState): void {
   state.list.innerHTML = '';
   if (state.allSuggestions.length === 0) {
-    state.status.textContent = 'No predefined members found.';
+    state.status.textContent = t('team.picker.empty');
     return;
   }
   state.status.textContent = '';
@@ -232,13 +235,13 @@ function buildEmptyState(state: DialogState): HTMLElement {
   wrap.className = 'team-picker-empty';
 
   const msg = document.createElement('div');
-  msg.textContent = 'No personas match your filter.';
+  msg.textContent = t('team.picker.noMatches');
   wrap.appendChild(msg);
 
   const clear = document.createElement('button');
   clear.type = 'button';
   clear.className = 'team-picker-empty-clear';
-  clear.textContent = 'Clear filters';
+  clear.textContent = t('team.picker.clearFilters');
   clear.addEventListener('click', () => {
     state.query = '';
     state.activeDomain = 'all';
@@ -277,10 +280,10 @@ function buildCard(state: DialogState, member: TeamMember, isInstalled: boolean)
 
   const addBtn = document.createElement('button');
   addBtn.className = 'btn-primary team-picker-card-add';
-  applyAddState(addBtn, isInstalled, 'Add to team', 'Added');
+  applyAddState(addBtn, isInstalled, t('team.picker.addToTeam'), t('team.picker.added'));
   const onAdd = (): void => {
     addMember(member);
-    applyAddState(addBtn, true, 'Add to team', 'Added');
+    applyAddState(addBtn, true, t('team.picker.addToTeam'), t('team.picker.added'));
     updateFooterCount(state);
   };
   addBtn.addEventListener('click', (e) => {
@@ -316,7 +319,7 @@ function showMemberDetail(member: TeamMember, onAdd: () => void, isInstalled: bo
   const backBtn = document.createElement('button');
   backBtn.className = 'team-picker-detail-back';
   backBtn.textContent = '‹';
-  backBtn.setAttribute('aria-label', 'Back');
+  backBtn.setAttribute('aria-label', t('team.picker.backAriaLabel'));
 
   const titleWrap = buildNameRole(member);
   titleWrap.classList.add('team-picker-detail-title');
@@ -324,7 +327,7 @@ function showMemberDetail(member: TeamMember, onAdd: () => void, isInstalled: bo
   const closeBtn = document.createElement('button');
   closeBtn.className = 'team-picker-close';
   closeBtn.textContent = '×';
-  closeBtn.setAttribute('aria-label', 'Close');
+  closeBtn.setAttribute('aria-label', t('team.picker.closeAriaLabel'));
 
   header.appendChild(backBtn);
   header.appendChild(titleWrap);
@@ -340,10 +343,10 @@ function showMemberDetail(member: TeamMember, onAdd: () => void, isInstalled: bo
 
   const addBtn = document.createElement('button');
   addBtn.className = 'btn-primary btn-sm team-picker-card-add';
-  applyAddState(addBtn, isInstalled, 'Add to team', 'Already added');
+  applyAddState(addBtn, isInstalled, t('team.picker.addToTeam'), t('team.picker.alreadyAdded'));
   addBtn.addEventListener('click', () => {
     onAdd();
-    applyAddState(addBtn, true, 'Add to team', 'Already added');
+    applyAddState(addBtn, true, t('team.picker.addToTeam'), t('team.picker.alreadyAdded'));
   });
   footer.appendChild(addBtn);
 
@@ -394,7 +397,9 @@ function addMember(member: TeamMember): void {
 
 function applyAddState(btn: HTMLButtonElement, isInstalled: boolean, addLabel: string, addedLabel: string): void {
   btn.disabled = isInstalled;
-  btn.textContent = isInstalled ? `✓  ${addedLabel}` : `+  ${addLabel}`;
+  btn.textContent = isInstalled
+    ? t('team.picker.addedGlyph', { label: addedLabel })
+    : t('team.picker.addGlyph', { label: addLabel });
 }
 
 function initials(name: string): string {

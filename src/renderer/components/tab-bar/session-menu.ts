@@ -5,13 +5,14 @@ import { findInvalidEnvLines } from '../../../shared/env-vars.js';
 import { showJoinDialog } from '../join-dialog.js';
 import { loadProviderAvailability, getProviderAvailabilitySnapshot } from '../../provider-availability.js';
 import { hideTabContextMenu, setActiveContextMenu, positionMenu } from './menu.js';
+import { t } from '../../i18n.js';
 
 export function quickNewSession(): void {
   const project = appState.activeProject;
   if (!project) return;
   (document.activeElement as HTMLElement)?.blur?.();
   const sessionNum = project.sessions.length + 1;
-  appState.addSession(project.id, `Session ${sessionNum}`);
+  appState.addSession(project.id, t('tab.newSession.defaultName', { num: sessionNum }));
 }
 
 // "More" overflow menu. Deliberately excludes actions that have their own
@@ -44,11 +45,11 @@ export function showMoreMenu(x: number, y: number): void {
   };
 
   const swarmActive = appState.activeProject?.layout.mode === 'swarm';
-  addItem(swarmActive ? 'Swarm Layout ✓' : 'Swarm Layout', () => appState.toggleSwarm());
-  addItem('MCP Inspector', () => addMcpInspector());
+  addItem(swarmActive ? t('tab.moreMenu.swarmLayoutActive') : t('tab.moreMenu.swarmLayout'), () => appState.toggleSwarm());
+  addItem(t('tab.moreMenu.mcpInspector'), () => addMcpInspector());
 
   addSeparator();
-  addItem('Join Remote Session…', () => showJoinDialog());
+  addItem(t('tab.moreMenu.joinRemoteSession'), () => showJoinDialog());
 
   document.body.appendChild(menu);
   setActiveContextMenu(menu);
@@ -71,17 +72,17 @@ export async function promptNewSession(onCreated?: (session: SessionRecord) => v
   const availabilityMap = providerSnapshot?.availability ?? new Map();
 
   const fields: FieldDef[] = [
-    { label: 'Name', id: 'session-name', placeholder: `Session ${sessionNum}`, defaultValue: `Session ${sessionNum}` },
-    { label: 'Arguments', id: 'session-args', placeholder: 'e.g. --model sonnet', defaultValue: project.defaultArgs ?? '' },
+    { label: t('tab.newSessionModal.nameLabel'), id: 'session-name', placeholder: t('tab.newSessionModal.namePlaceholder', { num: sessionNum }), defaultValue: t('tab.newSessionModal.namePlaceholder', { num: sessionNum }) },
+    { label: t('tab.newSessionModal.argumentsLabel'), id: 'session-args', placeholder: t('tab.newSessionModal.argumentsPlaceholder'), defaultValue: project.defaultArgs ?? '' },
     {
-      label: 'Keep args for future sessions',
+      label: t('tab.newSessionModal.keepArgsLabel'),
       id: 'keep-args',
       type: 'checkbox',
       defaultValue: project.defaultArgs ? 'true' : undefined,
     },
-    { label: 'Environment Variables', id: 'session-env', type: 'textarea', placeholder: 'KEY=VALUE (one per line)', defaultValue: project.defaultEnv ?? '' },
+    { label: t('tab.newSessionModal.envLabel'), id: 'session-env', type: 'textarea', placeholder: t('tab.newSessionModal.envPlaceholder'), defaultValue: project.defaultEnv ?? '' },
     {
-      label: 'Keep env vars for future sessions',
+      label: t('tab.newSessionModal.keepEnvLabel'),
       id: 'keep-env',
       type: 'checkbox',
       defaultValue: project.defaultEnv ? 'true' : undefined,
@@ -92,14 +93,14 @@ export async function promptNewSession(onCreated?: (session: SessionRecord) => v
   const effectiveProvider = (availabilityMap.get(preferred) ? preferred : providers.find(p => availabilityMap.get(p.id))?.id) ?? 'claude';
   if (providers.length > 1) {
     fields.unshift({
-      label: 'Provider',
+      label: t('tab.newSessionModal.providerLabel'),
       id: 'provider',
       type: 'select',
       defaultValue: effectiveProvider,
       onSelectChange: (value) => setProfileFieldVisible(value === 'claude'),
       options: providers.map(p => {
         const available = availabilityMap.get(p.id);
-        return { value: p.id, label: available ? p.displayName : `${p.displayName} (not installed)`, disabled: !available };
+        return { value: p.id, label: available ? p.displayName : t('tab.newSessionModal.providerNotInstalled', { name: p.displayName }), disabled: !available };
       }),
     });
   }
@@ -108,18 +109,18 @@ export async function promptNewSession(onCreated?: (session: SessionRecord) => v
   const claudeProfiles = appState.profiles.filter(p => p.providerId === 'claude');
   if (claudeProfiles.length > 0) {
     fields.push({
-      label: 'Profile',
+      label: t('tab.newSessionModal.profileLabel'),
       id: 'profile',
       type: 'select',
       defaultValue: project.defaultProfileId ?? appState.preferences.defaultProfileId ?? '',
       options: [
-        { value: '', label: 'Default (~/.claude)' },
+        { value: '', label: t('sidebar.defaultProfileOption') },
         ...claudeProfiles.map(p => ({ value: p.id, label: p.name })),
       ],
     });
   }
 
-  showModal('New Session', fields, (values) => {
+  showModal(t('tab.newSessionModal.title'), fields, (values) => {
     const name = values['session-name']?.trim();
     if (!name) return;
 
@@ -127,7 +128,7 @@ export async function promptNewSession(onCreated?: (session: SessionRecord) => v
     if (envVars) {
       const invalid = findInvalidEnvLines(envVars);
       if (invalid.length > 0) {
-        setModalError('session-env', `Use KEY=VALUE — invalid line: ${invalid[0]}`);
+        setModalError('session-env', t('tab.newSessionModal.envError', { line: invalid[0] }));
         return;
       }
     }
@@ -162,5 +163,5 @@ function addMcpInspector(): void {
   if (!project) return;
 
   const inspectorNum = project.sessions.filter(s => s.type === 'mcp-inspector').length + 1;
-  appState.addMcpInspectorSession(project.id, `Inspector ${inspectorNum}`);
+  appState.addMcpInspectorSession(project.id, t('tab.newMcpInspector.defaultName', { num: inspectorNum }));
 }

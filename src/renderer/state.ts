@@ -111,6 +111,7 @@ const defaultPreferences: Preferences = {
   readinessExcludedProviders: [],
   sidebarViews: { gitPanel: true, sessionHistory: true, discussions: true, fileTree: true },
   boardCardMetrics: true,
+  locale: 'en',
 };
 
 class AppState {
@@ -275,6 +276,12 @@ class AppState {
     this.state.preferences[key] = value;
     this.persist();
     this.emit('preferences-changed');
+  }
+
+  /** Convenience wrapper: persist + emit. Use this for UI locale switching. */
+  setLocale(locale: Preferences['locale']): void {
+    if (locale === undefined) return;
+    this.setPreference('locale', locale);
   }
 
   setActiveProject(id: string | null): void {

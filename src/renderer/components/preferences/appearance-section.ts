@@ -1,6 +1,7 @@
 import { appState } from '../../state.js';
 import { createCustomSelect, type CustomSelectInstance } from '../custom-select.js';
 import { applyZoom, getZoomFactor, ZOOM_STEPS } from '../../zoom.js';
+import { t } from '../../i18n.js';
 import type { PreferencesContext, SectionController } from './section.js';
 import { toggleRow } from './shared.js';
 
@@ -26,10 +27,10 @@ export function createAppearanceSection(ctx: PreferencesContext): SectionControl
       const themeRow = document.createElement('div');
       themeRow.className = 'modal-toggle-field';
       const themeLabel = document.createElement('label');
-      themeLabel.textContent = 'Theme';
+      themeLabel.textContent = t('appearance.theme');
       themeSelect = createCustomSelect(
         'pref-theme',
-        [{ value: 'dark', label: 'Dark' }, { value: 'light', label: 'Light' }],
+        [{ value: 'dark', label: t('appearance.themeDark') }, { value: 'light', label: t('appearance.themeLight') }],
         ctx.originalTheme,
         (value) => { document.documentElement.dataset.theme = value; },
       );
@@ -40,7 +41,7 @@ export function createAppearanceSection(ctx: PreferencesContext): SectionControl
       const zoomRow = document.createElement('div');
       zoomRow.className = 'modal-toggle-field';
       const zoomLabel = document.createElement('label');
-      zoomLabel.textContent = 'Zoom';
+      zoomLabel.textContent = t('appearance.zoom');
       const zoomOptions = ZOOM_STEPS.map((v) => ({ value: String(v), label: `${Math.round(v * 100)}%` }));
       zoomSelect = createCustomSelect('pref-zoom', zoomOptions, String(getZoomFactor()), (value) => {
         const n = parseFloat(value);
@@ -57,15 +58,15 @@ export function createAppearanceSection(ctx: PreferencesContext): SectionControl
 
       const sidebarHeading = document.createElement('div');
       sidebarHeading.className = 'preferences-subheading';
-      sidebarHeading.textContent = 'Sidebar Views';
+      sidebarHeading.textContent = t('appearance.sidebarViews');
       container.appendChild(sidebarHeading);
 
       const views = appState.preferences.sidebarViews ?? { gitPanel: true, sessionHistory: true, discussions: true, fileTree: true };
       const toggles: { key: keyof SidebarViews; label: string }[] = [
-        { key: 'fileTree', label: 'Project File Tree' },
-        { key: 'gitPanel', label: 'Git Panel' },
-        { key: 'sessionHistory', label: 'Session History' },
-        { key: 'discussions', label: 'Discussions' },
+        { key: 'fileTree', label: t('appearance.fileTree') },
+        { key: 'gitPanel', label: t('appearance.gitPanel') },
+        { key: 'sessionHistory', label: t('appearance.sessionHistory') },
+        { key: 'discussions', label: t('appearance.discussions') },
       ];
 
       const checkboxes = {} as Record<keyof SidebarViews, HTMLInputElement>;
@@ -78,10 +79,10 @@ export function createAppearanceSection(ctx: PreferencesContext): SectionControl
 
       const boardHeading = document.createElement('div');
       boardHeading.className = 'preferences-subheading';
-      boardHeading.textContent = 'Board';
+      boardHeading.textContent = t('appearance.board');
       container.appendChild(boardHeading);
 
-      const boardMetrics = toggleRow('pref-board-card-metrics', 'Show metrics on cards', appState.preferences.boardCardMetrics ?? true);
+      const boardMetrics = toggleRow('pref-board-card-metrics', t('appearance.showMetricsOnCards'), appState.preferences.boardCardMetrics ?? true);
       boardCardMetricsCheckbox = boardMetrics.checkbox;
       container.appendChild(boardMetrics.row);
     },

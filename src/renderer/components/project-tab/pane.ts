@@ -5,6 +5,7 @@ import { showWidgetPicker } from './widgets/widget-picker-modal.js';
 import { showGithubSettings } from './widgets/github-settings-modal.js';
 import { showSessionsSettings } from './widgets/sessions-settings-modal.js';
 import { showTopFilesSettings } from './widgets/top-files-settings-modal.js';
+import { t } from '../../i18n.js';
 import type { OverviewLayout, OverviewWidget } from '../../../shared/types.js';
 
 function defaultLayout(): OverviewLayout {
@@ -31,7 +32,7 @@ export function createProjectTabPane(sessionId: string, projectId: string): void
   if (!project) {
     const empty = document.createElement('div');
     empty.className = 'project-tab-empty';
-    empty.textContent = 'Project unavailable';
+    empty.textContent = t('projectTab.empty');
     el.appendChild(empty);
 
     const instance: ProjectTabInstance = {
@@ -55,13 +56,13 @@ export function createProjectTabPane(sessionId: string, projectId: string): void
 
   const addBtn = document.createElement('button');
   addBtn.className = 'btn-secondary btn-sm project-tab-toolbar-btn';
-  addBtn.textContent = '+ Add Widget';
+  addBtn.textContent = t('projectTab.addWidgetButton');
   toolbar.appendChild(addBtn);
 
   const editBtn = document.createElement('button');
   editBtn.className = 'btn-secondary btn-sm project-tab-toolbar-btn';
-  editBtn.textContent = 'Edit layout';
-  editBtn.title = 'Toggle drag and resize';
+  editBtn.textContent = t('projectTab.editLayoutButton');
+  editBtn.title = t('projectTab.editLayoutTooltip');
   toolbar.appendChild(editBtn);
 
   // Scroll lives on this wrapper, not on .project-tab-grid-root. Gridstack's
@@ -106,7 +107,7 @@ export function createProjectTabPane(sessionId: string, projectId: string): void
     editing = !editing;
     grid?.setEditMode(editing);
     editBtn.classList.toggle('active', editing);
-    editBtn.textContent = editing ? 'Done editing' : 'Edit layout';
+    editBtn.textContent = editing ? t('projectTab.doneEditingButton') : t('projectTab.editLayoutButton');
     el.classList.toggle('editing', editing);
   });
 

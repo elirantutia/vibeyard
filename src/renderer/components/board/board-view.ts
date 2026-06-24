@@ -6,6 +6,7 @@ import { initBoardDnd, isDragActive, addDragEndCallback } from './board-dnd.js';
 import { showConfirmModal } from '../modal.js';
 import { showContextMenu } from './board-context-menu.js';
 import { showBoardHelpDialog } from './board-help-dialog.js';
+import { t } from '../../i18n.js';
 import { instances as kanbanInstances } from '../kanban/instance.js';
 import type { BoardColumn, TagDefinition, BoardData } from '../../../shared/types.js';
 import {
@@ -15,7 +16,7 @@ import {
 import { onChange as onStatusChange } from '../../session-activity.js';
 import { onChange as onCostChange, getCost } from '../../session-cost.js';
 import { onChange as onContextChange, getContext } from '../../session-context.js';
-import { STATUS_LABELS, updateMetricsRow } from './board-card.js';
+import { statusLabel, updateMetricsRow } from './board-card.js';
 
 const svgIcon = (inner: string): string =>
   `<svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
@@ -54,7 +55,7 @@ export function initBoard(): void {
     dot.className = `card-status-dot ${status}`;
     const labelNode = dot.parentElement?.lastChild;
     if (labelNode && labelNode.nodeType === Node.TEXT_NODE) {
-      labelNode.textContent = STATUS_LABELS[status];
+      labelNode.textContent = statusLabel(status);
     }
   });
   const refreshMetrics = (sessionId: string): void => {
@@ -88,12 +89,12 @@ export function createBoardView(): HTMLElement {
 
   const title = document.createElement('span');
   title.className = 'board-title';
-  title.textContent = 'Board';
+  title.textContent = t('board.title');
 
   const helpBtn = document.createElement('button');
   helpBtn.className = 'board-help-btn';
-  helpBtn.title = 'About the board';
-  helpBtn.setAttribute('aria-label', 'About the board');
+  helpBtn.title = t('board.helpTooltip');
+  helpBtn.setAttribute('aria-label', t('board.helpAriaLabel'));
   helpBtn.textContent = '?';
   helpBtn.addEventListener('click', () => showBoardHelpDialog());
 
@@ -113,7 +114,7 @@ export function createBoardView(): HTMLElement {
 
   const searchInput = document.createElement('input');
   searchInput.className = 'board-search-input';
-  searchInput.placeholder = 'Search tasks';
+  searchInput.placeholder = t('board.searchPlaceholder');
   searchInput.value = getSearchQuery();
 
   let searchDebounce: ReturnType<typeof setTimeout>;
@@ -127,7 +128,7 @@ export function createBoardView(): HTMLElement {
 
   const addBtn = document.createElement('button');
   addBtn.className = 'btn-primary';
-  addBtn.innerHTML = `${svgIcon('<line x1="7" y1="2.5" x2="7" y2="11.5"/><line x1="2.5" y1="7" x2="11.5" y2="7"/>')}<span>New task</span>`;
+  addBtn.innerHTML = `${svgIcon('<line x1="7" y1="2.5" x2="7" y2="11.5"/><line x1="2.5" y1="7" x2="11.5" y2="7"/>')}<span>${t('board.newTaskButton')}</span>`;
   addBtn.addEventListener('click', () => showTaskModal('create'));
 
   actions.appendChild(searchWrap);
@@ -230,7 +231,7 @@ function renderTagRow(container: HTMLElement, board: BoardData): void {
   if (board.tags && board.tags.length > 0) {
     const label = document.createElement('span');
     label.className = 'board-tag-row-label';
-    label.textContent = 'Filter';
+    label.textContent = t('board.filterLabel');
     container.appendChild(label);
 
     const pillsContainer = document.createElement('div');
@@ -247,7 +248,7 @@ function renderTagRow(container: HTMLElement, board: BoardData): void {
     if (tags.length > MAX_VISIBLE) {
       const moreBtn = document.createElement('button');
       moreBtn.className = 'board-tag-row-more';
-      moreBtn.textContent = `+${tags.length - MAX_VISIBLE} more...`;
+      moreBtn.textContent = t('board.tagsMore', { count: tags.length - MAX_VISIBLE });
       moreBtn.addEventListener('click', () => {
         const isExpanded = pillsContainer.dataset.expanded === 'true';
         if (isExpanded) {
@@ -255,7 +256,7 @@ function renderTagRow(container: HTMLElement, board: BoardData): void {
             pillsContainer.removeChild(pillsContainer.lastChild!);
           }
           pillsContainer.appendChild(moreBtn);
-          moreBtn.textContent = `+${tags.length - MAX_VISIBLE} more...`;
+          moreBtn.textContent = t('board.tagsMore', { count: tags.length - MAX_VISIBLE });
           pillsContainer.dataset.expanded = 'false';
         } else {
           moreBtn.remove();
@@ -263,7 +264,7 @@ function renderTagRow(container: HTMLElement, board: BoardData): void {
             pillsContainer.appendChild(createTagRowPill(tags[i]));
           }
           pillsContainer.appendChild(moreBtn);
-          moreBtn.textContent = 'Show less';
+          moreBtn.textContent = t('board.tagsShowLess');
           pillsContainer.dataset.expanded = 'true';
         }
       });
@@ -275,8 +276,8 @@ function renderTagRow(container: HTMLElement, board: BoardData): void {
     // "+" button to add new tag
     const addBtn = document.createElement('button');
     addBtn.className = 'board-tag-row-add';
-    addBtn.textContent = '+';
-    addBtn.title = 'Add tag';
+    addBtn.textContent = t('board.addTagButtonLabel');
+    addBtn.title = t('board.addTagTooltip');
     addBtn.addEventListener('click', () => showInlineTagInput(container));
     container.appendChild(addBtn);
   }
@@ -287,7 +288,7 @@ function renderTagRow(container: HTMLElement, board: BoardData): void {
     const filtered = getFilteredTasks(board.tasks).length;
     const countEl = document.createElement('span');
     countEl.className = 'board-filter-count';
-    countEl.textContent = `${filtered}/${total} tasks`;
+    countEl.textContent = t('board.filterCount', { filtered, total });
     container.appendChild(countEl);
   }
 }
@@ -312,7 +313,7 @@ function createTagRowPill(tag: TagDefinition): HTMLElement {
     e.stopPropagation();
 
     const colorItems = TAG_COLORS.map(color => ({
-      label: `● ${color}`,
+      label: t('board.tagColorOption', { color }),
       action: () => updateTagColor(tag.name, color),
       disabled: color === tag.color,
     }));
@@ -321,14 +322,14 @@ function createTagRowPill(tag: TagDefinition): HTMLElement {
       ...colorItems,
       { label: '', action: () => {}, disabled: true },
       {
-        label: 'Delete Tag',
+        label: t('contextMenu.board.deleteTag'),
         danger: true,
         action: () => {
           const count = getTagCount(tag.name);
           const msg = count > 0
-            ? `Delete tag "${tag.name}"? This will remove it from ${count} task(s).`
-            : `Delete tag "${tag.name}"?`;
-          showConfirmModal('Delete Tag', msg, () => removeTag(tag.name));
+            ? t('board.deleteTagConfirmWithTasks', { name: tag.name, count })
+            : t('board.deleteTagConfirmEmpty', { name: tag.name });
+          showConfirmModal(t('board.deleteTagConfirmTitle'), msg, () => removeTag(tag.name));
         },
       },
     ]);
@@ -343,7 +344,7 @@ function showInlineTagInput(container: HTMLElement): void {
 
   const input = document.createElement('input');
   input.className = 'board-tag-row-input';
-  input.placeholder = 'Tag name...';
+  input.placeholder = t('board.tagInputPlaceholder');
   input.maxLength = 30;
 
   const commit = () => {

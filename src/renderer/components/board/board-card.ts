@@ -9,14 +9,17 @@ import { showTaskModal } from './board-task-modal.js';
 import { showContextMenu } from './board-context-menu.js';
 import { showConfirmModal } from '../modal.js';
 import { setPendingPrompt } from '../terminal-pane.js';
+import { t } from '../../i18n.js';
 
-export const STATUS_LABELS: Record<SessionStatus, string> = {
-  working: 'Working',
-  waiting: 'Waiting',
-  idle: 'Idle',
-  completed: 'Done',
-  input: 'Input',
-};
+export function statusLabel(status: SessionStatus): string {
+  switch (status) {
+    case 'working': return t('board.status.working');
+    case 'waiting': return t('board.status.waiting');
+    case 'idle': return t('board.status.idle');
+    case 'completed': return t('board.status.done');
+    case 'input': return t('board.status.input');
+  }
+}
 
 export function createCardElement(task: BoardTask): HTMLElement {
   const el = document.createElement('div');
@@ -40,13 +43,13 @@ export function createCardElement(task: BoardTask): HTMLElement {
 
   const titleEl = document.createElement('div');
   titleEl.className = 'board-card-title';
-  titleEl.textContent = task.title || truncate(task.prompt, 60) || 'Untitled';
+  titleEl.textContent = task.title || truncate(task.prompt, 60) || t('board.card.untitledFallback');
 
   const runBtn = document.createElement('button');
   runBtn.className = 'card-run-btn';
   const hasActiveSession = !!task.sessionId;
   const canResume = !hasActiveSession && !!task.cliSessionId;
-  runBtn.title = hasActiveSession ? 'Focus session' : canResume ? 'Resume' : 'Run';
+  runBtn.title = hasActiveSession ? t('board.card.focusSessionTooltip') : canResume ? t('board.card.resumeTooltip') : t('board.card.runTooltip');
   runBtn.textContent = hasActiveSession ? '>>>' : canResume ? '\u21BB' : '\u25B6';
   runBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -91,7 +94,7 @@ export function createCardElement(task: BoardTask): HTMLElement {
       dot.className = `card-status-dot ${status}`;
       dot.dataset.sessionId = task.sessionId;
       statusEl.appendChild(dot);
-      statusEl.appendChild(document.createTextNode(STATUS_LABELS[status]));
+      statusEl.appendChild(document.createTextNode(statusLabel(status)));
       bottomRow.appendChild(statusEl);
       el.appendChild(bottomRow);
     }
@@ -111,8 +114,8 @@ export function createCardElement(task: BoardTask): HTMLElement {
     e.preventDefault();
     e.stopPropagation();
     showContextMenu(e.clientX, e.clientY, [
-      { label: 'Edit', action: () => showTaskModal('edit', task) },
-      { label: 'Delete', danger: true, action: () => confirmDeleteTask(task) },
+      { label: t('contextMenu.card.edit'), action: () => showTaskModal('edit', task) },
+      { label: t('contextMenu.card.delete'), danger: true, action: () => confirmDeleteTask(task) },
     ]);
   });
 
@@ -120,10 +123,10 @@ export function createCardElement(task: BoardTask): HTMLElement {
 }
 
 function confirmDeleteTask(task: BoardTask): void {
-  const label = task.title || task.prompt.slice(0, 40) || 'this task';
+  const label = task.title || task.prompt.slice(0, 40) || t('board.card.fallbackLabel');
   showConfirmModal(
-    'Delete Task',
-    `Are you sure you want to delete "${label}"? This cannot be undone.`,
+    t('board.deleteTaskTitle'),
+    t('board.deleteTaskMessage', { label }),
     () => deleteTask(task.id),
   );
 }
@@ -251,10 +254,10 @@ export function updateMetricsRow(
       const dur = (cost.totalDurationMs / 1000).toFixed(1);
       const apiDur = (cost.totalApiDurationMs / 1000).toFixed(1);
       const modelPrefix = cost.model ? `${cost.model} · ` : '';
-      costEl.title = `${modelPrefix}Cache read: ${formatTokens(cost.cacheReadTokens)} · Cache create: ${formatTokens(cost.cacheCreationTokens)} · Duration: ${dur}s · API: ${apiDur}s`;
+      costEl.title = `${modelPrefix}${t('board.card.costTooltip', { read: formatTokens(cost.cacheReadTokens), create: formatTokens(cost.cacheCreationTokens), dur, apiDur })}`;
     } else if (archivedCost) {
       const dur = (archivedCost.totalDurationMs / 1000).toFixed(1);
-      costEl.title = `Archived · Duration: ${dur}s`;
+      costEl.title = t('board.card.costTooltipArchived', { dur });
     }
     row.appendChild(costEl);
   }
@@ -263,7 +266,7 @@ export function updateMetricsRow(
     const tokensEl = document.createElement('span');
     tokensEl.className = 'card-tokens';
     tokensEl.textContent = formatTokens(totalTokens);
-    tokensEl.title = `${formatTokens(inputTokens)} in / ${formatTokens(outputTokens)} out`;
+    tokensEl.title = t('board.card.tokenTooltip', { input: formatTokens(inputTokens), output: formatTokens(outputTokens) });
     row.appendChild(tokensEl);
   }
 
@@ -273,7 +276,7 @@ export function updateMetricsRow(
     const severity = getContextSeverity(pct);
     ctxEl.className = severity ? `card-ctx ${severity}` : 'card-ctx';
     ctxEl.textContent = `${pct}%`;
-    ctxEl.title = `Context: ${ctx.totalTokens.toLocaleString()} / ${ctx.contextWindowSize.toLocaleString()} tokens`;
+    ctxEl.title = t('board.card.contextTooltip', { total: ctx.totalTokens.toLocaleString(), window: ctx.contextWindowSize.toLocaleString() });
     row.appendChild(ctxEl);
   }
 }

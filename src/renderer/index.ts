@@ -37,6 +37,21 @@ import { initSessionInspector } from './components/session-inspector.js';
 import { initFilePrompt } from './components/file-prompt.js';
 import { applyThemeToAllRemoteTerminals } from './components/remote-terminal-pane.js';
 import { loadProviderMetas } from './provider-availability.js';
+import { setLocale as setI18nLocale, getLocale } from './i18n.js';
+import { resolveSystemLocale } from './system-locale.js';
+import { rerenderOpenPreferencesModal } from './components/preferences-modal.js';
+import type { Locale } from '../shared/types.js';
+
+function initI18n(): void {
+  const saved = appState.preferences.locale;
+  const initial: Locale = saved ?? resolveSystemLocale(navigator.language);
+  setI18nLocale(initial);
+  document.documentElement.lang = initial;
+  // Persist the resolved locale on first launch so subsequent runs reuse it.
+  if (!saved) {
+    appState.setPreference('locale', initial);
+  }
+}
 import { initBoard } from './components/board/board-view.js';
 import { initBoardSessionSync } from './board-session-sync.js';
 import { initTeamView } from './components/team/team-view.js';
@@ -207,17 +222,34 @@ async function main(): Promise<void> {
   // Load persisted state
   await appState.load();
 
+  // Initialize the UI locale before anything else renders strings.
+  // Persisted choice wins; otherwise fall back to the OS language and persist
+  // it so future launches start in the same locale.
+  initI18n();
+
   // Apply theme from loaded preferences
   const initialTheme = appState.preferences.theme ?? 'dark';
   document.documentElement.dataset.theme = initialTheme;
 
-  // Re-apply theme (and re-theme terminals) whenever preferences change
+  // Re-apply theme (and re-theme terminals) whenever preferences change.
+  // Also handles locale change: re-translate the open preferences modal in
+  // place. Out-of-modal strings (sidebar buttons, tab titles) stay English
+  // until a follow-up PR translates them.
+  let lastLocale = getLocale();
   appState.on('preferences-changed', () => {
     const theme = appState.preferences.theme ?? 'dark';
     document.documentElement.dataset.theme = theme;
     applyThemeToAllTerminals(theme);
     applyThemeToAllShells(theme);
     applyThemeToAllRemoteTerminals(theme);
+
+    const newLocale = appState.preferences.locale;
+    if (newLocale && newLocale !== lastLocale) {
+      lastLocale = newLocale;
+      setI18nLocale(newLocale);
+      document.documentElement.lang = newLocale;
+      rerenderOpenPreferencesModal();
+    }
   });
   // Adding/removing a profile changes whether the status-line profile label is shown.
   appState.on('profiles-changed', () => refreshProfileLabels());
