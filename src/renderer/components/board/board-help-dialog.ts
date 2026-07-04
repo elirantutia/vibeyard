@@ -2,16 +2,19 @@ import { createModalShell, createModalButton } from '../modal-shell.js';
 import { pushModal } from '../modal-manager.js';
 import { buildSection, badge, mono } from '../help-shared.js';
 import { createDefaultBoard } from '../../state.js';
+import { t } from '../../i18n.js';
 import type { ColumnBehavior } from '../../../shared/types.js';
 
 let cleanupFn: (() => void) | null = null;
 
-const BEHAVIOR_DESCRIPTION: Record<ColumnBehavior, string> = {
-  inbox: 'New tasks land here. Tasks from deleted columns also fall back here.',
-  none: 'Plain user-managed column. No automation. Only these columns can be added or deleted.',
-  active: 'Tasks auto-move here when you click Run and a session spawns.',
-  terminal: 'Tasks auto-move here when their session completes.',
-};
+function behaviorDescription(behavior: ColumnBehavior): string {
+  switch (behavior) {
+    case 'inbox': return t('board.help.inboxDesc');
+    case 'none': return t('board.help.noneDesc');
+    case 'active': return t('board.help.activeDesc');
+    case 'terminal': return t('board.help.terminalDesc');
+  }
+}
 
 function buildDefaultColumnsSection(): HTMLElement {
   const section = document.createElement('div');
@@ -19,7 +22,7 @@ function buildDefaultColumnsSection(): HTMLElement {
 
   const header = document.createElement('div');
   header.className = 'help-section-header';
-  header.textContent = 'Default Columns';
+  header.textContent = t('board.help.defaultColumnsHeader');
   section.appendChild(header);
 
   for (const col of createDefaultBoard().columns) {
@@ -32,7 +35,7 @@ function buildDefaultColumnsSection(): HTMLElement {
 
     const descEl = document.createElement('div');
     descEl.className = 'help-desc';
-    descEl.textContent = BEHAVIOR_DESCRIPTION[col.behavior];
+    descEl.textContent = behaviorDescription(col.behavior);
 
     rowEl.appendChild(visualEl);
     rowEl.appendChild(descEl);
@@ -48,13 +51,13 @@ export function showBoardHelpDialog(): void {
 
   const { overlay, body, actions } = createModalShell({
     id: 'board-help-overlay',
-    title: 'About the Board',
+    title: t('board.help.title'),
     wide: true,
   });
   body.innerHTML = '';
   actions.innerHTML = '';
 
-  const confirmBtn = createModalButton('Done', true);
+  const confirmBtn = createModalButton(t('board.help.doneButton'), true);
   confirmBtn.id = 'board-help-confirm';
   actions.appendChild(confirmBtn);
 
@@ -63,30 +66,30 @@ export function showBoardHelpDialog(): void {
 
   container.appendChild(buildDefaultColumnsSection());
 
-  container.appendChild(buildSection('Column Management', [
-    { visual: () => mono('right-click'), label: 'Add column',    description: 'Right-click a column header to add a new column after it. New columns always have behavior "none".' },
-    { visual: () => mono('dbl-click'),   label: 'Rename column', description: 'Double-click a column title to rename it.' },
-    { visual: () => mono('delete'),      label: 'Delete column', description: 'Only "none" columns can be deleted, and never the last column. Tasks fall back to the Backlog (inbox).' },
+  container.appendChild(buildSection(t('board.help.columnMgmtHeader'), [
+    { visual: () => mono(t('board.help.columnAddSample')), label: t('board.help.columnAddLabel'), description: t('board.help.columnAddDesc') },
+    { visual: () => mono(t('board.help.columnRenameSample')), label: t('board.help.columnRenameLabel'), description: t('board.help.columnRenameDesc') },
+    { visual: () => mono(t('board.help.columnDeleteSample')), label: t('board.help.columnDeleteLabel'), description: t('board.help.columnDeleteDesc') },
   ]));
 
-  container.appendChild(buildSection('Card Actions', [
-    { visual: () => mono('▶'),     label: 'Run',       description: 'Spawns a session with the task prompt and moves the card to the Running column.' },
-    { visual: () => mono('⟲'),     label: 'Resume',    description: 'Restores a previous session for the task using its saved CLI session id.' },
-    { visual: () => mono('»'),     label: 'Focus',     description: 'Brings the task\'s active session to the front.' },
-    { visual: () => mono('click'), label: 'Edit',      description: 'Opens the task modal to edit title, prompt, notes, tags, and plan mode.' },
-    { visual: () => mono('right-click'), label: 'Delete', description: 'Right-click a card to delete it.' },
-    { visual: () => badge('Plan'), label: 'Plan mode', description: 'When enabled in the task modal, Run spawns a plan-only session (provider permitting).' },
+  container.appendChild(buildSection(t('board.help.cardActionsHeader'), [
+    { visual: () => mono(t('board.help.cardRunSample')), label: t('board.help.cardRunLabel'), description: t('board.help.cardRunDesc') },
+    { visual: () => mono(t('board.help.cardResumeSample')), label: t('board.help.cardResumeLabel'), description: t('board.help.cardResumeDesc') },
+    { visual: () => mono(t('board.help.cardFocusSample')), label: t('board.help.cardFocusLabel'), description: t('board.help.cardFocusDesc') },
+    { visual: () => mono(t('board.help.cardEditSample')), label: t('board.help.cardEditLabel'), description: t('board.help.cardEditDesc') },
+    { visual: () => mono(t('board.help.cardDeleteSample')), label: t('board.help.cardDeleteLabel'), description: t('board.help.cardDeleteDesc') },
+    { visual: () => badge(t('board.help.cardPlanSample')), label: t('board.help.cardPlanLabel'), description: t('board.help.cardPlanDesc') },
   ]));
 
-  container.appendChild(buildSection('Tags & Search', [
-    { visual: () => mono('search'), label: 'Search',  description: 'Filters tasks by title or prompt (case-insensitive substring).' },
-    { visual: () => badge('#tag'),  label: 'Tags',    description: 'Click a tag pill to toggle a filter. Multiple tags AND together with the search.' },
-    { visual: () => mono('+ tag'),  label: 'Add tag', description: 'Add new tags from the tag row; right-click a tag to recolor or delete it.' },
+  container.appendChild(buildSection(t('board.help.tagsSearchHeader'), [
+    { visual: () => mono(t('board.help.tagsSearchSample')), label: t('board.help.tagsSearchLabel'), description: t('board.help.tagsSearchDesc') },
+    { visual: () => badge(t('board.help.tagsTagSample')), label: t('board.help.tagsTagLabel'), description: t('board.help.tagsTagDesc') },
+    { visual: () => mono(t('board.help.tagsAddSample')), label: t('board.help.tagsAddLabel'), description: t('board.help.tagsAddDesc') },
   ]));
 
-  container.appendChild(buildSection('Drag & Drop', [
-    { visual: () => mono('drag'),       label: 'Move card',     description: 'Drag a card across columns to change its column or order.' },
-    { visual: () => mono('right-click'), label: 'Reorder columns', description: 'Right-click a column header to move it left or right (columns do not drag).' },
+  container.appendChild(buildSection(t('board.help.dragDropHeader'), [
+    { visual: () => mono(t('board.help.dragSample')), label: t('board.help.dragLabel'), description: t('board.help.dragDesc') },
+    { visual: () => mono(t('board.help.reorderSample')), label: t('board.help.reorderLabel'), description: t('board.help.reorderDesc') },
   ]));
 
   body.appendChild(container);

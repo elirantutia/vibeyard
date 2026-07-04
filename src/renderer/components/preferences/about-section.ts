@@ -1,4 +1,5 @@
 import { appState } from '../../state.js';
+import { t } from '../../i18n.js';
 import type { SectionController } from './section.js';
 import { toggleRow } from './shared.js';
 
@@ -15,44 +16,44 @@ export function createAboutSection(): SectionController {
 
       const appName = document.createElement('div');
       appName.className = 'about-app-name';
-      appName.textContent = 'Vibeyard';
+      appName.textContent = t('about.appName');
 
       const versionLine = document.createElement('div');
       versionLine.className = 'about-version';
-      versionLine.textContent = 'Version: loading...';
+      versionLine.textContent = t('about.versionLoading');
 
       const updateRow = document.createElement('div');
       updateRow.className = 'about-update-row';
 
       const updateBtn = document.createElement('button');
       updateBtn.className = 'about-update-btn';
-      updateBtn.textContent = 'Check for Updates';
+      updateBtn.textContent = t('about.updateButton');
 
       const updateStatus = document.createElement('span');
       updateStatus.className = 'about-update-status';
 
       updateBtn.addEventListener('click', () => {
         updateBtn.disabled = true;
-        updateStatus.textContent = 'Checking...';
+        updateStatus.textContent = t('about.updateChecking');
         window.vibeyard.update.checkNow().then(() => {
           // If no update event fires within a few seconds, show "up to date"
           const timeout = setTimeout(() => {
-            updateStatus.textContent = 'You’re up to date.';
+            updateStatus.textContent = t('about.upToDate');
             updateBtn.disabled = false;
           }, 5000);
           const unsub = window.vibeyard.update.onAvailable((info) => {
             clearTimeout(timeout);
-            updateStatus.textContent = `Update v${info.version} available — downloading...`;
+            updateStatus.textContent = t('about.updateAvailable', { version: info.version });
             unsub();
           });
           const unsubErr = window.vibeyard.update.onError(() => {
             clearTimeout(timeout);
-            updateStatus.textContent = 'Update check failed.';
+            updateStatus.textContent = t('about.updateFailed');
             updateBtn.disabled = false;
             unsubErr();
           });
         }).catch(() => {
-          updateStatus.textContent = 'Update check failed.';
+          updateStatus.textContent = t('about.updateFailed');
           updateBtn.disabled = false;
         });
       });
@@ -65,13 +66,13 @@ export function createAboutSection(): SectionController {
 
       const ghLink = document.createElement('a');
       ghLink.className = 'about-link';
-      ghLink.textContent = 'GitHub';
+      ghLink.textContent = t('about.githubLink');
       ghLink.href = '#';
       ghLink.addEventListener('click', (e) => { e.preventDefault(); window.vibeyard.app.openExternal(GITHUB_URL); });
 
       const bugLink = document.createElement('a');
       bugLink.className = 'about-link';
-      bugLink.textContent = 'Report a Bug';
+      bugLink.textContent = t('about.bugLink');
       bugLink.href = '#';
       bugLink.addEventListener('click', (e) => { e.preventDefault(); window.vibeyard.app.openExternal(ISSUES_URL); });
 
@@ -83,15 +84,15 @@ export function createAboutSection(): SectionController {
       const contributeLink = document.createElement('a');
       contributeLink.className = 'about-link';
       contributeLink.href = '#';
-      contributeLink.textContent = 'Contribute on GitHub';
+      contributeLink.textContent = t('about.contributeLink');
       contributeLink.addEventListener('click', (e) => { e.preventDefault(); window.vibeyard.app.openExternal(GITHUB_URL); });
       communityDiv.append(
-        'Vibeyard is open source. ',
+        t('about.communityPrefix'),
         contributeLink,
-        ' — and if you find it useful, give it a star!',
+        t('about.communitySuffix'),
       );
 
-      const debug = toggleRow('pref-debug-mode', 'Debug Mode', appState.preferences.debugMode);
+      const debug = toggleRow('pref-debug-mode', t('about.debugModeLabel'), appState.preferences.debugMode);
       const debugRow = debug.row;
       debugModeCheckbox = debug.checkbox;
 
@@ -104,7 +105,7 @@ export function createAboutSection(): SectionController {
       container.appendChild(aboutDiv);
 
       window.vibeyard.app.getVersion().then((ver) => {
-        versionLine.textContent = `Version: ${ver}`;
+        versionLine.textContent = t('about.versionLoaded', { ver });
       });
     },
 

@@ -446,6 +446,29 @@ describe('addSession()', () => {
     const session = appState.addSession(project.id, 'S1')!;
     expect(session.args).toBeUndefined();
   });
+
+  it('pins an explicitly-passed profile that matches the provider', () => {
+    const project = addProject();
+    appState.profiles.push({ id: 'prof-1', name: 'Work', providerId: 'claude', configDir: '/x', managed: true, createdAt: 0 });
+    const session = appState.addSession(project.id, 'S1', undefined, 'claude', 'prof-1')!;
+    expect(session.profileId).toBe('prof-1');
+  });
+
+  it('does not pin a profile whose provider mismatches', () => {
+    const project = addProject();
+    appState.profiles.push({ id: 'prof-2', name: 'Other', providerId: 'codex', configDir: '/y', managed: true, createdAt: 0 });
+    const session = appState.addSession(project.id, 'S1', undefined, 'claude', 'prof-2')!;
+    expect(session.profileId).toBeUndefined();
+  });
+});
+
+describe('addPlanSession()', () => {
+  it('forwards profileId to addSession', () => {
+    const project = addProject();
+    const spy = vi.spyOn(appState, 'addSession');
+    appState.addPlanSession(project.id, 'S1', true, 'claude', 'prof-1');
+    expect(spy.mock.calls[0][4]).toBe('prof-1');
+  });
 });
 
 describe('removeSession()', () => {

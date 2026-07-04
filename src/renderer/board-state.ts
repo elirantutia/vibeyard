@@ -54,6 +54,7 @@ export function addTask(partial: Partial<BoardTask>): BoardTask | undefined {
     ...(partial.notes ? { notes: partial.notes } : {}),
     ...(partial.tags && partial.tags.length > 0 ? { tags: partial.tags } : {}),
     ...(partial.providerId ? { providerId: partial.providerId } : {}),
+    ...(partial.profileId ? { profileId: partial.profileId } : {}),
     ...(partial.planMode !== undefined ? { planMode: partial.planMode } : {}),
   };
 

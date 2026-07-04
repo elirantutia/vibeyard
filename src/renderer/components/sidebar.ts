@@ -18,6 +18,7 @@ import { attachHoverCard } from './hover-card.js';
 import { mountGitPanel, closeGitPanel } from './git-panel.js';
 import { gitChangeCount, onChange as onGitStatusChange } from '../git-status.js';
 import { ICON_KANBAN, ICON_TEAM, ICON_OVERVIEW, ICON_SESSIONS, ICON_FILES, ICON_GIT } from '../icons.js';
+import { t } from '../i18n.js';
 
 type ProjectPanel = 'history' | 'files' | 'git' | null;
 const projectPanelOpen = new Map<string, ProjectPanel>();
@@ -180,8 +181,8 @@ export function projectProfileLabel(project: ProjectRecord): string | undefined 
   const providerProfiles = appState.profiles.filter((p) => p.providerId === 'claude');
   if (providerProfiles.length <= 1) return undefined;
   const id = project.defaultProfileId ?? appState.preferences.defaultProfileId;
-  if (!id) return 'Default';
-  return providerProfiles.find((p) => p.id === id)?.name ?? 'Default';
+  if (!id) return t('sidebar.default');
+  return providerProfiles.find((p) => p.id === id)?.name ?? t('sidebar.default');
 }
 
 function buildProjectRow(project: ProjectRecord, isActive: boolean, opts: RenderOpts): HTMLElement {
@@ -209,7 +210,7 @@ function buildProjectRow(project: ProjectRecord, isActive: boolean, opts: Render
   // the badge takes that slot).
   const profileLabel = isActive ? projectProfileLabel(project) : undefined;
   const profileBadge = profileLabel
-    ? `<span class="project-profile-badge" title="Claude profile">${esc(profileLabel)}</span>`
+    ? `<span class="project-profile-badge" title="${esc(t('sidebar.claudeProfileTooltip'))}">${esc(profileLabel)}</span>`
     : '';
   el.innerHTML = `
     ${lead}
@@ -219,7 +220,7 @@ function buildProjectRow(project: ProjectRecord, isActive: boolean, opts: Render
     </div>
     ${profileBadge}
     ${countPill}
-    <span class="project-delete" title="Remove project">&times;</span>
+    <span class="project-delete" title="${esc(t('sidebar.removeProjectTooltip'))}">&times;</span>
   `;
 
   el.addEventListener('click', (e) => {
@@ -331,14 +332,14 @@ function buildProjectActions(
   // Only the panel toggles (Files, Sessions) reflect a selected state, derived
   // from openPanel below. The tab buttons (Overview, Kanban, Team) never mark
   // themselves selected from the open tab — opening a tab leaves them inert.
-  const overviewBtn = makeActionButton('Overview', ICON_OVERVIEW, false);
+  const overviewBtn = makeActionButton(t('sidebar.overview'), ICON_OVERVIEW, false);
   overviewBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     appState.openProjectTab(project.id);
   });
   actions.appendChild(overviewBtn);
 
-  const kanbanBtn = makeActionButton('Kanban', ICON_KANBAN, false);
+  const kanbanBtn = makeActionButton(t('sidebar.kanban'), ICON_KANBAN, false);
   kanbanBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     appState.openKanbanTab(project.id);
@@ -346,7 +347,7 @@ function buildProjectActions(
   actions.appendChild(kanbanBtn);
 
   if (opts.historyEnabled) {
-    const historyBtn = makeActionButton('Sessions', ICON_SESSIONS, openPanel === 'history');
+    const historyBtn = makeActionButton(t('sidebar.sessions'), ICON_SESSIONS, openPanel === 'history');
     historyBtn.classList.add('panel-toggle');
     historyBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -355,7 +356,7 @@ function buildProjectActions(
     actions.appendChild(historyBtn);
   }
 
-  const teamBtn = makeActionButton('Team', ICON_TEAM, false);
+  const teamBtn = makeActionButton(t('sidebar.team'), ICON_TEAM, false);
   teamBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     appState.openTeamTab(project.id);
@@ -363,7 +364,7 @@ function buildProjectActions(
   actions.appendChild(teamBtn);
 
   if (opts.fileTreeEnabled) {
-    const filesBtn = makeActionButton('Files', ICON_FILES, openPanel === 'files');
+    const filesBtn = makeActionButton(t('sidebar.files'), ICON_FILES, openPanel === 'files');
     filesBtn.classList.add('panel-toggle');
     filesBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -376,7 +377,7 @@ function buildProjectActions(
   // tab still gives passive awareness without expanding (mirrors the old panel).
   const gitCount = gitChangeCount(project.id);
   if (opts.gitEnabled && gitCount !== null) {
-    const gitBtn = makeActionButton('Git', ICON_GIT, openPanel === 'git');
+    const gitBtn = makeActionButton(t('sidebar.git'), ICON_GIT, openPanel === 'git');
     gitBtn.classList.add('panel-toggle', 'git-toggle');
     const badge = document.createElement('span');
     badge.className = 'project-action-badge' + (gitCount === 0 ? ' hidden' : '');
@@ -427,10 +428,10 @@ export function toggleGitPanel(): void {
 export function promptNewProject(): void {
   const claudeProfiles = appState.profiles.filter((p) => p.providerId === 'claude');
   const fields: FieldDef[] = [
-    { label: 'Name', id: 'project-name', placeholder: 'My Project' },
+    { label: t('sidebar.newProject.nameLabel'), id: 'project-name', placeholder: t('sidebar.newProject.namePlaceholder') },
     {
-      label: 'Path', id: 'project-path', placeholder: '/path/to/project',
-      buttonLabel: 'Browse',
+      label: t('sidebar.newProject.pathLabel'), id: 'project-path', placeholder: t('sidebar.newProject.pathPlaceholder'),
+      buttonLabel: t('sidebar.newProject.browseButton'),
       onButtonClick: async (input) => {
         const dir = await window.vibeyard.fs.browseDirectory();
         if (!dir) return;
@@ -441,17 +442,17 @@ export function promptNewProject(): void {
   ];
   if (claudeProfiles.length > 0) {
     fields.push({
-      label: 'Default profile',
+      label: t('sidebar.newProject.defaultProfileLabel'),
       id: 'profile',
       type: 'select',
       defaultValue: appState.preferences.defaultProfileId ?? '',
       options: [
-        { value: '', label: 'Default (~/.claude)' },
+        { value: '', label: t('sidebar.defaultProfileOption') },
         ...claudeProfiles.map((p) => ({ value: p.id, label: p.name })),
       ],
     });
   }
-  showModal('New Project', fields, async (values) => {
+  showModal(t('sidebar.newProject.title'), fields, async (values) => {
     const name = values['project-name']?.trim();
     const rawPath = values['project-path']?.trim();
     if (!name || !rawPath) return;
@@ -459,7 +460,7 @@ export function promptNewProject(): void {
     const projectPath = await window.vibeyard.fs.expandPath(rawPath);
     const isDir = await window.vibeyard.fs.isDirectory(projectPath);
     if (!isDir) {
-      setModalError('project-path', 'Directory does not exist');
+      setModalError('project-path', t('sidebar.newProject.directoryNotExist'));
       return;
     }
 
@@ -612,19 +613,23 @@ function confirmRemoveProject(project: ProjectRecord): void {
 
   const parts: string[] = [];
   if (historyCount > 0) {
-    parts.push(
-      `all sessions and history (${historyCount} ${historyCount === 1 ? 'entry' : 'entries'})`,
-    );
+    const noun = historyCount === 1
+      ? t('sidebar.removeConfirm.sessionsHistoryNounSingular')
+      : t('sidebar.removeConfirm.sessionsHistoryNounPlural');
+    parts.push(t('sidebar.removeConfirm.sessionsHistory', { count: historyCount, noun }));
   }
   if (taskCount > 0) {
-    parts.push(`kanban tasks (${taskCount} ${taskCount === 1 ? 'task' : 'tasks'})`);
+    const noun = taskCount === 1
+      ? t('sidebar.removeConfirm.kanbanTasksNounSingular')
+      : t('sidebar.removeConfirm.kanbanTasksNounPlural');
+    parts.push(t('sidebar.removeConfirm.kanbanTasks', { count: taskCount, noun }));
   }
 
   const message = parts.length > 0
-    ? `Remove project "${project.name}"? This will delete ${parts.join(' and ')} from Vibeyard. No files on disk will be affected.`
-    : `Remove project "${project.name}"? No files on disk will be affected.`;
-  showConfirmDialog('Remove project', message, {
-    confirmLabel: 'Remove',
+    ? t('sidebar.removeConfirm.withDataMessage', { name: project.name, parts: parts.join(' and ') })
+    : t('sidebar.removeConfirm.emptyMessage', { name: project.name });
+  showConfirmDialog(t('sidebar.removeConfirm.title'), message, {
+    confirmLabel: t('sidebar.removeConfirm.confirmLabel'),
     onConfirm: () => appState.removeProject(project.id),
   });
 }
@@ -682,7 +687,7 @@ function showProjectContextMenu(x: number, y: number, project: ProjectRecord): v
 
   const renameItem = document.createElement('div');
   renameItem.className = 'tab-context-menu-item';
-  renameItem.textContent = 'Rename';
+  renameItem.textContent = t('contextMenu.project.rename');
   renameItem.addEventListener('click', (e) => {
     e.stopPropagation();
     hideProjectContextMenu();
@@ -693,7 +698,7 @@ function showProjectContextMenu(x: number, y: number, project: ProjectRecord): v
 
   const closeAllItem = document.createElement('div');
   closeAllItem.className = 'tab-context-menu-item' + (!hasSessions ? ' disabled' : '');
-  closeAllItem.textContent = 'Close All Sessions';
+  closeAllItem.textContent = t('contextMenu.project.closeAllSessions');
   if (hasSessions) {
     closeAllItem.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -712,7 +717,7 @@ function showProjectContextMenu(x: number, y: number, project: ProjectRecord): v
   if (claudeProfiles.length > 0) {
     settingsItem = document.createElement('div');
     settingsItem.className = 'tab-context-menu-item';
-    settingsItem.textContent = 'Project Settings…';
+    settingsItem.textContent = t('contextMenu.project.settings');
     settingsItem.addEventListener('click', (e) => {
       e.stopPropagation();
       hideProjectContextMenu();
@@ -722,7 +727,7 @@ function showProjectContextMenu(x: number, y: number, project: ProjectRecord): v
 
   const removeItem = document.createElement('div');
   removeItem.className = 'tab-context-menu-item';
-  removeItem.textContent = 'Remove Project';
+  removeItem.textContent = t('contextMenu.project.removeProject');
   removeItem.addEventListener('click', (e) => {
     e.stopPropagation();
     hideProjectContextMenu();
@@ -752,14 +757,14 @@ function hideProjectContextMenu(): void {
 /** Project-level settings dialog. Currently just the default Claude profile. */
 function promptProjectSettings(project: ProjectRecord): void {
   const claudeProfiles = appState.profiles.filter((p) => p.providerId === 'claude');
-  showModal('Project Settings', [
+  showModal(t('sidebar.projectSettings.title'), [
     {
-      label: 'Default profile',
+      label: t('sidebar.projectSettings.defaultProfileLabel'),
       id: 'profile',
       type: 'select',
       defaultValue: project.defaultProfileId ?? '',
       options: [
-        { value: '', label: 'Default (~/.claude)' },
+        { value: '', label: t('sidebar.defaultProfileOption') },
         ...claudeProfiles.map((p) => ({ value: p.id, label: p.name })),
       ],
     },
@@ -779,12 +784,12 @@ function renderDiscussions(): void {
   // inline badge is shown only when expanded (text visible). CSS picks one per mode.
   const dot = count > 0 ? '<span class="discussions-icon-dot"></span>' : '';
   const inlineBadge = count > 0 ? ` <span class="discussions-badge">${count}</span>` : '';
-  sidebarDiscussionsEl.title = 'Vibeyard Discussions';
+  sidebarDiscussionsEl.title = t('sidebar.discussions.tooltip');
   sidebarDiscussionsEl.innerHTML =
     `<span class="action-icon" aria-hidden="true">${ICON_DISCUSSIONS}${dot}</span>` +
     `<div class="discussions-text">` +
-      `<div class="discussions-title">Vibeyard Discussions${inlineBadge}</div>` +
-      `<div class="discussions-desc">Join the conversation about coding with AI</div>` +
+      `<div class="discussions-title">${esc(t('sidebar.discussions.title'))}${inlineBadge}</div>` +
+      `<div class="discussions-desc">${esc(t('sidebar.discussions.description'))}</div>` +
     `</div>`;
 }
 

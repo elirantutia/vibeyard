@@ -200,7 +200,9 @@ jobs:
 
   build-windows:
     needs: [prepare]
-    runs-on: windows-latest
+    # Pinned to windows-2022: the windows-latest image (now windows-2025)
+    # breaks node-gyp's Visual Studio detection when compiling node-pty.
+    runs-on: windows-2022
 
     steps:
       - uses: actions/checkout@v4

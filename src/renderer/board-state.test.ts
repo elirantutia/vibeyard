@@ -103,6 +103,16 @@ describe('board-state', () => {
       const task = addTask({ title: 'T', prompt: 'p', columnId: 'col-ready' });
       expect(task!.columnId).toBe('col-ready');
     });
+
+    it('persists profileId when provided', () => {
+      const task = addTask({ title: 'T', prompt: 'p', profileId: 'prof-1' });
+      expect(task!.profileId).toBe('prof-1');
+    });
+
+    it('omits profileId when absent', () => {
+      const task = addTask({ title: 'T', prompt: 'p' });
+      expect('profileId' in task!).toBe(false);
+    });
   });
 
   describe('updateTask', () => {
@@ -129,6 +139,12 @@ describe('board-state', () => {
       updateTask('nonexistent', { title: 'X' });
       // Should not throw
       expect(getBoard()!.tasks).toHaveLength(0);
+    });
+
+    it('updates profileId', () => {
+      const task = addTask({ title: 'T', prompt: 'p' })!;
+      updateTask(task.id, { profileId: 'prof-2' });
+      expect(task.profileId).toBe('prof-2');
     });
 
     it('strips invalid columnId from updates', () => {

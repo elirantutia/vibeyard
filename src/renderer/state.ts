@@ -111,6 +111,7 @@ const defaultPreferences: Preferences = {
   readinessExcludedProviders: [],
   sidebarViews: { gitPanel: true, sessionHistory: true, discussions: true, fileTree: true },
   boardCardMetrics: true,
+  locale: 'en',
 };
 
 class AppState {
@@ -277,6 +278,12 @@ class AppState {
     this.emit('preferences-changed');
   }
 
+  /** Convenience wrapper: persist + emit. Use this for UI locale switching. */
+  setLocale(locale: Preferences['locale']): void {
+    if (locale === undefined) return;
+    this.setPreference('locale', locale);
+  }
+
   setActiveProject(id: string | null): void {
     this.state.activeProjectId = id;
     const project = this.state.projects.find((p) => p.id === id);
@@ -335,12 +342,13 @@ class AppState {
     name: string,
     planMode: boolean = true,
     providerIdOverride?: ProviderId,
+    profileId?: string,
   ): SessionRecord | undefined {
     const project = this.state.projects.find((p) => p.id === projectId);
     if (!project) return undefined;
     const providerId = resolvePlanProvider(project, this.state.preferences, providerIdOverride);
     const args = buildPlanSessionArgs(project, getProviderCapabilities(providerId), planMode);
-    return this.addSession(projectId, name, args, providerId);
+    return this.addSession(projectId, name, args, providerId, profileId);
   }
 
   addSession(projectId: string, name: string, args?: string, providerId?: ProviderId, profileId?: string, envVars?: string): SessionRecord | undefined {

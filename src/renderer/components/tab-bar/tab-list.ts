@@ -21,10 +21,11 @@ import {
 } from '../../session-close.js';
 import { hideTabContextMenu, setActiveContextMenu, positionMenu } from './menu.js';
 import { tabListEl } from './dom.js';
+import { t } from '../../i18n.js';
 
 function buildTooltip(status: SessionStatus, cliSessionId?: string): string {
-  const statusLine = `Status: ${status}`;
-  return cliSessionId ? `${statusLine}\nSession: ${cliSessionId}` : statusLine;
+  const statusLine = t('tab.tooltip.statusPrefix', { status });
+  return cliSessionId ? `${statusLine}\n${t('tab.tooltip.sessionPrefix', { cliSessionId })}` : statusLine;
 }
 
 function startRename(tab: HTMLElement, project: ProjectRecord, session: SessionRecord): void {
@@ -78,7 +79,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
   const renamable = session.type !== 'kanban' && session.type !== 'project-tab' && session.type !== 'team';
   const renameItem = document.createElement('div');
   renameItem.className = 'tab-context-menu-item' + (renamable ? '' : ' disabled');
-  renameItem.textContent = 'Rename';
+  renameItem.textContent = t('contextMenu.tab.rename');
   if (renamable) {
     renameItem.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -89,7 +90,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
 
   const closeItem = document.createElement('div');
   closeItem.className = 'tab-context-menu-item';
-  closeItem.textContent = 'Close';
+  closeItem.textContent = t('contextMenu.tab.close');
   closeItem.addEventListener('click', (e) => {
     e.stopPropagation();
     hideTabContextMenu();
@@ -104,7 +105,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
 
   const closeAllItem = document.createElement('div');
   closeAllItem.className = 'tab-context-menu-item';
-  closeAllItem.textContent = 'Close All';
+  closeAllItem.textContent = t('contextMenu.tab.closeAll');
   closeAllItem.addEventListener('click', (e) => {
     e.stopPropagation();
     hideTabContextMenu();
@@ -113,7 +114,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
 
   const closeOthersItem = document.createElement('div');
   closeOthersItem.className = 'tab-context-menu-item' + (totalSessions <= 1 ? ' disabled' : '');
-  closeOthersItem.textContent = 'Close Others';
+  closeOthersItem.textContent = t('contextMenu.tab.closeOthers');
   if (totalSessions > 1) {
     closeOthersItem.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -124,7 +125,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
 
   const closeRightItem = document.createElement('div');
   closeRightItem.className = 'tab-context-menu-item' + (sessionIdx >= totalSessions - 1 ? ' disabled' : '');
-  closeRightItem.textContent = 'Close to the Right';
+  closeRightItem.textContent = t('contextMenu.tab.closeRight');
   if (sessionIdx < totalSessions - 1) {
     closeRightItem.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -135,7 +136,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
 
   const closeLeftItem = document.createElement('div');
   closeLeftItem.className = 'tab-context-menu-item' + (sessionIdx <= 0 ? ' disabled' : '');
-  closeLeftItem.textContent = 'Close to the Left';
+  closeLeftItem.textContent = t('contextMenu.tab.closeLeft');
   if (sessionIdx > 0) {
     closeLeftItem.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -146,7 +147,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
 
   const moveLeftItem = document.createElement('div');
   moveLeftItem.className = 'tab-context-menu-item' + (sessionIdx <= 0 ? ' disabled' : '');
-  moveLeftItem.textContent = 'Move Left';
+  moveLeftItem.textContent = t('contextMenu.tab.moveLeft');
   if (sessionIdx > 0) {
     moveLeftItem.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -157,7 +158,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
 
   const moveRightItem = document.createElement('div');
   moveRightItem.className = 'tab-context-menu-item' + (sessionIdx >= totalSessions - 1 ? ' disabled' : '');
-  moveRightItem.textContent = 'Move Right';
+  moveRightItem.textContent = t('contextMenu.tab.moveRight');
   if (sessionIdx < totalSessions - 1) {
     moveRightItem.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -178,7 +179,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
 
   const shareItem = document.createElement('div');
   shareItem.className = 'tab-context-menu-item' + (!isCli || currentlySharing ? ' disabled' : '');
-  shareItem.textContent = 'Share Session…';
+  shareItem.textContent = t('contextMenu.tab.shareSession');
   if (isCli && !currentlySharing) {
     shareItem.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -189,7 +190,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
 
   const stopShareItem = document.createElement('div');
   stopShareItem.className = 'tab-context-menu-item' + (!currentlySharing ? ' disabled' : '');
-  stopShareItem.textContent = 'Stop Sharing';
+  stopShareItem.textContent = t('contextMenu.tab.stopSharing');
   if (currentlySharing) {
     stopShareItem.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -211,7 +212,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
 
     const copySessionIdItem = document.createElement('div');
     copySessionIdItem.className = 'tab-context-menu-item' + (!hasCliSession ? ' disabled' : '');
-    copySessionIdItem.textContent = 'Copy CLI Session ID';
+    copySessionIdItem.textContent = t('contextMenu.tab.copyCliSessionId');
     if (hasCliSession) {
       copySessionIdItem.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -222,7 +223,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
 
     const copyInternalIdItem = document.createElement('div');
     copyInternalIdItem.className = 'tab-context-menu-item';
-    copyInternalIdItem.textContent = 'Copy Internal ID';
+    copyInternalIdItem.textContent = t('contextMenu.tab.copyInternalId');
     copyInternalIdItem.addEventListener('click', (e) => {
       e.stopPropagation();
       hideTabContextMenu();
@@ -238,7 +239,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
   const inspectItem = document.createElement('div');
   const isCurrentlyInspecting = isInspectorOpen() && getInspectedSessionId() === session.id;
   inspectItem.className = 'tab-context-menu-item' + (!canInspect ? ' disabled' : '');
-  inspectItem.textContent = isCurrentlyInspecting ? 'Close Inspector' : 'Inspect';
+  inspectItem.textContent = isCurrentlyInspecting ? t('contextMenu.tab.closeInspector') : t('contextMenu.tab.inspect');
   if (canInspect) {
     inspectItem.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -310,21 +311,21 @@ export function render(): void {
     const isTeam = session.type === 'team';
     const isSpecial = isMcp || isDiff || isFileReader || isRemoteTab || isBrowserTab || isProjectTab || isKanban || isTeam;
     const sharing = isSharing(session.id);
-    const displayName = isProjectTab ? `${project.name} - Overview` : isKanban ? `${project.name} - Kanban` : isTeam ? `${project.name} - Team` : session.name;
+    const displayName = isProjectTab ? t('tab.title.overview', { name: project.name }) : isKanban ? t('tab.title.kanban', { name: project.name }) : isTeam ? t('tab.title.team', { name: project.name }) : session.name;
     tab.className = 'tab-item' + (isActive ? ' active' : '') + (unread ? ' unread' : '') + (sharing ? ' tab-sharing' : '') + (isRemoteTab ? ' tab-remote' : '');
     tab.dataset.sessionId = session.id;
     tab.draggable = true;
-    tab.title = isDiff ? `Diff: ${session.diffFilePath || session.name}` : isMcp ? `MCP Inspector` : isFileReader ? `File: ${session.fileReaderPath || session.name}` : isRemoteTab ? `Remote: ${session.remoteHostName || session.name}` : isBrowserTab ? `Browser: ${session.browserTabUrl || 'New Tab'}` : isProjectTab ? 'Project tools' : isKanban ? 'Kanban board' : isTeam ? 'Team' : buildTooltip(getStatus(session.id), session.cliSessionId);
+    tab.title = isDiff ? t('tab.tooltip.diff', { name: session.diffFilePath || session.name }) : isMcp ? t('tab.tooltip.mcpInspector') : isFileReader ? t('tab.tooltip.file', { name: session.fileReaderPath || session.name }) : isRemoteTab ? t('tab.tooltip.remote', { name: session.remoteHostName || session.name }) : isBrowserTab ? t('tab.tooltip.browser', { url: session.browserTabUrl || t('tab.tooltip.browserNew') }) : isProjectTab ? t('tab.tooltip.projectTools') : isKanban ? t('tab.tooltip.kanbanBoard') : isTeam ? t('tab.tooltip.team') : buildTooltip(getStatus(session.id), session.cliSessionId);
     const providerId = session.providerId || 'claude';
     const providerIcon = hasMultipleAvailableProviders() ? `<img class="tab-provider-icon" src="assets/providers/${providerId}.png" alt="${providerId}" onerror="this.style.display='none'"> ` : '';
     const namePrefix = isDiff ? '<span class="tab-diff-badge">DIFF</span> ' : isMcp ? '<span class="tab-mcp-badge">MCP</span> ' : isFileReader ? '<span class="tab-file-badge">FILE</span> ' : isRemoteTab ? '<span class="tab-remote-badge">P2P</span> ' : isBrowserTab ? '<span class="tab-browser-badge">WEB</span> ' : isProjectTab ? `<span class="tab-project-badge">${ICON_OVERVIEW}</span> ` : isKanban ? `<span class="tab-kanban-badge">${ICON_KANBAN}</span> ` : isTeam ? `<span class="tab-team-badge">${ICON_TEAM}</span> ` : !isSpecial ? providerIcon : '';
-    const shareIndicator = sharing ? '<span class="tab-share-indicator" title="Sharing"></span>' : '';
+    const shareIndicator = sharing ? `<span class="tab-share-indicator" title="${esc(t('tab.shareIndicatorTooltip'))}"></span>` : '';
     const statusDot = isSpecial ? '' : `<span class="tab-status ${getStatus(session.id)}"></span>`;
     tab.innerHTML = `
       ${statusDot}
       <span class="tab-name">${namePrefix}${esc(displayName)}</span>
       ${shareIndicator}
-      <span class="tab-close" title="Close session">&times;</span>
+      <span class="tab-close" title="${esc(t('tab.closeTooltip'))}">&times;</span>
     `;
 
     // Click to switch

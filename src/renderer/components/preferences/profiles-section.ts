@@ -2,6 +2,7 @@ import { appState } from '../../state.js';
 import { isMac } from '../../platform.js';
 import { createCustomSelect, type CustomSelectInstance } from '../custom-select.js';
 import { showModal, closeModal, setModalError, showConfirmDialog } from '../modal.js';
+import { t } from '../../i18n.js';
 import type { PreferencesContext, SectionController } from './section.js';
 
 export function createProfilesSection(ctx: PreferencesContext): SectionController {
@@ -15,12 +16,12 @@ export function createProfilesSection(ctx: PreferencesContext): SectionControlle
 
     const heading = document.createElement('div');
     heading.className = 'preferences-subheading';
-    heading.textContent = 'Claude profiles';
+    heading.textContent = t('profiles.heading');
     container.appendChild(heading);
 
     const desc = document.createElement('div');
     desc.className = 'preferences-section-desc';
-    desc.textContent = 'Each profile runs Claude Code against its own config directory (CLAUDE_CONFIG_DIR), isolating login, settings, and history — handy for separate work and personal licenses. After creating a profile, start a session with it and run /login once to sign in.';
+    desc.textContent = t('profiles.description');
     container.appendChild(desc);
 
     // macOS-only guardrail notice: per-profile login isolation depends on Claude
@@ -35,8 +36,8 @@ export function createProfilesSection(ctx: PreferencesContext): SectionControlle
         const warn = document.createElement('div');
         warn.className = res.status === 'unsupported' ? 'profiles-keychain-warning' : 'profiles-keychain-warning info';
         warn.textContent = res.status === 'unsupported'
-          ? `This version of Claude Code${res.version ? ` (${res.version})` : ''} stores every login under a single macOS keychain entry, so profiles can't keep accounts separate. Update Claude Code to create and use profiles.`
-          : `Vibeyard can't yet confirm this Claude Code build isolates profile logins in the macOS keychain. Sign in to a profile once and isolation will be verified automatically.`;
+          ? t('profiles.keychainUnsupported', { version: res.version ? ` (${res.version})` : '' })
+          : t('profiles.keychainUnknown');
         warnSlot.appendChild(warn);
       }).catch(() => { /* status check is best-effort */ });
     }
@@ -47,10 +48,10 @@ export function createProfilesSection(ctx: PreferencesContext): SectionControlle
     const defaultRow = document.createElement('div');
     defaultRow.className = 'modal-toggle-field';
     const defaultLabel = document.createElement('label');
-    defaultLabel.textContent = 'Default profile';
+    defaultLabel.textContent = t('profiles.defaultLabel');
     profileDefaultSelect = createCustomSelect(
       'pref-default-profile',
-      [{ value: '', label: 'Default (~/.claude)' }, ...profiles.map((p) => ({ value: p.id, label: p.name }))],
+      [{ value: '', label: t('sidebar.defaultProfileOption') }, ...profiles.map((p) => ({ value: p.id, label: p.name }))],
       appState.preferences.defaultProfileId ?? '',
       (value) => appState.setPreference('defaultProfileId', value || undefined),
     );
@@ -64,7 +65,7 @@ export function createProfilesSection(ctx: PreferencesContext): SectionControlle
     if (profiles.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'profiles-empty';
-      empty.textContent = 'No profiles yet.';
+      empty.textContent = t('profiles.empty');
       list.appendChild(empty);
     } else {
       for (const profile of profiles) {
@@ -78,7 +79,7 @@ export function createProfilesSection(ctx: PreferencesContext): SectionControlle
         nameEl.textContent = profile.name;
         const tag = document.createElement('span');
         tag.className = 'profile-row-tag';
-        tag.textContent = profile.managed ? 'managed' : 'custom';
+        tag.textContent = profile.managed ? t('profiles.tagManaged') : t('profiles.tagCustom');
         nameEl.appendChild(tag);
         const pathEl = document.createElement('div');
         pathEl.className = 'profile-row-path';
@@ -90,17 +91,17 @@ export function createProfilesSection(ctx: PreferencesContext): SectionControlle
         actions.className = 'profile-row-actions';
         const editBtn = document.createElement('button');
         editBtn.className = 'btn-secondary btn-sm';
-        editBtn.textContent = 'Rename';
+        editBtn.textContent = t('profiles.renameButton');
         editBtn.addEventListener('click', () => promptEditProfile(profile.id, profile.name));
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'btn-secondary btn-sm danger';
-        deleteBtn.textContent = 'Delete';
+        deleteBtn.textContent = t('profiles.deleteButton');
         deleteBtn.addEventListener('click', () => {
           showConfirmDialog(
-            'Delete profile',
-            `Delete profile "${profile.name}"? Sessions and projects using it fall back to the default config dir. The config directory on disk is not removed.`,
+            t('profiles.deleteTitle'),
+            t('profiles.deleteMessage', { name: profile.name }),
             {
-              confirmLabel: 'Delete',
+              confirmLabel: t('profiles.deleteConfirm'),
               onConfirm: () => {
                 appState.removeProfile(profile.id);
                 ctx.rerenderSection('profiles');
@@ -125,26 +126,26 @@ export function createProfilesSection(ctx: PreferencesContext): SectionControlle
     addBtn.innerHTML =
       '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" ' +
       'stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">' +
-      '<path d="M12 5v14M5 12h14"/></svg><span>Add Profile</span>';
+      `<path d="M12 5v14M5 12h14"/></svg><span>${t('profiles.addButton')}</span>`;
     addBtn.addEventListener('click', promptAddProfile);
     addRow.appendChild(addBtn);
     container.appendChild(addRow);
   }
 
   function promptAddProfile() {
-    showModal('Add Profile', [
-      { label: 'Name', id: 'profile-name', placeholder: 'e.g. Work' },
-      { label: 'Custom config path (optional)', id: 'profile-path', placeholder: 'Leave blank for a managed directory' },
+    showModal(t('profiles.addModalTitle'), [
+      { label: t('profiles.addNameLabel'), id: 'profile-name', placeholder: t('profiles.addNamePlaceholder') },
+      { label: t('profiles.addPathLabel'), id: 'profile-path', placeholder: t('profiles.addPathPlaceholder') },
     ], async (values) => {
       const name = values['profile-name']?.trim();
-      if (!name) { setModalError('profile-name', 'Name is required'); return; }
+      if (!name) { setModalError('profile-name', t('profiles.nameRequired')); return; }
       // Block creation when this Claude build can't isolate profile logins on
       // macOS — otherwise the new profile would silently share the default
       // account's keychain login.
       if (isMac) {
         const { status, version } = cachedKeychainStatus ?? await window.vibeyard.profiles.keychainStatus();
         if (status === 'unsupported') {
-          setModalError('profile-name', `Claude Code${version ? ` ${version}` : ''} can't isolate profile logins on macOS — update Claude Code first.`);
+          setModalError('profile-name', t('profiles.unsupportedMacError', { version: version ? ` ${version}` : '' }));
           return;
         }
       }
@@ -152,7 +153,7 @@ export function createProfilesSection(ctx: PreferencesContext): SectionControlle
       try {
         await appState.addProfile({ name, providerId: 'claude', customPath });
       } catch (err) {
-        setModalError('profile-path', `Could not create config directory: ${err instanceof Error ? err.message : String(err)}`);
+        setModalError('profile-path', t('profiles.createDirError', { err: err instanceof Error ? err.message : String(err) }));
         return;
       }
       closeModal();
@@ -161,11 +162,11 @@ export function createProfilesSection(ctx: PreferencesContext): SectionControlle
   }
 
   function promptEditProfile(id: string, currentName: string) {
-    showModal('Rename Profile', [
-      { label: 'Name', id: 'profile-name', defaultValue: currentName },
+    showModal(t('profiles.renameModalTitle'), [
+      { label: t('profiles.renameNameLabel'), id: 'profile-name', defaultValue: currentName },
     ], (values) => {
       const name = values['profile-name']?.trim();
-      if (!name) { setModalError('profile-name', 'Name is required'); return; }
+      if (!name) { setModalError('profile-name', t('profiles.nameRequired')); return; }
       appState.updateProfile(id, { name });
       closeModal();
       ctx.rerenderSection('profiles');

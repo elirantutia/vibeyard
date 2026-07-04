@@ -1,4 +1,5 @@
 import { shortcutManager, displayKeys, eventToAccelerator } from '../../shortcuts.js';
+import { t } from '../../i18n.js';
 import type { PreferencesContext, SectionController } from './section.js';
 
 export function createShortcutsSection(ctx: PreferencesContext): SectionController {
@@ -31,8 +32,8 @@ export function createShortcutsSection(ctx: PreferencesContext): SectionControll
 
           const resetBtn = document.createElement('button');
           resetBtn.className = 'shortcut-reset-btn';
-          resetBtn.textContent = 'Reset';
-          resetBtn.title = 'Reset to default';
+          resetBtn.textContent = t('shortcuts.resetButton');
+          resetBtn.title = t('shortcuts.resetTooltip');
           if (!hasOverride) {
             resetBtn.style.visibility = 'hidden';
           }
@@ -40,7 +41,7 @@ export function createShortcutsSection(ctx: PreferencesContext): SectionControll
           // Click key button to start recording
           keyBtn.addEventListener('click', () => {
             ctx.endRecorder();
-            keyBtn.textContent = 'Press keys...';
+            keyBtn.textContent = t('shortcuts.recordingPrompt');
             keyBtn.classList.add('recording');
 
             const onKeydown = (e: KeyboardEvent) => {

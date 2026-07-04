@@ -1,6 +1,7 @@
 import { appState } from '../state.js';
 import { createModalShell, createModalButton } from './modal-shell.js';
 import { pushModal } from './modal-manager.js';
+import { t } from '../i18n.js';
 import type { PreferencesContext, Section, SectionController } from './preferences/section.js';
 import { createGeneralSection } from './preferences/general-section.js';
 import { createAppearanceSection } from './preferences/appearance-section.js';
@@ -13,33 +14,40 @@ import { createHelpSection } from './preferences/help-section.js';
 
 let cleanupFn: (() => void) | null = null;
 
-const SECTIONS: { id: Section; label: string; create: (ctx: PreferencesContext) => SectionController }[] = [
-  { id: 'general', label: 'General', create: createGeneralSection },
-  { id: 'appearance', label: 'Appearance', create: createAppearanceSection },
-  { id: 'browser', label: 'Browser', create: createBrowserSection },
-  { id: 'shortcuts', label: 'Shortcuts', create: createShortcutsSection },
-  { id: 'profiles', label: 'Profiles', create: createProfilesSection },
-  { id: 'setup', label: 'Setup', create: createSetupSection },
-  { id: 'help', label: 'Help', create: createHelpSection },
-  { id: 'about', label: 'About', create: createAboutSection },
+let openModal: (() => void) | null = null;
+
+const SECTIONS: { id: Section; labelKey: string; create: (ctx: PreferencesContext) => SectionController }[] = [
+  { id: 'general', labelKey: 'preferencesNav.general', create: createGeneralSection },
+  { id: 'appearance', labelKey: 'preferencesNav.appearance', create: createAppearanceSection },
+  { id: 'browser', labelKey: 'preferencesNav.browser', create: createBrowserSection },
+  { id: 'shortcuts', labelKey: 'preferencesNav.shortcuts', create: createShortcutsSection },
+  { id: 'profiles', labelKey: 'preferencesNav.profiles', create: createProfilesSection },
+  { id: 'setup', labelKey: 'preferencesNav.setup', create: createSetupSection },
+  { id: 'help', labelKey: 'preferencesNav.help', create: createHelpSection },
+  { id: 'about', labelKey: 'preferencesNav.about', create: createAboutSection },
 ];
+
+/** Re-translate an open preferences modal in place. No-op when closed. */
+export function rerenderOpenPreferencesModal(): void {
+  openModal?.();
+}
 
 export function showPreferencesModal(initialSection: Section = 'general'): void {
   cleanupFn?.();
   cleanupFn = null;
 
-  const { overlay, body: bodyEl, actions } = createModalShell({
+  const { overlay, body: bodyEl, actions, titleEl } = createModalShell({
     id: 'preferences-overlay',
-    title: 'Preferences',
+    title: t('preferences.title'),
     wide: true,
   });
   bodyEl.innerHTML = '';
   actions.innerHTML = '';
 
-  const btnCancel = createModalButton('Cancel', false);
+  const btnCancel = createModalButton(t('preferences.cancel'), false);
   btnCancel.id = 'preferences-cancel';
   actions.appendChild(btnCancel);
-  const btnConfirm = createModalButton('Done', true);
+  const btnConfirm = createModalButton(t('preferences.done'), true);
   btnConfirm.id = 'preferences-confirm';
   actions.appendChild(btnConfirm);
 
@@ -54,7 +62,7 @@ export function showPreferencesModal(initialSection: Section = 'general'): void 
   for (const section of SECTIONS) {
     const item = document.createElement('div');
     item.className = 'preferences-menu-item';
-    item.textContent = section.label;
+    item.textContent = t(section.labelKey);
     item.dataset.section = section.id;
     menu.appendChild(item);
     menuItems.set(section.id, item);
@@ -176,5 +184,24 @@ export function showPreferencesModal(initialSection: Section = 'general'): void 
     btnConfirm.removeEventListener('click', handleConfirm);
     btnCancel.removeEventListener('click', handleCancel);
     document.removeEventListener('keydown', handleKeydown);
+    openModal = null;
+  };
+
+  openModal = () => {
+    // Refresh the modal title and footer buttons (in case they were re-translated).
+    titleEl.textContent = t('preferences.title');
+    btnCancel.textContent = t('preferences.cancel');
+    btnConfirm.textContent = t('preferences.done');
+    // Refresh the sidebar menu labels.
+    for (const section of SECTIONS) {
+      menuItems.get(section.id)!.textContent = t(section.labelKey);
+    }
+    // Re-render the active section content into a fresh container so all
+    // textContent / placeholder strings pick up the new locale. Section
+    // controllers persist (so user-typed input would survive a section
+    // switch but NOT a full locale change — acceptable for v1).
+    controllers.get(currentSection)?.destroy?.();
+    controllers.delete(currentSection);
+    renderSection(currentSection);
   };
 }

@@ -84,6 +84,7 @@ import { addTask } from '../../board-state';
 import {
   createCardElement,
   updateMetricsRow,
+  runTask,
 } from './board-card';
 import { hasMultipleAvailableProviders } from '../../provider-availability.js';
 import type { CostInfo, ContextWindowInfo } from '../../../shared/types.js';
@@ -240,6 +241,54 @@ describe('createCardElement metrics row', () => {
     const card = createCardElement(task) as unknown as StubEl;
     const row = card.children.find((c) => c.className === 'board-card-metrics');
     expect(row).toBeUndefined();
+  });
+});
+
+describe('runTask profile threading', () => {
+  it('passes task.profileId to addSession on fresh spawn', async () => {
+    const spy = vi.spyOn(appState, 'addSession').mockReturnValue({ id: 'new-sess' } as never);
+    const task = addTask({ title: 'T', prompt: 'do it', columnId: 'col-backlog', providerId: 'claude', profileId: 'prof-work' })!;
+
+    await runTask(task);
+
+    expect(spy).toHaveBeenCalledWith(
+      appState.activeProject!.id,
+      expect.any(String),
+      undefined,
+      'claude',
+      'prof-work',
+    );
+  });
+
+  it('passes task.profileId to addPlanSession when planMode', async () => {
+    const spy = vi.spyOn(appState, 'addPlanSession').mockReturnValue({ id: 'new-sess' } as never);
+    const task = addTask({ title: 'T', prompt: 'do it', columnId: 'col-backlog', providerId: 'claude', profileId: 'prof-work' })!;
+    task.planMode = true;
+
+    await runTask(task);
+
+    expect(spy).toHaveBeenCalledWith(
+      appState.activeProject!.id,
+      expect.any(String),
+      true,
+      'claude',
+      'prof-work',
+    );
+  });
+
+  it('passes undefined profile when task has none', async () => {
+    const spy = vi.spyOn(appState, 'addSession').mockReturnValue({ id: 'new-sess' } as never);
+    const task = addTask({ title: 'T', prompt: 'do it', columnId: 'col-backlog', providerId: 'claude' })!;
+
+    await runTask(task);
+
+    expect(spy).toHaveBeenCalledWith(
+      appState.activeProject!.id,
+      expect.any(String),
+      undefined,
+      'claude',
+      undefined,
+    );
   });
 });
 

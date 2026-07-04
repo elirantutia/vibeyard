@@ -10,6 +10,7 @@ import {
 } from '../../provider-availability.js';
 import { appState } from '../../state.js';
 import { runTask } from './board-card.js';
+import { t } from '../../i18n.js';
 
 export interface TaskModalPrefill {
   title?: string;
@@ -33,25 +34,25 @@ export function showTaskModal(
 
   const fields: FieldDef[] = [
     {
-      label: 'Title',
+      label: t('board.taskModal.titleLabel'),
       id: 'taskTitle',
-      placeholder: 'Task title',
+      placeholder: t('board.taskModal.titlePlaceholder'),
       defaultValue: task?.title ?? prefill?.title ?? '',
     },
     {
-      label: 'Prompt',
+      label: t('board.taskModal.promptLabel'),
       id: 'prompt',
       type: 'textarea',
-      placeholder: 'Instructions for Claude...',
+      placeholder: t('board.taskModal.promptPlaceholder'),
       defaultValue: task?.prompt ?? prefill?.prompt ?? '',
       rows: 4,
       maxLength: 10000,
     },
     {
-      label: 'Notes',
+      label: t('board.taskModal.notesLabel'),
       id: 'notes',
       type: 'textarea',
-      placeholder: 'Context, reasoning, acceptance criteria...',
+      placeholder: t('board.taskModal.notesPlaceholder'),
       defaultValue: task?.notes ?? prefill?.notes ?? '',
       rows: 3,
     },
@@ -59,7 +60,7 @@ export function showTaskModal(
 
   if (mode === 'edit') {
     fields.push({
-      label: 'Column',
+      label: t('board.taskModal.columnLabel'),
       id: 'columnId',
       type: 'select',
       options: columnOptions,
@@ -67,9 +68,9 @@ export function showTaskModal(
     });
   }
 
-  const title = mode === 'create' ? 'New Task' : 'Edit Task';
+  const title = mode === 'create' ? t('board.taskModal.titleCreate') : t('board.taskModal.titleEdit');
 
-  const confirmLabel = mode === 'create' ? 'Create' : 'Update';
+  const confirmLabel = mode === 'create' ? t('board.taskModal.confirmCreate') : t('board.taskModal.confirmEdit');
 
   const currentTags: string[] = [...(task?.tags ?? prefill?.tags ?? [])];
 
@@ -77,6 +78,11 @@ export function showTaskModal(
     task?.providerId
     ?? appState.preferences.defaultProvider
     ?? 'claude';
+  // Only the task's own explicit profile pre-selects the dropdown. "Default"
+  // (empty) means "follow the project/global default at run time" — we must NOT
+  // pre-fill the resolved default id here, or selecting "Default" would never
+  // stick (it would reappear as the default profile on reopen).
+  let currentProfileId: string = task?.profileId ?? '';
   const initialPlanMode = task?.planMode ?? (mode === 'create');
   const { row: planModeRow, checkbox: planModeCheckbox } =
     createPlanModeRow('Plan mode', initialPlanMode);
@@ -86,7 +92,7 @@ export function showTaskModal(
     const taskTitle = values.taskTitle?.trim() ?? '';
 
     if (!taskTitle) {
-      setModalError('taskTitle', 'Title is required');
+      setModalError('taskTitle', t('board.taskModal.titleRequired'));
       return;
     }
 
@@ -106,6 +112,7 @@ export function showTaskModal(
         columnId: targetColumnId,
         tags: currentTags.length > 0 ? currentTags : undefined,
         providerId: currentProviderId,
+        profileId: currentProfileId || undefined,
         planMode,
       });
     } else if (task) {
@@ -115,6 +122,7 @@ export function showTaskModal(
         notes: notes || undefined,
         tags: currentTags.length > 0 ? currentTags : undefined,
         providerId: currentProviderId,
+        profileId: currentProfileId || undefined,
         planMode,
         ...(values.columnId ? { columnId: values.columnId } : {}),
       });
@@ -131,7 +139,7 @@ export function showTaskModal(
   tagFieldDiv.className = 'modal-field';
 
   const tagLabel = document.createElement('label');
-  tagLabel.textContent = 'Tags';
+  tagLabel.textContent = t('board.taskModal.tagsLabel');
   tagFieldDiv.appendChild(tagLabel);
 
   // Current tags as removable pills
@@ -168,7 +176,7 @@ export function showTaskModal(
 
   const tagInput = document.createElement('input');
   tagInput.className = 'board-modal-tag-input';
-  tagInput.placeholder = 'Add tag...';
+  tagInput.placeholder = t('board.taskModal.tagInputPlaceholder');
 
   const autocompleteList = document.createElement('div');
   autocompleteList.className = 'tag-autocomplete';
@@ -236,7 +244,7 @@ export function showTaskModal(
   const providerFieldDiv = document.createElement('div');
   providerFieldDiv.className = 'modal-field';
   const providerLabel = document.createElement('label');
-  providerLabel.textContent = 'Provider';
+  providerLabel.textContent = t('board.taskModal.providerLabel');
   providerFieldDiv.appendChild(providerLabel);
 
   const buildProviderOptions = () =>
@@ -247,12 +255,13 @@ export function showTaskModal(
     const supported = !!caps?.planModeArg;
     planModeCheckbox.disabled = !supported;
     if (!supported) planModeCheckbox.checked = false;
-    planModeRow.title = supported ? '' : 'Provider does not support plan mode';
+    planModeRow.title = supported ? '' : t('board.taskModal.planModeUnsupportedTooltip');
   }
 
   const onProviderChange = (value: string) => {
     currentProviderId = value as ProviderId;
     refreshPlanModeAvailability();
+    renderProfileField();
   };
 
   const initialProviderOptions = buildProviderOptions();
@@ -260,24 +269,79 @@ export function showTaskModal(
     'taskProvider',
     initialProviderOptions.length > 0
       ? initialProviderOptions
-      : [{ value: currentProviderId, label: 'Loading…' }],
+      : [{ value: currentProviderId, label: t('board.taskModal.providerLoading') }],
     currentProviderId,
     onProviderChange,
   );
   providerFieldDiv.appendChild(providerSelect.element);
   registerModalCleanup(() => providerSelect.destroy());
 
+  // Profile dropdown (provider-scoped; today only Claude has profiles).
+  // Hidden entirely when the selected provider has no profiles.
+  const profileFieldDiv = document.createElement('div');
+  profileFieldDiv.className = 'modal-field';
+  const profileLabel = document.createElement('label');
+  profileLabel.textContent = 'Profile';
+  profileFieldDiv.appendChild(profileLabel);
+
+  let profileSelect: CustomSelectInstance | null = null;
+  registerModalCleanup(() => profileSelect?.destroy());
+
+  function renderProfileField(): void {
+    const profiles = appState.profiles.filter(p => p.providerId === currentProviderId);
+    if (profileSelect) {
+      profileSelect.destroy();
+      profileSelect.element.remove();
+      profileSelect = null;
+    }
+    if (profiles.length === 0) {
+      profileFieldDiv.style.display = 'none';
+      currentProfileId = '';
+      return;
+    }
+    profileFieldDiv.style.display = '';
+    // Reset selection if the pinned profile doesn't belong to this provider.
+    if (currentProfileId && !profiles.some(p => p.id === currentProfileId)) {
+      currentProfileId = '';
+    }
+    // Label the "Default" option with the project/global default profile it
+    // resolves to, so a task with no explicit profile visibly shows which
+    // profile it will run under — while still saving as "follow the default"
+    // (empty) rather than pinning a copy of that id onto the task.
+    const defaultId =
+      appState.activeProject?.defaultProfileId
+      ?? appState.preferences.defaultProfileId
+      ?? '';
+    const defaultProfile = profiles.find(p => p.id === defaultId);
+    // Fold an explicit pin of the default profile into "follow default" so the
+    // default profile is never listed twice (once as "Default (X)", once as "X").
+    if (defaultProfile && currentProfileId === defaultProfile.id) currentProfileId = '';
+    const options = [
+      { value: '', label: defaultProfile ? `Default (${defaultProfile.name})` : 'Default' },
+      ...profiles
+        .filter(p => p.id !== defaultProfile?.id)
+        .map(p => ({ value: p.id, label: p.name })),
+    ];
+    profileSelect = createCustomSelect('taskProfile', options, currentProfileId, v => {
+      currentProfileId = v;
+    });
+    profileFieldDiv.appendChild(profileSelect.element);
+  }
+
   const planModeFieldDiv = document.createElement('div');
   planModeFieldDiv.className = 'modal-field modal-field-checkbox';
   planModeFieldDiv.appendChild(planModeRow);
 
   refreshPlanModeAvailability();
+  renderProfileField();
 
   if (columnField) {
     modalBody.insertBefore(providerFieldDiv, columnField);
+    modalBody.insertBefore(profileFieldDiv, columnField);
     modalBody.insertBefore(planModeFieldDiv, columnField);
   } else {
     modalBody.appendChild(providerFieldDiv);
+    modalBody.appendChild(profileFieldDiv);
     modalBody.appendChild(planModeFieldDiv);
   }
 
@@ -303,7 +367,7 @@ export function showTaskModal(
       runBtn.className = 'board-modal-run-btn';
       const hasActiveSession = !!task.sessionId;
       const canResume = !hasActiveSession && !!task.cliSessionId;
-      runBtn.textContent = hasActiveSession ? 'Focus Session' : canResume ? 'Resume' : 'Run';
+      runBtn.textContent = hasActiveSession ? t('board.taskModal.focusSessionButton') : canResume ? t('board.taskModal.resumeButton') : t('board.taskModal.runButton');
       runBtn.addEventListener('click', () => {
         // Save current edits before running
         const prompt = (document.getElementById('modal-prompt') as HTMLTextAreaElement)?.value?.trim() ?? '';
@@ -319,6 +383,7 @@ export function showTaskModal(
           notes: notes || undefined,
           tags: currentTags.length > 0 ? currentTags : undefined,
           providerId: currentProviderId,
+          profileId: currentProfileId || undefined,
           planMode,
           ...(columnId ? { columnId } : {}),
         });

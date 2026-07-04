@@ -7,12 +7,13 @@ import {
   SESSIONS_RECENT_LIMIT_MIN,
   type SessionsConfig,
 } from './sessions-types.js';
+import { t } from '../../../i18n.js';
 
 export function showSessionsSettings(
   widget: OverviewWidget,
   onSave: (patch: Partial<SessionsConfig>) => void,
 ): void {
-  const shell = createModalShell({ id: 'sessions-settings-modal', title: 'Sessions Settings' });
+  const shell = createModalShell({ id: 'sessions-settings-modal', title: t('projectTab.sessionsSettings.title') });
   shell.body.innerHTML = '';
   shell.actions.innerHTML = '';
 
@@ -29,7 +30,7 @@ export function showSessionsSettings(
   limitField.className = 'widget-settings-field';
 
   const limitLabel = document.createElement('label');
-  limitLabel.textContent = 'Max recent sessions';
+  limitLabel.textContent = t('projectTab.sessionsSettings.limitLabel');
   limitLabel.htmlFor = 'sessions-settings-limit';
   limitField.appendChild(limitLabel);
 
@@ -43,17 +44,17 @@ export function showSessionsSettings(
 
   const limitHelp = document.createElement('div');
   limitHelp.className = 'widget-settings-help';
-  limitHelp.textContent = `How many archived sessions to show in the Recent section (${SESSIONS_RECENT_LIMIT_MIN}–${SESSIONS_RECENT_LIMIT_MAX}).`;
+  limitHelp.textContent = t('projectTab.sessionsSettings.limitHelp', { min: SESSIONS_RECENT_LIMIT_MIN, max: SESSIONS_RECENT_LIMIT_MAX });
   limitField.appendChild(limitHelp);
 
   form.appendChild(limitField);
   shell.body.appendChild(form);
 
-  const cancel = createModalButton('Cancel', false);
+  const cancel = createModalButton(t('projectTab.sessionsSettings.cancelButton'), false);
   cancel.addEventListener('click', close);
   shell.actions.appendChild(cancel);
 
-  const save = createModalButton('Save', true);
+  const save = createModalButton(t('projectTab.sessionsSettings.saveButton'), true);
   save.addEventListener('click', () => {
     const raw = parseInt(limitInput.value, 10);
     const clamped = Math.max(
