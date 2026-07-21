@@ -3,7 +3,7 @@ import { getStatus, SessionStatus } from './session-activity.js';
 // Aggregate the activity of a project's sessions into a single status for the
 // sidebar row's status dot. Priority mirrors the urgency order surfaced
 // elsewhere: input needed > working > waiting > completed > idle.
-const STATUS_PRIORITY: SessionStatus[] = ['input', 'working', 'waiting', 'completed'];
+export const STATUS_PRIORITY: SessionStatus[] = ['input', 'working', 'waiting', 'completed'];
 
 export function getProjectStatus(project: { sessions: { id: string }[] }): SessionStatus {
   if (!project.sessions.length) return 'idle';

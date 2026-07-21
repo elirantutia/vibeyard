@@ -16,6 +16,7 @@ import { initProjectTerminal, handleShellPtyData, handleShellPtyExit, isShellSes
 import { startPolling as startGitPolling } from './git-status.js';
 import { initDebugPanel, logDebugEvent } from './components/debug-panel.js';
 import { initGitPanel } from './components/git-panel.js';
+import { initActiveSessions } from './components/active-sessions-panel.js';
 import { disconnectInspector } from './components/mcp-inspector.js';
 import { initUpdateBanner } from './components/update-banner.js';
 import { initSessionHistory } from './components/session-history.js';
@@ -183,6 +184,7 @@ async function main(): Promise<void> {
   initProjectTerminal();
   initDebugPanel();
   initGitPanel();
+  initActiveSessions();
   initSessionHistory();
   initUpdateBanner();
   initInsightAlert();
