@@ -195,3 +195,62 @@ describe('onChange unsubscribe', () => {
     expect(cb2).toHaveBeenCalledTimes(1);
   });
 });
+
+// The subagent-aware Stop hook writes `Stop:working` (not `completed`) while it
+// believes subagents are in flight. If that signal is wrong the session must
+// still eventually complete — these cover the renderer backstop that guarantees it.
+describe('Stop-resolved-working fallback', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('completes a session left in working by a Stop, after silence', () => {
+    initSession('s1');
+    setHookStatus('s1', 'working', 'UserPromptSubmit');
+    // A Stop that resolved to working (subagents believed in flight).
+    setHookStatus('s1', 'working', 'Stop');
+    expect(getStatus('s1')).toBe('working');
+
+    vi.advanceTimersByTime(10 * 60 * 1000);
+    expect(getStatus('s1')).toBe('completed');
+  });
+
+  it('does not fire the fallback when a real completion arrives first', () => {
+    initSession('s1');
+    setHookStatus('s1', 'working', 'Stop');
+    setHookStatus('s1', 'completed', 'Stop');
+    expect(getStatus('s1')).toBe('completed');
+
+    // The completion cancelled the fallback; it must not re-fire later.
+    const cb = vi.fn();
+    onChange(cb);
+    vi.advanceTimersByTime(10 * 60 * 1000);
+    expect(cb).not.toHaveBeenCalled();
+    expect(getStatus('s1')).toBe('completed');
+  });
+
+  it('is cancelled by ongoing subagent activity (a later working hook)', () => {
+    initSession('s1');
+    setHookStatus('s1', 'working', 'Stop');
+    // A subagent tool finishes: PostToolUse working — activity, resets the timer.
+    vi.advanceTimersByTime(9 * 60 * 1000);
+    setHookStatus('s1', 'working', 'PostToolUse');
+    // Original 10-min mark passes without a fire because it was reset.
+    vi.advanceTimersByTime(2 * 60 * 1000);
+    expect(getStatus('s1')).toBe('working');
+  });
+
+  it('only arms for Stop, not for a plain working hook', () => {
+    initSession('s1');
+    setHookStatus('s1', 'working', 'PostToolUse');
+    vi.advanceTimersByTime(10 * 60 * 1000);
+    expect(getStatus('s1')).toBe('working');
+  });
+
+  it('is cleared when the session goes idle before firing', () => {
+    initSession('s1');
+    setHookStatus('s1', 'working', 'Stop');
+    setIdle('s1');
+    vi.advanceTimersByTime(10 * 60 * 1000);
+    expect(getStatus('s1')).toBe('idle');
+  });
+});

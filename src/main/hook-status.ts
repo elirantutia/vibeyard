@@ -8,7 +8,7 @@ export const STATUS_DIR = path.join(os.tmpdir(), 'vibeyard');
 export const SCRIPT_DIR = path.join(os.homedir(), '.vibeyard', 'run');
 const STATUSLINE_SCRIPT = path.join(SCRIPT_DIR, isWin ? 'statusline.cmd' : 'statusline.sh');
 
-const KNOWN_EXTENSIONS = ['.status', '.sessionid', '.cost', '.toolfailure', '.events'];
+const KNOWN_EXTENSIONS = ['.status', '.sessionid', '.cost', '.toolfailure', '.events', '.subagents'];
 
 let watcher: fs.FSWatcher | null = null;
 let pollInterval: ReturnType<typeof setInterval> | null = null;
@@ -117,6 +117,10 @@ function extractSessionId(filename: string): string {
 function handleFileChange(win: BrowserWindow, filename: string): void {
   const extractedId = extractSessionId(filename);
   if (extractedId && !knownSessionIds.has(extractedId)) return;
+
+  // In-flight subagent counter — hook-internal only, never forwarded to the
+  // renderer. Included in KNOWN_EXTENSIONS solely for cleanup.
+  if (filename.endsWith('.subagents')) return;
 
   if (filename.endsWith('.status')) {
     const sessionId = filename.replace('.status', '');
