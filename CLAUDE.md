@@ -134,7 +134,8 @@ When entering plan mode for a new feature, consider whether the feature (or aspe
 After completing an implementation task, always:
 
 1. Run `/code-review` to review changed code for correctness bugs and reuse/quality/efficiency cleanups. Run it automatically — do not ask the user for permission first.
-2. Add or update tests as needed to cover the changes.
+2. Run `/simplify` to apply reuse, simplification, efficiency, and altitude cleanups to the changed code. Run it automatically — do not ask the user for permission first.
+3. Add or update tests as needed to cover the changes.
 
 ## Git Workflow
 
