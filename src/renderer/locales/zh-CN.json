@@ -30,6 +30,8 @@
     "gitPanel": "Git 面板",
     "sessionHistory": "会话历史",
     "discussions": "讨论",
+    "activeSessions": "活动会话",
+    "activeSessionStatuses": "活动会话状态",
     "board": "看板",
     "showMetricsOnCards": "在卡片上显示指标"
   },
@@ -69,6 +71,9 @@
       "kanbanTasks": "看板任务（{count} {noun}）",
       "kanbanTasksNounSingular": "个",
       "kanbanTasksNounPlural": "个"
+    },
+    "activeSessions": {
+      "title": "活动会话"
     },
     "discussions": {
       "tooltip": "Vibeyard 讨论",

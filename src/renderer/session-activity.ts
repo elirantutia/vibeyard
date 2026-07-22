@@ -10,6 +10,27 @@ interface SessionState {
 const sessions = new Map<string, SessionState>();
 const listeners: StatusChangeCallback[] = [];
 
+// Backstop for the subagent-aware Stop hook (see stop_status_writer.py). When
+// that hook judges subagents are still in flight it writes `Stop:working`
+// instead of `Stop:completed`. If that in-flight signal is ever wrong — a lost
+// SubagentStop, a counter race between concurrent subagent hooks, or an
+// auto-compact SessionStart reset — the session would otherwise sit in
+// 'working' forever and the real completion would never be notified. To
+// guarantee eventual completion, arm a fallback whenever a Stop resolves to
+// 'working': if the session then goes silent, complete it. Any later hook
+// event counts as activity and cancels the pending fallback. The window
+// matches the hook-side staleness guard (STOP_STALE_MS).
+const STOP_FALLBACK_MS = 10 * 60 * 1000;
+const stopFallbackTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function clearStopFallback(sessionId: string): void {
+  const timer = stopFallbackTimers.get(sessionId);
+  if (timer) {
+    clearTimeout(timer);
+    stopFallbackTimers.delete(sessionId);
+  }
+}
+
 function setStatus(sessionId: string, status: SessionStatus): void {
   const state = sessions.get(sessionId);
   if (!state || state.status === status) return;
@@ -23,6 +44,10 @@ function setStatus(sessionId: string, status: SessionStatus): void {
 export function setHookStatus(sessionId: string, status: 'working' | 'waiting' | 'completed' | 'input', hookName?: string): void {
   const state = sessions.get(sessionId);
   if (!state) return;  // Ignore events for sessions not managed by Vibeyard
+
+  // Any hook event is fresh activity — cancel a pending Stop fallback. It is
+  // re-armed below only if this event is itself a Stop that resolved to 'working'.
+  clearStopFallback(sessionId);
 
   // Don't let Stop/StopFailure ('waiting') overwrite a just-set 'completed' status.
   // Completed is sticky until a new prompt ('working') or PTY exit ('idle').
@@ -39,6 +64,17 @@ export function setHookStatus(sessionId: string, status: 'working' | 'waiting' |
   if (status !== 'working') state.interrupted = false;
 
   setStatus(sessionId, status);
+
+  // A Stop that resolved to 'working' means the subagent-aware hook is holding
+  // the session open for in-flight subagents. Arm the backstop so a wrong
+  // in-flight signal can't wedge the session in 'working' indefinitely.
+  if (hookName === 'Stop' && status === 'working' && sessions.get(sessionId)?.status === 'working') {
+    stopFallbackTimers.set(sessionId, setTimeout(() => {
+      stopFallbackTimers.delete(sessionId);
+      const st = sessions.get(sessionId);
+      if (st && st.status === 'working') setStatus(sessionId, 'completed');
+    }, STOP_FALLBACK_MS));
+  }
 }
 
 export function initSession(sessionId: string): void {
@@ -56,10 +92,12 @@ export function notifyInterrupt(sessionId: string): void {
 export function setIdle(sessionId: string): void {
   const state = sessions.get(sessionId);
   if (!state) return;
+  clearStopFallback(sessionId);
   setStatus(sessionId, 'idle');
 }
 
 export function removeSession(sessionId: string): void {
+  clearStopFallback(sessionId);
   sessions.delete(sessionId);
 }
 
@@ -77,6 +115,8 @@ export function onChange(callback: StatusChangeCallback): () => void {
 
 /** @internal Test-only: reset all module state */
 export function _resetForTesting(): void {
+  for (const timer of stopFallbackTimers.values()) clearTimeout(timer);
+  stopFallbackTimers.clear();
   sessions.clear();
   listeners.length = 0;
 }

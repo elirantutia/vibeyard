@@ -30,6 +30,8 @@
     "gitPanel": "Git Panel",
     "sessionHistory": "Session History",
     "discussions": "Discussions",
+    "activeSessions": "Active Sessions",
+    "activeSessionStatuses": "Active Session Statuses",
     "board": "Board",
     "showMetricsOnCards": "Show metrics on cards"
   },
@@ -69,6 +71,9 @@
       "kanbanTasks": "kanban tasks ({count} {noun})",
       "kanbanTasksNounSingular": "task",
       "kanbanTasksNounPlural": "tasks"
+    },
+    "activeSessions": {
+      "title": "Active Sessions"
     },
     "discussions": {
       "tooltip": "Vibeyard Discussions",

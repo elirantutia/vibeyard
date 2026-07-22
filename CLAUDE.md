@@ -67,6 +67,7 @@ CLI-specific behavior is encapsulated behind a `CliProvider` interface (`src/mai
 - `split-layout.ts` — Manages tab mode (single terminal) vs split mode (side-by-side)
 - `session-activity.ts` — Tracks working/waiting/idle status with debounced transitions
 - `session-cost.ts` — Structured cost tracking via Claude CLI status line (`statusLine` setting), with regex fallback for older CLI versions. Provides per-session and aggregate cost data (USD, tokens, cache, duration)
+- `components/active-sessions-panel.ts` — Global, cross-project **Active Sessions** list rendered into `#sidebar-active-sessions` (a persistent sidebar block above Discussions). `selectActiveSessions(projects, statusOf, activeStatuses)` is a DOM-free selector that collects open CLI sessions (`isCliSession`) across `appState.projects` whose live `getStatus()` is in the configured set, ordered by `STATUS_PRIORITY` (from `project-status.ts`, now exported) then project name. `initActiveSessions()` subscribes to `session-activity.onChange` + the relevant `appState` events and re-renders; rows route clicks through `setActiveProject` + `setActiveSession`. Visibility is gated by `preferences.sidebarViews.activeSessions` **and** requires more than one project (with a single project the rows just duplicate its own tab bar); the "active" status set comes from `preferences.activeSessionStatuses` (`{ working, waiting, input, completed }`, default working/input/completed via `resolveActiveStatuses`). Both preferences are edited in the Preferences → Appearance section. Styles live in `styles/sidebar.css`; status dots reuse the existing `.project-status.<status>` classes.
 - `components/git-panel.ts` — Git changes for the **active project**, rendered inside its sidebar card as a `git` panel-toggle tab (a third `ProjectPanel` alongside `history`/`files` in `sidebar.ts`), not a standalone bottom panel. The "Git" tab carries a `.project-action-badge` count of total changes (badge + click-to-open); `Cmd/Ctrl+Shift+G` (`toggleGitPanel`, exported from `sidebar.ts`) toggles it. `mountGitPanel(project, container)` reparents a single persistent node into `.project-panel-git` so file rows/scroll survive sidebar re-renders; `closeGitPanel()` detaches it. The shared `loadFiles`/worktree-selector logic is unchanged; `sidebarViews.gitPanel` now gates the tab button. There is no `#git-panel` node in `index.html`.
 - `browser-tab/` — Browser tab pane split into focused modules: `types.ts`, `instance.ts` (registry + preload path), `navigation.ts`, `viewport.ts`, `selector-ui.ts`, `inspect-mode.ts`, `flow-recording.ts`, `flow-picker.ts`, `session-integration.ts`, and `pane.ts` (DOM build + event wiring). `browser-tab-pane.ts` is a re-export shim for backward compatibility.
 - `board-state.ts` — Kanban board CRUD: tasks, columns, tags, reorder. Mutates `appState.activeProject.board` in place, calls `appState.notifyBoardChanged()`.
@@ -134,7 +135,8 @@ When entering plan mode for a new feature, consider whether the feature (or aspe
 After completing an implementation task, always:
 
 1. Run `/code-review` to review changed code for correctness bugs and reuse/quality/efficiency cleanups. Run it automatically — do not ask the user for permission first.
-2. Add or update tests as needed to cover the changes.
+2. Run `/simplify` to apply reuse, simplification, efficiency, and altitude cleanups to the changed code. Run it automatically — do not ask the user for permission first.
+3. Add or update tests as needed to cover the changes.
 
 ## Git Workflow
 

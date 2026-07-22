@@ -152,6 +152,18 @@ describe('hook-status', () => {
       expect(mockSend).not.toHaveBeenCalled();
     });
 
+    it('.subagents is hook-internal and never forwarded to the renderer', () => {
+      const win = createMockWin();
+      startWatching(win);
+      registerSession('abc123');
+
+      watchCallback!('change', 'abc123.subagents');
+
+      expect(mockSend).not.toHaveBeenCalled();
+      // Must not even read the counter file — it is purely a hook-side artifact.
+      expect(fs.readFileSync).not.toHaveBeenCalled();
+    });
+
     it('.sessionid sends session:cliSessionId and session:claudeSessionId', () => {
       const win = createMockWin();
       startWatching(win);
@@ -318,7 +330,7 @@ describe('hook-status', () => {
   });
 
   describe('cleanupSessionStatus', () => {
-    it('unlinks all 5 file types', () => {
+    it('unlinks all 6 file types', () => {
       cleanupSessionStatus('sess-1');
 
       expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'sess-1.status'));
@@ -326,7 +338,8 @@ describe('hook-status', () => {
       expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'sess-1.cost'));
       expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'sess-1.toolfailure'));
       expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'sess-1.events'));
-      expect(fs.unlinkSync).toHaveBeenCalledTimes(5);
+      expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'sess-1.subagents'));
+      expect(fs.unlinkSync).toHaveBeenCalledTimes(6);
     });
 
     it('handles errors when files do not exist', () => {

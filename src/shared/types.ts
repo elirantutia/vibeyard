@@ -370,6 +370,18 @@ export interface Preferences {
     sessionHistory: boolean;
     discussions: boolean;
     fileTree: boolean;
+    /** Show the global cross-project "Active Sessions" section in the sidebar. */
+    activeSessions: boolean;
+  };
+  /**
+   * Which live session statuses count as "active" for the global Active Sessions
+   * sidebar section. Absent ⇒ the default set (working, input, completed).
+   */
+  activeSessionStatuses?: {
+    working: boolean;
+    waiting: boolean;
+    input: boolean;
+    completed: boolean;
   };
   boardCardMetrics?: boolean;
   chromeImport?: ChromeImportSummary;

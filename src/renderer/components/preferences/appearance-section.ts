@@ -4,14 +4,18 @@ import { applyZoom, getZoomFactor, ZOOM_STEPS } from '../../zoom.js';
 import { t } from '../../i18n.js';
 import type { PreferencesContext, SectionController } from './section.js';
 import { toggleRow } from './shared.js';
+import type { Preferences } from '../../../shared/types.js';
+import { DEFAULT_ACTIVE_SESSION_STATUSES } from '../active-sessions-panel.js';
 
-type SidebarViews = { gitPanel: boolean; sessionHistory: boolean; discussions: boolean; fileTree: boolean };
+type SidebarViews = { gitPanel: boolean; sessionHistory: boolean; discussions: boolean; fileTree: boolean; activeSessions: boolean };
+type ActiveStatuses = NonNullable<Preferences['activeSessionStatuses']>;
 
 export function createAppearanceSection(ctx: PreferencesContext): SectionController {
   let themeSelect: CustomSelectInstance | null = null;
   let zoomSelect: CustomSelectInstance | null = null;
   let zoomPrefUnsub: (() => void) | null = null;
   let sidebarCheckboxes: Record<keyof SidebarViews, HTMLInputElement> | null = null;
+  let statusCheckboxes: Record<keyof ActiveStatuses, HTMLInputElement> | null = null;
   let boardCardMetricsCheckbox: HTMLInputElement | null = null;
 
   function unsubZoom() {
@@ -61,12 +65,13 @@ export function createAppearanceSection(ctx: PreferencesContext): SectionControl
       sidebarHeading.textContent = t('appearance.sidebarViews');
       container.appendChild(sidebarHeading);
 
-      const views = appState.preferences.sidebarViews ?? { gitPanel: true, sessionHistory: true, discussions: true, fileTree: true };
+      const views = appState.preferences.sidebarViews ?? { gitPanel: true, sessionHistory: true, discussions: true, fileTree: true, activeSessions: true };
       const toggles: { key: keyof SidebarViews; label: string }[] = [
         { key: 'fileTree', label: t('appearance.fileTree') },
         { key: 'gitPanel', label: t('appearance.gitPanel') },
         { key: 'sessionHistory', label: t('appearance.sessionHistory') },
         { key: 'discussions', label: t('appearance.discussions') },
+        { key: 'activeSessions', label: t('appearance.activeSessions') },
       ];
 
       const checkboxes = {} as Record<keyof SidebarViews, HTMLInputElement>;
@@ -76,6 +81,26 @@ export function createAppearanceSection(ctx: PreferencesContext): SectionControl
         checkboxes[toggle.key] = checkbox;
       }
       sidebarCheckboxes = checkboxes;
+
+      const statusHeading = document.createElement('div');
+      statusHeading.className = 'preferences-subheading';
+      statusHeading.textContent = t('appearance.activeSessionStatuses');
+      container.appendChild(statusHeading);
+
+      const statuses = appState.preferences.activeSessionStatuses ?? DEFAULT_ACTIVE_SESSION_STATUSES;
+      const statusToggles: { key: keyof ActiveStatuses; label: string }[] = [
+        { key: 'working', label: t('help.status.working') },
+        { key: 'input', label: t('help.status.input') },
+        { key: 'waiting', label: t('help.status.waiting') },
+        { key: 'completed', label: t('help.status.completed') },
+      ];
+      const statusBoxes = {} as Record<keyof ActiveStatuses, HTMLInputElement>;
+      for (const toggle of statusToggles) {
+        const { row, checkbox } = toggleRow(`pref-active-status-${toggle.key}`, toggle.label, statuses[toggle.key] ?? DEFAULT_ACTIVE_SESSION_STATUSES[toggle.key]);
+        container.appendChild(row);
+        statusBoxes[toggle.key] = checkbox;
+      }
+      statusCheckboxes = statusBoxes;
 
       const boardHeading = document.createElement('div');
       boardHeading.className = 'preferences-subheading';
@@ -95,6 +120,15 @@ export function createAppearanceSection(ctx: PreferencesContext): SectionControl
           sessionHistory: sidebarCheckboxes.sessionHistory.checked,
           discussions: sidebarCheckboxes.discussions.checked,
           fileTree: sidebarCheckboxes.fileTree.checked,
+          activeSessions: sidebarCheckboxes.activeSessions.checked,
+        });
+      }
+      if (statusCheckboxes) {
+        appState.setPreference('activeSessionStatuses', {
+          working: statusCheckboxes.working.checked,
+          waiting: statusCheckboxes.waiting.checked,
+          input: statusCheckboxes.input.checked,
+          completed: statusCheckboxes.completed.checked,
         });
       }
       if (boardCardMetricsCheckbox && boardCardMetricsCheckbox.checked !== (appState.preferences.boardCardMetrics ?? true)) {

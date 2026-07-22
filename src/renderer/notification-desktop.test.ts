@@ -44,10 +44,14 @@ class MockNotification {
   title: string;
   options: NotificationOptions;
   onclick: (() => void) | null = null;
+  onclose: (() => void) | null = null;
   constructor(title: string, options: NotificationOptions = {}) {
     this.title = title;
     this.options = options;
     notificationInstances.push(this as any);
+  }
+  close(): void {
+    this.onclose?.();
   }
 }
 
@@ -162,10 +166,48 @@ describe('notification-desktop', () => {
     setHookStatus('bg-session', 'waiting');
 
     expect(notificationInstances).toHaveLength(1);
+    expect(notificationInstances[0].options.tag).toBe('vibeyard-session-bg-session');
     notificationInstances[0].onclick!();
 
     expect(mockAppState.setActiveProject).toHaveBeenCalledWith('proj-1');
     expect(mockAppState.setActiveSession).toHaveBeenCalledWith('proj-1', 'bg-session');
+  });
+
+  it('should route clicks to the correct session id when two sessions share a name', () => {
+    const focusSpy = vi.fn();
+    (globalThis as any).window = {
+      focus: focusSpy,
+      vibeyard: { app: { focus: focusSpy } },
+    };
+
+    // Two distinct sessions that happen to share the same display name.
+    mockAppState.projects[0].sessions.push(
+      { id: 'dup-a', name: 'Session 6' } as any,
+      { id: 'dup-b', name: 'Session 6' } as any,
+    );
+
+    initSession('dup-a');
+    setHookStatus('dup-a', 'working');
+    setHookStatus('dup-a', 'completed');
+
+    initSession('dup-b');
+    setHookStatus('dup-b', 'working');
+    setHookStatus('dup-b', 'completed');
+
+    expect(notificationInstances).toHaveLength(2);
+    // Identical body, but distinct per-session tags keep them separate at the OS level.
+    expect(notificationInstances[0].options.body).toBe('Session 6 has completed');
+    expect(notificationInstances[1].options.body).toBe('Session 6 has completed');
+    expect(notificationInstances[0].options.tag).toBe('vibeyard-session-dup-a');
+    expect(notificationInstances[1].options.tag).toBe('vibeyard-session-dup-b');
+    expect(notificationInstances[0].options.tag).not.toBe(notificationInstances[1].options.tag);
+
+    // Clicking each notification focuses the id that produced it, not the other same-named session.
+    notificationInstances[0].onclick!();
+    expect(mockAppState.setActiveSession).toHaveBeenLastCalledWith('proj-1', 'dup-a');
+
+    notificationInstances[1].onclick!();
+    expect(mockAppState.setActiveSession).toHaveBeenLastCalledWith('proj-1', 'dup-b');
   });
 
   it('should not notify when Notification permission is not granted', () => {

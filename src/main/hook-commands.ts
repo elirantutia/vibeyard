@@ -24,6 +24,15 @@ import { isWin, pythonBin as PY } from './platform';
 let scriptsInstalled = false;
 
 /**
+ * How long (ms) an in-flight subagent count is trusted before the Stop writer
+ * falls back to 'completed'. Guards against a lost SubagentStop (which is
+ * known to be unreliable, anthropics/claude-code#27755) wedging a session in
+ * 'working' forever. Generous because a slow-but-active subagent keeps the
+ * counter's timestamp fresh via PostToolUse (see claude-cli.ts captureEventCmd).
+ */
+export const STOP_STALE_MS = 600000;
+
+/**
  * Ensure the shared Python helper scripts exist in STATUS_DIR.
  */
 export function installHookScripts(): void {
@@ -38,6 +47,46 @@ status_dir=sys.argv[4]
 if sid:
     with open(os.path.join(status_dir,sid+'.status'),'w') as f:
         f.write(event+':'+status)
+`);
+
+  // stop_status_writer.py — subagent-aware Stop handler. The main Claude agent
+  // fires a top-level Stop hook every time it pauses to wait on parallel Task
+  // subagents, so a naive "Stop -> completed" write produces false completion
+  // notifications mid-orchestration. This reads the per-session in-flight
+  // subagent counter (<sid>.subagents, maintained by the captureEventCmd
+  // scripts) and only writes 'completed' when no subagents are in flight.
+  // argv: [1]=session-id env var, [2]=status_dir, [3]=stale_ms, [4]=marker.
+  installEventScript('stop_status_writer.py', `import sys,os,json,time
+sid=os.environ.get(sys.argv[1],'')
+status_dir=sys.argv[2]
+try:
+    stale_ms=int(sys.argv[3])
+except:
+    stale_ms=600000
+if not sid:
+    sys.exit(0)
+force_working=False
+try:
+    d=json.load(sys.stdin)
+    if d.get('agent_id') or d.get('agent_type') or d.get('hook_event_name')=='SubagentStop':
+        force_working=True
+except:
+    pass
+n=0
+t=0
+try:
+    with open(os.path.join(status_dir,sid+'.subagents')) as f:
+        c=json.load(f)
+        n=int(c.get('n',0))
+        t=int(c.get('t',0))
+except:
+    pass
+now=int(time.time()*1000)
+inflight=n>0 and (now-t)<stale_ms
+status='working' if (force_working or inflight) else 'completed'
+os.makedirs(status_dir,exist_ok=True)
+with open(os.path.join(status_dir,sid+'.status'),'w') as f:
+    f.write('Stop:'+status)
 `);
 
   // session_id_capture.py — captures session_id from JSON stdin
@@ -89,6 +138,20 @@ export function statusCmd(
     return `python "${py}" "${event}" "${status}" "${sessionIdVar}" "${dir}" "${hookMarker}"`;
   }
   return `sh -c 'mkdir -p ${STATUS_DIR} && echo ${event}:${status} > ${STATUS_DIR}/$${sessionIdVar}.status ${hookMarker}'`;
+}
+
+/**
+ * Generate the subagent-aware Stop status command. Invokes stop_status_writer.py
+ * which writes 'completed' only when no subagents are in flight (else 'working').
+ * Mirrors captureSessionIdCmd (no isWin branch — relies on PY + normalized paths).
+ */
+export function stopStatusCmd(
+  sessionIdVar: string,
+  hookMarker: string,
+): string {
+  const py = path.join(SCRIPT_DIR, 'stop_status_writer.py').replace(/\\/g, '/');
+  const dir = STATUS_DIR.replace(/\\/g, '/');
+  return `${PY} "${py}" "${sessionIdVar}" "${dir}" "${STOP_STALE_MS}" "${hookMarker}"`;
 }
 
 /**
