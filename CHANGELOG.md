@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.4] - 2026-07-22
+
+### Features
+
+- Global active sessions sidebar panel across projects
+
+### Fixes
+
+- Notification click opening wrong session for same-named sessions
+- False session completion on subagent finish
+
 ## [0.3.3] - 2026-06-29
 
 ### Features
