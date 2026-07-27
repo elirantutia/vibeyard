@@ -127,8 +127,19 @@ class AppState {
     this.nav.prune(sessionId);
   }
 
+  /** Resolve a session id to both the session and its owning project in one scan. */
+  findSessionWithProject(
+    sessionId: string,
+  ): { project: ProjectRecord; session: SessionRecord } | undefined {
+    for (const project of this.state.projects) {
+      const session = project.sessions.find((s) => s.id === sessionId);
+      if (session) return { project, session };
+    }
+    return undefined;
+  }
+
   private findProjectBySession(sessionId: string): ProjectRecord | undefined {
-    return this.state.projects.find((p) => p.sessions.some((s) => s.id === sessionId));
+    return this.findSessionWithProject(sessionId)?.project;
   }
 
   navigateBack(): void {
@@ -896,11 +907,7 @@ class AppState {
   }
 
   private findSessionById(sessionId: string): SessionRecord | undefined {
-    for (const project of this.state.projects) {
-      const session = project.sessions.find((s) => s.id === sessionId);
-      if (session) return session;
-    }
-    return undefined;
+    return this.findSessionWithProject(sessionId)?.session;
   }
 
   updateSessionCost(sessionId: string, cost: CostInfo): void {
