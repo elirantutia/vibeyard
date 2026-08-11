@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execSync } from 'child_process';
-import { isWin, pathSep, whichCmd } from './platform';
+import { isWin, pathSep } from './platform';
 
 /**
  * Check whether Python is available on Windows (needed for hook scripts).
@@ -50,35 +50,39 @@ export function validatePrerequisites(): { ok: boolean; message: string } {
     } catch {}
   }
 
-  // Try `which`/`where` claude with augmented PATH
-  try {
-    const currentPath = process.env.PATH || '';
-    const extraDirs = isWin
-      ? [
-          path.join(home, 'AppData', 'Roaming', 'npm'),
-          path.join(home, '.local', 'bin'),
-        ]
-      : [
-          '/usr/local/bin',
-          '/opt/homebrew/bin',
-          path.join(home, '.local', 'bin'),
-          path.join(home, '.npm-global', 'bin'),
-          '/usr/local/sbin',
-          '/opt/homebrew/sbin',
-        ];
-    const pathSet = new Set(currentPath.split(pathSep));
-    for (const dir of extraDirs) {
-      pathSet.add(dir);
-    }
-    const augmentedPath = Array.from(pathSet).join(pathSep);
+  // Fall back to searching the (augmented) PATH. Walk it in Node instead of
+  // shelling out to `where`, which prints a localized "not found" message
+  // (GBK on zh-CN Windows) to the terminal even when its stderr is piped.
+  const currentPath = process.env.PATH || '';
+  const extraDirs = isWin
+    ? [
+        path.join(home, 'AppData', 'Roaming', 'npm'),
+        path.join(home, '.local', 'bin'),
+      ]
+    : [
+        '/usr/local/bin',
+        '/opt/homebrew/bin',
+        path.join(home, '.local', 'bin'),
+        path.join(home, '.npm-global', 'bin'),
+        '/usr/local/sbin',
+        '/opt/homebrew/sbin',
+      ];
+  const pathSet = new Set(currentPath.split(pathSep));
+  for (const dir of extraDirs) {
+    pathSet.add(dir);
+  }
 
-    const resolved = execSync(`${whichCmd} claude`, {
-      env: { ...process.env, PATH: augmentedPath },
-      encoding: 'utf-8',
-      timeout: 3000,
-    }).trim();
-    if (resolved) return { ok: true, message: '' };
-  } catch {}
+  const extensions = isWin ? ['.cmd', '.exe', '.ps1', ''] : [''];
+  for (const dir of pathSet) {
+    if (!dir) continue;
+    for (const ext of extensions) {
+      try {
+        if (fs.existsSync(path.join(dir, `claude${ext}`))) {
+          return { ok: true, message: '' };
+        }
+      } catch {}
+    }
+  }
 
   return {
     ok: false,

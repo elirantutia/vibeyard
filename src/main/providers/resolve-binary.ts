@@ -2,7 +2,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { execSync } from 'child_process';
 import { getFullPath } from '../pty-manager';
-import { isWin, whichCmd } from '../platform';
+import { isWin, pathSep, whichCmd } from '../platform';
 import { fileExists } from '../fs-utils';
 import { findBinaryInNvm } from './nvm';
 
@@ -39,13 +39,25 @@ function findBinaryInDir(dir: string, binaryName: string): string | null {
 }
 
 function whichBinary(binaryName: string, envPath: string): string | null {
+  // On Windows, walk PATH directly instead of shelling out to `where`. `where`
+  // prints a localized "not found" message (GBK on zh-CN Windows) straight to
+  // the terminal even when its stderr is piped, and Node's utf-8 decode turns
+  // those bytes into mojibake (锟斤拷) in `npm start` output.
+  if (isWin) {
+    for (const dir of envPath.split(pathSep)) {
+      if (!dir) continue;
+      const found = findBinaryInDir(dir, binaryName);
+      if (found) return found;
+    }
+    return null;
+  }
   try {
     const resolved = execSync(`${whichCmd} "${binaryName}"`, {
       env: { ...process.env, PATH: envPath },
       encoding: 'utf-8',
       timeout: 3000,
     }).trim();
-    // 'where' on Windows may return multiple lines — take the first
+    // 'which' may return multiple lines — take the first
     const firstLine = resolved.split(/\r?\n/)[0];
     return firstLine || null;
   } catch {

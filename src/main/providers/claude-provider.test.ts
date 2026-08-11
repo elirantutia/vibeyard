@@ -86,9 +86,21 @@ describe('resolveBinaryPath', () => {
     expect(provider.resolveBinaryPath()).toBe(firstCandidate);
   });
 
-  it(`falls back to ${isWin ? 'where' : 'which'} claude when no candidate exists`, () => {
-    mockExecSync.mockReturnValue('/some/other/path/claude\n' as any);
-    expect(provider.resolveBinaryPath()).toBe('/some/other/path/claude');
+  it(`falls back to searching the ${isWin ? 'augmented PATH in Node' : 'PATH via which'} when no candidate exists`, () => {
+    // On Windows the augmented PATH is walked in Node (no `where` subprocess —
+    // `where` prints localized "not found" text that garbles the terminal);
+    // other platforms shell out to `which`.
+    if (isWin) {
+      const onPath = path.join('/usr/local/bin', 'claude.cmd');
+      mockStatSync.mockImplementation((p) => {
+        if (p === onPath) return fileStat;
+        throw new Error('ENOENT');
+      });
+      expect(provider.resolveBinaryPath()).toBe(onPath);
+    } else {
+      mockExecSync.mockReturnValue('/some/other/path/claude\n' as any);
+      expect(provider.resolveBinaryPath()).toBe('/some/other/path/claude');
+    }
   });
 
   it('falls back to bare "claude" when both candidate and which fail', () => {
@@ -121,9 +133,17 @@ describe('validatePrerequisites', () => {
     expect(provider.validatePrerequisites()).toBe(true);
   });
 
-  it('returns ok when binary found via which', () => {
+  it(`returns ok when binary found ${isWin ? 'on the augmented PATH' : 'via which'}`, () => {
     mockExistsSync.mockReturnValue(false);
-    mockExecSync.mockReturnValue('/resolved/claude\n' as any);
+    if (isWin) {
+      const onPath = path.join('/usr/local/bin', 'claude.cmd');
+      mockStatSync.mockImplementation((p) => {
+        if (p === onPath) return fileStat;
+        throw new Error('ENOENT');
+      });
+    } else {
+      mockExecSync.mockReturnValue('/resolved/claude\n' as any);
+    }
     expect(provider.validatePrerequisites()).toBe(true);
   });
 
