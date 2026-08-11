@@ -516,5 +516,33 @@
     "about": "关于",
     "general": "通用",
     "appearance": "外观"
+  },
+  "titleBar": {
+    "brand": "Vibeyard",
+    "file": {
+      "label": "文件",
+      "newProject": "新建项目",
+      "newSession": "新建会话",
+      "closeSession": "关闭会话",
+      "quit": "退出"
+    },
+    "edit": {
+      "label": "编辑",
+      "undo": "撤销",
+      "redo": "重做",
+      "cut": "剪切",
+      "copy": "复制",
+      "paste": "粘贴",
+      "delete": "删除",
+      "selectAll": "全选"
+    },
+    "view": {
+      "label": "视图",
+      "toggleSplit": "切换分屏模式",
+      "toggleInspector": "切换会话检查器",
+      "toggleDebugPanel": "切换调试面板",
+      "toggleDevTools": "开发者工具",
+      "reloadMainWindow": "重新加载主窗口"
+    }
   }
 }

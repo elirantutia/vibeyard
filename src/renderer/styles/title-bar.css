@@ -1,0 +1,62 @@
+/* Custom in-app title bar (Windows). Hidden by default; .active is added by
+   title-bar.ts when the bar is built (Windows only). */
+
+#title-bar {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 10px;
+  background: var(--tab-inactive);
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+#title-bar.active {
+  display: flex;
+}
+
+/* Reserve space for the system min/max/close buttons, which overlay the
+   top-right corner on Windows (titleBarStyle: hidden). */
+#title-bar.win {
+  padding-right: 140px;
+}
+
+.titlebar-brand {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-right: 8px;
+  letter-spacing: 0.01em;
+}
+
+.titlebar-menu-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-menu-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.titlebar-menu-btn.open {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Dropdown menus — reuse .tab-context-menu base; tune radius/width to match
+   the app's rounded dark surfaces. */
+.titlebar-menu {
+  min-width: 190px;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
