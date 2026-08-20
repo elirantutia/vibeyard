@@ -268,15 +268,17 @@ export function renderTimeline(container: HTMLElement): void {
     if (ev.tool_name) {
       desc.textContent = mcpTool?.displayLabel ?? ev.tool_name;
     } else if (ev.type === 'user_prompt') {
-      desc.textContent = 'User prompt submitted';
+      desc.textContent = ev.prompt
+        ? ev.prompt.replace(/\s+/g, ' ').slice(0, 120)
+        : 'User prompt submitted';
     } else if (ev.type === 'stop') {
       desc.textContent = 'Response completed';
     } else if (ev.type === 'stop_failure') {
-      desc.textContent = ev.error || 'Response stopped with error';
+      desc.textContent = ev.error || ev.error_details || 'Response stopped with error';
     } else if (ev.type === 'session_start') {
       desc.textContent = 'Session started';
     } else if (ev.type === 'session_end') {
-      desc.textContent = 'Session ended';
+      desc.textContent = ev.reason ? `Session ended: ${ev.reason}` : 'Session ended';
     } else if (ev.type === 'permission_request') {
       desc.textContent = 'Waiting for permission';
     } else if (ev.type === 'subagent_start') {
@@ -288,39 +290,51 @@ export function renderTimeline(container: HTMLElement): void {
         ? `Agent stopped: ${agentLabel(ev)} (${formatDuration(duration)})`
         : `Agent stopped: ${agentLabel(ev)}`;
     } else if (ev.type === 'notification') {
-      desc.textContent = ev.message || 'Notification';
+      desc.textContent = ev.title
+        ? `${ev.title}: ${ev.message ?? ''}`.trim()
+        : ev.message || ev.notification_type || 'Notification';
     } else if (ev.type === 'pre_compact') {
       desc.textContent = 'Context compaction starting';
     } else if (ev.type === 'post_compact') {
       desc.textContent = 'Context compaction complete';
     } else if (ev.type === 'task_created') {
-      desc.textContent = ev.task_id ? `Task created: ${ev.task_id}` : 'Task created';
+      const label = ev.task_subject || ev.task_id;
+      desc.textContent = label ? `Task created: ${label}` : 'Task created';
     } else if (ev.type === 'task_completed') {
-      desc.textContent = ev.task_id ? `Task completed: ${ev.task_id}` : 'Task completed';
+      const label = ev.task_subject || ev.task_id;
+      desc.textContent = label ? `Task completed: ${label}` : 'Task completed';
     } else if (ev.type === 'worktree_create') {
       desc.textContent = ev.worktree_path || 'Worktree created';
     } else if (ev.type === 'worktree_remove') {
       desc.textContent = ev.worktree_path || 'Worktree removed';
     } else if (ev.type === 'cwd_changed') {
-      desc.textContent = ev.cwd || 'Working directory changed';
+      // `new_cwd`, not the common `cwd` field — that one is the directory the
+      // hook ran in, i.e. the value *before* the change.
+      desc.textContent = ev.new_cwd || 'Working directory changed';
     } else if (ev.type === 'file_changed') {
-      desc.textContent = ev.file_path || 'File changed';
+      const p = ev.file_path;
+      desc.textContent = p ? (ev.event ? `${ev.event}: ${p}` : p) : 'File changed';
     } else if (ev.type === 'config_change') {
-      desc.textContent = ev.config_key ? `Config: ${ev.config_key}` : 'Config changed';
+      desc.textContent = ev.file_path ? `Config: ${ev.file_path}` : 'Config changed';
     } else if (ev.type === 'elicitation') {
-      desc.textContent = ev.question || 'Elicitation requested';
+      desc.textContent = ev.message || ev.mcp_server_name || 'Elicitation requested';
     } else if (ev.type === 'elicitation_result') {
-      desc.textContent = 'Elicitation answered';
+      desc.textContent = ev.action ? `Elicitation ${ev.action}` : 'Elicitation answered';
     } else if (ev.type === 'instructions_loaded') {
-      desc.textContent = 'Instructions loaded';
+      desc.textContent = ev.file_path || 'Instructions loaded';
     } else if (ev.type === 'teammate_idle') {
-      desc.textContent = `Teammate idle: ${agentLabel(ev)}`;
+      // TeammateIdle carries no agent_id/agent_type, so agentLabel never resolves.
+      desc.textContent = `Teammate idle: ${ev.teammate_name || agentLabel(ev)}`;
     }
 
-    // Duration to next event
+    // Duration. Prefer the tool's own reported execution time when the hook
+    // supplied one — the delta to the next event also counts permission prompts
+    // and PreToolUse hook time, which the tool didn't spend.
     const durationEl = document.createElement('span');
     durationEl.className = 'inspector-duration';
-    if (i < events.length - 1) {
+    if (typeof ev.duration_ms === 'number') {
+      durationEl.textContent = formatDuration(ev.duration_ms);
+    } else if (i < events.length - 1) {
       const durationMs = events[i + 1].timestamp - ev.timestamp;
       durationEl.textContent = formatDuration(durationMs);
     }

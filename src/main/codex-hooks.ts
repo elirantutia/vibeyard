@@ -5,6 +5,7 @@ import { STATUS_DIR } from './hook-status';
 import { statusCmd as mkStatusCmd, captureSessionIdCmd as mkCaptureSessionIdCmd, installEventScript, wrapPythonHookCmd, installHookScripts } from './hook-commands';
 import { readFileSafe, readJsonSafe } from './fs-utils';
 import type { InspectorEventType, SettingsValidationResult } from '../shared/types';
+import { pyLiteral } from '../shared/python';
 
 export const CODEX_HOOK_MARKER = '# vibeyard-hook';
 
@@ -150,7 +151,7 @@ for fld in ("session_id","cwd","model","turn_id"):
  v=d.get(fld,"")
  if v:
   e[fld]=v
-status_dir=r'${STATUS_DIR}'
+status_dir=${pyLiteral(STATUS_DIR)}
 with open(os.path.join(status_dir,sid+".events"),"a") as f:
  f.write(json.dumps(e)+"\\n")
 `;

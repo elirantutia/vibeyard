@@ -394,6 +394,24 @@ describe('install into a profile config dir', () => {
   });
 });
 
+/** The generated Python body for one event's capture script. */
+function eventScriptBody(event: string): string {
+  const scripts = new Map<string, string>(
+    vi.mocked(installEventScript).mock.calls.map(([name, code]) => [name as string, code as string])
+  );
+  return scripts.get(`claude_event_${event}.py`) ?? '';
+}
+
+/** Every hook handler installed for one event, across all matcher entries. */
+function hookHandlersFor(written: any, event: string): Array<{ command: string; timeout?: number }> {
+  return (written.hooks[event] ?? []).flatMap((m: { hooks: Array<{ command: string; timeout?: number }> }) => m.hooks);
+}
+
+/** Just the commands for one event. */
+function hookCommandsFor(written: any, event: string): string[] {
+  return hookHandlersFor(written, event).map((h) => h.command);
+}
+
 describe('installHooks', () => {
   it('writes hooks to settings.json', () => {
     mockReadFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
@@ -472,7 +490,7 @@ describe('installHooks', () => {
     expect(vibeyardHookCount).toBe(2);
   });
 
-  it('installs all 24 hook events (6 core + 18 inspector-only)', () => {
+  it('installs all 25 hook events (7 core + 18 inspector-only)', () => {
     mockReadFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
 
     installHooks();
@@ -480,13 +498,13 @@ describe('installHooks', () => {
     const written = JSON.parse(String(mockWriteFileSync.mock.calls[0][1]));
     const hookEvents = Object.keys(written.hooks);
 
-    // Core 6 hooks (PostToolUseFailure is not a real Claude hook event and
-    // is skipped — not listed in the version manifest).
-    const coreEvents = ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'Stop', 'StopFailure', 'PermissionRequest'];
+    const coreEvents = [
+      'SessionStart', 'UserPromptSubmit', 'PostToolUse', 'PostToolUseFailure',
+      'Stop', 'StopFailure', 'PermissionRequest',
+    ];
     for (const event of coreEvents) {
       expect(hookEvents).toContain(event);
     }
-    expect(hookEvents).not.toContain('PostToolUseFailure');
 
     const inspectorEvents = [
       'PreToolUse', 'PermissionDenied', 'SubagentStart', 'SubagentStop', 'Notification',
@@ -499,7 +517,7 @@ describe('installHooks', () => {
       expect(hookEvents).toContain(event);
     }
 
-    expect(hookEvents).toHaveLength(24);
+    expect(hookEvents).toHaveLength(25);
 
     // Core hooks should have status writer + event logger (at least 2 hooks)
     for (const event of coreEvents) {
@@ -564,12 +582,13 @@ describe('installHooks', () => {
 
     installHooks();
 
-    const scripts = new Map<string, string>(
-      vi.mocked(installEventScript).mock.calls.map(([name, code]) => [name as string, code as string])
-    );
-    const bodyOf = (event: string) => scripts.get(`claude_event_${event}.py`) ?? '';
+    const bodyOf = eventScriptBody;
 
     // Counter mutations land in exactly the four counter-affecting scripts.
+    // The counter is now a fallback — stop_status_writer.py prefers the Stop
+    // payload's `background_tasks` — but it is consulted whenever that payload
+    // reports nothing holding (empty *or* absent), so it must still be
+    // maintained on every CLI version.
     expect(bodyOf('SubagentStart')).toContain('.subagents');
     expect(bodyOf('SubagentStart')).toContain('n=n+1');
     expect(bodyOf('SubagentStop')).toContain('n=max(0,n-1)');
@@ -583,6 +602,95 @@ describe('installHooks', () => {
     // Unrelated event scripts stay counter-free.
     expect(bodyOf('PreToolUse')).not.toContain('.subagents');
     expect(bodyOf('UserPromptSubmit')).not.toContain('.subagents');
+  });
+
+  it('wires tool-failure capture onto PostToolUseFailure and nowhere else', () => {
+    mockReadFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
+
+    installHooks();
+
+    const written = JSON.parse(String(mockWriteFileSync.mock.calls[0][1]));
+    const commandsFor = (event: string) => hookCommandsFor(written, event);
+
+    expect(commandsFor('PostToolUseFailure').some((c: string) => c.includes('.toolfailure'))).toBe(true);
+    for (const event of Object.keys(written.hooks)) {
+      if (event === 'PostToolUseFailure') continue;
+      expect(commandsFor(event).some((c: string) => c.includes('.toolfailure'))).toBe(false);
+    }
+  });
+
+  it('omits PostToolUseFailure on a CLI older than its minimum version', () => {
+    // 2.1.118 supports PermissionDenied (2.1.89) but not PostToolUseFailure (2.1.119).
+    vi.mocked(getClaudeVersion).mockReturnValueOnce('2.1.118');
+    mockReadFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
+
+    installHooks();
+
+    const hookEvents = Object.keys(JSON.parse(String(mockWriteFileSync.mock.calls[0][1])).hooks);
+    expect(hookEvents).toContain('PermissionDenied');
+    expect(hookEvents).not.toContain('PostToolUseFailure');
+  });
+
+  it('requests a longer timeout only for SessionEnd, whose default budget is 1.5s', () => {
+    mockReadFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
+
+    installHooks();
+
+    const written = JSON.parse(String(mockWriteFileSync.mock.calls[0][1]));
+    const timeoutsFor = (event: string) => hookHandlersFor(written, event).map((h) => h.timeout);
+
+    expect(timeoutsFor('SessionEnd')).toEqual([5]);
+    for (const event of Object.keys(written.hooks)) {
+      if (event === 'SessionEnd') continue;
+      expect(timeoutsFor(event).every((t: number | undefined) => t === undefined)).toBe(true);
+    }
+  });
+
+  it('captures only real hook-payload fields into inspector events', () => {
+    mockReadFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
+
+    installHooks();
+
+    const body = eventScriptBody('Notification');
+
+    // Real per-event fields the timeline renders.
+    for (const field of ['notification_type', 'new_cwd', 'teammate_name', 'task_subject', 'action']) {
+      expect(body).toContain(`"${field}"`);
+    }
+    // Captured fields are limited to what something actually reads — there is no
+    // generic payload viewer, so an unread field is written, parsed, IPC'd and
+    // typed for nothing.
+    for (const field of ['load_reason', 'memory_type', 'elicitation_id', 'tool_use_id']) {
+      expect(body).not.toContain(`"${field}"`);
+    }
+    // None of these is a top-level hook-payload field, so the code reading them
+    // was dead. `type`/`username` are especially easy to re-add by mistake: they
+    // appear in the docs' Elicitation example, but nested inside
+    // requested_schema.properties.username.type.
+    for (const field of ['config_key', 'question', 'answer', 'username']) {
+      expect(body).not.toContain(`"${field}"`);
+    }
+    expect(body).not.toContain('elicitation_type');
+    // Long strings are truncated before hitting the .events log.
+    expect(body).toContain('len(v)>2000');
+  });
+
+  // PostToolUse now fires only on SUCCESS, so treating any non-empty
+  // tool_response as a failure produced a .toolfailure file for every
+  // successful tool call. The only PostToolUse-derived signal left is a Read
+  // truncated by the token cap, which is a success, not a failure.
+  it('derives a .toolfailure from PostToolUse only for a token-capped Read', () => {
+    mockReadFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
+
+    installHooks();
+
+    const body = eventScriptBody('PostToolUse');
+
+    expect(body).toContain('truncatedByTokenCap');
+    expect(body).toContain('tn=="Read"');
+    // No blanket "any tool_response is an error" synthesis.
+    expect(body).not.toContain('tool_result');
+    expect(body).not.toContain('fe=tr');
   });
 
   // CC >= 2.1.50 treats WorktreeCreate as a path-replacement hook that must

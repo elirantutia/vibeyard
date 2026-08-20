@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { handleToolFailure, onLargeFileAlert, _resetForTesting, type LargeFileAlert } from './large-file-detector.js';
 import { appState, _resetForTesting as resetState } from '../state.js';
 import type { ToolFailureData } from '../../shared/types.js';
+import { TOKEN_TRUNCATION_SENTINEL } from '../../shared/constants.js';
 
 const mockReadFile = vi.fn().mockResolvedValue({ ok: true, content: '' });
 
@@ -24,11 +25,15 @@ function setupProject(): string {
   return project.id;
 }
 
-function makeReadFailure(filePath: string, tokens = 28897, maxTokens = 10000): ToolFailureData {
+// Claude Code 2.1.238 truncates an oversized Read instead of failing it, so the
+// record now arrives synthesized from a *successful* PostToolUse carrying
+// `tool_response.file.truncatedByTokenCap` — see the PostToolUse hook script in
+// claude-cli.ts and TOKEN_TRUNCATION_SENTINEL in shared/constants.ts.
+function makeReadFailure(filePath: string, numLines = 550, totalLines = 2601): ToolFailureData {
   return {
     tool_name: 'Read',
     tool_input: { file_path: filePath },
-    error: `File content (${tokens} tokens) exceeds maximum allowed tokens (${maxTokens}). Use offset and limit parameters to read specific portions of the file, or search for specific content instead of reading the whole file.`,
+    error: `${TOKEN_TRUNCATION_SENTINEL}: read returned ${numLines} of ${totalLines} lines`,
   };
 }
 
@@ -75,6 +80,43 @@ describe('handleToolFailure', () => {
       tool_name: 'Read',
       tool_input: { file_path: '/tmp/test/missing.txt' },
       error: 'ENOENT: no such file or directory',
+    });
+
+    expect(alerts).toHaveLength(0);
+  });
+
+  // Regression: PostToolUse fires only on success now, and the hook script used
+  // to synthesize a .toolfailure from any non-empty tool_response. That fed
+  // successful output straight into this detector.
+  it('does not alert for a successful Read that was not truncated', async () => {
+    const projectId = setupProject();
+    const session = appState.addSession(projectId, 'Session 1')!;
+
+    const alerts: LargeFileAlert[] = [];
+    onLargeFileAlert((alert) => alerts.push(alert));
+
+    await handleToolFailure(session.id, {
+      tool_name: 'Read',
+      tool_input: { file_path: '/tmp/test/styles.css' },
+      error: '{"type":"text","file":{"content":"body { color: red; }","numLines":1}}',
+    });
+
+    expect(alerts).toHaveLength(0);
+  });
+
+  // The CLI stopped emitting this text when it switched from erroring to
+  // truncating, which is exactly how the alert went silently dead.
+  it('does not alert for the retired token-limit error text', async () => {
+    const projectId = setupProject();
+    const session = appState.addSession(projectId, 'Session 1')!;
+
+    const alerts: LargeFileAlert[] = [];
+    onLargeFileAlert((alert) => alerts.push(alert));
+
+    await handleToolFailure(session.id, {
+      tool_name: 'Read',
+      tool_input: { file_path: '/tmp/test/styles.css' },
+      error: 'File content (28897 tokens) exceeds maximum allowed tokens (10000).',
     });
 
     expect(alerts).toHaveLength(0);
@@ -195,7 +237,7 @@ describe('handleToolFailure', () => {
     await handleToolFailure(session.id, {
       tool_name: 'Read',
       tool_input: {},
-      error: 'File content (28897 tokens) exceeds maximum allowed tokens (10000).',
+      error: `${TOKEN_TRUNCATION_SENTINEL}: read returned 550 of 2601 lines`,
     });
 
     expect(alerts).toHaveLength(0);

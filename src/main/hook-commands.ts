@@ -15,6 +15,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { STATUS_DIR, SCRIPT_DIR } from './hook-status';
 import { isWin, pythonBin as PY } from './platform';
+import { STOP_INFLIGHT_TRUST_MS } from '../shared/constants';
 
 // Python helper scripts are written to STATUS_DIR via installEventScript()
 // and cleaned up on app exit. Shared scripts are installed once via
@@ -29,8 +30,12 @@ let scriptsInstalled = false;
  * known to be unreliable, anthropics/claude-code#27755) wedging a session in
  * 'working' forever. Generous because a slow-but-active subagent keeps the
  * counter's timestamp fresh via PostToolUse (see claude-cli.ts captureEventCmd).
+ *
+ * Only reached on the FALLBACK branch of stop_status_writer.py — a CLI whose
+ * Stop payload carries no `background_tasks` key. Modern CLIs answer the
+ * question directly and never consult the counter or this constant.
  */
-export const STOP_STALE_MS = 600000;
+export const STOP_STALE_MS = STOP_INFLIGHT_TRUST_MS;
 
 /**
  * Ensure the shared Python helper scripts exist in STATUS_DIR.
@@ -49,12 +54,36 @@ if sid:
         f.write(event+':'+status)
 `);
 
-  // stop_status_writer.py — subagent-aware Stop handler. The main Claude agent
-  // fires a top-level Stop hook every time it pauses to wait on parallel Task
-  // subagents, so a naive "Stop -> completed" write produces false completion
-  // notifications mid-orchestration. This reads the per-session in-flight
-  // subagent counter (<sid>.subagents, maintained by the captureEventCmd
-  // scripts) and only writes 'completed' when no subagents are in flight.
+  // stop_status_writer.py — decides whether a Stop really ends the session.
+  // The main Claude agent fires a top-level Stop every time it pauses to wait
+  // on parallel Task subagents, so a naive "Stop -> completed" write produces
+  // false completion notifications mid-orchestration.
+  //
+  // Claude Code answers this directly now: the Stop payload carries
+  // `background_tasks` (each `{id,type,status,...}`, type one of shell,
+  // subagent, monitor, workflow, teammate, cloud session, MCP task). We hold
+  // the session in 'working' only for the types that mean *the model itself
+  // will produce more output in this turn* — subagent/teammate/workflow. A
+  // backgrounded shell, a monitor, an MCP task or a cloud session may wake the
+  // session later, but the turn is over and the user is free to type, so those
+  // complete. `session_crons` is deliberately never consulted: a /loop session
+  // always has a pending cron and would otherwise never report completed.
+  //
+  // Only a NON-EMPTY `background_tasks` is authoritative. An empty array is not
+  // a reliable "nothing in flight" signal: the CLI filters the array on an
+  // `isBackgrounded` flag that Task-spawned subagents only acquire after an
+  // optional auto-background timer, so a spurious Stop fired the instant the
+  // main agent pauses on freshly-dispatched foreground subagents can carry
+  // `[]` while three of them are running — exactly the false completion this
+  // writer exists to prevent. So an empty array falls through to the legacy
+  // <sid>.subagents counter, which captureEventCmd still maintains, and the two
+  // signals are OR'd. Being wrong in this direction costs a late notification
+  // bounded by the renderer's STOP_FALLBACK_MS backstop; being wrong in the
+  // other direction fires a completion mid-orchestration.
+  //
+  // The counter is also the whole answer on older CLIs, where the key is absent
+  // entirely.
+  //
   // argv: [1]=session-id env var, [2]=status_dir, [3]=stale_ms, [4]=marker.
   installEventScript('stop_status_writer.py', `import sys,os,json,time
 sid=os.environ.get(sys.argv[1],'')
@@ -65,24 +94,40 @@ except:
     stale_ms=600000
 if not sid:
     sys.exit(0)
-force_working=False
+d={}
 try:
     d=json.load(sys.stdin)
-    if d.get('agent_id') or d.get('agent_type') or d.get('hook_event_name')=='SubagentStop':
-        force_working=True
 except:
     pass
-n=0
-t=0
-try:
-    with open(os.path.join(status_dir,sid+'.subagents')) as f:
-        c=json.load(f)
-        n=int(c.get('n',0))
-        t=int(c.get('t',0))
-except:
-    pass
-now=int(time.time()*1000)
-inflight=n>0 and (now-t)<stale_ms
+if not isinstance(d,dict):
+    d={}
+# A Stop firing inside a subagent is never the parent session completing.
+# Keyed on agent_id only: agent_type is ALSO set on the main thread of a session
+# started with --agent, which would wedge such a session in 'working' forever.
+force_working=bool(d.get('agent_id') or d.get('hook_event_name')=='SubagentStop')
+HOLD=('subagent','teammate','workflow')
+DONE=('completed','complete','done','failed','error','cancelled','canceled','killed','stopped','timed_out','timeout')
+inflight=False
+bt=d.get('background_tasks')
+if isinstance(bt,list):
+    for task in bt:
+        if not isinstance(task,dict):
+            continue
+        if str(task.get('type','')).strip().lower() in HOLD and str(task.get('status','')).strip().lower() not in DONE:
+            inflight=True
+            break
+# An empty/absent list is not proof of an idle session — fall back to the counter.
+if not inflight:
+    n=0
+    t=0
+    try:
+        with open(os.path.join(status_dir,sid+'.subagents')) as f:
+            c=json.load(f)
+            n=int(c.get('n',0))
+            t=int(c.get('t',0))
+    except:
+        pass
+    inflight=n>0 and (int(time.time()*1000)-t)<stale_ms
 status='working' if (force_working or inflight) else 'completed'
 os.makedirs(status_dir,exist_ok=True)
 with open(os.path.join(status_dir,sid+'.status'),'w') as f:
@@ -103,7 +148,11 @@ if sid_env and claude_sid:
         f.write(claude_sid)
 `);
 
-  // tool_failure_capture.py — captures tool failure details
+  // tool_failure_capture.py — captures tool failure details from a
+  // PostToolUseFailure payload (`tool_name`, `tool_input`, `error`). Skips
+  // `is_interrupt`, which marks a user abort rather than a broken toolchain and
+  // must not raise a missing-tool insight. Random suffix so several failures in
+  // one turn can't collide.
   installEventScript('tool_failure_capture.py', `import sys,json,os,random,string
 try:
     d=json.load(sys.stdin)
@@ -114,7 +163,11 @@ status_dir=sys.argv[2]
 tn=d.get('tool_name','')
 ti=d.get('tool_input',{})
 err=d.get('error','')
-if sid and tn:
+if not isinstance(err,str):
+    err=json.dumps(err)
+# Both renderer detectors require a matching error string, so an empty one is a
+# guaranteed-wasted file write + fs event + IPC round-trip.
+if sid and tn and err and not d.get('is_interrupt'):
     sfx=''.join(random.choices(string.ascii_lowercase,k=6))
     with open(os.path.join(status_dir,sid+'-'+sfx+'.toolfailure'),'w') as f:
         json.dump({'tool_name':tn,'tool_input':ti,'error':err},f)

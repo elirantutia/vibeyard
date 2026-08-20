@@ -8,7 +8,9 @@ import { parseFrontmatter } from './frontmatter';
 import { getSupportedHookEvents as computeSupportedHookEvents } from './claude-hook-versions';
 import { getClaudeVersion } from './providers/claude-version';
 import { resolveBinary } from './providers/resolve-binary';
-import type { McpServer, Agent, Skill, Command, ClaudeConfig, InspectorEventType } from '../shared/types';
+import { TOKEN_TRUNCATION_KEY, TOKEN_TRUNCATION_SENTINEL } from '../shared/constants';
+import { pyLiteral } from '../shared/python';
+import type { McpServer, Agent, Skill, Command, ClaudeConfig, InspectorEvent, InspectorEventType } from '../shared/types';
 
 export type { McpServer, Agent, Skill, Command, ClaudeConfig } from '../shared/types';
 
@@ -144,6 +146,67 @@ function getEnabledPlugins(): Set<string> {
   return new Set(Object.entries(enabled).filter(([, v]) => v).map(([k]) => k));
 }
 
+/**
+ * Hook-payload fields copied verbatim into an inspector event, when present.
+ *
+ * Every name here is taken from a per-event input schema in the Claude Code
+ * hooks reference — an invented name costs nothing at write time and silently
+ * renders a blank timeline row forever, which is exactly how `config_key`,
+ * `question` and `answer` survived here for so long.
+ *
+ * `reason` is intentionally shared across events (SessionEnd and
+ * PermissionDenied), which is safe because the consuming timeline branch is
+ * selected by `ev.type`, not by field presence.
+ *
+ * Beware nested keys when reading the docs: an Elicitation example carries
+ * `requested_schema.properties.username.type`, which reads like top-level
+ * `type`/`username` fields. Neither exists. Elicitation's real discriminator is
+ * `mode` ('form' | 'url').
+ *
+ * Deliberately NOT copied: `cwd` (a common field on every event, so it bloats
+ * all 25 event types with a value that is constant per session),
+ * `requested_schema` / `properties` (unbounded MCP JSON Schema),
+ * `compact_summary` / `custom_instructions` (potentially huge),
+ * `background_tasks` / `session_crons` (consumed by stop_status_writer.py).
+ */
+const INSPECTOR_FIELDS = [
+  // tool events
+  'duration_ms',
+  // subagent + turn events
+  'agent_id', 'agent_type', 'agent_transcript_path', 'last_assistant_message',
+  // prompt / notification
+  'prompt', 'message', 'title', 'notification_type',
+  // lifecycle discriminators
+  'reason', 'error_details',
+  // tasks + teams
+  'task_id', 'task_subject', 'teammate_name',
+  // filesystem / config / worktree
+  'worktree_path', 'file_path', 'event', 'new_cwd',
+  // MCP elicitation
+  'mcp_server_name', 'action',
+] as const;
+
+/**
+ * Compile-time guard that every captured field has a home on `InspectorEvent`.
+ * Hand-mirroring the two lists is what let `config_key`/`question`/`answer`
+ * survive for months; this makes at least the internal half of that drift a
+ * type error. (It cannot check the half that actually broke — whether the name
+ * exists in Claude Code's payload — so the docblock above stays load-bearing.)
+ */
+const _inspectorFieldsAreTyped: readonly (keyof InspectorEvent)[] = INSPECTOR_FIELDS;
+void _inspectorFieldsAreTyped;
+
+/**
+ * Cap on a copied string field. `last_assistant_message` arrives on every Stop
+ * and SubagentStop and was previously written verbatim into `.events`, read
+ * back whole, sent over IPC and held in the renderer — while the timeline only
+ * ever displays 500 characters of it.
+ */
+const INSPECTOR_FIELD_MAX_CHARS = 2000;
+
+/** Per-hook timeout (seconds) requested for SessionEnd. See its use site. */
+const SESSION_END_TIMEOUT_SEC = 5;
+
 export const HOOK_MARKER = '# vibeyard-hook';
 
 /** The default Claude config dir (~/.claude). Profiles override this via CLAUDE_CONFIG_DIR. */
@@ -165,6 +228,13 @@ export function getSupportedHookEvents(): Set<string> {
 interface HookHandler {
   type: string;
   command: string;
+  /**
+   * Per-hook timeout in seconds. Only set where the event's default is too
+   * tight: SessionEnd hooks share a 1.5s budget, which a cold Python start can
+   * blow through, and Claude Code raises the budget to the highest configured
+   * per-hook timeout.
+   */
+  timeout?: number;
 }
 
 interface HookMatcherEntry {
@@ -248,14 +318,21 @@ export function installHooksOnly(configDir: string = defaultClaudeDir()): void {
     // In-flight subagent counter mutation, injected ONLY into the scripts for
     // the four events that affect it. All subagents share the parent's
     // CLAUDE_IDE_SESSION_ID, so a single <sid>.subagents file tracks the whole
-    // session. This read-modify-write is NOT locked: parallel subagent lifecycle
-    // hooks are separate processes and can race, so the counter may transiently
+    // session.
+    //
+    // FALLBACK. Claude Code now reports in-flight work directly on the Stop
+    // payload as `background_tasks`, and stop_status_writer.py prefers it — but
+    // consults this counter whenever that payload reports nothing holding, i.e.
+    // an empty *or* absent `background_tasks`. An empty array is not proof of an
+    // idle session (see the stop_status_writer.py comment in hook-commands.ts),
+    // so the counter still has to be maintained on every CLI version.
+    //
+    // The read-modify-write is NOT locked: parallel subagent lifecycle hooks
+    // are separate processes and can race, so the counter may transiently
     // drift. That is tolerated by design — the renderer arms a completion
     // backstop whenever a Stop resolves to 'working' (see session-activity.ts),
     // so an over-count can never wedge the session and an under-count degrades
-    // to at worst a single stale over-notification (never worse than the
-    // pre-fix behavior this replaces). The Stop writer (stop_status_writer.py)
-    // reads this counter to suppress spurious mid-orchestration completions.
+    // to at worst a single stale over-notification.
     let counterSnippet = '';
     if (hookEvent === 'SubagentStart' || hookEvent === 'SubagentStop') {
       const op = hookEvent === 'SubagentStart' ? 'n=n+1' : 'n=max(0,n-1)';
@@ -295,6 +372,24 @@ if d.get("agent_id"):
  except:
   pass`;
     }
+    // An oversized Read no longer fails: Claude Code truncates it and returns a
+    // successful PostToolUse flagged with TOKEN_TRUNCATION_KEY. Detect that one
+    // structured flag and synthesize the record large-file-detector.ts expects.
+    // Gated here in TS rather than with a `"${hookEvent}"=="PostToolUse"` compare
+    // inside the Python, so the other 24 scripts don't carry a dead branch.
+    //
+    // Scoped to tool_name == "Read" deliberately: a generic "capture every
+    // tool_response" rule would mean a file write + fs event + IPC per tool call.
+    const truncationSnippet = hookEvent === 'PostToolUse' ? `
+if tn=="Read":
+ _tr=d.get("tool_response")
+ _fi=_tr.get("file") if isinstance(_tr,dict) else None
+ if isinstance(_fi,dict) and _fi.get(${pyLiteral(TOKEN_TRUNCATION_KEY)}):
+  import random,string as st
+  _msg=${pyLiteral(TOKEN_TRUNCATION_SENTINEL)}+": read returned "+str(_fi.get("numLines",0))+" of "+str(_fi.get("totalLines",0))+" lines"
+  sfx="".join(random.choices(st.ascii_lowercase,k=6))
+  json.dump({"tool_name":tn,"tool_input":d.get("tool_input",{}),"error":_msg},open(os.path.join(status_dir,sid+"-"+sfx+".toolfailure"),"w"))` : '';
+
     const pyCode = `import sys,json,os,time
 try:
  d=json.load(sys.stdin)
@@ -315,10 +410,15 @@ if ti:
 er=d.get("error","")
 if er:
  e["error"]=er
-for fld in ("agent_id","agent_type","last_assistant_message","agent_transcript_path","message","task_id","worktree_path","cwd","file_path","config_key","question","answer"):
- v=d.get(fld,"")
- if v:
-  e[fld]=v
+for fld in ${pyLiteral(INSPECTOR_FIELDS)}:
+ if fld not in d:
+  continue
+ v=d[fld]
+ if v is None or v=="" or v==[] or v=={}:
+  continue
+ if isinstance(v,str) and len(v)>${INSPECTOR_FIELD_MAX_CHARS}:
+  v=v[:${INSPECTOR_FIELD_MAX_CHARS}]+"..."
+ e[fld]=v
 if cs:
  e["cost_snapshot"]={k:cs[k] for k in ("total_cost_usd","total_duration_ms") if k in cs}
 if cw:
@@ -328,14 +428,7 @@ if cw:
   "context_window_size":cw.get("context_window_size",200000),
   "used_percentage":cw.get("used_percentage",0)
  }
-status_dir=r'${STATUS_DIR}'
-if tn and "${hookEvent}"=="PostToolUse":
- import random,string as st
- tr=d.get("tool_result","") or d.get("tool_response","")
- fe=tr if isinstance(tr,str) else json.dumps(tr) if tr else ""
- if fe:
-  sfx="".join(random.choices(st.ascii_lowercase,k=6))
-  json.dump({"tool_name":tn,"tool_input":d.get("tool_input",{}),"error":fe},open(os.path.join(status_dir,sid+"-"+sfx+".toolfailure"),"w"))${counterSnippet}
+status_dir=${pyLiteral(STATUS_DIR)}${truncationSnippet}${counterSnippet}
 with open(os.path.join(status_dir,sid+".events"),"a") as f:
  f.write(json.dumps(e)+"\\n")
 `;
@@ -349,6 +442,10 @@ with open(os.path.join(status_dir,sid+".events"),"a") as f:
     SessionStart: 'waiting',
     UserPromptSubmit: 'working',
     PostToolUse: 'working',
+    // A failed tool still means the turn is running. This writer is statusCmd,
+    // a plain `sh -c echo` that cannot read stdin, so it also writes 'working'
+    // for an is_interrupt (user-abort) failure; the renderer's interrupt latch
+    // swallows that (see session-activity.ts, `interrupted` guard).
     PostToolUseFailure: 'working',
     Stop: 'completed',
     StopFailure: 'waiting',
@@ -419,10 +516,14 @@ with open(os.path.join(status_dir,sid+".events"),"a") as f:
   for (const [event, eventType] of Object.entries(inspectorOnlyEvents)) {
     if (!supportedEvents.has(event)) continue;
     const existing = cleaned[event] ?? [];
-    existing.push({
-      matcher: '',
-      hooks: [{ type: 'command', command: captureEventCmd(event, eventType) }],
-    });
+    const handler: HookHandler = { type: 'command', command: captureEventCmd(event, eventType) };
+    // SessionEnd hooks share a 1.5s budget by default — tight enough that a
+    // cold Python start (notably on Windows) can miss it and silently drop the
+    // final event. Claude Code raises the budget to the highest configured
+    // per-hook timeout, so asking for 5s buys headroom without delaying exit:
+    // the budget is a ceiling, not a wait.
+    if (event === 'SessionEnd') handler.timeout = SESSION_END_TIMEOUT_SEC;
+    existing.push({ matcher: '', hooks: [handler] });
     cleaned[event] = existing;
   }
 

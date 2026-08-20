@@ -163,6 +163,105 @@ function ev(type: InspectorEvent['type'], timestamp: number, extra?: Partial<Ins
   return { type, timestamp, hookEvent: type, ...extra };
 }
 
+describe('session-inspector timeline event descriptions', () => {
+  beforeEach(() => {
+    vi.stubGlobal('document', new FakeDocument());
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
+    });
+  });
+
+  /** Render one event and return its description text. */
+  function descFor(event: InspectorEvent): string | undefined {
+    vi.mocked(getEvents).mockReturnValue([event]);
+    const container = new FakeElement('div') as unknown as HTMLElement;
+    renderTimeline(container);
+    return (container as unknown as FakeElement).querySelector('.inspector-desc')?.textContent;
+  }
+
+  // Each of these previously read a field Claude Code never sends, so every row
+  // fell through to its generic fallback string.
+  it('renders ConfigChange from file_path, not the nonexistent config_key', () => {
+    expect(descFor({
+      type: 'config_change', timestamp: 1, hookEvent: 'ConfigChange',
+      file_path: '/home/u/.claude/settings.json', source: 'user_settings',
+    })).toBe('Config: /home/u/.claude/settings.json');
+  });
+
+  it('renders Elicitation from message, not the nonexistent question', () => {
+    expect(descFor({
+      type: 'elicitation', timestamp: 1, hookEvent: 'Elicitation',
+      message: 'Pick a branch', mcp_server_name: 'git',
+    })).toBe('Pick a branch');
+  });
+
+  it('falls back to the MCP server name when an elicitation has no message', () => {
+    expect(descFor({
+      type: 'elicitation', timestamp: 1, hookEvent: 'Elicitation', mcp_server_name: 'git',
+    })).toBe('git');
+  });
+
+  it('renders ElicitationResult from action', () => {
+    expect(descFor({
+      type: 'elicitation_result', timestamp: 1, hookEvent: 'ElicitationResult', action: 'accept',
+    })).toBe('Elicitation accept');
+  });
+
+  // The common `cwd` field is the directory the hook ran in — the value
+  // *before* the change — so rendering it here was actively misleading.
+  it('renders CwdChanged from new_cwd', () => {
+    expect(descFor({
+      type: 'cwd_changed', timestamp: 1, hookEvent: 'CwdChanged',
+      new_cwd: '/repo/packages/api', old_cwd: '/repo',
+    })).toBe('/repo/packages/api');
+  });
+
+  it('renders FileChanged with its change kind', () => {
+    expect(descFor({
+      type: 'file_changed', timestamp: 1, hookEvent: 'FileChanged',
+      file_path: '/repo/.env', event: 'modified',
+    })).toBe('modified: /repo/.env');
+  });
+
+  it('renders Notification with its title', () => {
+    expect(descFor({
+      type: 'notification', timestamp: 1, hookEvent: 'Notification',
+      title: 'Permission needed', message: 'Claude needs your permission',
+      notification_type: 'permission_prompt',
+    })).toBe('Permission needed: Claude needs your permission');
+  });
+
+  // TeammateIdle carries teammate_name/team_name and no agent_id or agent_type,
+  // so the agentLabel fallback never resolved to anything useful.
+  it('renders TeammateIdle from teammate_name', () => {
+    expect(descFor({
+      type: 'teammate_idle', timestamp: 1, hookEvent: 'TeammateIdle',
+      teammate_name: 'reviewer', team_name: 'core',
+    })).toBe('Teammate idle: reviewer');
+  });
+
+  it('renders SessionEnd with its reason', () => {
+    expect(descFor({
+      type: 'session_end', timestamp: 1, hookEvent: 'SessionEnd', reason: 'clear',
+    })).toBe('Session ended: clear');
+  });
+
+  it('prefers a task subject over the raw task id', () => {
+    expect(descFor({
+      type: 'task_completed', timestamp: 1, hookEvent: 'TaskCompleted',
+      task_id: 'task-001', task_subject: 'Ship the release',
+    })).toBe('Task completed: Ship the release');
+  });
+
+  it('falls back to the generic label when a field is absent', () => {
+    expect(descFor({ type: 'config_change', timestamp: 1, hookEvent: 'ConfigChange' }))
+      .toBe('Config changed');
+    expect(descFor({ type: 'cwd_changed', timestamp: 1, hookEvent: 'CwdChanged' }))
+      .toBe('Working directory changed');
+  });
+});
+
 describe('buildAgentModel', () => {
   it('pairs sequential agents correctly', () => {
     const events: InspectorEvent[] = [

@@ -1,3 +1,4 @@
+import { STOP_INFLIGHT_TRUST_MS } from '../shared/constants';
 export type SessionStatus = 'working' | 'waiting' | 'idle' | 'completed' | 'input';
 
 type StatusChangeCallback = (sessionId: string, status: SessionStatus) => void;
@@ -11,16 +12,24 @@ const sessions = new Map<string, SessionState>();
 const listeners: StatusChangeCallback[] = [];
 
 // Backstop for the subagent-aware Stop hook (see stop_status_writer.py). When
-// that hook judges subagents are still in flight it writes `Stop:working`
-// instead of `Stop:completed`. If that in-flight signal is ever wrong — a lost
-// SubagentStop, a counter race between concurrent subagent hooks, or an
-// auto-compact SessionStart reset — the session would otherwise sit in
-// 'working' forever and the real completion would never be notified. To
-// guarantee eventual completion, arm a fallback whenever a Stop resolves to
-// 'working': if the session then goes silent, complete it. Any later hook
-// event counts as activity and cancels the pending fallback. The window
-// matches the hook-side staleness guard (STOP_STALE_MS).
-const STOP_FALLBACK_MS = 10 * 60 * 1000;
+// that hook judges work is still in flight it writes `Stop:working` instead of
+// `Stop:completed`. If that in-flight signal is ever wrong the session would
+// sit in 'working' forever and the real completion would never be notified.
+//
+// Both of the hook's branches can be wrong, in different ways:
+//   - `background_tasks` (preferred): a subagent/teammate/workflow entry that
+//     hangs around in the task registry holds the session indefinitely, and the
+//     payload carries no per-task timestamp to age it out — so this backstop is
+//     the *only* escape hatch on that path.
+//   - the legacy <sid>.subagents counter (fallback, older CLIs): a lost
+//     SubagentStop, a race between concurrent subagent hooks, or an
+//     auto-compact SessionStart reset can leave the count too high.
+//
+// So: arm a fallback whenever a Stop resolves to 'working'; if the session then
+// goes silent, complete it. Any later hook event counts as activity and cancels
+// the pending fallback. The window matches the hook-side staleness guard
+// (STOP_STALE_MS).
+const STOP_FALLBACK_MS = STOP_INFLIGHT_TRUST_MS;
 const stopFallbackTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 function clearStopFallback(sessionId: string): void {

@@ -33,6 +33,11 @@ export const CLAUDE_HOOK_MIN_VERSIONS: Record<string, string> = {
   FileChanged: '2.1.83',
   TaskCreated: '2.1.84',
   PermissionDenied: '2.1.89',
+  // Earliest version the public changelog references this event in (2.1.119 added
+  // `duration_ms` to it). It certainly predates that, but nothing pins how far back,
+  // and gating too low would write an unrecognized key into a user's settings.json.
+  // Lower the floor if an earlier changelog entry is ever confirmed.
+  PostToolUseFailure: '2.1.119',
 };
 
 /** Parse a semver-ish string into a [major, minor, patch] tuple, or null. */

@@ -520,6 +520,16 @@ export interface CostData {
 
 // --- Tool Failure ---
 
+/**
+ * A tool signal from a CLI hook, dispatched by consumers on `tool_name`.
+ *
+ * Not strictly a *failure*: a `Read` truncated at the token cap is a successful
+ * tool call that still arrives here, tagged with `TOKEN_TRUNCATION_SENTINEL`,
+ * because it needs the same one-shot file → IPC delivery. Adding a parallel
+ * channel would cost a KNOWN_EXTENSIONS entry, a second suffix-stripping branch
+ * in `extractSessionId`, an IPC channel and a preload binding — to reach
+ * consumers that would still filter by `tool_name` anyway.
+ */
 export interface ToolFailureData {
   tool_name: string;
   tool_input: Record<string, unknown>;
@@ -556,18 +566,43 @@ export interface InspectorEvent {
   error?: string;
   cost_snapshot?: { total_cost_usd: number; total_duration_ms: number };
   context_snapshot?: { total_tokens: number; context_window_size: number; used_percentage: number };
+  // Copied verbatim from the hook payload by INSPECTOR_FIELDS in claude-cli.ts.
+  // Keep the two lists in step — a name here with no counterpart there is dead.
+  tool_use_id?: string;
+  duration_ms?: number;
+  is_interrupt?: boolean;
   agent_id?: string;
   agent_type?: string;
-  last_assistant_message?: string;
   agent_transcript_path?: string;
+  last_assistant_message?: string;
+  prompt?: string;
   message?: string;
+  title?: string;
+  notification_type?: string;
+  source?: string;
+  model?: string;
+  reason?: string;
+  error_details?: string;
+  trigger?: string;
   task_id?: string;
+  task_subject?: string;
+  task_description?: string;
+  team_name?: string;
+  teammate_name?: string;
   worktree_path?: string;
-  cwd?: string;
   file_path?: string;
-  config_key?: string;
-  question?: string;
-  answer?: string;
+  event?: string;
+  new_cwd?: string;
+  old_cwd?: string;
+  load_reason?: string;
+  memory_type?: string;
+  mcp_server_name?: string;
+  /** Elicitation discriminator: 'form' | 'url'. */
+  mode?: string;
+  action?: string;
+  elicitation_id?: string;
+  content?: string;
+  url?: string;
 }
 
 export interface ToolUsageStats {

@@ -1,6 +1,6 @@
 import picomatch from 'picomatch';
 import type { ToolFailureData } from '../../shared/types.js';
-import { DEFAULT_SCAN_IGNORE, EXCLUDED_DIRECTORIES, EXTRA_ALERT_IGNORE } from '../../shared/constants.js';
+import { DEFAULT_SCAN_IGNORE, EXCLUDED_DIRECTORIES, EXTRA_ALERT_IGNORE, TOKEN_TRUNCATION_SENTINEL } from '../../shared/constants.js';
 import { basename as pathBasename } from '../../shared/platform.js';
 import { appState } from '../state.js';
 
@@ -11,8 +11,6 @@ export interface LargeFileAlert {
 }
 
 type LargeFileAlertCallback = (alert: LargeFileAlert) => void;
-
-const TOKEN_LIMIT_RE = /file content \(\d+ tokens\) exceeds maximum allowed tokens/i;
 
 const excludedDirSet = new Set(EXCLUDED_DIRECTORIES);
 const hardcodedMatcher = picomatch([...DEFAULT_SCAN_IGNORE, ...EXTRA_ALERT_IGNORE], { basename: true });
@@ -76,7 +74,11 @@ export function onLargeFileAlert(callback: LargeFileAlertCallback): void {
 export async function handleToolFailure(sessionId: string, data: ToolFailureData): Promise<void> {
   if (!appState.preferences.insightsEnabled) return;
   if (data.tool_name !== 'Read') return;
-  if (!TOKEN_LIMIT_RE.test(data.error)) return;
+  // Not a regex over the error text: Claude Code truncates an oversized Read and
+  // returns success rather than failing it, so the old `file content (N tokens)
+  // exceeds maximum allowed tokens` message no longer exists. The PostToolUse
+  // hook tags the synthetic record with this sentinel instead.
+  if (!data.error.startsWith(TOKEN_TRUNCATION_SENTINEL)) return;
 
   const filePath = typeof data.tool_input?.file_path === 'string'
     ? data.tool_input.file_path
