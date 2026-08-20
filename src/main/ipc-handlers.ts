@@ -7,7 +7,7 @@ import { spawnPty, spawnShellPty, writePty, resizePty, killPty, isSilencedExit, 
 import { addMcpServer, removeMcpServer } from './claude-cli';
 import type { McpServerConfig } from './claude-cli';
 import { loadState, saveState, PersistedState } from './store';
-import { startWatching, cleanupSessionStatus } from './hook-status';
+import { startWatching, cleanupSessionStatus, resyncAllSessions } from './hook-status';
 import { startCodexSessionWatcher, registerPendingCodexSession, unregisterCodexSession } from './codex-session-watcher';
 import { getGitStatus, getGitFiles, getGitDiff, getGitWorktrees, gitStageFile, gitUnstageFile, gitDiscardFile, getGitRemoteUrl, listGitBranches, checkoutGitBranch, createGitBranch } from './git-status';
 import { startGitWatcher, stopGitWatcher, notifyGitChanged } from './git-watcher';
@@ -402,6 +402,15 @@ export function registerIpcHandlers(): void {
     const result = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
     if (result.canceled || result.filePaths.length === 0) return null;
     return result.filePaths[0];
+  });
+
+  // Replay every status file. The hook scripts write only on change, so a
+  // title already on disk produces no further fs event — without this, turning
+  // "Auto-name sessions" back on would leave existing tabs unnamed until their
+  // title happened to change.
+  ipcMain.on('session:resyncStatus', () => {
+    const w = BrowserWindow.getAllWindows()[0];
+    if (w) resyncAllSessions(w);
   });
 
   ipcMain.on('app:focus', () => {

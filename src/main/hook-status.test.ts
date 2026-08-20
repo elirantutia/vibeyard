@@ -29,6 +29,7 @@ vi.mock('electron', () => ({
 
 import * as fs from 'fs';
 import {
+  buildStatusLinePython,
   installStatusLineScript,
   startWatching,
   resyncAllSessions,
@@ -85,6 +86,78 @@ afterEach(() => {
 });
 
 describe('hook-status', () => {
+  describe('buildStatusLinePython', () => {
+    // Tested directly rather than through installStatusLineScript so the body
+    // used by the Windows branch is exercised on every platform's CI run.
+    const body = () => buildStatusLinePython(STATUS_DIR);
+
+    it('extracts cost, context_window, session_id and session_name', () => {
+      const script = body();
+      for (const field of ['cost', 'context_window', 'session_id', 'session_name']) {
+        expect(script).toContain(field);
+      }
+    });
+
+    it('builds every path with os.path.join off the status_dir literal', () => {
+      const script = body();
+      expect(script).toContain(`status_dir=${JSON.stringify(STATUS_DIR)}`);
+      for (const ext of ['.cost', '.sessionid', '.name']) {
+        expect(script).toContain(`sid+'${ext}'`);
+      }
+      expect(script).not.toContain('status_dir+');
+    });
+
+    it.each([
+      ['posix', '/tmp/vibeyard'],
+      ['windows backslashes', 'C:\\Users\\dev\\Temp\\vibeyard'],
+      ['apostrophe in path', "C:\\Users\\O'Brien\\Temp\\vibeyard"],
+      ['double quote in path', '/tmp/we"ird/vibeyard'],
+      ['trailing separator', '/tmp/vibeyard/'],
+      ['non-ascii', '/tmp/\u00fcn\u00efcode/vibeyard'],
+    ])('embeds a %s status dir as a valid Python literal', (_label, dir) => {
+      // A SyntaxError here is silent in production and kills cost, context,
+      // sessionid and name at once. A raw literal breaks on an apostrophe.
+      const script = buildStatusLinePython(dir);
+      const literal = script.split('\n').find((l) => l.startsWith('status_dir='))!;
+      expect(literal).toBe(`status_dir=${JSON.stringify(dir)}`);
+
+      const { spawnSync } = require('child_process') as typeof import('child_process');
+      if (spawnSync('python3', ['-c', 'pass']).error) return; // no python3 here
+
+      const result = spawnSync('python3', [
+        '-c',
+        `import sys,json;ns={};exec(sys.stdin.read(),ns);print(json.dumps(ns["status_dir"]))`,
+      ], { input: literal });
+      expect(result.status).toBe(0);
+      expect(JSON.parse(result.stdout.toString())).toBe(dir);
+    });
+
+    it('writes the name as ASCII-safe JSON', () => {
+      // json.dumps defaults to ensure_ascii=True, so a CJK/emoji title never
+      // hits Windows' locale codepage and raises UnicodeEncodeError — which
+      // would abort the script and take the .cost write down with it.
+      expect(body()).toContain('json.dumps(');
+      expect(body()).not.toContain("encoding=");
+    });
+
+    it('is syntactically valid Python', () => {
+      // A syntax error here is silent in production: it kills cost, context,
+      // sessionid and name at once, with the traceback going only to
+      // statusline.log. Nothing else in this suite would catch it.
+      const { spawnSync } = require('child_process') as typeof import('child_process');
+      const probe = spawnSync('python3', ['-c', 'pass']);
+      if (probe.error) return; // no python3 on this runner
+
+      const result = spawnSync('python3', [
+        '-c',
+        'import sys;compile(sys.stdin.read(),"statusline","exec")',
+      ], { input: body() });
+
+      expect(result.stderr.toString()).toBe('');
+      expect(result.status).toBe(0);
+    });
+  });
+
   describe('installStatusLineScript', () => {
     it('creates dir and writes script with mode 0o755', () => {
       installStatusLineScript();
@@ -95,6 +168,24 @@ describe('hook-status', () => {
         isWin ? expect.stringContaining('@echo off') : expect.stringContaining('#!/bin/sh'),
         { mode: 0o755 },
       );
+    });
+
+    it('installs the Python body as a file and invokes it by path', () => {
+      // Never inlined into the shell command — see the module docstring in
+      // hook-commands.ts for why inlining Python here is fragile.
+      installStatusLineScript();
+
+      const pyPath = path.join(SCRIPT_DIR, 'statusline.py');
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        pyPath,
+        expect.stringContaining('session_name'),
+        { mode: 0o755 },
+      );
+
+      const wrapper = vi.mocked(fs.writeFileSync).mock.calls
+        .find(([target]) => target === STATUSLINE_SCRIPT)![1] as string;
+      expect(wrapper).toContain(`"${pyPath}"`);
+      expect(wrapper).not.toContain('-c');
     });
   });
 
@@ -186,6 +277,65 @@ describe('hook-status', () => {
       watchCallback!('change', 'abc123.cost');
 
       expect(mockSend).toHaveBeenCalledWith('session:costData', 'abc123', costData);
+    });
+
+    it('.name parses JSON and sends session:sessionName with the CLI session id', () => {
+      const win = createMockWin();
+      startWatching(win);
+      registerSession('abc123');
+
+      vi.mocked(fs.readFileSync).mockReturnValue(
+        JSON.stringify({ name: 'Fix the flaky test', session_id: 'cli-1' }),
+      );
+      watchCallback!('change', 'abc123.name');
+
+      expect(mockSend).toHaveBeenCalledWith('session:sessionName', 'abc123', 'Fix the flaky test', 'cli-1');
+    });
+
+    it('.name without a session_id sends an empty CLI session id', () => {
+      const win = createMockWin();
+      startWatching(win);
+      registerSession('abc123');
+
+      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({ name: 'Untagged' }));
+      watchCallback!('change', 'abc123.name');
+
+      expect(mockSend).toHaveBeenCalledWith('session:sessionName', 'abc123', 'Untagged', '');
+    });
+
+    it('.name with malformed JSON does not send and does not throw', () => {
+      const win = createMockWin();
+      startWatching(win);
+      registerSession('abc123');
+
+      // A partially-flushed write looks exactly like this
+      vi.mocked(fs.readFileSync).mockReturnValue('{"name": "Fix the fla');
+      expect(() => watchCallback!('change', 'abc123.name')).not.toThrow();
+
+      expect(mockSend).not.toHaveBeenCalledWith('session:sessionName', expect.anything(), expect.anything());
+    });
+
+    it('.name with an empty or non-string name does not send', () => {
+      const win = createMockWin();
+      startWatching(win);
+      registerSession('abc123');
+
+      for (const payload of ['{}', '{"name":""}', '{"name":123}']) {
+        vi.mocked(fs.readFileSync).mockReturnValue(payload);
+        watchCallback!('change', 'abc123.name');
+      }
+
+      expect(mockSend).not.toHaveBeenCalledWith('session:sessionName', expect.anything(), expect.anything());
+    });
+
+    it('.name is ignored for unregistered sessions', () => {
+      const win = createMockWin();
+      startWatching(win);
+
+      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({ name: 'Nope' }));
+      watchCallback!('change', 'stranger.name');
+
+      expect(mockSend).not.toHaveBeenCalled();
     });
 
     it('.toolfailure parses JSON, sends session:toolFailure, and deletes file', () => {
@@ -330,16 +480,17 @@ describe('hook-status', () => {
   });
 
   describe('cleanupSessionStatus', () => {
-    it('unlinks all 6 file types', () => {
+    it('unlinks all 7 file types', () => {
       cleanupSessionStatus('sess-1');
 
       expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'sess-1.status'));
       expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'sess-1.sessionid'));
       expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'sess-1.cost'));
+      expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'sess-1.name'));
       expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'sess-1.toolfailure'));
       expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'sess-1.events'));
       expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'sess-1.subagents'));
-      expect(fs.unlinkSync).toHaveBeenCalledTimes(6);
+      expect(fs.unlinkSync).toHaveBeenCalledTimes(7);
     });
 
     it('handles errors when files do not exist', () => {

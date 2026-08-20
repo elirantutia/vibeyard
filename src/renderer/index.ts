@@ -6,7 +6,7 @@ import { initKeybindings } from './keybindings.js';
 import { handlePtyData, destroyTerminal, updateCostDisplay, updateContextDisplay, applyThemeToAllTerminals, refreshProfileLabels } from './components/terminal-pane.js';
 import { setIdle, setHookStatus, notifyInterrupt } from './session-activity.js';
 import { parseCost, setCostData, onChange as onCostChange } from './session-cost.js';
-import { parseTitle, clearSession as clearTitleSession } from './session-title.js';
+import { applyCliSessionName } from './session-title.js';
 import { setContextData, onChange as onContextChange } from './session-context.js';
 import { initNotificationSound } from './notification-sound.js';
 import { initNotificationDesktop } from './notification-desktop.js';
@@ -77,7 +77,6 @@ async function main(): Promise<void> {
     } else if (!isMcpSession(sessionId)) {
       handlePtyData(sessionId, data);
       parseCost(sessionId, data);
-      parseTitle(sessionId, data);
       if (data.includes('Interrupted')) {
         notifyInterrupt(sessionId);
       }
@@ -86,6 +85,12 @@ async function main(): Promise<void> {
         forwardPtyData(sessionId, data);
       }
     }
+  });
+
+  window.vibeyard.session.onSessionName((sessionId, name, cliSessionId) => {
+    if (!appState.hasSession(sessionId)) return;
+    logDebugEvent('sessionName', sessionId, name);
+    applyCliSessionName(sessionId, name, cliSessionId);
   });
 
   window.vibeyard.session.onCostData((sessionId, costData) => {
@@ -145,7 +150,6 @@ async function main(): Promise<void> {
     // Find the project containing this session and persist the CLI session ID
     const project = appState.projects.find(p => p.sessions.some(s => s.id === sessionId));
     if (project) {
-      clearTitleSession(sessionId);
       appState.updateSessionCliId(project.id, sessionId, cliSessionId);
     }
   });
@@ -163,7 +167,6 @@ async function main(): Promise<void> {
       const project = appState.projects.find(p => p.sessions.some(s => s.id === sessionId));
       if (project) {
         destroyTerminal(sessionId);
-        clearTitleSession(sessionId);
         appState.removeSession(project.id, sessionId);
       }
     }
@@ -238,12 +241,19 @@ async function main(): Promise<void> {
   // place. Out-of-modal strings (sidebar buttons, tab titles) stay English
   // until a follow-up PR translates them.
   let lastLocale = getLocale();
+  let lastAutoTitle = appState.preferences.autoTitleEnabled;
   appState.on('preferences-changed', () => {
     const theme = appState.preferences.theme ?? 'dark';
     document.documentElement.dataset.theme = theme;
     applyThemeToAllTerminals(theme);
     applyThemeToAllShells(theme);
     applyThemeToAllRemoteTerminals(theme);
+
+    // Titles already on disk produce no new fs event (the hook writes only on
+    // change), so re-enabling auto-naming needs an explicit replay.
+    const autoTitle = appState.preferences.autoTitleEnabled;
+    if (autoTitle && !lastAutoTitle) window.vibeyard.session.resyncStatus();
+    lastAutoTitle = autoTitle;
 
     const newLocale = appState.preferences.locale;
     if (newLocale && newLocale !== lastLocale) {

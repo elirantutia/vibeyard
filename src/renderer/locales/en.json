@@ -16,7 +16,7 @@
     "desktopNotifications": "Desktop notifications when sessions need attention",
     "recordSessionHistory": "Record session history when sessions close",
     "showInsightAlerts": "Show insight alerts",
-    "autoNameSessions": "Auto-name sessions from conversation title",
+    "autoNameSessions": "Auto-name sessions from the CLI's session title (Claude only)",
     "confirmClosingActiveSession": "Confirm closing an active session",
     "copyOnSelect": "Copy on select"
   },

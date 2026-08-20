@@ -2,13 +2,21 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { BrowserWindow } from 'electron';
-import { isWin } from './platform';
+import { isWin, pythonBin } from './platform';
 
 export const STATUS_DIR = path.join(os.tmpdir(), 'vibeyard');
 export const SCRIPT_DIR = path.join(os.homedir(), '.vibeyard', 'run');
 const STATUSLINE_SCRIPT = path.join(SCRIPT_DIR, isWin ? 'statusline.cmd' : 'statusline.sh');
 
-const KNOWN_EXTENSIONS = ['.status', '.sessionid', '.cost', '.toolfailure', '.events', '.subagents'];
+// Status files any provider may write into STATUS_DIR, keyed by Vibeyard's
+// session id. This array drives cleanup, polling and resync generically.
+//
+// `.name` is a provider-facing channel, not Claude-private: write
+// `{"name": "…", "session_id": "…"}` and the tab adopts that title. Claude
+// fills it from its statusLine payload (see buildStatusLinePython); another
+// provider can populate it from any source, the way codex-session-watcher.ts
+// already writes `.sessionid` without hooks.
+const KNOWN_EXTENSIONS = ['.status', '.sessionid', '.cost', '.name', '.toolfailure', '.events', '.subagents'];
 
 let watcher: fs.FSWatcher | null = null;
 let pollInterval: ReturnType<typeof setInterval> | null = null;
@@ -32,20 +40,26 @@ export function getStatusLineScriptPath(): string {
   return STATUSLINE_SCRIPT;
 }
 
-export function installStatusLineScript(): void {
-  fs.mkdirSync(STATUS_DIR, { recursive: true, mode: 0o700 });
-  fs.mkdirSync(SCRIPT_DIR, { recursive: true, mode: 0o700 });
-
-  // Script that extracts cost, context_window, and session_id from hook JSON stdin.
-  // Used by hook commands to write .cost and .sessionid files to STATUS_DIR.
-  // Use forward slashes — backslashes inside double-quoted .cmd strings can
-  // interfere with cmd.exe's >> redirection parsing on some Windows versions.
-  const statusDir = STATUS_DIR.replace(/\\/g, '/');
-
-  let script: string;
-  if (isWin) {
-    // On Windows, write a Python helper script and a .cmd wrapper
-    const pyScript = `import sys,json,os
+/**
+ * Body of the statusLine helper, shared by the POSIX and Windows branches.
+ *
+ * Claude invokes the statusLine command on every render, piping it the session
+ * JSON on stdin. We extract `cost`, `context_window`, `session_id` and
+ * `session_name` and drop them into STATUS_DIR for the watcher to pick up.
+ * The `.name` payload carries the CLI session id alongside the title so a
+ * stale title can be told apart from the current conversation's.
+ *
+ * Installed as a real `.py` file on every platform and invoked by path, never
+ * inlined into the shell command — see the module docstring in
+ * `hook-commands.ts` for why inlining Python is fragile here.
+ *
+ * `statusDir` is embedded via `JSON.stringify`, whose escapes (`\\`, `\"`,
+ * `\uXXXX`) are all valid Python ones. A raw literal would break on an
+ * apostrophe in the path — e.g. a Windows user named O'Brien — and a
+ * SyntaxError here silently kills cost, context, sessionid and name at once.
+ */
+export function buildStatusLinePython(statusDir: string): string {
+  return `import sys,json,os
 try:
     d=json.load(sys.stdin)
 except:
@@ -53,7 +67,7 @@ except:
 sid=os.environ.get('CLAUDE_IDE_SESSION_ID','')
 if not sid:
     sys.exit(0)
-status_dir=r'${STATUS_DIR}'
+status_dir=${JSON.stringify(statusDir)}
 cost=d.get('cost',{})
 ctx=d.get('context_window',{})
 model=d.get('model',{}).get('display_name','')
@@ -67,37 +81,40 @@ claude_sid=d.get('session_id','')
 if claude_sid:
     with open(os.path.join(status_dir,sid+'.sessionid'),'w') as f:
         f.write(claude_sid)
-`;
-    const pyPath = path.join(SCRIPT_DIR, 'statusline.py');
-    fs.writeFileSync(pyPath, pyScript, { mode: 0o755 });
-    script = `@echo off\r\npython "${pyPath}" 2>>"${statusDir}/statusline.log"\r\n`;
-  } else {
-    script = `#!/bin/sh
-/usr/bin/python3 -c "
-import sys,json,os
+name_path=os.path.join(status_dir,sid+'.name')
+name=str(d.get('session_name') or '').strip()
+blob=json.dumps({'name':name,'session_id':claude_sid}) if name else ''
+prev=''
 try:
-    d=json.load(sys.stdin)
+    with open(name_path) as f:
+        prev=f.read()
 except:
-    sys.exit(0)
-sid=os.environ.get('CLAUDE_IDE_SESSION_ID','')
-if not sid:
-    sys.exit(0)
-cost=d.get('cost',{})
-ctx=d.get('context_window',{})
-model=d.get('model',{}).get('display_name','')
-if cost or ctx or model:
-    payload={'cost':cost,'context_window':ctx}
-    if model:
-        payload['model']=model
-    with open(f'${STATUS_DIR}/{sid}.cost','w') as f:
-        json.dump(payload,f)
-claude_sid=d.get('session_id','')
-if claude_sid:
-    with open(f'${STATUS_DIR}/{sid}.sessionid','w') as f:
-        f.write(claude_sid)
-" 2>>${STATUS_DIR}/statusline.log
+    pass
+if prev!=blob:
+    try:
+        if blob:
+            with open(name_path,'w') as f:
+                f.write(blob)
+        else:
+            os.remove(name_path)
+    except:
+        pass
 `;
-  }
+}
+
+export function installStatusLineScript(): void {
+  fs.mkdirSync(STATUS_DIR, { recursive: true, mode: 0o700 });
+  fs.mkdirSync(SCRIPT_DIR, { recursive: true, mode: 0o700 });
+
+  const pyPath = path.join(SCRIPT_DIR, 'statusline.py');
+  fs.writeFileSync(pyPath, buildStatusLinePython(STATUS_DIR), { mode: 0o755 });
+
+  // Use forward slashes — backslashes inside double-quoted .cmd strings can
+  // interfere with cmd.exe's >> redirection parsing on some Windows versions.
+  const logPath = `${STATUS_DIR.replace(/\\/g, '/')}/statusline.log`;
+  const script = isWin
+    ? `@echo off\r\n${pythonBin} "${pyPath}" 2>>"${logPath}"\r\n`
+    : `#!/bin/sh\n${pythonBin} "${pyPath}" 2>>"${logPath}"\n`;
 
   fs.writeFileSync(STATUSLINE_SCRIPT, script, { mode: 0o755 });
 }
@@ -167,6 +184,28 @@ function handleFileChange(win: BrowserWindow, filename: string): void {
     } catch {
       // File may have been deleted or contain invalid JSON
     }
+  } else if (filename.endsWith('.name')) {
+    const sessionId = extractedId;
+    const filePath = path.join(STATUS_DIR, filename);
+
+    try {
+      const content = fs.readFileSync(filePath, 'utf-8').trim();
+      const { name, session_id: cliSessionId } = JSON.parse(content);
+      if (typeof name === 'string' && name && !win.isDestroyed()) {
+        // cliSessionId lets the renderer drop a title left over from a
+        // conversation that has since been cleared — resyncAllSessions
+        // re-reads every file, so a stale .name would otherwise re-title
+        // the freshly reset tab.
+        win.webContents.send(
+          'session:sessionName',
+          sessionId,
+          name,
+          typeof cliSessionId === 'string' ? cliSessionId : '',
+        );
+      }
+    } catch {
+      // File may have been deleted or contain invalid JSON (partial write)
+    }
   } else if (filename.endsWith('.toolfailure')) {
     const sessionId = extractedId;
     const filePath = path.join(STATUS_DIR, filename);
@@ -227,14 +266,16 @@ function pollForChanges(win: BrowserWindow): void {
         const stat = fs.statSync(filePath);
         const mtime = stat.mtimeMs;
         const prev = lastMtimes.get(filename);
-        if (prev === undefined || mtime > prev) {
+        // `!==`, not `>`: `.name` is deleted and rewritten on /clear, and a
+        // recreated file can carry a coarser, non-increasing timestamp.
+        if (prev !== mtime) {
           lastMtimes.set(filename, mtime);
           if (prev !== undefined) {
             handleFileChange(win, filename);
           }
         }
       } catch {
-        // File may have been deleted
+        // File may have been deleted between readdir and stat
       }
     }
   } catch {

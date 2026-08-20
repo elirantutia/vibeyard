@@ -27,6 +27,7 @@ import {
   buildTeamSession,
 } from './state/session-factory.js';
 import { NavHistory } from './state/nav-history.js';
+import { defaultSessionName } from './state/session-naming.js';
 import { createDefaultBoard, ensureProjectDefaults, hydrateLoadedState, serializeForSave } from './state/persistence.js';
 import {
   applyMemberPatch,
@@ -887,7 +888,7 @@ class AppState {
       if (this.isArchivable(session, project)) {
         this.archiveSession(project, session);
       }
-      session.name = `Session ${project.sessions.length + (project.sessionHistory?.length || 0)}`;
+      session.name = defaultSessionName(project);
       session.userRenamed = false;
       this.emit('cli-session-cleared', { sessionId });
     }

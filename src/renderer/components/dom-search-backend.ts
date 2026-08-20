@@ -1,4 +1,8 @@
 import type { SearchBackend, SearchResultState } from './search-bar.js';
+import { escapeRegExp } from '../../shared/regex.js';
+
+// Re-exported for the existing importers of this module.
+export { escapeRegExp };
 
 interface MatchInfo {
   element: HTMLElement;
@@ -10,9 +14,6 @@ export function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-export function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 export class DomSearchBackend implements SearchBackend {
   private matches: MatchInfo[] = [];

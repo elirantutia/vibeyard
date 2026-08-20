@@ -25,6 +25,8 @@ export interface VibeyardApi {
     /** @deprecated Use onCliSessionId instead */
     onClaudeSessionId(callback: (sessionId: string, claudeSessionId: string) => void): () => void;
     onCostData(callback: (sessionId: string, costData: CostData) => void): () => void;
+    onSessionName(callback: (sessionId: string, name: string, cliSessionId: string) => void): () => void;
+    resyncStatus(): void;
     onToolFailure(callback: (sessionId: string, data: ToolFailureData) => void): () => void;
     onInspectorEvents(callback: (sessionId: string, events: InspectorEvent[]) => void): () => void;
   };
@@ -209,6 +211,10 @@ const api: VibeyardApi = {
     onCostData: (callback) =>
       onChannel('session:costData', (sessionId, costData) =>
         callback(sessionId as string, costData as CostData)),
+    onSessionName: (callback) =>
+      onChannel('session:sessionName', (sessionId, name, cliSessionId) =>
+        callback(sessionId as string, name as string, (cliSessionId as string) || '')),
+    resyncStatus: () => ipcRenderer.send('session:resyncStatus'),
     onToolFailure: (callback) =>
       onChannel('session:toolFailure', (sessionId, data) =>
         callback(sessionId as string, data as ToolFailureData)),

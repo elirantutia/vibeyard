@@ -20,6 +20,8 @@ export interface VibeyardApi {
     /** @deprecated Use onCliSessionId */
     onClaudeSessionId(callback: (sessionId: string, claudeSessionId: string) => void): () => void;
     onCostData(callback: (sessionId: string, costData: CostData) => void): () => void;
+    onSessionName(callback: (sessionId: string, name: string, cliSessionId: string) => void): () => void;
+    resyncStatus(): void;
   };
   fs: {
     isDirectory(path: string): Promise<boolean>;

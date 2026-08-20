@@ -1,49 +1,35 @@
-import { stripAnsi } from './ansi';
-import { appState } from './state.js';
+import { appState, MAX_SESSION_NAME_LENGTH } from './state.js';
 
-/** Matches a Claude Code separator line containing the conversation title */
-const TITLE_RE = /─{3,}\s+(\S[^─]*\S)\s+─{2,}/;
-
-/** Sessions that have already been titled (skip future parsing for performance) */
-const titled = new Set<string>();
-
-/** Parse conversation title from raw PTY output and auto-rename the session */
-export function parseTitle(sessionId: string, rawData: string): void {
-  if (titled.has(sessionId)) return;
+/**
+ * Adopt the CLI's own session name as the tab title.
+ *
+ * The name comes from the `session_name` field of Claude's statusLine payload:
+ * the custom name set via `--name` or `/rename` when one exists, otherwise the
+ * AI-generated topic title. It is absent until the session has one, so this is
+ * only called with a real title.
+ *
+ * `cliSessionId` is the conversation the title belongs to. It matters because
+ * the status file survives a `/clear` until the next statusLine render deletes
+ * it, and `resyncAllSessions` re-reads every file on window activate — without
+ * this check that stale title would re-name the freshly reset tab.
+ */
+export function applyCliSessionName(sessionId: string, name: string, cliSessionId?: string): void {
   if (!appState.preferences.autoTitleEnabled) return;
 
-  const clean = stripAnsi(rawData);
+  const title = name.trim();
+  if (!title) return;
 
-  // Process line-by-line to avoid matching text spanning across separate separator lines
-  for (const line of clean.split(/\r?\n|\r/)) {
-    const match = TITLE_RE.exec(line);
-    if (!match) continue;
+  const found = appState.findSessionWithProject(sessionId);
+  if (!found) return;
+  const { project, session } = found;
 
-    const title = match[1].trim();
-    if (!title) continue;
+  // A rename typed in Vibeyard is sticky and always wins.
+  if (session.userRenamed) return;
+  if (cliSessionId && session.cliSessionId && session.cliSessionId !== cliSessionId) return;
+  // Claude re-sends the title on every statusLine render, and resync replays it
+  // on window activate. Compare against the stored (already truncated) name so a
+  // repeat doesn't cost a persist and a full tab-bar re-render.
+  if (session.name === title.slice(0, MAX_SESSION_NAME_LENGTH)) return;
 
-    titled.add(sessionId);
-
-    // Find the session and check if user renamed it
-    for (const project of appState.projects) {
-      const session = project.sessions.find((s) => s.id === sessionId);
-      if (session) {
-        if (!session.userRenamed) {
-          appState.renameSession(project.id, sessionId, title);
-        }
-        return;
-      }
-    }
-    return;
-  }
-}
-
-/** Clear a session's title tracking so it can be titled again (e.g., after /clear or session exit) */
-export function clearSession(sessionId: string): void {
-  titled.delete(sessionId);
-}
-
-/** @internal Test-only: reset all module state */
-export function _resetForTesting(): void {
-  titled.clear();
+  appState.renameSession(project.id, sessionId, title);
 }

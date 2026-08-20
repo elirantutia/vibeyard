@@ -57,6 +57,22 @@ export function t(key: string, vars?: Record<string, string | number>): string {
   return key;
 }
 
+/**
+ * Every locale's raw template for `key`, English first, de-duplicated.
+ *
+ * Used where a string must be recognised regardless of the *current* locale —
+ * e.g. spotting an auto-generated session name that was created before the
+ * user switched languages. Returns `[]` when the key is missing everywhere.
+ */
+export function allTranslations(key: string): string[] {
+  const seen = new Set<string>();
+  for (const locale of SUPPORTED_LOCALES) {
+    const value = lookupByKey(key, locale);
+    if (value !== undefined) seen.add(value);
+  }
+  return [...seen];
+}
+
 function interpolate(template: string, vars?: Record<string, string | number>): string {
   if (!vars) return template;
   return template.replace(/\{(\w+)\}/g, (match, name) => {

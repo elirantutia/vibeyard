@@ -16,7 +16,7 @@
     "desktopNotifications": "会话需要关注时显示桌面通知",
     "recordSessionHistory": "会话关闭时记录会话历史",
     "showInsightAlerts": "显示洞察提醒",
-    "autoNameSessions": "根据对话标题自动命名会话",
+    "autoNameSessions": "根据 CLI 的会话标题自动命名会话（仅限 Claude）",
     "confirmClosingActiveSession": "关闭活动会话前进行确认",
     "copyOnSelect": "选中即复制"
   },

@@ -6,13 +6,13 @@ import { showJoinDialog } from '../join-dialog.js';
 import { loadProviderAvailability, getProviderAvailabilitySnapshot } from '../../provider-availability.js';
 import { hideTabContextMenu, setActiveContextMenu, positionMenu } from './menu.js';
 import { t } from '../../i18n.js';
+import { defaultSessionName, nextNumberFor, nextSessionNumber, MCP_INSPECTOR_NAME_KEY } from '../../state/session-naming.js';
 
 export function quickNewSession(): void {
   const project = appState.activeProject;
   if (!project) return;
   (document.activeElement as HTMLElement)?.blur?.();
-  const sessionNum = project.sessions.length + 1;
-  appState.addSession(project.id, t('tab.newSession.defaultName', { num: sessionNum }));
+  appState.addSession(project.id, defaultSessionName(project));
 }
 
 // "More" overflow menu. Deliberately excludes actions that have their own
@@ -61,7 +61,7 @@ export async function promptNewSession(onCreated?: (session: SessionRecord) => v
   const project = appState.activeProject;
   if (!project) return;
 
-  const sessionNum = project.sessions.length + 1;
+  const sessionNum = nextSessionNumber(project);
 
   let providerSnapshot = getProviderAvailabilitySnapshot();
   if (!providerSnapshot) {
@@ -162,6 +162,6 @@ function addMcpInspector(): void {
   const project = appState.activeProject;
   if (!project) return;
 
-  const inspectorNum = project.sessions.filter(s => s.type === 'mcp-inspector').length + 1;
+  const inspectorNum = nextNumberFor(MCP_INSPECTOR_NAME_KEY, project);
   appState.addMcpInspectorSession(project.id, t('tab.newMcpInspector.defaultName', { num: inspectorNum }));
 }
