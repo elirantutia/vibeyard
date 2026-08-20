@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.5] - 2026-08-20
+
+### Features
+
+- Clickable links in rendered markdown
+
+### Fixes
+
+- Session state drift against the current Claude Code hook spec
+- Notification click doing nothing
+
+### Changes
+
+- Improve session auto-naming by reading the CLI status line instead of terminal output
+
 ## [0.3.4] - 2026-07-22
 
 ### Features
