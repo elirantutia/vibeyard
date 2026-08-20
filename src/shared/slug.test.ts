@@ -1,5 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { ensureUniqueSlug, nameToSlug } from './slug';
+import { ensureUniqueSlug, nameToSlug, slugifyHeading } from './slug';
+
+describe('slugifyHeading', () => {
+  it('lowercases and dashes whitespace', () => {
+    expect(slugifyHeading('Notification Types')).toBe('notification-types');
+  });
+
+  it('drops punctuation but keeps existing dashes', () => {
+    expect(slugifyHeading('Deep-links: the basics!')).toBe('deep-links-the-basics');
+  });
+
+  it('emits one dash per whitespace char, unlike nameToSlug', () => {
+    expect(slugifyHeading('Push & Pull')).toBe('push--pull');
+    expect(nameToSlug('Push & Pull')).toBe('push-pull');
+  });
+
+  it('keeps non-latin word characters, unlike nameToSlug', () => {
+    expect(slugifyHeading('通知 Types')).toBe('通知-types');
+    expect(nameToSlug('通知 Types')).toBe('types');
+  });
+});
 
 describe('nameToSlug', () => {
   it('lowercases and replaces whitespace with dashes', () => {

@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, powerMonitor, shell } from 'electron';
 import * as path from 'path';
+import { pathToFileURL } from 'url';
 import { registerIpcHandlers, resetHookWatcher } from './ipc-handlers';
 import { killAllPtys } from './pty-manager';
 import { flushState, loadState } from './store';
@@ -12,6 +13,7 @@ import { stopAllFileWatchers } from './file-watcher';
 import { checkPythonAvailable } from './prerequisites';
 import { isMac } from './platform';
 import { isCloseConfirmed, setCloseConfirmed } from './close-state';
+import { isHttpUrl } from '../shared/url';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -43,21 +45,35 @@ function createWindow(): void {
     },
   });
 
-  mainWindow.loadFile(path.join(__dirname, '..', '..', 'renderer', 'index.html'));
+  const indexPath = path.join(__dirname, '..', '..', 'renderer', 'index.html');
+  mainWindow.loadFile(indexPath);
 
   // Open external links in default browser instead of inside the app
-  const isHttpUrl = (url: string) => url.startsWith('http://') || url.startsWith('https://');
-
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (isHttpUrl(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
 
-  mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith('file://')) {
-      event.preventDefault();
-      if (isHttpUrl(url)) shell.openExternal(url);
+  // The app document is the ONLY navigation target we ever allow. A stray anchor
+  // in rendered content (e.g. a relative `.md` link in the file reader) resolves
+  // against this file:// document and would otherwise navigate the window away
+  // from index.html, destroying every session, PTY and layout binding with it.
+  // Compared on the decoded pathname so percent-encoding differences between
+  // Electron's own loadFile URL and pathToFileURL never cause a false block.
+  const appPathname = decodeURIComponent(pathToFileURL(indexPath).pathname);
+  const isAppUrl = (url: string): boolean => {
+    try {
+      const parsed = new URL(url);
+      return parsed.protocol === 'file:' && decodeURIComponent(parsed.pathname) === appPathname;
+    } catch {
+      return false;
     }
+  };
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (isAppUrl(url)) return;
+    event.preventDefault();
+    if (isHttpUrl(url)) shell.openExternal(url);
   });
 
   mainWindow.on('close', (event) => {

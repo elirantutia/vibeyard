@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { basename, dirname, isAbsolutePath, isPathUnder, lastSeparatorIndex, samePath } from './platform';
+import { basename, dirname, isAbsolutePath, isPathUnder, lastSeparatorIndex, resolveRelativePath, samePath } from './platform';
 
 describe('basename', () => {
   it('extracts last segment from POSIX paths', () => {
@@ -115,6 +115,52 @@ describe('dirname', () => {
 
   it('returns . when no separator present', () => {
     expect(dirname('file.ts')).toBe('.');
+  });
+});
+
+describe('resolveRelativePath', () => {
+  it('joins and normalizes segments', () => {
+    expect(resolveRelativePath('/repo/docs', 'other.md')).toBe('/repo/docs/other.md');
+    expect(resolveRelativePath('/repo/docs', './other.md')).toBe('/repo/docs/other.md');
+    expect(resolveRelativePath('/repo', 'docs/guides/intro.md')).toBe('/repo/docs/guides/intro.md');
+    expect(resolveRelativePath('/repo//docs/', 'other.md')).toBe('/repo/docs/other.md');
+  });
+
+  it('collapses ../ segments', () => {
+    expect(resolveRelativePath('/repo/docs', '../README.md')).toBe('/repo/README.md');
+    expect(resolveRelativePath('/repo/a/b/c', '../../x/y.md')).toBe('/repo/a/x/y.md');
+  });
+
+  it('collapses .. inside the base dir too', () => {
+    expect(resolveRelativePath('/repo/a/../b', 'f.md')).toBe('/repo/b/f.md');
+  });
+
+  it('preserves Windows separator style', () => {
+    expect(resolveRelativePath('C:\\repo\\docs', 'other.md')).toBe('C:\\repo\\docs\\other.md');
+    expect(resolveRelativePath('C:\\repo\\docs', '../README.md')).toBe('C:\\repo\\README.md');
+  });
+
+  it('accepts backslash separators inside the relative part', () => {
+    expect(resolveRelativePath('/repo', 'docs\\intro.md')).toBe('/repo/docs/intro.md');
+  });
+
+  it('clamps .. at the root instead of escaping it', () => {
+    expect(resolveRelativePath('/repo', '../../../etc/passwd')).toBe('/etc/passwd');
+  });
+
+  it('clamps at a Windows drive root without dropping the drive', () => {
+    expect(resolveRelativePath('C:\\repo', '../../x.md')).toBe('C:\\x.md');
+    expect(resolveRelativePath('C:\\repo\\a', '../../../../x.md')).toBe('C:\\x.md');
+  });
+
+  it('preserves a UNC share prefix', () => {
+    expect(resolveRelativePath('\\\\server\\share\\docs', 'a.md')).toBe('\\\\server\\share\\docs\\a.md');
+    expect(resolveRelativePath('\\\\server\\share\\docs', '../../../a.md')).toBe('\\\\server\\share\\a.md');
+  });
+
+  it('returns the base when the relative part is empty or .', () => {
+    expect(resolveRelativePath('/repo/docs', '')).toBe('/repo/docs');
+    expect(resolveRelativePath('/repo/docs', '.')).toBe('/repo/docs');
   });
 });
 

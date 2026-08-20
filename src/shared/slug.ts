@@ -9,6 +9,22 @@ export function nameToSlug(name: string): string {
   return ascii || 'agent';
 }
 
+/**
+ * Slugify Markdown heading text the way in-document `#anchor` links are written.
+ *
+ * Deliberately NOT `nameToSlug`: that one folds to ASCII and collapses
+ * whitespace runs, which is right for filenames but wrong here — anchors keep
+ * non-latin characters and emit one dash per whitespace char ('a & b' -> 'a--b'),
+ * matching how GitHub-style heading anchors are generated.
+ */
+export function slugifyHeading(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]/gu, '')
+    .replace(/\s/g, '-');
+}
+
 /** Append a short hex suffix until the slug is unique within `taken`. */
 export function ensureUniqueSlug(base: string, taken: Set<string>): string {
   if (!taken.has(base)) return base;

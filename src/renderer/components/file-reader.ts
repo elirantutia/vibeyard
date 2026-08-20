@@ -7,6 +7,8 @@ import { escapeHtml } from './dom-search-backend.js';
 import { isAbsolutePath, dirname, samePath } from '../../shared/platform.js';
 import { estimateTokens, TOKEN_COUNT_MAX_CHARS } from '../../shared/token-estimate.js';
 import { pathToFileURL } from '../file-url.js';
+import { resolveMarkdownLink } from '../markdown-link.js';
+import { slugifyHeading } from '../../shared/slug.js';
 
 interface FileReaderInstance {
   element: HTMLElement;
@@ -61,11 +63,77 @@ function renderFileContent(content: string): HTMLElement {
   return wrapper;
 }
 
-export function renderMarkdownContent(content: string): HTMLElement {
+function scrollToHeading(wrapper: HTMLElement, slug: string): void {
+  const headings = [...wrapper.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6')];
+  const heading = headings.find((h) => slugifyHeading(h.textContent ?? '') === slug);
+  if (!heading) {
+    console.warn(`[markdown-link] no heading matches anchor #${slug}`);
+    return;
+  }
+  heading.scrollIntoView({ block: 'start' });
+}
+
+async function openMarkdownLinkTarget(path: string): Promise<void> {
+  // Check first: opening a dead link would spawn a tab that loadFile's
+  // closeSessionIfFileMissing immediately tears down again. `exists` is also
+  // true for directories, whose read fails with EISDIR — and that tab would
+  // never be reaped, since the path really is there.
+  const [exists, isDir] = await Promise.all([
+    window.vibeyard.fs.exists(path),
+    window.vibeyard.fs.isDirectory(path),
+  ]);
+  if (!exists || isDir) {
+    console.warn(`[markdown-link] not an openable file: ${path}`);
+    return;
+  }
+  // Re-read after the await: the user may have switched projects while the IPC
+  // was in flight, and appending to the stale one would silently steal its tab
+  // selection.
+  const project = appState.activeProject;
+  if (project) appState.addFileReaderSession(project.id, path);
+}
+
+/**
+ * Route clicks on links inside rendered Markdown. The default action is always
+ * suppressed: the renderer is a `file://` document, so letting an anchor
+ * navigate would replace the whole app with the link target.
+ */
+function handleMarkdownClick(wrapper: HTMLElement, baseDir: string | undefined, event: MouseEvent): void {
+  const anchor = (event.target as Element | null)?.closest('a');
+  if (!anchor) return;
+
+  event.preventDefault();
+
+  const href = anchor.getAttribute('href') ?? '';
+  const target = resolveMarkdownLink(href, baseDir);
+  // Every branch can fail silently, and a suppressed default is indistinguishable
+  // from a dead link — so each failure path says why on the console.
+  switch (target.kind) {
+    case 'anchor':
+      scrollToHeading(wrapper, target.slug);
+      break;
+    case 'external':
+      window.vibeyard.app
+        .openExternal(target.url)
+        .catch((err: unknown) => console.warn(`[markdown-link] could not open ${target.url}`, err));
+      break;
+    case 'file':
+      openMarkdownLinkTarget(target.path).catch((err: unknown) =>
+        console.warn(`[markdown-link] could not open ${target.path}`, err),
+      );
+      break;
+    case 'ignore':
+      console.warn(`[markdown-link] not a routable link: ${href}`);
+      break;
+  }
+}
+
+export function renderMarkdownContent(content: string, baseDir?: string): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.className = 'file-reader-markdown';
   const rawHtml = marked.parse(content, { async: false }) as string;
   wrapper.innerHTML = DOMPurify.sanitize(rawHtml);
+  wrapper.addEventListener('click', (event) => handleMarkdownClick(wrapper, baseDir, event));
   return wrapper;
 }
 
@@ -94,7 +162,7 @@ function renderBody(instance: FileReaderInstance): void {
     return;
   }
   if (instance.viewMode === 'rendered') {
-    body.appendChild(renderMarkdownContent(instance.rawContent!));
+    body.appendChild(renderMarkdownContent(instance.rawContent!, dirname(resolveFilePath(instance))));
   } else {
     body.appendChild(renderFileContent(instance.rawContent!));
   }
