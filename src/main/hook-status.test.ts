@@ -91,6 +91,21 @@ describe('hook-status', () => {
     // used by the Windows branch is exercised on every platform's CI run.
     const body = () => buildStatusLinePython(STATUS_DIR);
 
+    // Feeds the script to python3 on stdin. PYTHONIOENCODING is required:
+    // Node writes `input` as UTF-8, but on Windows sys.stdin defaults to the
+    // locale codepage, so a non-ascii path comes back mojibake'd (\u00fc ->
+    // \u00c3\u00bc). Production is unaffected — the body is written to a .py file,
+    // and Python reads source files as UTF-8 regardless of locale.
+    const runPython = (code: string, input: string) => {
+      const { spawnSync } = require('child_process') as typeof import('child_process');
+      const opts = { input, env: { ...process.env, PYTHONIOENCODING: 'utf-8' } };
+      return spawnSync('python3', ['-c', code], opts);
+    };
+    const hasPython = () => {
+      const { spawnSync } = require('child_process') as typeof import('child_process');
+      return !spawnSync('python3', ['-c', 'pass']).error;
+    };
+
     it('extracts cost, context_window, session_id and session_name', () => {
       const script = body();
       for (const field of ['cost', 'context_window', 'session_id', 'session_name']) {
@@ -121,13 +136,12 @@ describe('hook-status', () => {
       const literal = script.split('\n').find((l) => l.startsWith('status_dir='))!;
       expect(literal).toBe(`status_dir=${JSON.stringify(dir)}`);
 
-      const { spawnSync } = require('child_process') as typeof import('child_process');
-      if (spawnSync('python3', ['-c', 'pass']).error) return; // no python3 here
+      if (!hasPython()) return; // no python3 here
 
-      const result = spawnSync('python3', [
-        '-c',
+      const result = runPython(
         `import sys,json;ns={};exec(sys.stdin.read(),ns);print(json.dumps(ns["status_dir"]))`,
-      ], { input: literal });
+        literal,
+      );
       expect(result.status).toBe(0);
       expect(JSON.parse(result.stdout.toString())).toBe(dir);
     });
@@ -144,14 +158,9 @@ describe('hook-status', () => {
       // A syntax error here is silent in production: it kills cost, context,
       // sessionid and name at once, with the traceback going only to
       // statusline.log. Nothing else in this suite would catch it.
-      const { spawnSync } = require('child_process') as typeof import('child_process');
-      const probe = spawnSync('python3', ['-c', 'pass']);
-      if (probe.error) return; // no python3 on this runner
+      if (!hasPython()) return; // no python3 on this runner
 
-      const result = spawnSync('python3', [
-        '-c',
-        'import sys;compile(sys.stdin.read(),"statusline","exec")',
-      ], { input: body() });
+      const result = runPython('import sys;compile(sys.stdin.read(),"statusline","exec")', body());
 
       expect(result.stderr.toString()).toBe('');
       expect(result.status).toBe(0);
