@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "you-search": {
+      "url": "https://api.you.com/mcp?profile=free",
+      "description": "You.com web search (keyless)"
+    },
+    "you-research": {
+      "url": "https://api.you.com/mcp",
+      "description": "You.com research with full API access (requires YDC_API_KEY)"
+    },
+    "you-finance": {
+      "url": "https://api.you.com/mcp?tools=you-finance", 
+      "description": "You.com finance research tools (requires YDC_API_KEY)"
+    },
+    "filesystem": {
+      "command": "npx @modelcontextprotocol/server-filesystem",
+      "args": ["/path/to/allowed/directory"],
+      "description": "File system access for reading/writing files"
+    },
+    "git": {
+      "command": "npx @modelcontextprotocol/server-git",
+      "args": ["--repository", "/path/to/repository"],
+      "description": "Git repository operations"
+    }
+  }
+}
