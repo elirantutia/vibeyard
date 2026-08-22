@@ -19,6 +19,7 @@ import { mountGitPanel, closeGitPanel } from './git-panel.js';
 import { gitChangeCount, onChange as onGitStatusChange } from '../git-status.js';
 import { ICON_KANBAN, ICON_TEAM, ICON_OVERVIEW, ICON_SESSIONS, ICON_FILES, ICON_GIT } from '../icons.js';
 import { t } from '../i18n.js';
+import { fileManagerLabelKey } from '../file-manager-label.js';
 
 type ProjectPanel = 'history' | 'files' | 'git' | null;
 const projectPanelOpen = new Map<string, ProjectPanel>();
@@ -757,13 +758,6 @@ function hideProjectContextMenu(): void {
     activeProjectContextMenu.remove();
     activeProjectContextMenu = null;
   }
-}
-
-/** i18n key for the file-manager label, chosen per OS so it reads naturally. */
-function fileManagerLabelKey(): string {
-  if (/win/i.test(navigator.platform)) return 'contextMenu.files.openInExplorer';
-  if (/mac/i.test(navigator.platform)) return 'contextMenu.files.openInFinder';
-  return 'contextMenu.files.openInFileManager';
 }
 
 /**

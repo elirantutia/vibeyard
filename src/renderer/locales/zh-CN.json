@@ -145,7 +145,10 @@
     "files": {
       "openInExplorer": "在资源管理器中打开",
       "openInFinder": "在 Finder 中打开",
-      "openInFileManager": "在文件管理器中打开"
+      "openInFileManager": "在文件管理器中打开",
+      "openFolderInExplorer": "在资源管理器中打开文件夹",
+      "openFolderInFinder": "在 Finder 中打开文件夹",
+      "openFolderInFileManager": "在文件管理器中打开文件夹"
     },
     "tab": {
       "rename": "重命名",

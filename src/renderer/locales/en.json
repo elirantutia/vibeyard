@@ -145,7 +145,10 @@
     "files": {
       "openInExplorer": "Open in Explorer",
       "openInFinder": "Open in Finder",
-      "openInFileManager": "Open in File Manager"
+      "openInFileManager": "Open in File Manager",
+      "openFolderInExplorer": "Open folder in Explorer",
+      "openFolderInFinder": "Open folder in Finder",
+      "openFolderInFileManager": "Open folder in File Manager"
     },
     "tab": {
       "rename": "Rename",
