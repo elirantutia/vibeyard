@@ -370,6 +370,11 @@ function buildProjectActions(
       e.stopPropagation();
       setProjectPanel(project.id, openPanel === 'files' ? null : 'files');
     });
+    filesBtn.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showFilesContextMenu(e.clientX, e.clientY, project);
+    });
     actions.appendChild(filesBtn);
   }
 
@@ -752,6 +757,45 @@ function hideProjectContextMenu(): void {
     activeProjectContextMenu.remove();
     activeProjectContextMenu = null;
   }
+}
+
+/** i18n key for the file-manager label, chosen per OS so it reads naturally. */
+function fileManagerLabelKey(): string {
+  if (/win/i.test(navigator.platform)) return 'contextMenu.files.openInExplorer';
+  if (/mac/i.test(navigator.platform)) return 'contextMenu.files.openInFinder';
+  return 'contextMenu.files.openInFileManager';
+}
+
+/**
+ * Right-click menu on the Files button: a single "Open in <Explorer/Finder/…>"
+ * item that opens the project's directory in the OS file manager. Reuses the
+ * project context-menu's close machinery (activeProjectContextMenu + the
+ * document click/Escape listeners registered in initSidebar).
+ */
+function showFilesContextMenu(x: number, y: number, project: ProjectRecord): void {
+  hideProjectContextMenu();
+
+  const menu = document.createElement('div');
+  menu.className = 'tab-context-menu';
+  menu.style.left = `${x}px`;
+  menu.style.top = `${y}px`;
+
+  const openItem = document.createElement('div');
+  openItem.className = 'tab-context-menu-item';
+  openItem.textContent = t(fileManagerLabelKey());
+  openItem.addEventListener('click', (e) => {
+    e.stopPropagation();
+    hideProjectContextMenu();
+    window.vibeyard.app.openInFileManager(project.path);
+  });
+
+  menu.appendChild(openItem);
+  document.body.appendChild(menu);
+  activeProjectContextMenu = menu;
+
+  const rect = menu.getBoundingClientRect();
+  if (rect.right > window.innerWidth) menu.style.left = `${window.innerWidth - rect.width - 4}px`;
+  if (rect.bottom > window.innerHeight) menu.style.top = `${window.innerHeight - rect.height - 4}px`;
 }
 
 /** Project-level settings dialog. Currently just the default Claude profile. */

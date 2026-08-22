@@ -75,6 +75,7 @@ export interface VibeyardApi {
     focus(): void;
     getVersion(): Promise<string>;
     openExternal(url: string): Promise<void>;
+    openInFileManager(dirPath: string): Promise<void>;
     onQuitting(callback: () => void): () => void;
   };
   chromeImport: {

@@ -142,6 +142,11 @@
       "settings": "Project Settings…",
       "removeProject": "Remove Project"
     },
+    "files": {
+      "openInExplorer": "Open in Explorer",
+      "openInFinder": "Open in Finder",
+      "openInFileManager": "Open in File Manager"
+    },
     "tab": {
       "rename": "Rename",
       "close": "Close",

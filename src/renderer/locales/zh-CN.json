@@ -142,6 +142,11 @@
       "settings": "项目设置…",
       "removeProject": "移除项目"
     },
+    "files": {
+      "openInExplorer": "在资源管理器中打开",
+      "openInFinder": "在 Finder 中打开",
+      "openInFileManager": "在文件管理器中打开"
+    },
     "tab": {
       "rename": "重命名",
       "close": "关闭",
