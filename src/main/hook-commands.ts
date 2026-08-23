@@ -24,6 +24,14 @@ import { STOP_INFLIGHT_TRUST_MS } from '../shared/constants';
 
 let scriptsInstalled = false;
 
+// Content cache of the scripts written this process. installEventScript is
+// invoked on every Claude spawn (app boot, and again for each profile session
+// in spawnPty), and the generated bodies are deterministic per CLI version — so
+// a warm launch or a repeat profile spawn would otherwise re-write ~25 identical
+// files for no reason. Skipping the write when the bytes are unchanged keeps
+// that sync I/O off the session-launch critical path.
+const writtenScripts = new Map<string, string>();
+
 /**
  * How long (ms) an in-flight subagent count is trusted before the Stop writer
  * falls back to 'completed'. Guards against a lost SubagentStop (which is
@@ -239,8 +247,17 @@ export function captureToolFailureCmd(
  * @param pythonCode Multi-line Python code
  */
 export function installEventScript(scriptName: string, pythonCode: string): void {
+  // Skip the write when this process already wrote identical bytes for this
+  // script — the common case on a warm launch or a repeat profile spawn.
+  if (writtenScripts.get(scriptName) === pythonCode) return;
+  writtenScripts.set(scriptName, pythonCode);
   fs.mkdirSync(SCRIPT_DIR, { recursive: true });
   fs.writeFileSync(path.join(SCRIPT_DIR, scriptName), pythonCode);
+}
+
+/** @internal Test-only: forget which scripts were written this process. */
+export function _resetWrittenScripts(): void {
+  writtenScripts.clear();
 }
 
 /**

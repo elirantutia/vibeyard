@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as path from 'path';
 
 const mockExecSync = vi.fn();
+const mockGetFullPath = vi.fn(() => 'C:\\Windows\\system32;C:\\Users\\test\\AppData\\Roaming\\npm');
 
 vi.mock('child_process', () => ({
   execSync: (...args: unknown[]) => mockExecSync(...args),
@@ -25,7 +26,7 @@ vi.mock('../platform', () => ({
 
 // Mock pty-manager to avoid its module-level side effects
 vi.mock('../pty-manager', () => ({
-  getFullPath: () => 'C:\\Windows\\system32;C:\\Users\\test\\AppData\\Roaming\\npm',
+  getFullPath: (...args: unknown[]) => mockGetFullPath(...args),
 }));
 
 import * as fs from 'fs';
@@ -128,6 +129,21 @@ describe('resolveBinary (Windows)', () => {
 
     expect(result).toBe('C:\\cached\\claude.cmd');
     expect(mockStatSync).not.toHaveBeenCalled();
+  });
+
+  it('defers the PATH spawn when the binary is found in a common dir', () => {
+    const voltaPath = path.join('C:\\Users\\test', '.volta', 'bin', 'claude.cmd');
+    mockStatSync.mockImplementation((p) => {
+      if (String(p) === voltaPath) return fileStat;
+      throw new Error('ENOENT');
+    });
+
+    const cache = { path: null as string | null };
+    const result = resolveBinary('claude', cache);
+
+    expect(result).toBe(voltaPath);
+    // Found by a cheap stat, so the login-shell / registry PATH spawn is skipped.
+    expect(mockGetFullPath).not.toHaveBeenCalled();
   });
 });
 

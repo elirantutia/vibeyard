@@ -78,8 +78,10 @@ function findViaNpmPrefix(binaryName: string, fullPath: string): string | null {
 export function resolveBinary(binaryName: string, cache: { path: string | null }): string {
   if (cache.path) return cache.path;
 
-  const fullPath = getFullPath();
-
+  // The common case is a binary present in a well-known dir, found by a cheap
+  // statSync below — so defer getFullPath() (a login-shell / registry spawn)
+  // until a fallback that actually needs the augmented PATH. A warm launch
+  // otherwise pays that spawn for nothing.
   for (const dir of COMMON_BIN_DIRS) {
     const found = findBinaryInDir(dir, binaryName);
     if (found) {
@@ -94,6 +96,7 @@ export function resolveBinary(binaryName: string, cache: { path: string | null }
     return nvmFound;
   }
 
+  const fullPath = getFullPath();
   const resolved = whichBinary(binaryName, fullPath);
   if (resolved) {
     cache.path = resolved;

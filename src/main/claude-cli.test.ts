@@ -34,7 +34,7 @@ vi.mock('./hook-commands', () => ({
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { getClaudeConfig, installHooks, installHooksOnly, installStatusLine } from './claude-cli';
+import { getClaudeConfig, installHooks, installHooksOnly, installStatusLine, _resetWrittenSettings } from './claude-cli';
 import { installEventScript } from './hook-commands';
 import { getClaudeVersion } from './providers/claude-version';
 
@@ -48,6 +48,9 @@ const n = (p: string) => p.replace(/\\/g, '/');
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Reset the settings-write content cache so each test's first write is not
+  // deduplicated away by a write from a prior test.
+  _resetWrittenSettings();
   // Default: all reads/dirs fail (empty state)
   mockReadFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
   mockReaddirSync.mockImplementation(() => { throw new Error('ENOENT'); });
@@ -391,6 +394,23 @@ describe('install into a profile config dir', () => {
   it('defaults to ~/.claude when no config dir is given', () => {
     installHooksOnly();
     expect(n(String(mockWriteFileSync.mock.calls[0][0]))).toBe('/mock/home/.claude/settings.json');
+  });
+
+  it('skips a settings.json write when the generated content is unchanged', () => {
+    // First install writes the file.
+    installHooksOnly(profileDir);
+    expect(mockWriteFileSync).toHaveBeenCalledTimes(1);
+
+    // A repeat install (warm launch / repeat profile spawn) produces identical
+    // content, so the second write is deduplicated away.
+    installHooksOnly(profileDir);
+    expect(mockWriteFileSync).toHaveBeenCalledTimes(1);
+
+    // A different CLI version changes the generated hooks, so the next install
+    // must write again.
+    vi.mocked(getClaudeVersion).mockReturnValueOnce('1.0.38');
+    installHooksOnly(profileDir);
+    expect(mockWriteFileSync).toHaveBeenCalledTimes(2);
   });
 });
 

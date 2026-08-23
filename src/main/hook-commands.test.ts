@@ -9,7 +9,7 @@ import * as fs from 'fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { stopStatusCmd, installHookScripts, STOP_STALE_MS } from './hook-commands';
+import { stopStatusCmd, installHookScripts, installEventScript, STOP_STALE_MS } from './hook-commands';
 import { pythonBin } from './platform';
 
 // `fs` is mocked module-wide above; the executed-script suite below needs the
@@ -79,6 +79,29 @@ describe('installHookScripts', () => {
     expect(body).toContain("not d.get('is_interrupt')");
     // An empty error can never match either detector, so don't write the file.
     expect(body).toContain('and err and');
+  });
+});
+
+// installEventScript is called on every Claude spawn (app boot, and again for
+// each profile session). The generated bodies are deterministic per CLI version,
+// so a repeat install of identical content must not re-write the file — that is
+// what keeps warm launches and repeat profile spawns from paying ~25 sync writes.
+// A changed body must still write.
+describe('installEventScript skip-when-unchanged', () => {
+  it('writes on first install, skips an identical re-install, and writes again on a change', () => {
+    const name = 'claude_event_SkipTest.py';
+    const before = vi.mocked(fs.writeFileSync).mock.calls.length;
+
+    installEventScript(name, 'body v1');
+    expect(vi.mocked(fs.writeFileSync).mock.calls.length).toBe(before + 1);
+
+    // Same content again: deduplicated, no new write.
+    installEventScript(name, 'body v1');
+    expect(vi.mocked(fs.writeFileSync).mock.calls.length).toBe(before + 1);
+
+    // Changed content: a fresh write is required.
+    installEventScript(name, 'body v2');
+    expect(vi.mocked(fs.writeFileSync).mock.calls.length).toBe(before + 2);
   });
 });
 

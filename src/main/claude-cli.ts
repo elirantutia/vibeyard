@@ -279,10 +279,29 @@ function prepareSettings(configDir: string = defaultClaudeDir()): { settings: Re
   return { settings, cleaned };
 }
 
+// Content cache of settings.json writes, keyed by path. installHooksOnly and
+// installStatusLine both rewrite the same file on every Claude spawn (app boot,
+// and again for each profile session in spawnPty). Once a config dir has been
+// fully installed, both calls produce byte-identical content, so a warm launch
+// or a repeat profile spawn would otherwise re-write settings.json for no reason.
+// Skipping an unchanged write keeps that sync I/O off the session-launch path.
+// This is a pure "did I already write exactly these bytes this process" dedup —
+// any change to the generated content (new CLI version, a user-added hook)
+// changes the string and forces a write, so it never skips a needed update.
+const writtenSettings = new Map<string, string>();
+
 function writeSettings(settings: Record<string, unknown>, configDir: string = defaultClaudeDir()): void {
   const settingsPath = path.join(configDir, 'settings.json');
+  const content = JSON.stringify(settings, null, 2) + '\n';
+  if (writtenSettings.get(settingsPath) === content) return;
+  writtenSettings.set(settingsPath, content);
   fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
-  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+  fs.writeFileSync(settingsPath, content);
+}
+
+/** @internal Test-only: forget which settings.json files were written this process. */
+export function _resetWrittenSettings(): void {
+  writtenSettings.clear();
 }
 
 /**
