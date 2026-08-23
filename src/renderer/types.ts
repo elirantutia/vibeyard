@@ -1,5 +1,5 @@
 export type { McpServer, Agent, Skill, Command, ProviderConfig, ClaudeConfig, GitWorktree, GitFileEntry, CostData, McpResult, ProviderId, CliProviderMeta, CliProviderCapabilities, StatsCache, ReadinessResult, ReadinessCategory, ReadinessCheck, ReadinessCheckStatus, ChromeProfile, ChromeImportOptions, ChromeImportProgress, ChromeImportResult } from '../shared/types.js';
-import type { CostData, ProviderConfig, GitWorktree, McpResult, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, TopFilesResult, FsChange, ChromeProfile, ChromeImportOptions, ChromeImportProgress, ChromeImportResult } from '../shared/types.js';
+import type { CostData, ProviderConfig, GitWorktree, McpResult, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, TopFilesResult, FsChange, ChromeProfile, ChromeImportOptions, ChromeImportProgress, ChromeImportResult, EditAction } from '../shared/types.js';
 
 export interface VibeyardApi {
   pty: {
@@ -113,5 +113,10 @@ export interface VibeyardApi {
     onToggleDebug(callback: () => void): () => void;
     onToggleInspector(callback: () => void): () => void;
     onCloseSession(callback: () => void): () => void;
+    rebuild(debugMode: boolean): Promise<void>;
+    runEditAction(action: EditAction): Promise<void>;
+    toggleDevTools(): Promise<void>;
+    reloadMainWindow(): Promise<void>;
+    quitApp(): Promise<void>;
   };
 }

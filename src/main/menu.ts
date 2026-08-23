@@ -2,6 +2,10 @@ import { app, Menu, BrowserWindow } from 'electron';
 import { isMac, isWin } from './platform';
 
 export function createAppMenu(debugMode = false): void {
+  // Windows uses a custom in-app title bar (src/renderer/components/title-bar.ts)
+  // and has no native menu bar; the File/Edit/View menus live in-page.
+  // macOS keeps the system menu bar; Linux keeps the native menu bar.
+  if (isWin) return;
 
   const template: Electron.MenuItemConstructorOptions[] = [
     ...(isMac ? [{

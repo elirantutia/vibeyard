@@ -185,7 +185,17 @@ html, body {
 
 #app {
   display: flex;
+  flex-direction: column;
   height: 100vh;
+}
+
+/* Custom in-app title bar (Windows) sits above the sidebar + main area,
+   which live in a row under it. */
+#app-body {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
 }
 
 body.debug-panel-open #app {

@@ -516,5 +516,33 @@
     "about": "About",
     "general": "General",
     "appearance": "Appearance"
+  },
+  "titleBar": {
+    "brand": "Vibeyard",
+    "file": {
+      "label": "File",
+      "newProject": "New Project",
+      "newSession": "New Session",
+      "closeSession": "Close Session",
+      "quit": "Quit"
+    },
+    "edit": {
+      "label": "Edit",
+      "undo": "Undo",
+      "redo": "Redo",
+      "cut": "Cut",
+      "copy": "Copy",
+      "paste": "Paste",
+      "delete": "Delete",
+      "selectAll": "Select All"
+    },
+    "view": {
+      "label": "View",
+      "toggleSplit": "Toggle Split Mode",
+      "toggleInspector": "Toggle Session Inspector",
+      "toggleDebugPanel": "Toggle Debug Panel",
+      "toggleDevTools": "Toggle DevTools",
+      "reloadMainWindow": "Reload Main Window"
+    }
   }
 }

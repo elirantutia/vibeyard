@@ -18,7 +18,7 @@ import { createAppMenu } from './menu';
 import { getProvider, getProviderMeta, getAllProviderMetas, getAllProviders } from './providers/registry';
 import { buildHandoffPrompt } from './providers/resume-handoff';
 import { searchSessions } from './session-deep-search';
-import type { ProviderId, GitFileEntry, SettingsValidationResult, ReadFileResult, FileStatResult, TopFilesResult, TopFile } from '../shared/types';
+import type { ProviderId, GitFileEntry, SettingsValidationResult, ReadFileResult, FileStatResult, TopFilesResult, TopFile, EditAction } from '../shared/types';
 import { estimateTokens, TOKEN_COUNT_MAX_CHARS } from '../shared/token-estimate';
 import { analyzeReadiness } from './readiness/analyzer';
 import { isGhAvailable, listPullRequests, listIssues, detectRepo } from './github-cli';
@@ -286,6 +286,25 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('menu:rebuild', (_event, debugMode: boolean) => {
     createAppMenu(debugMode);
+  });
+
+  // Edit-menu actions from the custom in-app title bar (Windows). Forward to
+  // the focused webContents — identical to the native Edit menu's handlers.
+  ipcMain.handle('menu:edit-action', (_event, action: EditAction) => {
+    const wc = BrowserWindow.getFocusedWindow()?.webContents;
+    const fn = wc?.[action];
+    if (typeof fn === 'function') (fn as () => void)();
+  });
+
+  // Main-process-only actions for the in-app View menu (Windows).
+  ipcMain.handle('menu:toggle-devtools', () => {
+    BrowserWindow.getFocusedWindow()?.webContents.toggleDevTools();
+  });
+  ipcMain.handle('menu:reload', () => {
+    BrowserWindow.getFocusedWindow()?.reload();
+  });
+  ipcMain.handle('menu:quit', () => {
+    app.quit();
   });
 
   ipcMain.handle('clipboard:write', (_event, text: string) => {

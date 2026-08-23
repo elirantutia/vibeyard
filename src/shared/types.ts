@@ -17,6 +17,13 @@ export type PendingPromptTrigger = 'session-start' | 'first-output' | 'startup-a
  */
 export type Locale = 'en' | 'zh-CN';
 
+/**
+ * Edit-menu actions dispatched from the custom in-app title bar (Windows) to
+ * the main process, which forwards them to the focused webContents — the same
+ * code path the native Windows Edit menu used before it was removed.
+ */
+export type EditAction = 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'delete' | 'selectAll';
+
 export interface CliProviderCapabilities {
   sessionResume: boolean;
   costTracking: boolean;

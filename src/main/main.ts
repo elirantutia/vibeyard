@@ -11,7 +11,7 @@ import { initAutoUpdater } from './auto-updater';
 import { stopGitWatcher } from './git-watcher';
 import { stopAllFileWatchers } from './file-watcher';
 import { checkPythonAvailable } from './prerequisites';
-import { isMac } from './platform';
+import { isMac, isWin } from './platform';
 import { isCloseConfirmed, setCloseConfirmed } from './close-state';
 import { isHttpUrl } from '../shared/url';
 
@@ -36,6 +36,13 @@ function createWindow(): void {
     title: 'Vibeyard',
     icon: path.join(__dirname, '..', '..', '..', 'build', 'icon.png'),
     backgroundColor: '#000000',
+    // Windows: hide the native title bar and draw a custom in-app nav bar.
+    // titleBarOverlay keeps the system min/max/close buttons but tints them
+    // to match the dark UI so there's no white system-bar seam.
+    ...(isWin ? {
+      titleBarStyle: 'hidden' as const,
+      titleBarOverlay: { color: '#101116', symbolColor: '#e9eaf1', height: 36 },
+    } : {}),
     webPreferences: {
       preload: path.join(__dirname, '..', '..', 'preload', 'preload', 'preload.js'),
       nodeIntegration: false,

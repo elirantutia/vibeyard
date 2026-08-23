@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron';
-import type { CostData, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, ToolFailureData, SettingsWarningData, SettingsValidationResult, StatusLineConflictData, InspectorEvent, ProviderConfig, ReadFileResult, FileStatResult, TopFilesResult, FsChange, DeepSearchResult, GithubFetchResult, GithubRepo, ChromeProfile, ChromeImportOptions, ChromeImportProgress, ChromeImportResult } from '../shared/types';
+import type { CostData, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, ToolFailureData, SettingsWarningData, SettingsValidationResult, StatusLineConflictData, InspectorEvent, ProviderConfig, ReadFileResult, FileStatResult, TopFilesResult, FsChange, DeepSearchResult, GithubFetchResult, GithubRepo, ChromeProfile, ChromeImportOptions, ChromeImportProgress, ChromeImportResult, EditAction } from '../shared/types';
 import { ZOOM_MIN, ZOOM_MAX } from '../shared/types';
 
 export type { CostData } from '../shared/types';
@@ -161,6 +161,10 @@ export interface VibeyardApi {
     onToggleInspector(callback: () => void): () => void;
     onCloseSession(callback: () => void): () => void;
     rebuild(debugMode: boolean): Promise<void>;
+    runEditAction(action: EditAction): Promise<void>;
+    toggleDevTools(): Promise<void>;
+    reloadMainWindow(): Promise<void>;
+    quitApp(): Promise<void>;
   };
 }
 
@@ -356,6 +360,10 @@ const api: VibeyardApi = {
     onToggleInspector: (cb) => onChannel('menu:toggle-inspector', cb),
     onCloseSession: (cb) => onChannel('menu:close-session', cb),
     rebuild: (debugMode) => ipcRenderer.invoke('menu:rebuild', debugMode),
+    runEditAction: (action) => ipcRenderer.invoke('menu:edit-action', action),
+    toggleDevTools: () => ipcRenderer.invoke('menu:toggle-devtools'),
+    reloadMainWindow: () => ipcRenderer.invoke('menu:reload'),
+    quitApp: () => ipcRenderer.invoke('menu:quit'),
   },
 };
 
