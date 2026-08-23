@@ -1050,6 +1050,21 @@ class AppState {
     this.emit('readiness-changed', projectId);
   }
 
+  /**
+   * Bump a project's last-activity timestamp, driven solely by real session
+   * interaction (a session prompt/answer, via the 'working' hook) — not by
+   * merely viewing or creating a project. Feeds the optional activity-sorted
+   * sidebar order. Persists but emits no event: the sorted order refreshes on
+   * the next natural sidebar render (project switch / session add) so projects
+   * don't reshuffle mid-keystroke while a session streams hooks.
+   */
+  touchProjectActivity(projectId: string): void {
+    const project = this.state.projects.find((p) => p.id === projectId);
+    if (!project) return;
+    project.lastActivityAt = Date.now();
+    this.persist();
+  }
+
   reorderProject(fromIndex: number, toIndex: number): void {
     if (fromIndex === toIndex) return;
     if (fromIndex < 0 || fromIndex >= this.state.projects.length) return;

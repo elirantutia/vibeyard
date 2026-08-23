@@ -16,6 +16,7 @@ export function createGeneralSection(ctx: PreferencesContext): SectionController
   let autoTitleCheckbox: HTMLInputElement | null = null;
   let confirmCloseCheckbox: HTMLInputElement | null = null;
   let copyOnSelectCheckbox: HTMLInputElement | null = null;
+  let sortByActivityCheckbox: HTMLInputElement | null = null;
 
   return {
     render(container) {
@@ -102,6 +103,10 @@ export function createGeneralSection(ctx: PreferencesContext): SectionController
       const copyOnSelect = toggleRow('pref-copy-on-select', t('general.copyOnSelect'), appState.preferences.copyOnSelect ?? false);
       copyOnSelectCheckbox = copyOnSelect.checkbox;
       container.appendChild(copyOnSelect.row);
+
+      const sortByActivity = toggleRow('pref-sort-projects-by-activity', 'Sort projects by recent activity', appState.preferences.sortProjectsByActivity ?? false);
+      sortByActivityCheckbox = sortByActivity.checkbox;
+      container.appendChild(sortByActivity.row);
     },
 
     save() {
@@ -112,6 +117,7 @@ export function createGeneralSection(ctx: PreferencesContext): SectionController
       if (autoTitleCheckbox) appState.setPreference('autoTitleEnabled', autoTitleCheckbox.checked);
       if (confirmCloseCheckbox) appState.setPreference('confirmCloseWorkingSession', confirmCloseCheckbox.checked);
       if (copyOnSelectCheckbox) appState.setPreference('copyOnSelect', copyOnSelectCheckbox.checked);
+      if (sortByActivityCheckbox) appState.setPreference('sortProjectsByActivity', sortByActivityCheckbox.checked);
       if (providerSelect) appState.setPreference('defaultProvider', providerSelect.getValue() as ProviderId);
     },
 

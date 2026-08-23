@@ -579,6 +579,41 @@ describe('reorderProject()', () => {
   });
 });
 
+describe('touchProjectActivity()', () => {
+  it('stamps lastActivityAt and persists without emitting project-changed', () => {
+    const p = appState.addProject('A', '/a');
+    expect(p.lastActivityAt).toBeUndefined();
+    const cb = vi.fn();
+    appState.on('project-changed', cb);
+    mockSave.mockClear();
+    appState.touchProjectActivity(p.id);
+    expect(typeof p.lastActivityAt).toBe('number');
+    expect(mockSave).toHaveBeenCalled();
+    // No reshuffle event — the sorted order refreshes on the next natural render.
+    expect(cb).not.toHaveBeenCalled();
+  });
+
+  it('is a no-op for an unknown project id', () => {
+    mockSave.mockClear();
+    appState.touchProjectActivity('ghost');
+    expect(mockSave).not.toHaveBeenCalled();
+  });
+
+  it('does NOT stamp on setActiveProject — viewing a project is not interaction', () => {
+    const p = appState.addProject('A', '/a');
+    p.lastActivityAt = undefined;
+    appState.setActiveProject(p.id);
+    expect(p.lastActivityAt).toBeUndefined();
+  });
+
+  it('does NOT stamp on session creation — only a prompt/answer counts', () => {
+    const p = appState.addProject('A', '/a');
+    p.lastActivityAt = undefined;
+    appState.addSession(p.id, 'S1');
+    expect(p.lastActivityAt).toBeUndefined();
+  });
+});
+
 describe('preferences', () => {
   it('setPreference updates and persists', () => {
     appState.setPreference('debugMode', true);
