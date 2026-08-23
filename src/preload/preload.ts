@@ -98,6 +98,7 @@ export interface VibeyardApi {
     focus(): void;
     getVersion(): Promise<string>;
     openExternal(url: string): Promise<void>;
+    openInFileManager(dirPath: string): Promise<void>;
     getBrowserPreloadPath(): Promise<string>;
     onQuitting(callback: () => void): () => void;
     onConfirmClose(callback: () => void): () => void;
@@ -289,6 +290,7 @@ const api: VibeyardApi = {
     focus: () => { ipcRenderer.send('app:focus'); },
     getVersion: () => ipcRenderer.invoke('app:getVersion'),
     openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', url),
+    openInFileManager: (dirPath: string) => ipcRenderer.invoke('app:openInFileManager', dirPath),
     getBrowserPreloadPath: () => ipcRenderer.invoke('app:getBrowserPreloadPath'),
     onQuitting: (cb: () => void) => onChannel('app:quitting', cb),
     onConfirmClose: (cb: () => void) => onChannel('app:confirmClose', cb),

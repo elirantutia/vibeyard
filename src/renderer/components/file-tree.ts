@@ -4,7 +4,9 @@ import { showContextMenu, MenuOption } from './board/board-context-menu.js';
 import { showConfirmModal, showPropertiesDialog } from './modal.js';
 import { FILE_PATH_DRAG_TYPE } from '../drag-types.js';
 import { estimateTokens, TOKEN_COUNT_MAX_CHARS } from '../../shared/token-estimate.js';
-import { isPathUnder } from '../../shared/platform.js';
+import { isPathUnder, dirname } from '../../shared/platform.js';
+import { t } from '../i18n.js';
+import { fileManagerLabelKey, openFolderLabelKey } from '../file-manager-label.js';
 
 export interface DirEntry {
   name: string;
@@ -252,7 +254,13 @@ function createEntry(projectId: string, depth: number, entry: DirEntry): HTMLEle
     row.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      showContextMenu(e.clientX, e.clientY, [deleteMenuOption(entry)]);
+      showContextMenu(e.clientX, e.clientY, [
+        {
+          label: t(fileManagerLabelKey()),
+          action: () => { window.vibeyard.app.openInFileManager(entry.path); },
+        },
+        deleteMenuOption(entry),
+      ]);
     });
     return [row, subContainer];
   }
@@ -272,6 +280,10 @@ function createEntry(projectId: string, depth: number, entry: DirEntry): HTMLEle
     e.preventDefault();
     e.stopPropagation();
     showContextMenu(e.clientX, e.clientY, [
+      {
+        label: t(openFolderLabelKey()),
+        action: () => { window.vibeyard.app.openInFileManager(dirname(entry.path)); },
+      },
       {
         label: 'Open in Browser',
         action: () => {

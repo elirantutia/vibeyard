@@ -19,6 +19,7 @@ import { mountGitPanel, closeGitPanel } from './git-panel.js';
 import { gitChangeCount, onChange as onGitStatusChange } from '../git-status.js';
 import { ICON_KANBAN, ICON_TEAM, ICON_OVERVIEW, ICON_SESSIONS, ICON_FILES, ICON_GIT } from '../icons.js';
 import { t } from '../i18n.js';
+import { fileManagerLabelKey } from '../file-manager-label.js';
 
 type ProjectPanel = 'history' | 'files' | 'git' | null;
 const projectPanelOpen = new Map<string, ProjectPanel>();
@@ -369,6 +370,11 @@ function buildProjectActions(
     filesBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       setProjectPanel(project.id, openPanel === 'files' ? null : 'files');
+    });
+    filesBtn.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showFilesContextMenu(e.clientX, e.clientY, project);
     });
     actions.appendChild(filesBtn);
   }
@@ -752,6 +758,38 @@ function hideProjectContextMenu(): void {
     activeProjectContextMenu.remove();
     activeProjectContextMenu = null;
   }
+}
+
+/**
+ * Right-click menu on the Files button: a single "Open in <Explorer/Finder/…>"
+ * item that opens the project's directory in the OS file manager. Reuses the
+ * project context-menu's close machinery (activeProjectContextMenu + the
+ * document click/Escape listeners registered in initSidebar).
+ */
+function showFilesContextMenu(x: number, y: number, project: ProjectRecord): void {
+  hideProjectContextMenu();
+
+  const menu = document.createElement('div');
+  menu.className = 'tab-context-menu';
+  menu.style.left = `${x}px`;
+  menu.style.top = `${y}px`;
+
+  const openItem = document.createElement('div');
+  openItem.className = 'tab-context-menu-item';
+  openItem.textContent = t(fileManagerLabelKey());
+  openItem.addEventListener('click', (e) => {
+    e.stopPropagation();
+    hideProjectContextMenu();
+    window.vibeyard.app.openInFileManager(project.path);
+  });
+
+  menu.appendChild(openItem);
+  document.body.appendChild(menu);
+  activeProjectContextMenu = menu;
+
+  const rect = menu.getBoundingClientRect();
+  if (rect.right > window.innerWidth) menu.style.left = `${window.innerWidth - rect.width - 4}px`;
+  if (rect.bottom > window.innerHeight) menu.style.top = `${window.innerHeight - rect.height - 4}px`;
 }
 
 /** Project-level settings dialog. Currently just the default Claude profile. */

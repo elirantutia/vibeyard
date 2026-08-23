@@ -538,6 +538,10 @@ export function registerIpcHandlers(): void {
     return shell.openExternal(url);
   });
 
+  // Opens a directory in the OS file manager (Explorer / Finder / xdg-open).
+  // shell.openPath resolves to '' on success or an error string on failure.
+  ipcMain.handle('app:openInFileManager', (_event, dirPath: string) => shell.openPath(dirPath));
+
   ipcMain.handle('git:getStatus', (_event, projectPath: string) => getGitStatus(projectPath));
 
   ipcMain.handle('git:getRemoteUrl', (_event, projectPath: string) => getGitRemoteUrl(projectPath));
