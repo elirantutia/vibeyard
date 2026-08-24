@@ -8,7 +8,7 @@ import { getProvider } from './providers/registry';
 import { registerSession } from './hook-status';
 import { installHooksOnly, installStatusLine } from './claude-cli';
 import { getKeychainIsolationStatus } from './claude-keychain';
-import { isWin, pathSep } from './platform';
+import { isWin, pathSep, utf8LocaleEnv } from './platform';
 import { nvmDefaultNodeBinDir } from './providers/nvm';
 
 interface PtyInstance {
@@ -136,6 +136,23 @@ export function getFullPath(): string {
 }
 
 /**
+ * Fill in a UTF-8 locale when the environment names no charset, so spawned CLIs
+ * and shells don't land in the C locale. A Finder/Dock-launched macOS app
+ * inherits no LANG, which mangles multi-byte output and drops macOS text APIs
+ * back to the legacy system encoding (#157, #160).
+ *
+ * Bare `C`/`POSIX` does not count as a deliberate choice — it is the very locale
+ * that produces the mojibake, and a .desktop entry or systemd unit exporting
+ * `LANG=C` would otherwise pin it. Resolution follows POSIX precedence, so an
+ * `LC_ALL=C` really does mean the session is in the C locale.
+ */
+export function withUtf8Locale<T extends Record<string, string | undefined>>(env: T): T {
+  const locale = env.LC_ALL || env.LC_CTYPE || env.LANG;
+  if (isWin || (locale && !/^(C|POSIX)$/i.test(locale))) return env;
+  return { ...env, ...utf8LocaleEnv };
+}
+
+/**
  * On Windows, .cmd/.bat and .ps1 files cannot be spawned directly by node-pty
  * (CreateProcess returns error 193). Wrap them via cmd.exe or powershell.exe.
  */
@@ -229,7 +246,7 @@ export async function spawnPty(
     }
   }
 
-  const env = provider.buildEnv(sessionId, { ...process.env } as Record<string, string>, { configDir });
+  const env = provider.buildEnv(sessionId, withUtf8Locale({ ...process.env }) as Record<string, string>, { configDir });
   // User-provided env vars are merged last so they can override anything,
   // including provider-set vars like PATH (see plan: "user vars win").
   Object.assign(env, parseEnvVars(envVars));
@@ -342,7 +359,7 @@ export function spawnShellPty(
   const shell = isWin
     ? (process.env.COMSPEC || 'cmd.exe')
     : (process.env.SHELL || '/bin/zsh');
-  const shellEnv = { ...process.env, PATH: getFullPath() };
+  const shellEnv = withUtf8Locale({ ...process.env, PATH: getFullPath() });
   const ptyProcess = pty.spawn(shell, [], {
     name: 'xterm-256color',
     cols: 120,

@@ -1,6 +1,6 @@
 import type { Terminal } from '@xterm/xterm';
 import { isMac } from '../platform.js';
-import { wrapBracketedPaste } from './terminal-utils.js';
+import { copySelection, wrapBracketedPaste } from './terminal-utils.js';
 import { t } from '../i18n.js';
 
 let activeMenu: HTMLElement | null = null;
@@ -50,8 +50,7 @@ export function showTerminalContextMenu(
       e.stopPropagation();
       hideTerminalContextMenu();
       terminal.focus();
-      const selection = terminal.getSelection();
-      if (selection) navigator.clipboard.writeText(selection).catch(() => {});
+      copySelection(terminal);
     });
   }
   menu.appendChild(copyItem);

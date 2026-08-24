@@ -686,3 +686,10 @@ export interface TopFile {
 export type TopFilesResult =
   | { ok: true; files: TopFile[]; scanned: number; skipped: number }
   | { ok: false };
+
+/**
+ * Why a clipboard write happened. The renderer reports intent; the main process
+ * owns what each one means per platform (on Linux a 'selection' copy also
+ * populates the X11 PRIMARY selection so middle-click paste works).
+ */
+export type ClipboardSource = 'selection' | 'explicit';

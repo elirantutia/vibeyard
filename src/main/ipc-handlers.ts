@@ -23,9 +23,9 @@ import { estimateTokens, TOKEN_COUNT_MAX_CHARS } from '../shared/token-estimate'
 import { analyzeReadiness } from './readiness/analyzer';
 import { isGhAvailable, listPullRequests, listIssues, detectRepo } from './github-cli';
 import { expandUserPath, isBinaryBuffer, isLikelyBinaryFile, BINARY_SNIFF_BYTES } from './fs-utils';
-import { isMac, isWin } from './platform';
+import { isLinux, isMac, isWin } from './platform';
 import { listProfiles as listChromeProfiles, runImport as runChromeImport, clearImportedCookies, getCookieCount } from './chrome-import/importer';
-import type { ChromeImportOptions, ChromeImportProgress } from '../shared/types';
+import type { ChromeImportOptions, ChromeImportProgress, ClipboardSource } from '../shared/types';
 import { shouldWarnStatusLine } from './settings-guard';
 import { buildVibeyardignoreMatcher } from './vibeyardignore';
 import { setCloseConfirmed } from './close-state';
@@ -288,10 +288,12 @@ export function registerIpcHandlers(): void {
     createAppMenu(debugMode);
   });
 
-  ipcMain.handle('clipboard:write', (_event, text: string) => {
+  ipcMain.handle('clipboard:write', (_event, text: string, source?: ClipboardSource) => {
     clipboard.writeText(text);
-    // Also write to X11 primary selection on Linux so middle-click paste works
-    if (process.platform === 'linux') clipboard.writeText(text, 'selection');
+    // On Linux a selection-driven copy also populates the X11 PRIMARY selection
+    // so middle-click paste works. An explicit copy must not — it would clobber
+    // whatever the user has selected in another window.
+    if (source === 'selection' && isLinux) clipboard.writeText(text, 'selection');
   });
 
   ipcMain.handle('provider:getConfig', async (_event, providerId: ProviderId, projectPath: string) => {

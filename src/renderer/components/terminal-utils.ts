@@ -3,6 +3,7 @@ import { WebglAddon } from '@xterm/addon-webgl';
 import { shortcutManager } from '../shortcuts.js';
 import { isWin } from '../platform.js';
 import { appState } from '../state.js';
+import type { ClipboardSource } from '../../shared/types.js';
 
 type ExtraKeyHandler = (e: KeyboardEvent) => boolean | undefined;
 
@@ -13,12 +14,44 @@ export function wrapBracketedPaste(terminal: Terminal, text: string): string {
   return modes?.bracketedPasteMode ? `\x1b[200~${text}\x1b[201~` : text;
 }
 
+// Every terminal copy goes through the main process rather than
+// navigator.clipboard, so exactly one plain-text flavor reaches the OS clipboard
+// (#160). `source` is the caller's intent, not a mechanism: the main process
+// decides what a selection-driven copy means per platform.
+export function copyText(text: string, source: ClipboardSource = 'explicit'): void {
+  if (!text) return;
+  window.vibeyard.clipboard.write(text, source)
+    .catch((err) => console.warn('clipboard write failed', err));
+}
+
+export function copySelection(terminal: Terminal, source?: ClipboardSource): void {
+  copyText(terminal.getSelection(), source);
+}
+
 // Call after terminal.open(); the selection service doesn't fire before then.
 export function attachCopyOnSelect(terminal: Terminal): void {
   terminal.onSelectionChange(() => {
     if (!appState.preferences.copyOnSelect) return;
-    const selection = terminal.getSelection();
-    if (selection) window.vibeyard.clipboard.write(selection).catch(() => {});
+    copySelection(terminal, 'selection');
+  });
+}
+
+/**
+ * Call after terminal.open(). xterm's right-click handler parks the selection in
+ * its hidden textarea and DOM-selects it so a native context-menu Copy can pick
+ * it up, which leaves anything that later serializes that textarea free to write
+ * the rich flavors that corrupt non-Latin text (#160).
+ *
+ * Collapse the selection rather than wiping the value: with nothing selected
+ * Blink reports the copy command unavailable, and the contents stay intact for
+ * xterm's IME CompositionHelper, which reads `textarea.value` back in a deferred
+ * callback — clearing it would silently drop a CJK or Cyrillic candidate mid
+ * composition, hitting exactly the users this fixes.
+ */
+export function collapseArmedTextareaOnContextMenu(terminal: Terminal): void {
+  // xterm's own handler is on this element, so ours runs after the arming.
+  terminal.element?.addEventListener('contextmenu', () => {
+    terminal.textarea?.setSelectionRange(0, 0);
   });
 }
 
@@ -46,21 +79,17 @@ export function attachClipboardCopyHandler(
 
     // Ctrl+Shift+C: copy selected text (all platforms)
     if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'C') {
-      if (e.type === 'keydown') {
-        const selection = terminal.getSelection();
-        if (selection) navigator.clipboard.writeText(selection).catch(() => {});
-      }
+      if (e.type === 'keydown') copySelection(terminal);
       return false;
     }
 
     // Windows: Ctrl+C with selection → copy; without selection → SIGINT
     if (isWin && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && e.key === 'c') {
-      const selection = terminal.getSelection();
-      if (selection) {
-        if (e.type === 'keydown') navigator.clipboard.writeText(selection).catch(() => {});
-        return false;
-      }
-      return true; // no selection — let xterm send \x03
+      // hasSelection() is a coordinate compare; getSelection() rebuilds the whole
+      // string from the buffer, and this handler fires on keyup too.
+      if (!terminal.hasSelection()) return true; // let xterm send \x03
+      if (e.type === 'keydown') copySelection(terminal);
+      return false;
     }
 
     // Windows: Ctrl+V → async paste clipboard to PTY

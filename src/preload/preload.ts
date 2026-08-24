@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron';
-import type { CostData, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, ToolFailureData, SettingsWarningData, SettingsValidationResult, StatusLineConflictData, InspectorEvent, ProviderConfig, ReadFileResult, FileStatResult, TopFilesResult, FsChange, DeepSearchResult, GithubFetchResult, GithubRepo, ChromeProfile, ChromeImportOptions, ChromeImportProgress, ChromeImportResult } from '../shared/types';
+import type { CostData, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, ToolFailureData, SettingsWarningData, SettingsValidationResult, StatusLineConflictData, InspectorEvent, ProviderConfig, ReadFileResult, FileStatResult, TopFilesResult, FsChange, DeepSearchResult, GithubFetchResult, GithubRepo, ChromeProfile, ChromeImportOptions, ChromeImportProgress, ChromeImportResult, ClipboardSource } from '../shared/types';
 import { ZOOM_MIN, ZOOM_MAX } from '../shared/types';
 
 export type { CostData } from '../shared/types';
@@ -145,7 +145,7 @@ export interface VibeyardApi {
     validate(providerId?: ProviderId): Promise<SettingsValidationResult>;
   };
   clipboard: {
-    write(text: string): Promise<void>;
+    write(text: string, source?: ClipboardSource): Promise<void>;
   };
   zoom: {
     set(factor: number): void;
@@ -338,7 +338,7 @@ const api: VibeyardApi = {
     validate: (providerId) => ipcRenderer.invoke('settings:validate', providerId || 'claude'),
   },
   clipboard: {
-    write: (text: string) => ipcRenderer.invoke('clipboard:write', text),
+    write: (text: string, source?: ClipboardSource) => ipcRenderer.invoke('clipboard:write', text, source),
   },
   zoom: {
     set: (factor: number) => {

@@ -38,7 +38,7 @@ vi.mock('@xterm/addon-webgl', () => ({
   },
 }));
 
-import { attachClipboardCopyHandler, attachCopyOnSelect, loadWebglWithFallback } from './terminal-utils.js';
+import { attachClipboardCopyHandler, attachCopyOnSelect, collapseArmedTextareaOnContextMenu, loadWebglWithFallback } from './terminal-utils.js';
 
 const mockClipboardWrite = vi.fn().mockResolvedValue(undefined);
 const mockClipboardRead = vi.fn();
@@ -62,7 +62,27 @@ class FakeTerminal {
   }
   fireSelectionChange(): void { this.selectionListener?.(); }
   getSelection(): string { return this._selection; }
+  hasSelection(): boolean { return this._selection.length > 0; }
   setSelection(s: string): void { this._selection = s; }
+
+  // Stand-ins for the DOM nodes xterm exposes once opened.
+  element?: { addEventListener(type: string, fn: () => void): void };
+  textarea?: { value: string; selectionRange: null | [number, number]; setSelectionRange(s: number, e: number): void };
+  private contextMenuListener: (() => void) | null = null;
+
+  open(): void {
+    this.textarea = {
+      value: '',
+      selectionRange: null,
+      setSelectionRange(start: number, end: number) { this.selectionRange = [start, end]; },
+    };
+    this.element = {
+      addEventListener: (type: string, fn: () => void) => {
+        if (type === 'contextmenu') this.contextMenuListener = fn;
+      },
+    };
+  }
+  fireContextMenu(): void { this.contextMenuListener?.(); }
 }
 
 function stubPlatform(platform: string) {
@@ -94,7 +114,10 @@ describe('attachClipboardCopyHandler (macOS)', () => {
     terminal.setSelection('hello');
     terminal.simulateKey({ ctrlKey: true, shiftKey: true, key: 'C', type: 'keydown' });
 
-    expect(mockClipboardWrite).toHaveBeenCalledWith('hello');
+    expect(mockVibeyardClipboardWrite).toHaveBeenCalledWith('hello', 'explicit');
+    // #160: no copy path may touch navigator.clipboard — the main process
+    // writes a single plain-text flavor, Chromium's copy also writes rich ones.
+    expect(mockClipboardWrite).not.toHaveBeenCalled();
   });
 
   it('does not copy on keyup', () => {
@@ -104,7 +127,7 @@ describe('attachClipboardCopyHandler (macOS)', () => {
     terminal.setSelection('hello');
     terminal.simulateKey({ ctrlKey: true, shiftKey: true, key: 'C', type: 'keyup' });
 
-    expect(mockClipboardWrite).not.toHaveBeenCalled();
+    expect(mockVibeyardClipboardWrite).not.toHaveBeenCalled();
   });
 
   it('does not copy when nothing is selected', () => {
@@ -114,7 +137,7 @@ describe('attachClipboardCopyHandler (macOS)', () => {
     terminal.setSelection('');
     terminal.simulateKey({ ctrlKey: true, shiftKey: true, key: 'C', type: 'keydown' });
 
-    expect(mockClipboardWrite).not.toHaveBeenCalled();
+    expect(mockVibeyardClipboardWrite).not.toHaveBeenCalled();
   });
 
   it('returns false on Ctrl+Shift+C to prevent default', () => {
@@ -171,7 +194,7 @@ describe('attachClipboardCopyHandler (macOS)', () => {
     const result = terminal.simulateKey({ ctrlKey: true, key: 'c', type: 'keydown' });
 
     expect(result).toBe(true);
-    expect(mockClipboardWrite).not.toHaveBeenCalled();
+    expect(mockVibeyardClipboardWrite).not.toHaveBeenCalled();
   });
 
   it('does not intercept Ctrl+V (lets xterm send control char)', () => {
@@ -201,7 +224,8 @@ describe('attachClipboardCopyHandler (Windows)', () => {
     const result = terminal.simulateKey({ ctrlKey: true, key: 'c', type: 'keydown' });
 
     expect(result).toBe(false);
-    expect(mockClipboardWrite).toHaveBeenCalledWith('selected text');
+    expect(mockVibeyardClipboardWrite).toHaveBeenCalledWith('selected text', 'explicit');
+    expect(mockClipboardWrite).not.toHaveBeenCalled();
   });
 
   it('Ctrl+C without selection returns true (SIGINT passthrough)', () => {
@@ -212,7 +236,7 @@ describe('attachClipboardCopyHandler (Windows)', () => {
     const result = terminal.simulateKey({ ctrlKey: true, key: 'c', type: 'keydown' });
 
     expect(result).toBe(true);
-    expect(mockClipboardWrite).not.toHaveBeenCalled();
+    expect(mockVibeyardClipboardWrite).not.toHaveBeenCalled();
   });
 
   it('Ctrl+C does not copy on keyup', () => {
@@ -223,7 +247,7 @@ describe('attachClipboardCopyHandler (Windows)', () => {
     const result = terminal.simulateKey({ ctrlKey: true, key: 'c', type: 'keyup' });
 
     expect(result).toBe(false);
-    expect(mockClipboardWrite).not.toHaveBeenCalled();
+    expect(mockVibeyardClipboardWrite).not.toHaveBeenCalled();
   });
 
   it('Ctrl+V returns false and pastes clipboard to PTY', async () => {
@@ -303,7 +327,8 @@ describe('attachClipboardCopyHandler (Windows)', () => {
     const result = terminal.simulateKey({ ctrlKey: true, shiftKey: true, key: 'C', type: 'keydown' });
 
     expect(result).toBe(false);
-    expect(mockClipboardWrite).toHaveBeenCalledWith('shift-copy');
+    expect(mockVibeyardClipboardWrite).toHaveBeenCalledWith('shift-copy', 'explicit');
+    expect(mockClipboardWrite).not.toHaveBeenCalled();
   });
 });
 
@@ -354,7 +379,8 @@ describe('attachCopyOnSelect', () => {
     terminal.setSelection('selected');
     terminal.fireSelectionChange();
 
-    expect(mockVibeyardClipboardWrite).toHaveBeenCalledWith('selected');
+    expect(mockVibeyardClipboardWrite).toHaveBeenCalledWith('selected', 'selection');
+    expect(mockClipboardWrite).not.toHaveBeenCalled();
   });
 
   it('does not write to clipboard when copyOnSelect is on but selection is empty', () => {
@@ -398,5 +424,37 @@ describe('loadWebglWithFallback', () => {
 
     expect(() => loadWebglWithFallback(terminal as any)).not.toThrow();
     expect(terminal.loadAddon).not.toHaveBeenCalled();
+  });
+});
+
+describe('collapseArmedTextareaOnContextMenu', () => {
+  // xterm parks the selection in its hidden textarea on right-click so a native
+  // context-menu Copy can serialize it — the path that corrupts non-Latin text.
+  it("collapses the selection xterm armed in its hidden textarea", () => {
+    const terminal = new FakeTerminal();
+    terminal.open();
+    collapseArmedTextareaOnContextMenu(terminal as any);
+    terminal.textarea!.value = 'Проверка';
+
+    terminal.fireContextMenu();
+
+    expect(terminal.textarea!.selectionRange).toEqual([0, 0]);
+  });
+
+  // xterm's IME CompositionHelper reads textarea.value back in a deferred
+  // callback; wiping it would drop a candidate mid-composition.
+  it('leaves the textarea contents intact for an in-flight IME composition', () => {
+    const terminal = new FakeTerminal();
+    terminal.open();
+    collapseArmedTextareaOnContextMenu(terminal as any);
+    terminal.textarea!.value = '你好';
+
+    terminal.fireContextMenu();
+
+    expect(terminal.textarea!.value).toBe('你好');
+  });
+
+  it('is a no-op for a terminal that was never opened', () => {
+    expect(() => collapseArmedTextareaOnContextMenu(new FakeTerminal() as any)).not.toThrow();
   });
 });

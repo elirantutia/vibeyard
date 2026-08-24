@@ -107,9 +107,13 @@ describe('terminal-context-menu', () => {
     expect(terminal.selectAll).toHaveBeenCalled();
   });
 
-  it('Copy click writes selection to clipboard', () => {
+  // Copies route through the main process, not navigator.clipboard, so exactly
+  // one plain-text flavor reaches the OS clipboard (#160).
+  it('Copy click writes selection through the main-process clipboard', () => {
+    const mockWrite = vi.fn().mockResolvedValue(undefined);
     const mockWriteText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText: mockWriteText, readText: vi.fn() } });
+    (window as any).vibeyard = { clipboard: { write: mockWrite } };
 
     const terminal = makeMockTerminal(true, 'hello world');
     showTerminalContextMenu(100, 100, terminal, writeToPty);
@@ -117,7 +121,8 @@ describe('terminal-context-menu', () => {
     const items = document.querySelectorAll('.tab-context-menu-item');
     (items[0] as HTMLElement).click();
 
-    expect(mockWriteText).toHaveBeenCalledWith('hello world');
+    expect(mockWrite).toHaveBeenCalledWith('hello world', 'explicit');
+    expect(mockWriteText).not.toHaveBeenCalled();
   });
 
   it('Paste click reads clipboard and writes to PTY', async () => {

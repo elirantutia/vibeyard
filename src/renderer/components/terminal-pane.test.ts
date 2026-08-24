@@ -185,6 +185,8 @@ class FakeDocument {
 }
 
 const mockClipboardWrite = vi.fn().mockResolvedValue(undefined);
+// Terminal copies go through the main process, not navigator.clipboard (#160).
+const mockVibeyardClipboardWrite = vi.fn().mockResolvedValue(undefined);
 
 function makeWindowStub() {
   return {
@@ -196,6 +198,7 @@ function makeWindowStub() {
         create: vi.fn(),
       },
       git: { getRemoteUrl: vi.fn(async () => null) },
+      clipboard: { write: mockVibeyardClipboardWrite },
       app: { openExternal: vi.fn() },
     },
   };
@@ -360,7 +363,7 @@ describe('terminal Ctrl+Shift+C clipboard copy', () => {
     term.setSelection('hello world');
     term.simulateKey({ ctrlKey: true, shiftKey: true, key: 'C', type: 'keydown' });
 
-    expect(mockClipboardWrite).toHaveBeenCalledWith('hello world');
+    expect(mockVibeyardClipboardWrite).toHaveBeenCalledWith('hello world', 'explicit');
   });
 
   it('does not copy on keyup', async () => {
@@ -371,7 +374,7 @@ describe('terminal Ctrl+Shift+C clipboard copy', () => {
     term.setSelection('hello world');
     term.simulateKey({ ctrlKey: true, shiftKey: true, key: 'C', type: 'keyup' });
 
-    expect(mockClipboardWrite).not.toHaveBeenCalled();
+    expect(mockVibeyardClipboardWrite).not.toHaveBeenCalled();
   });
 
   it('does not copy when nothing is selected', async () => {
@@ -382,7 +385,7 @@ describe('terminal Ctrl+Shift+C clipboard copy', () => {
     term.setSelection('');
     term.simulateKey({ ctrlKey: true, shiftKey: true, key: 'C', type: 'keydown' });
 
-    expect(mockClipboardWrite).not.toHaveBeenCalled();
+    expect(mockVibeyardClipboardWrite).not.toHaveBeenCalled();
   });
 
   it('returns false to prevent default on Ctrl+Shift+C', async () => {

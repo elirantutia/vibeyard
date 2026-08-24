@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import * as path from 'path';
-import { isWin } from './platform';
+import { isMac, isWin } from './platform';
 
 const { mockSpawn, mockWrite, mockResize, mockKill, mockExecFile, mockNvmDefaultNodeBinDir } = vi.hoisted(() => ({
   mockSpawn: vi.fn(),
@@ -42,7 +42,7 @@ vi.mock('./providers/nvm', () => ({
 
 import * as fs from 'fs';
 import * as child_process from 'child_process';
-import { spawnPty, writePty, resizePty, killPty, getPtyCwd, getRegistryPath, getFullPath, resetPathCache, resolveWindowsShell } from './pty-manager';
+import { spawnPty, writePty, resizePty, killPty, getPtyCwd, getRegistryPath, getFullPath, resetPathCache, resolveWindowsShell, withUtf8Locale } from './pty-manager';
 import { initProviders } from './providers/registry';
 
 const mockExistsSync = vi.mocked(fs.existsSync);
@@ -695,4 +695,39 @@ describe('resolveWindowsShell', () => {
       });
     });
   }
+});
+
+describe('withUtf8Locale (issues #157, #160)', () => {
+  // Only one branch runs per platform; spelling the delta once keeps each test
+  // to a single expectation.
+  const added = isWin ? {} : isMac ? { LC_CTYPE: 'UTF-8' } : { LANG: 'C.UTF-8' };
+
+  it('fills in a UTF-8 locale when the environment carries none', () => {
+    expect(withUtf8Locale({ PATH: '/usr/bin' })).toEqual({ PATH: '/usr/bin', ...added });
+  });
+
+  it.each(['LC_ALL', 'LC_CTYPE', 'LANG'])('leaves a user-set %s untouched', (key) => {
+    const env = { PATH: '/usr/bin', [key]: 'ru_RU.ISO8859-5' };
+
+    expect(withUtf8Locale(env)).toEqual(env);
+  });
+
+  it.each(['C', 'POSIX', 'c', 'posix'])('overrides a bare %s locale', (locale) => {
+    expect(withUtf8Locale({ LANG: locale })).toEqual({ LANG: locale, ...added });
+  });
+
+  // POSIX precedence: LC_ALL wins, so the session really is in the C locale.
+  it('overrides a charset-naming LANG when LC_ALL is bare C', () => {
+    const env = { LC_ALL: 'C', LANG: 'ru_RU.UTF-8' };
+
+    expect(withUtf8Locale(env)).toEqual({ ...env, ...added });
+  });
+
+  it('does not mutate the env it is given', () => {
+    const env = { PATH: '/usr/bin' };
+
+    withUtf8Locale(env);
+
+    expect(env).toEqual({ PATH: '/usr/bin' });
+  });
 });
