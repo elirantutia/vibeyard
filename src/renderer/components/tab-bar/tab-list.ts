@@ -21,7 +21,10 @@ import {
 } from '../../session-close.js';
 import { hideTabContextMenu, setActiveContextMenu, positionMenu } from './menu.js';
 import { tabListEl } from './dom.js';
+import { scrollDelta, shouldAutoScroll, type TabScrollMemo } from './tab-scroll.js';
 import { t } from '../../i18n.js';
+
+let lastScrolledTo: TabScrollMemo | null = null;
 
 function buildTooltip(status: SessionStatus, cliSessionId?: string): string {
   const statusLine = t('tab.tooltip.statusPrefix', { status });
@@ -297,7 +300,10 @@ export function render(): void {
   const prevScrollLeft = tabListEl.scrollLeft;
   tabListEl.innerHTML = '';
   const project = appState.activeProject;
-  if (!project) return;
+  if (!project) {
+    lastScrolledTo = null;
+    return;
+  }
 
   let activeTab: HTMLElement | null = null;
   for (const session of project.sessions) {
@@ -416,13 +422,22 @@ export function render(): void {
     tabListEl.appendChild(tab);
   }
 
-  // The rebuild above reset the scroll offset, so put it back and then pull the
-  // active tab into view — with enough tabs to overflow the strip it otherwise
-  // stays hidden, most visibly right after switching projects. 'nearest' is a
-  // no-op while the tab is already fully visible, so restoring the offset is
-  // what keeps an unrelated re-render from moving the strip at all.
-  tabListEl.scrollLeft = prevScrollLeft;
-  activeTab?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  // Both reads below have to happen before lastScrolledTo is rewritten.
+  const target: TabScrollMemo = { projectId: project.id, sessionId: project.activeSessionId, scrollLeft: prevScrollLeft };
+  const autoScroll = shouldAutoScroll(lastScrolledTo, target);
+
+  // The rebuild above reset the scroll offset. Put it back — unless the project
+  // changed, where the old offset belongs to a different set of tabs — so a
+  // re-render the user didn't ask for leaves the strip where they scrolled it.
+  tabListEl.scrollLeft = lastScrolledTo?.projectId === project.id ? prevScrollLeft : 0;
+  if (activeTab && autoScroll) {
+    // Rects, not offsetLeft: #tab-list is position:static, so offsetLeft is measured
+    // from <body> and would carry the sidebar's width into the strip's scroll space.
+    const view = tabListEl.getBoundingClientRect();
+    const tab = activeTab.getBoundingClientRect();
+    tabListEl.scrollLeft += scrollDelta(tab.left - view.left, tab.right - view.right);
+    lastScrolledTo = { ...target, scrollLeft: tabListEl.scrollLeft };
+  }
 }
 
 // Surgically update a single tab's status dot + tooltip without a full re-render.
