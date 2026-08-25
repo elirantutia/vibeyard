@@ -293,10 +293,13 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
 
 export function render(): void {
   if (tabListEl.querySelector('.tab-name input')) return;
+  // Read before the wipe below clamps it to 0.
+  const prevScrollLeft = tabListEl.scrollLeft;
   tabListEl.innerHTML = '';
   const project = appState.activeProject;
   if (!project) return;
 
+  let activeTab: HTMLElement | null = null;
   for (const session of project.sessions) {
     const tab = document.createElement('div');
     const isActive = session.id === project.activeSessionId;
@@ -409,8 +412,17 @@ export function render(): void {
       });
     });
 
+    if (isActive) activeTab = tab;
     tabListEl.appendChild(tab);
   }
+
+  // The rebuild above reset the scroll offset, so put it back and then pull the
+  // active tab into view — with enough tabs to overflow the strip it otherwise
+  // stays hidden, most visibly right after switching projects. 'nearest' is a
+  // no-op while the tab is already fully visible, so restoring the offset is
+  // what keeps an unrelated re-render from moving the strip at all.
+  tabListEl.scrollLeft = prevScrollLeft;
+  activeTab?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
 // Surgically update a single tab's status dot + tooltip without a full re-render.
