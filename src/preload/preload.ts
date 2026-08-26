@@ -43,6 +43,7 @@ export interface VibeyardApi {
     stat(filePath: string): Promise<FileStatResult>;
     readImage(filePath: string): Promise<{ dataUrl: string } | null>;
     trashItem(filePath: string): Promise<{ ok: boolean; error?: string }>;
+    showInFolder(targetPath: string): Promise<{ ok: boolean; error?: string }>;
     watchDir(dirPath: string): void;
     unwatchDir(dirPath: string): void;
     onFsChange(callback: (changes: FsChange[]) => void): () => void;
@@ -235,6 +236,7 @@ const api: VibeyardApi = {
     stat: (filePath: string) => ipcRenderer.invoke('fs:stat', filePath),
     readImage: (filePath: string) => ipcRenderer.invoke('fs:readImage', filePath),
     trashItem: (filePath: string) => ipcRenderer.invoke('fs:trashItem', filePath),
+    showInFolder: (targetPath: string) => ipcRenderer.invoke('fs:showInFolder', targetPath),
     watchDir: (dirPath: string) => ipcRenderer.send('fs:watchDir', dirPath),
     unwatchDir: (dirPath: string) => ipcRenderer.send('fs:unwatchDir', dirPath),
     onFsChange: (callback: (changes: FsChange[]) => void) => onChannel('fs:changed', (changes) => callback(changes as FsChange[])),

@@ -72,3 +72,18 @@ export function isLikelyBinaryFile(absPath: string): boolean {
     fs.closeSync(fd);
   }
 }
+
+/**
+ * macOS treats these directories as opaque *packages*: `shell.openPath` on one
+ * hands it to its default handler — a `.app` starts running, an `.xcodeproj`
+ * launches Xcode — instead of showing its contents. Callers that mean "show me
+ * this folder" must reveal these in the parent rather than open them.
+ */
+const MAC_PACKAGE_EXTENSIONS = new Set([
+  '.app', '.bundle', '.framework', '.plugin', '.playground', '.xcodeproj', '.xcworkspace',
+]);
+
+/** True when `dirPath` is a directory macOS would launch rather than browse. */
+export function isMacPackagePath(dirPath: string): boolean {
+  return MAC_PACKAGE_EXTENSIONS.has(path.extname(dirPath).toLowerCase());
+}

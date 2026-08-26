@@ -5,7 +5,7 @@ vi.mock('os', () => ({
   homedir: () => '/mock/home',
 }));
 
-import { expandUserPath, isBinaryBuffer } from './fs-utils';
+import { expandUserPath, isBinaryBuffer, isMacPackagePath } from './fs-utils';
 
 const home = '/mock/home';
 
@@ -65,5 +65,20 @@ describe('isBinaryBuffer', () => {
 
   it('flags a buffer that starts with a null byte', () => {
     expect(isBinaryBuffer(Buffer.from([0x00, 0x01, 0x02]))).toBe(true);
+  });
+});
+
+describe('isMacPackagePath', () => {
+  it('flags directories macOS launches instead of browsing', () => {
+    expect(isMacPackagePath('out/Vibeyard.app')).toBe(true);
+    expect(isMacPackagePath('ios/Runner.xcodeproj')).toBe(true);
+    // HFS+/APFS are case-insensitive.
+    expect(isMacPackagePath('Some.APP')).toBe(true);
+  });
+
+  it('leaves ordinary folders and files alone', () => {
+    expect(isMacPackagePath('src')).toBe(false);
+    expect(isMacPackagePath('dist.old')).toBe(false);
+    expect(isMacPackagePath('index.ts')).toBe(false);
   });
 });

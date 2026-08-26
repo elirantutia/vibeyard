@@ -22,7 +22,7 @@ import type { ProviderId, GitFileEntry, SettingsValidationResult, ReadFileResult
 import { estimateTokens, TOKEN_COUNT_MAX_CHARS } from '../shared/token-estimate';
 import { analyzeReadiness } from './readiness/analyzer';
 import { isGhAvailable, listPullRequests, listIssues, detectRepo } from './github-cli';
-import { expandUserPath, isBinaryBuffer, isLikelyBinaryFile, BINARY_SNIFF_BYTES } from './fs-utils';
+import { expandUserPath, isBinaryBuffer, isLikelyBinaryFile, isMacPackagePath, BINARY_SNIFF_BYTES } from './fs-utils';
 import { isLinux, isMac, isWin } from './platform';
 import { listProfiles as listChromeProfiles, runImport as runChromeImport, clearImportedCookies, getCookieCount } from './chrome-import/importer';
 import type { ChromeImportOptions, ChromeImportProgress, ClipboardSource } from '../shared/types';
@@ -38,6 +38,31 @@ import { getKeychainIsolationStatus } from './claude-keychain';
 function isWithinKnownProject(resolvedPath: string): boolean {
   const state = loadState();
   return state.projects.some(p => resolvedPath.startsWith(p.path + path.sep) || resolvedPath === p.path);
+}
+
+/**
+ * Envelope for fs handlers that act on a path: resolve it, refuse anything
+ * outside a known project (stricter than isAllowedReadPath — never config dirs
+ * like ~/.claude or ~/.codex), and turn a throw into `{ ok: false, error }`.
+ * `act` may return a non-empty error string to report a failure of its own.
+ */
+async function withProjectPath(
+  channel: string,
+  targetPath: string,
+  act: (resolved: string) => Promise<string | void>
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const resolved = path.resolve(targetPath);
+    if (!isWithinKnownProject(resolved)) {
+      console.warn(`${channel} blocked: ${resolved} is not within a known project`);
+      return { ok: false, error: 'Path is not within a known project' };
+    }
+    const error = await act(resolved);
+    return error ? { ok: false, error } : { ok: true };
+  } catch (err) {
+    console.warn(`${channel} failed:`, err);
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 /**
@@ -756,22 +781,24 @@ export function registerIpcHandlers(): void {
     }
   });
 
-  ipcMain.handle('fs:trashItem', async (_event, filePath: string): Promise<{ ok: boolean; error?: string }> => {
-    try {
-      const resolved = path.resolve(filePath);
-      // Stricter than isAllowedReadPath: only allow trashing inside a known project,
-      // never config dirs like ~/.claude or ~/.codex.
-      if (!isWithinKnownProject(resolved)) {
-        console.warn(`fs:trashItem blocked: ${resolved} is not within a known project`);
-        return { ok: false, error: 'Path is not within a known project' };
+  ipcMain.handle('fs:trashItem', (_event, filePath: string) =>
+    withProjectPath('fs:trashItem', filePath, (resolved) => shell.trashItem(resolved)));
+
+  ipcMain.handle('fs:showInFolder', (_event, targetPath: string) =>
+    withProjectPath('fs:showInFolder', targetPath, async (resolved) => {
+      // lstat, not stat: a symlink must never be followed here. isWithinKnownProject
+      // is a string-prefix check on the link's own path, so opening its target would
+      // walk straight out of the project (workspace node_modules links, a link into
+      // ~/.claude). Revealing the link itself in its parent is always in-bounds.
+      const stats = await fs.promises.lstat(resolved);
+      if (stats.isDirectory() && !(isMac && isMacPackagePath(resolved))) {
+        // Open the folder itself so the file manager shows its contents.
+        // openPath resolves to '' on success, or a message on failure.
+        return shell.openPath(resolved);
       }
-      await shell.trashItem(resolved);
-      return { ok: true };
-    } catch (err) {
-      console.warn('fs:trashItem failed:', err);
-      return { ok: false, error: err instanceof Error ? err.message : String(err) };
-    }
-  });
+      // Files, symlinks and macOS packages: reveal in the parent, selected.
+      shell.showItemInFolder(resolved);
+    }));
 
   ipcMain.on('fs:watchDir', (event, dirPath: string) => {
     const resolved = path.resolve(dirPath);

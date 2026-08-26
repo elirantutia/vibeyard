@@ -33,6 +33,7 @@ export interface VibeyardApi {
     exists(filePath: string): Promise<boolean>;
     readFile(filePath: string): Promise<string>;
     readImage(filePath: string): Promise<{ dataUrl: string } | null>;
+    showInFolder(targetPath: string): Promise<{ ok: boolean; error?: string }>;
     watchDir(dirPath: string): void;
     unwatchDir(dirPath: string): void;
     onFsChange(callback: (changes: FsChange[]) => void): () => void;

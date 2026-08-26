@@ -5,6 +5,7 @@ import { showConfirmModal, showPropertiesDialog } from './modal.js';
 import { FILE_PATH_DRAG_TYPE } from '../drag-types.js';
 import { estimateTokens, TOKEN_COUNT_MAX_CHARS } from '../../shared/token-estimate.js';
 import { isPathUnder } from '../../shared/platform.js';
+import { isMac, isWin } from '../platform.js';
 
 export interface DirEntry {
   name: string;
@@ -252,7 +253,7 @@ function createEntry(projectId: string, depth: number, entry: DirEntry): HTMLEle
     row.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      showContextMenu(e.clientX, e.clientY, [deleteMenuOption(entry)]);
+      showContextMenu(e.clientX, e.clientY, [showInFolderMenuOption(entry), deleteMenuOption(entry)]);
     });
     return [row, subContainer];
   }
@@ -278,6 +279,7 @@ function createEntry(projectId: string, depth: number, entry: DirEntry): HTMLEle
           appState.addBrowserTabSession(projectId, pathToFileURL(entry.path));
         },
       },
+      showInFolderMenuOption(entry),
       {
         label: 'Properties',
         action: () => { showFileProperties(entry); },
@@ -437,6 +439,25 @@ function fileTypeLabel(name: string): string {
   const dot = name.lastIndexOf('.');
   if (dot <= 0 || dot === name.length - 1) return '(no ext)';
   return name.slice(dot + 1).toLowerCase();
+}
+
+/** Name of the OS file manager, used in the reveal menu labels. Exported for tests. */
+export const FILE_MANAGER = isMac ? 'Finder' : isWin ? 'File Explorer' : 'File Manager';
+
+/**
+ * A folder opens in the file manager showing its own contents; a file is
+ * revealed inside its parent folder, selected. Main picks the two apart.
+ */
+function showInFolderMenuOption(entry: DirEntry): MenuOption {
+  return {
+    label: `${entry.isDirectory ? 'Open' : 'Reveal'} in ${FILE_MANAGER}`,
+    action: async () => {
+      const result = await window.vibeyard.fs.showInFolder(entry.path);
+      if (!result.ok) {
+        console.warn(`Failed to show ${entry.path} in ${FILE_MANAGER}: ${result.error ?? 'unknown error'}`);
+      }
+    },
+  };
 }
 
 function deleteMenuOption(entry: DirEntry): MenuOption {

@@ -49,6 +49,7 @@ export const dialog = {
 export const shell = {
   openExternal: () => Promise.resolve(),
   openPath: () => Promise.resolve(''),
+  showItemInFolder: noop,
 };
 
 export const clipboard = {

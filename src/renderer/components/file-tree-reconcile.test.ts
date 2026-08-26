@@ -9,7 +9,8 @@ vi.mock('./modal.js', () => ({ showConfirmModal: vi.fn(), showPropertiesDialog: 
 vi.mock('./board/board-context-menu.js', () => ({ showContextMenu: vi.fn() }));
 vi.mock('../file-url.js', () => ({ pathToFileURL: (p: string) => `file://${p}` }));
 
-import { renderFileTree, _resetForTesting, DirEntry, isExpanded } from './file-tree.js';
+import { renderFileTree, _resetForTesting, DirEntry, isExpanded, FILE_MANAGER } from './file-tree.js';
+import { showContextMenu, MenuOption } from './board/board-context-menu.js';
 
 // --- Fake filesystem backing window.vibeyard.fs ---
 let dirContents: Map<string, DirEntry[]>;
@@ -29,6 +30,7 @@ beforeEach(() => {
   (globalThis as any).vibeyard = {
     fs: {
       listDir: vi.fn((dir: string) => Promise.resolve(dirContents.get(dir) ?? [])),
+      showInFolder: vi.fn(() => Promise.resolve({ ok: true })),
       watchDir: vi.fn((dir: string) => { watchedDirs.add(dir); }),
       unwatchDir: vi.fn((dir: string) => { watchedDirs.delete(dir); }),
       onFsChange: vi.fn((cb: (c: FsChange[]) => void) => { fsChangeCb = cb; return () => { fsChangeCb = null; }; }),
@@ -65,6 +67,14 @@ function rows(container: HTMLElement): string[] {
 
 function emit(changes: FsChange[]): void {
   fsChangeCb?.(changes);
+}
+
+/** Right-click a row and return the menu options handed to showContextMenu. */
+function openMenu(container: HTMLElement, entryPath: string): MenuOption[] {
+  vi.mocked(showContextMenu).mockClear();
+  const row = container.querySelector(`[data-entry-path="${entryPath}"]`) as HTMLElement;
+  row.dispatchEvent(new MouseEvent('contextmenu', { clientX: 5, clientY: 6 }));
+  return vi.mocked(showContextMenu).mock.calls[0][2];
 }
 
 describe('file tree reconciliation', () => {
@@ -166,5 +176,35 @@ describe('file tree reconciliation', () => {
     expect(rows(container)).toEqual([]);
     expect(watchedDirs.has('/proj/src')).toBe(false);
     expect(isExpanded('p1', '/proj/src')).toBe(false);
+  });
+});
+
+describe('show in file manager menu option', () => {
+  it('opens a folder in the file manager', async () => {
+    dirContents.set('/proj', [entry('src', '/proj', true)]);
+    const container = document.createElement('div');
+    renderFileTree({ id: 'p1', path: '/proj' } as any, container);
+    await settle();
+
+    const options = openMenu(container, '/proj/src');
+    expect(options.map((o) => o.label)).toEqual([`Open in ${FILE_MANAGER}`, 'Delete']);
+
+    options[0].action();
+    expect((globalThis as any).vibeyard.fs.showInFolder).toHaveBeenCalledWith('/proj/src');
+  });
+
+  it('reveals a file in the file manager', async () => {
+    dirContents.set('/proj', [entry('a.ts', '/proj', false)]);
+    const container = document.createElement('div');
+    renderFileTree({ id: 'p1', path: '/proj' } as any, container);
+    await settle();
+
+    const options = openMenu(container, '/proj/a.ts');
+    expect(options.map((o) => o.label)).toEqual([
+      'Open in Browser', `Reveal in ${FILE_MANAGER}`, 'Properties', 'Delete',
+    ]);
+
+    options[1].action();
+    expect((globalThis as any).vibeyard.fs.showInFolder).toHaveBeenCalledWith('/proj/a.ts');
   });
 });
