@@ -1,5 +1,6 @@
 import type { ReadinessResult, ProviderId } from '../../shared/types';
-import type { ReadinessCheckProducer, TaggedCheck, TopCategory } from './types';
+import type { ReadinessCheckProducer, TaggedCheck, TopCategory, AnalysisContext } from './types';
+import { buildVibeyardignoreMatcher } from '../vibeyardignore';
 import { getAvailableProviderIds } from '../providers/registry';
 import { computeCategoryScore, getTrackedFiles } from './utils';
 import { aiInstructionsProducer } from './checkers/ai-instructions';
@@ -9,7 +10,7 @@ import { customExtensionsProducer } from './checkers/custom-extensions';
 import { claudeContextProducer } from './checkers/claude-context';
 import { codexContextProducer } from './checkers/codex-context';
 import { geminiContextProducer } from './checkers/gemini-context';
-import { genericContextProducer } from './checkers/context-optimization';
+import { genericContextProducer, ensureVibeyardignore } from './checkers/context-optimization';
 
 const allProducers: ReadinessCheckProducer[] = [
   aiInstructionsProducer,
@@ -36,7 +37,13 @@ export async function analyzeReadiness(projectPath: string, excludedProviders?: 
     p => !p.providerId || (availableIds.has(p.providerId) && !excludedSet.has(p.providerId))
   );
 
-  const ctx = { trackedFiles: getTrackedFiles(projectPath) };
+  // Seed the default ignore file before the matcher is built: otherwise a project's first
+  // scan silently applies no patterns and its second applies all of them.
+  ensureVibeyardignore(projectPath);
+  const ctx: AnalysisContext = {
+    trackedFiles: getTrackedFiles(projectPath),
+    isIgnored: buildVibeyardignoreMatcher(projectPath),
+  };
 
   const allTagged: TaggedCheck[] = activeProducers.flatMap(p => {
     const tagged = p.produce(projectPath, ctx);

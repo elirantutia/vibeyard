@@ -1,6 +1,7 @@
 import * as path from 'path';
 import type { ReadinessCheck } from '../../../shared/types';
-import { fileExists, readFileSafe } from '../utils';
+import type { AnalysisContext } from '../types';
+import { fileExists, readFileSafe, countFileLines } from '../utils';
 
 export interface InstructionFileOpts {
   fileName: string;           // e.g. 'CLAUDE.md' or 'AGENTS.md'
@@ -9,20 +10,46 @@ export interface InstructionFileOpts {
   displayName: string;        // e.g. 'CLAUDE.md' or 'AGENTS.md'
 }
 
-export function resolveInstructionFilePath(projectPath: string, opts: InstructionFileOpts): string | null {
-  const candidates = [path.join(projectPath, opts.fileName)];
+/** Line counts above which an instruction file starts costing more context than it earns. */
+export const SIZE_WARN_LINES = 300;
+export const SIZE_FAIL_LINES = 500;
 
+/** Defensive bound on how many nested-file rows a single scan may add to the readiness list. */
+const MAX_NESTED_ROWS = 20;
+
+/**
+ * The project-relative locations an instruction file may live at, in precedence order.
+ * Returned as POSIX paths so they can be compared directly against `git ls-files` output,
+ * which uses forward slashes on every platform.
+ */
+export function instructionFileCandidates(opts: InstructionFileOpts): string[] {
+  const candidates = [opts.fileName];
   if (opts.fallbackDirectory) {
-    candidates.push(path.join(projectPath, opts.fallbackDirectory, opts.fileName));
+    candidates.push(`${opts.fallbackDirectory}/${opts.fileName}`);
   }
+  return candidates;
+}
 
-  for (const candidate of candidates) {
+export function resolveInstructionFilePath(projectPath: string, opts: InstructionFileOpts): string | null {
+  for (const rel of instructionFileCandidates(opts)) {
+    const candidate = path.join(projectPath, rel);
     if (fileExists(candidate)) {
       return candidate;
     }
   }
 
   return null;
+}
+
+/** Grades a line count already known to exceed `SIZE_WARN_LINES`, and words the verdict. */
+function describeTooLong(label: string, lines: number): { status: 'warning' | 'fail'; score: number; description: string } {
+  return lines <= SIZE_FAIL_LINES
+    ? { status: 'warning', score: 50, description: `${label} is ${lines} lines — consider trimming for focus.` }
+    : { status: 'fail', score: 0, description: `${label} is ${lines} lines — too long, may waste context window.` };
+}
+
+function trimFixPrompt(label: string): string {
+  return `The ${label} file is too long (over ${SIZE_WARN_LINES} lines). Trim it to focus on the most important information for AI agents. Move detailed documentation to separate files and keep ${label} between 50-${SIZE_WARN_LINES} lines.`;
 }
 
 export function checkFileExists(projectPath: string, opts: InstructionFileOpts): ReadinessCheck {
@@ -135,47 +162,86 @@ export function checkFileSize(content: string | null, opts: InstructionFileOpts)
     };
   }
   const lines = content.split('\n').length;
-  let status: ReadinessCheck['status'];
-  let score: number;
-  let description: string;
+  const tooShortPrompt = `The ${opts.displayName} file is too short. Expand it to include comprehensive project documentation (aim for 50-${SIZE_WARN_LINES} lines) covering: build commands, test commands, architecture, key files, and conventions.`;
 
-  if (lines >= 50 && lines <= 300) {
-    status = 'pass';
-    score = 100;
-    description = `${opts.displayName} is ${lines} lines — good size.`;
-  } else if ((lines >= 10 && lines < 50) || (lines > 300 && lines <= 500)) {
-    status = 'warning';
-    score = 50;
-    description = lines < 50
-      ? `${opts.displayName} is only ${lines} lines — consider adding more detail.`
-      : `${opts.displayName} is ${lines} lines — consider trimming for focus.`;
-  } else {
-    status = 'fail';
-    score = 0;
-    description = lines < 10
-      ? `${opts.displayName} is only ${lines} lines — too short to be useful.`
-      : `${opts.displayName} is ${lines} lines — too long, may waste context window.`;
-  }
-
-  let fixPrompt: string | undefined;
-  if (status !== 'pass') {
-    fixPrompt = lines < 50
-      ? `The ${opts.displayName} file is too short. Expand it to include comprehensive project documentation (aim for 50-300 lines) covering: build commands, test commands, architecture, key files, and conventions.`
-      : `The ${opts.displayName} file is too long (over 300 lines). Trim it to focus on the most important information for AI agents. Move detailed documentation to separate files and keep ${opts.displayName} between 50-300 lines.`;
-  }
+  // Each branch carries its own fixPrompt so no threshold is tested twice.
+  const verdict =
+    lines > SIZE_WARN_LINES
+      ? { ...describeTooLong(opts.displayName, lines), fixPrompt: trimFixPrompt(opts.displayName) }
+      : lines >= 50
+        ? { status: 'pass' as const, score: 100, description: `${opts.displayName} is ${lines} lines — good size.`, fixPrompt: undefined }
+        : lines >= 10
+          ? { status: 'warning' as const, score: 50, description: `${opts.displayName} is only ${lines} lines — consider adding more detail.`, fixPrompt: tooShortPrompt }
+          : { status: 'fail' as const, score: 0, description: `${opts.displayName} is only ${lines} lines — too short to be useful.`, fixPrompt: tooShortPrompt };
 
   return {
+    ...verdict,
     id: `${opts.idPrefix}-size`,
     name: `${opts.displayName} appropriate size`,
-    status,
-    description,
-    score,
     maxScore: 100,
-    fixPrompt,
     effort: 'low',
     impact: 30,
     rationale: `${opts.displayName} is loaded into every prompt, so its bytes compete with your actual code for context. Too short and the AI lacks grounding; too long and it crowds out the files the AI actually needs to read.`,
   };
+}
+
+/**
+ * Size checks for instruction files that live *below* the project root — e.g. a monorepo's
+ * `packages/api/AGENTS.md`. The root checks only ever look at `instructionFileCandidates`,
+ * so without this a 700-line nested file is invisible and every message names the root file.
+ *
+ * Candidates come from `git ls-files` (already computed once per scan), which costs no extra
+ * I/O and inherits .gitignore, so vendored copies under node_modules never show up. Only
+ * oversized files produce a row: a short package-level instructions file is correct, not a
+ * defect, and a row per nested file would swamp the readiness list on a monorepo.
+ *
+ * The rows are `informational`, so they are listed and filterable but do not move the
+ * category score. They can only ever grade 0 or 50 — counting them would let a monorepo's
+ * file count dominate the 50%-weighted Instructions category, dragging it to 20% while every
+ * root file is perfect. The root file stays the scored signal.
+ */
+export function checkNestedFileSizes(
+  projectPath: string,
+  ctx: AnalysisContext,
+  opts: InstructionFileOpts,
+): ReadinessCheck[] {
+  // A nested path always has a separator before the filename, so this suffix test also
+  // excludes the bare root file — and, unlike splitting, allocates nothing per candidate.
+  const suffix = `/${opts.fileName}`;
+  const rootCandidates = new Set(instructionFileCandidates(opts));
+  const oversized: { rel: string; lines: number }[] = [];
+
+  for (const rel of ctx.trackedFiles) {
+    if (!rel.endsWith(suffix)) continue;
+    if (rootCandidates.has(rel) || ctx.isIgnored(rel)) continue;
+
+    try {
+      // countFileLines streams through a fixed buffer, so even a committed multi-MB
+      // instructions file is never materialized as one string.
+      const lines = countFileLines(path.join(projectPath, rel));
+      if (lines <= SIZE_WARN_LINES) continue;
+      oversized.push({ rel, lines });
+    } catch {
+      // Unreadable or vanished between the git listing and now — nothing to report.
+    }
+  }
+
+  // Worst offenders first, so the cap truncates the least useful rows rather than whatever
+  // sorts last alphabetically.
+  oversized.sort((a, b) => b.lines - a.lines);
+
+  return oversized.slice(0, MAX_NESTED_ROWS).map(({ rel, lines }) => ({
+    ...describeTooLong(rel, lines),
+    id: `${opts.idPrefix}-size:${rel}`,
+    name: `${rel} size`,
+    score: 0,
+    maxScore: 0,
+    informational: true,
+    fixPrompt: trimFixPrompt(rel),
+    effort: 'low' as const,
+    impact: 30,
+    rationale: `${rel} is loaded whenever the AI works under ${path.posix.dirname(rel)}, and it stacks on top of the root instructions file. Past ~${SIZE_WARN_LINES} lines it crowds out the code the AI actually needs to read in the one directory where it matters most.`,
+  }));
 }
 
 export function checkNotBloated(projectPath: string, opts: InstructionFileOpts): ReadinessCheck {
@@ -192,11 +258,11 @@ export function checkNotBloated(projectPath: string, opts: InstructionFileOpts):
     };
   }
   const lines = content.split('\n').length;
-  const bloatRationale = `Every byte of ${opts.displayName} is paid for on every prompt. Past ~300 lines you're spending real context budget on text the AI may not need that turn. Trim to essentials and offload depth to linked files.`;
-  if (lines <= 300) {
+  const bloatRationale = `Every byte of ${opts.displayName} is paid for on every prompt. Past ~${SIZE_WARN_LINES} lines you're spending real context budget on text the AI may not need that turn. Trim to essentials and offload depth to linked files.`;
+  if (lines <= SIZE_WARN_LINES) {
     return { id: `${opts.idPrefix}-bloat`, name: `${opts.displayName} not bloated`, status: 'pass', description: `${opts.displayName} is ${lines} lines — within limits.`, score: 100, maxScore: 100, effort: 'low', impact: 30, rationale: bloatRationale };
   }
-  if (lines <= 500) {
+  if (lines <= SIZE_FAIL_LINES) {
     return {
       id: `${opts.idPrefix}-bloat`, name: `${opts.displayName} not bloated`, status: 'warning', description: `${opts.displayName} is ${lines} lines — getting large.`, score: 50, maxScore: 100,
       fixPrompt: `The ${opts.displayName} file is getting large. Review it and move detailed documentation to separate files. Keep ${opts.displayName} focused on essential context that AI agents need for every interaction.`,
@@ -205,12 +271,16 @@ export function checkNotBloated(projectPath: string, opts: InstructionFileOpts):
   }
   return {
     id: `${opts.idPrefix}-bloat`, name: `${opts.displayName} not bloated`, status: 'fail', description: `${opts.displayName} is ${lines} lines — too large, wastes context window.`, score: 0, maxScore: 100,
-    fixPrompt: `The ${opts.displayName} file is too large and wastes AI context window space. Aggressively trim it: move detailed docs to separate files, remove redundant information, and keep only the most critical context. Target under 300 lines.`,
+    fixPrompt: `The ${opts.displayName} file is too large and wastes AI context window space. Aggressively trim it: move detailed docs to separate files, remove redundant information, and keep only the most critical context. Target under ${SIZE_WARN_LINES} lines.`,
     effort: 'medium', impact: 60, rationale: bloatRationale,
   };
 }
 
-export function runAllInstructionChecks(projectPath: string, opts: InstructionFileOpts): ReadinessCheck[] {
+export function runAllInstructionChecks(
+  projectPath: string,
+  opts: InstructionFileOpts,
+  ctx: AnalysisContext,
+): ReadinessCheck[] {
   const instructionPath = resolveInstructionFilePath(projectPath, opts);
   const content = instructionPath ? readFileSafe(instructionPath) : null;
   return [
@@ -219,5 +289,6 @@ export function runAllInstructionChecks(projectPath: string, opts: InstructionFi
     checkTestCommands(content, opts),
     checkArchitecture(content, opts),
     checkFileSize(content, opts),
+    ...checkNestedFileSizes(projectPath, ctx, opts),
   ];
 }

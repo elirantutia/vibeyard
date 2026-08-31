@@ -2,35 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { aiInstructionsProducer } from './ai-instructions';
-import type { AnalysisContext } from '../types';
+import { linesOf, makeAnalysisContext, mockInstructionFiles } from '../test-utils';
 
 vi.mock('fs');
 
 const mockFs = vi.mocked(fs);
-const ctx: AnalysisContext = { trackedFiles: [] };
+const ctx = makeAnalysisContext();
 
 beforeEach(() => {
   vi.resetAllMocks();
 });
-
-function mockFileExists(files: Record<string, string>): void {
-  mockFs.statSync.mockImplementation((p: fs.PathLike) => {
-    const filePath = String(p);
-    for (const key of Object.keys(files)) {
-      if (filePath.endsWith(key)) {
-        return { isFile: () => true, isDirectory: () => false } as fs.Stats;
-      }
-    }
-    throw new Error('ENOENT');
-  });
-  mockFs.readFileSync.mockImplementation((p: fs.PathOrFileDescriptor) => {
-    const filePath = String(p);
-    for (const [key, content] of Object.entries(files)) {
-      if (filePath.endsWith(key)) return content;
-    }
-    throw new Error('ENOENT');
-  });
-}
 
 describe('aiInstructionsProducer', () => {
   it('returns all fail when no files exist', () => {
@@ -46,7 +27,7 @@ describe('aiInstructionsProducer', () => {
 
   it('passes CLAUDE.md exists check', () => {
     const content = Array(100).fill('# Line').join('\n') + '\n## Build\nnpm run build\n## Testing\nnpm test\n## Architecture\nSome overview';
-    mockFileExists({ 'CLAUDE.md': content });
+    mockInstructionFiles(mockFs, { 'CLAUDE.md': content });
 
     const tagged = aiInstructionsProducer.produce('/test/project', ctx);
     const check = tagged.find(t => t.check.id === 'claude-md-exists')!.check;
@@ -55,7 +36,7 @@ describe('aiInstructionsProducer', () => {
   });
 
   it('detects build commands in CLAUDE.md', () => {
-    mockFileExists({ 'CLAUDE.md': '## Build\nnpm run build\n' });
+    mockInstructionFiles(mockFs, { 'CLAUDE.md': '## Build\nnpm run build\n' });
 
     const tagged = aiInstructionsProducer.produce('/test/project', ctx);
     const check = tagged.find(t => t.check.id === 'claude-md-build')!.check;
@@ -63,7 +44,7 @@ describe('aiInstructionsProducer', () => {
   });
 
   it('detects test commands in CLAUDE.md', () => {
-    mockFileExists({ 'CLAUDE.md': '## Testing\nnpm test\n' });
+    mockInstructionFiles(mockFs, { 'CLAUDE.md': '## Testing\nnpm test\n' });
 
     const tagged = aiInstructionsProducer.produce('/test/project', ctx);
     const check = tagged.find(t => t.check.id === 'claude-md-test')!.check;
@@ -71,7 +52,7 @@ describe('aiInstructionsProducer', () => {
   });
 
   it('detects architecture section in CLAUDE.md', () => {
-    mockFileExists({ 'CLAUDE.md': '## Architecture\nThree-process Electron architecture\n' });
+    mockInstructionFiles(mockFs, { 'CLAUDE.md': '## Architecture\nThree-process Electron architecture\n' });
 
     const tagged = aiInstructionsProducer.produce('/test/project', ctx);
     const check = tagged.find(t => t.check.id === 'claude-md-architecture')!.check;
@@ -79,7 +60,7 @@ describe('aiInstructionsProducer', () => {
   });
 
   it('uses .claude/CLAUDE.md when root CLAUDE.md is missing', () => {
-    mockFileExists({ [path.join('.claude', 'CLAUDE.md')]: '## Build\nnpm run build\n## Testing\nnpm test\n## Architecture\nReadiness architecture\n' });
+    mockInstructionFiles(mockFs, { [path.join('.claude', 'CLAUDE.md')]: '## Build\nnpm run build\n## Testing\nnpm test\n## Architecture\nReadiness architecture\n' });
 
     const tagged = aiInstructionsProducer.produce('/test/project', ctx);
 
@@ -90,7 +71,7 @@ describe('aiInstructionsProducer', () => {
   });
 
   it('prefers root CLAUDE.md over .claude/CLAUDE.md when both exist', () => {
-    mockFileExists({ 'CLAUDE.md': 'root only\n', [path.join('.claude', 'CLAUDE.md')]: '## Build\nnpm run build\n## Testing\nnpm test\n## Architecture\nDetailed\n' });
+    mockInstructionFiles(mockFs, { 'CLAUDE.md': 'root only\n', [path.join('.claude', 'CLAUDE.md')]: '## Build\nnpm run build\n## Testing\nnpm test\n## Architecture\nDetailed\n' });
 
     const tagged = aiInstructionsProducer.produce('/test/project', ctx);
 
@@ -100,8 +81,8 @@ describe('aiInstructionsProducer', () => {
   });
 
   it('warns for small CLAUDE.md', () => {
-    const content = Array(30).fill('line').join('\n');
-    mockFileExists({ 'CLAUDE.md': content });
+    const content = linesOf(30);
+    mockInstructionFiles(mockFs, { 'CLAUDE.md': content });
 
     const tagged = aiInstructionsProducer.produce('/test/project', ctx);
     const check = tagged.find(t => t.check.id === 'claude-md-size')!.check;
@@ -110,8 +91,8 @@ describe('aiInstructionsProducer', () => {
   });
 
   it('passes for good size CLAUDE.md', () => {
-    const content = Array(100).fill('line').join('\n');
-    mockFileExists({ 'CLAUDE.md': content });
+    const content = linesOf(100);
+    mockInstructionFiles(mockFs, { 'CLAUDE.md': content });
 
     const tagged = aiInstructionsProducer.produce('/test/project', ctx);
     const check = tagged.find(t => t.check.id === 'claude-md-size')!.check;
@@ -120,8 +101,8 @@ describe('aiInstructionsProducer', () => {
   });
 
   it('fails for very large CLAUDE.md', () => {
-    const content = Array(600).fill('line').join('\n');
-    mockFileExists({ 'CLAUDE.md': content });
+    const content = linesOf(600);
+    mockInstructionFiles(mockFs, { 'CLAUDE.md': content });
 
     const tagged = aiInstructionsProducer.produce('/test/project', ctx);
     const check = tagged.find(t => t.check.id === 'claude-md-size')!.check;
@@ -137,5 +118,32 @@ describe('aiInstructionsProducer', () => {
     const check = tagged.find(t => t.check.id === 'claude-md-exists')!.check;
     expect(check.status).toBe('fail');
     expect(check.fixPrompt).toBeTruthy();
+  });
+});
+
+describe('aiInstructionsProducer nested CLAUDE.md', () => {
+  function nestedChecks(trackedFiles: string[]) {
+    return aiInstructionsProducer
+      .produce('/test/project', makeAnalysisContext(trackedFiles))
+      .map(t => t.check)
+      .filter(c => c.id.startsWith('claude-md-size:'));
+  }
+
+  it('reports an oversized nested CLAUDE.md under its real path', () => {
+    mockInstructionFiles(mockFs, { [path.join('apps', 'web', 'CLAUDE.md')]: linesOf(700) });
+
+    const nested = nestedChecks(['apps/web/CLAUDE.md']);
+
+    expect(nested).toHaveLength(1);
+    expect(nested[0].id).toBe('claude-md-size:apps/web/CLAUDE.md');
+    expect(nested[0].status).toBe('fail');
+    expect(nested[0].description).toBe('apps/web/CLAUDE.md is 700 lines — too long, may waste context window.');
+    expect(nested[0].fixPrompt).toContain('apps/web/CLAUDE.md');
+  });
+
+  it('does not treat the .claude/ fallback location as a nested file', () => {
+    mockInstructionFiles(mockFs, { [path.join('.claude', 'CLAUDE.md')]: linesOf(700) });
+
+    expect(nestedChecks(['.claude/CLAUDE.md'])).toHaveLength(0);
   });
 });

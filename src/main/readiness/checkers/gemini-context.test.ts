@@ -1,13 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import { geminiContextProducer } from './gemini-context';
-import { mockInstructionFiles } from '../test-utils';
-import type { AnalysisContext } from '../types';
+import { makeAnalysisContext, mockInstructionFiles } from '../test-utils';
 
 vi.mock('fs');
 
 const mockFs = vi.mocked(fs);
-const ctx: AnalysisContext = { trackedFiles: [] };
+const ctx = makeAnalysisContext();
 
 beforeEach(() => {
   vi.resetAllMocks();

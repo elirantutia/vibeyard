@@ -5,8 +5,8 @@ import type { ProviderId } from '../../../shared/types';
 export function makeInstructionProducer(providerId: ProviderId, opts: InstructionFileOpts): ReadinessCheckProducer {
   return {
     providerId,
-    produce(projectPath: string, _ctx: AnalysisContext): TaggedCheck[] {
-      return runAllInstructionChecks(projectPath, opts).map(check => ({
+    produce(projectPath: string, ctx: AnalysisContext): TaggedCheck[] {
+      return runAllInstructionChecks(projectPath, opts, ctx).map(check => ({
         category: 'instructions',
         check,
       }));

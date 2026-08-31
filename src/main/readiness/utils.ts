@@ -4,10 +4,18 @@ import type { ReadinessCheck } from '../../shared/types';
 
 export { readFileSafe, fileExists, dirExists, readDirSafe } from '../fs-utils';
 
+/**
+ * Project-relative paths of every git-tracked file, forward-slash separated.
+ *
+ * `core.quotePath=false` is load-bearing: git otherwise octal-escapes any non-ASCII
+ * path (`"packages/caf\303\251/AGENTS.md"`), which breaks every consumer that matches
+ * on a path segment. The Set dedupes unmerged paths, which `git ls-files` prints once
+ * per index stage — three identical rows for one file mid-merge-conflict.
+ */
 export function getTrackedFiles(projectPath: string): string[] {
   try {
-    const output = execSync('git ls-files', { cwd: projectPath, encoding: 'utf-8', timeout: 5000 });
-    return output.split('\n').filter(Boolean);
+    const output = execSync('git -c core.quotePath=false ls-files', { cwd: projectPath, encoding: 'utf-8', timeout: 5000 });
+    return [...new Set(output.split('\n').filter(Boolean))];
   } catch {
     return [];
   }
@@ -45,8 +53,9 @@ export function countFileLines(filePath: string, maxLines?: number): number {
 }
 
 export function computeCategoryScore(checks: ReadinessCheck[]): number {
-  const totalMax = checks.reduce((sum, c) => sum + c.maxScore, 0);
-  const totalScore = checks.reduce((sum, c) => sum + c.score, 0);
+  const scored = checks.filter(c => !c.informational);
+  const totalMax = scored.reduce((sum, c) => sum + c.maxScore, 0);
+  const totalScore = scored.reduce((sum, c) => sum + c.score, 0);
   return totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : 0;
 }
 

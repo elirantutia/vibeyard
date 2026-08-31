@@ -13,7 +13,7 @@ const VIBEYARDIGNORE_HEADER = `# Files and patterns to exclude from AI readiness
 
 `;
 
-function ensureVibeyardignore(projectPath: string): void {
+export function ensureVibeyardignore(projectPath: string): void {
   const filePath = path.join(projectPath, '.vibeyardignore');
   if (fileExists(filePath)) return;
   try {

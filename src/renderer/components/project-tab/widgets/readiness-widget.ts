@@ -53,7 +53,9 @@ function selectQuickWins(result: ReadinessResult, n = 3): ReadinessCheck[] {
   const candidates: ReadinessCheck[] = [];
   for (const cat of result.categories) {
     for (const c of cat.checks) {
-      if ((c.status === 'fail' || c.status === 'warning') && c.fixPrompt) {
+      // Informational rows are unbounded in number (one per nested instruction file) and
+      // would otherwise crowd every scored failure out of the three quick-win slots.
+      if ((c.status === 'fail' || c.status === 'warning') && c.fixPrompt && !c.informational) {
         candidates.push(c);
       }
     }

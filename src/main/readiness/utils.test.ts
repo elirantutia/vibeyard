@@ -1,8 +1,11 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { countFileLines } from './utils';
+import { execSync } from 'child_process';
+import { countFileLines, getTrackedFiles } from './utils';
+
+vi.mock('child_process');
 
 describe('countFileLines', () => {
   let tmpDir: string;
@@ -49,5 +52,30 @@ describe('countFileLines', () => {
   it('returns exact count when file lands on the cutoff boundary', () => {
     const p = writeTmp('exact.txt', Array(500).fill('line').join('\n'));
     expect(countFileLines(p, 500)).toBe(500);
+  });
+});
+
+describe('getTrackedFiles', () => {
+  function mockLsFiles(stdout: string): void {
+    vi.mocked(execSync).mockReturnValue(stdout as unknown as Buffer);
+  }
+
+  it('disables git path quoting so non-ASCII directories stay matchable', () => {
+    mockLsFiles('packages/café/AGENTS.md\n');
+
+    expect(getTrackedFiles('/repo')).toEqual(['packages/café/AGENTS.md']);
+    expect(vi.mocked(execSync).mock.calls[0][0]).toContain('core.quotePath=false');
+  });
+
+  it('dedupes unmerged paths, which git lists once per index stage', () => {
+    mockLsFiles('pkg/AGENTS.md\npkg/AGENTS.md\npkg/AGENTS.md\nREADME.md\n');
+
+    expect(getTrackedFiles('/repo')).toEqual(['pkg/AGENTS.md', 'README.md']);
+  });
+
+  it('returns an empty list outside a git repo', () => {
+    vi.mocked(execSync).mockImplementation(() => { throw new Error('not a git repository'); });
+
+    expect(getTrackedFiles('/repo')).toEqual([]);
   });
 });

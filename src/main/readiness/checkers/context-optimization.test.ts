@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as child_process from 'child_process';
 import { genericContextProducer } from './context-optimization';
-import type { AnalysisContext } from '../types';
+
+import { makeAnalysisContext } from '../test-utils';
 
 vi.mock('fs');
 vi.mock('child_process');
@@ -14,9 +15,7 @@ beforeEach(() => {
   vi.resetAllMocks();
 });
 
-function makeCtx(trackedFiles: string[]): AnalysisContext {
-  return { trackedFiles };
-}
+const makeCtx = makeAnalysisContext;
 
 /** Mock .vibeyardignore auto-creation: writeFileSync captures content, readFileSync returns it after creation. */
 function mockVibeyardignoreAutoCreate(): void {

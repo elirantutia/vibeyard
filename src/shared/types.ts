@@ -476,6 +476,13 @@ export interface ReadinessCheck {
   effort?: ReadinessEffort;
   impact?: number;
   rationale?: string;
+  /**
+   * Advisory row: shown and filterable like any other check, but excluded from the category
+   * score and from quick-win ranking. Used where a single project can produce an unbounded
+   * number of rows (one per nested instruction file), which would otherwise let file count
+   * dominate a weighted category.
+   */
+  informational?: boolean;
 }
 
 export interface ReadinessCategory {

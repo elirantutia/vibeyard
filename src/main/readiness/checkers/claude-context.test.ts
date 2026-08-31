@@ -3,8 +3,7 @@ import * as fs from 'fs';
 import * as child_process from 'child_process';
 import * as path from 'path';
 import { claudeContextProducer } from './claude-context';
-import { mockInstructionFiles } from '../test-utils';
-import type { AnalysisContext } from '../types';
+import { makeAnalysisContext, mockInstructionFiles } from '../test-utils';
 
 vi.mock('fs');
 vi.mock('child_process');
@@ -16,9 +15,7 @@ beforeEach(() => {
   vi.resetAllMocks();
 });
 
-function makeCtx(trackedFiles: string[]): AnalysisContext {
-  return { trackedFiles };
-}
+const makeCtx = makeAnalysisContext;
 
 describe('claudeContextProducer', () => {
   it('returns tagged checks with context category', () => {
