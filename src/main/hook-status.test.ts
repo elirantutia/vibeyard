@@ -101,9 +101,14 @@ describe('hook-status', () => {
       const opts = { input, env: { ...process.env, PYTHONIOENCODING: 'utf-8' } };
       return spawnSync('python3', ['-c', code], opts);
     };
+    // Memoised: three tests probe for python3, and each probe is a process launch.
+    let pythonAvailable: boolean | undefined;
     const hasPython = () => {
-      const { spawnSync } = require('child_process') as typeof import('child_process');
-      return !spawnSync('python3', ['-c', 'pass']).error;
+      if (pythonAvailable === undefined) {
+        const { spawnSync } = require('child_process') as typeof import('child_process');
+        pythonAvailable = !spawnSync('python3', ['-c', 'pass']).error;
+      }
+      return pythonAvailable;
     };
 
     it('extracts cost, context_window, session_id and session_name', () => {
@@ -152,6 +157,57 @@ describe('hook-status', () => {
       // would abort the script and take the .cost write down with it.
       expect(body()).toContain('json.dumps(');
       expect(body()).not.toContain("encoding=");
+    });
+
+    it('writes .sessionid only when the id changed', () => {
+      // The statusLine fires on every render. An unconditional write reaches the
+      // renderer as an IPC that ends in a persist plus a full renderLayout(),
+      // which used to re-append the terminal pane many times a second — blurring
+      // the in-pane find bar and collapsing an in-progress selection.
+      if (!hasPython()) return; // no python3 on this runner
+
+      // Real fs, deliberately: `fs` is mocked in this suite, so the script's own
+      // writes are observed from inside Python instead.
+      const tmp = path.join(
+        process.env.TMPDIR || process.env.TEMP || '/tmp',
+        `vibeyard-statusline-${process.pid}`,
+      );
+      const driver = `
+import sys,os,io,json,builtins,shutil
+src=sys.stdin.read()
+d=${JSON.stringify(tmp)}
+shutil.rmtree(d,ignore_errors=True)
+os.makedirs(d)
+writes=[]
+real=builtins.open
+def spy(file,mode='r',*a,**k):
+    if str(file).endswith('.sessionid') and 'w' in mode:
+        writes.append(str(file))
+    return real(file,mode,*a,**k)
+builtins.open=spy
+os.environ['CLAUDE_IDE_SESSION_ID']='sess1'
+def run(payload):
+    sys.stdin=io.StringIO(payload)
+    try:
+        exec(compile(src,'statusline','exec'),{})
+    except SystemExit:
+        pass
+run('{"session_id":"cli-a"}')
+run('{"session_id":"cli-a"}')
+after_repeat=len(writes)
+run('{"session_id":"cli-b"}')
+final=real(os.path.join(d,'sess1.sessionid')).read()
+shutil.rmtree(d,ignore_errors=True)
+sys.stdout.write(json.dumps({'afterRepeat':after_repeat,'total':len(writes),'final':final}))
+`;
+      // Built against the temp dir so the script's .cost/.name writes land there too.
+      const result = runPython(driver, buildStatusLinePython(tmp));
+      expect(result.status).toBe(0);
+
+      const seen = JSON.parse(result.stdout.toString());
+      expect(seen.afterRepeat).toBe(1); // the repeat wrote nothing
+      expect(seen.total).toBe(2);       // the changed id did
+      expect(seen.final).toBe('cli-b');
     });
 
     it('is syntactically valid Python', () => {

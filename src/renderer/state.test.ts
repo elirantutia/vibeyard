@@ -682,6 +682,60 @@ describe('setActiveProject()', () => {
   });
 });
 
+describe('updateSessionCliId()', () => {
+  // The statusLine rewrites <sid>.sessionid on every render and the SessionStart /
+  // UserPromptSubmit hooks re-report the same id. Each repeat used to cost a
+  // persist plus a `session-changed` fan-out, and renderLayout() answered every one
+  // of those by re-appending the terminal pane — blurring the in-pane find bar and
+  // collapsing an in-progress selection.
+  beforeEach(() => {
+    (window as any).vibeyard.session = { transcriptExistsSync: vi.fn(() => false) };
+  });
+
+  it('emits and persists the first time an id arrives', () => {
+    const { project, sessions } = addProjectWithSessions(1);
+    const cb = vi.fn();
+    appState.on('session-changed', cb);
+    mockSave.mockClear();
+
+    appState.updateSessionCliId(project.id, sessions[0].id, 'cli-1');
+
+    expect(sessions[0].cliSessionId).toBe('cli-1');
+    expect(cb).toHaveBeenCalledTimes(1);
+    expect(mockSave).toHaveBeenCalled();
+  });
+
+  it('is a no-op when the same id is re-reported', () => {
+    const { project, sessions } = addProjectWithSessions(1);
+    appState.updateSessionCliId(project.id, sessions[0].id, 'cli-1');
+
+    const cb = vi.fn();
+    appState.on('session-changed', cb);
+    mockSave.mockClear();
+
+    appState.updateSessionCliId(project.id, sessions[0].id, 'cli-1');
+    appState.updateSessionCliId(project.id, sessions[0].id, 'cli-1');
+
+    expect(cb).not.toHaveBeenCalled();
+    expect(mockSave).not.toHaveBeenCalled();
+  });
+
+  it('still resets the tab on a changed id (/clear)', () => {
+    const { project, sessions } = addProjectWithSessions(1);
+    appState.updateSessionCliId(project.id, sessions[0].id, 'cli-1');
+    appState.renameSession(project.id, sessions[0].id, 'My name', true);
+
+    const cleared = vi.fn();
+    appState.on('cli-session-cleared', cleared);
+
+    appState.updateSessionCliId(project.id, sessions[0].id, 'cli-2');
+
+    expect(sessions[0].cliSessionId).toBe('cli-2');
+    expect(sessions[0].userRenamed).toBe(false);
+    expect(cleared).toHaveBeenCalledWith({ sessionId: sessions[0].id });
+  });
+});
+
 // --- Session History Tests ---
 
 function mockCostData() {

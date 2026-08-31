@@ -35,6 +35,8 @@ interface TerminalInstance {
   pendingPrompt: string | null;
   pendingSystemPrompt: string | null;
   pendingPromptTimer: ReturnType<typeof setTimeout> | null;
+  /** `cols`x`rows` last sent to the PTY, so a no-op fit doesn't make the CLI redraw. */
+  lastSize: string | null;
   /**
    * Peak output-token count seen this session, used to render a stable "out"
    * figure. Claude's `context_window.total_output_tokens` is per-turn, not
@@ -145,6 +147,7 @@ export function createTerminalPane(
     pendingPrompt: null,
     pendingSystemPrompt: null,
     pendingPromptTimer: null,
+    lastSize: null,
     peakOutputTokens: 0,
   };
 
@@ -302,8 +305,28 @@ export async function spawnTerminal(sessionId: string): Promise<void> {
   }
   await window.vibeyard.pty.create(sessionId, instance.projectPath, instance.cliSessionId, instance.isResume, instance.args, instance.providerId, initialPrompt, systemPrompt, instance.envVars, instance.configDir);
   instance.isResume = true; // subsequent spawns (e.g. Restart Session) should resume
+
+  // Callers fire this un-awaited and fit the pane immediately after, so that fit
+  // can reach the main process while `pty:create` is still suspended (Copilot
+  // awaits a hook install before registering the PTY) — `resizePty` drops a
+  // resize for a session it has never heard of. The PTY also starts at the
+  // hardcoded spawn default, not at whatever the previous one was sized to. So
+  // forget the memo and re-fit now that a PTY definitely exists.
+  instance.lastSize = null;
+  fitTerminal(sessionId);
 }
 
+/**
+ * Put a pane in `container`, opening xterm into it on first attach.
+ *
+ * Idempotent by design: a pane already in `container` is left alone, because
+ * `appendChild` on a node that is already a child removes and re-inserts it —
+ * which blurs whatever is focused inside (the Cmd+F find bar lives in the pane,
+ * see `search-bar.ts`) and collapses an in-progress selection. `renderLayout()`
+ * runs on every `session-changed`, so a render that changed nothing must touch
+ * nothing. DOM order among the panes laid out together is corrected separately,
+ * by `ensurePaneOrder` in `split-layout.ts`.
+ */
 export function attachToContainer(sessionId: string, container: HTMLElement): void {
   const instance = instances.get(sessionId);
   if (!instance) return;
@@ -316,8 +339,7 @@ export function attachToContainer(sessionId: string, container: HTMLElement): vo
     attachCopyOnSelect(instance.terminal);
     collapseArmedTextareaOnContextMenu(instance.terminal);
     loadWebglWithFallback(instance.terminal);
-  } else {
-    // Always re-append to ensure correct DOM order (appendChild moves existing children)
+  } else if (instance.element.parentElement !== container) {
     container.appendChild(instance.element);
   }
 }
@@ -353,6 +375,11 @@ export function fitTerminal(sessionId: string): void {
   try {
     instance.fitAddon.fit();
     const { cols, rows } = instance.terminal;
+    // renderLayout() ends in a fitAllVisible(), and a redundant resize makes the
+    // CLI redraw underneath an in-progress selection.
+    const size = `${cols}x${rows}`;
+    if (size === instance.lastSize) return;
+    instance.lastSize = size;
     window.vibeyard.pty.resize(sessionId, cols, rows);
   } catch {
     // Element not yet visible
@@ -379,7 +406,12 @@ export function setFocused(sessionId: string): void {
   focusedSessionId = sessionId;
 
   // Only move DOM focus if it's currently on a session terminal (or nothing).
-  // This prevents stealing focus from the project terminal panel, search bar, modals, etc.
+  // This prevents stealing focus from the project terminal panel, modals, etc.
+  //
+  // It deliberately does NOT try to spare the Cmd+F find bar, which lives *inside*
+  // the pane (search-bar.ts) and so is indistinguishable from the terminal here.
+  // That is `focusPane` in split-layout.ts's job: a render the user didn't ask for
+  // never reaches this function at all.
   const activeEl = document.activeElement;
   const shouldFocusTerminal =
     !activeEl ||

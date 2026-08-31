@@ -49,6 +49,15 @@ export function getStatusLineScriptPath(): string {
  * The `.name` payload carries the CLI session id alongside the title so a
  * stale title can be told apart from the current conversation's.
  *
+ * `.sessionid` and `.name` both go through `write_if_changed`, which writes only
+ * when the content differs (and removes the file for an empty blob — how a
+ * cleared `.name` is retracted; `.sessionid` never passes one). The statusLine
+ * fires on every render, and each write reaches the renderer as an IPC that ends
+ * in a `persist()` plus a full `renderLayout()` — which used to detach and
+ * re-insert the terminal pane many times a second, blurring the in-pane find bar
+ * and breaking mouse selection. `.cost` is exempt: its payload genuinely changes
+ * on nearly every render, and it lands on a persist-only path with no re-render.
+ *
  * Installed as a real `.py` file on every platform and invoked by path, never
  * inlined into the shell command — see the module docstring in
  * `hook-commands.ts` for why inlining Python is fragile here.
@@ -77,28 +86,28 @@ if cost or ctx or model:
         payload['model']=model
     with open(os.path.join(status_dir,sid+'.cost'),'w') as f:
         json.dump(payload,f)
-claude_sid=d.get('session_id','')
-if claude_sid:
-    with open(os.path.join(status_dir,sid+'.sessionid'),'w') as f:
-        f.write(claude_sid)
-name_path=os.path.join(status_dir,sid+'.name')
-name=str(d.get('session_name') or '').strip()
-blob=json.dumps({'name':name,'session_id':claude_sid}) if name else ''
-prev=''
-try:
-    with open(name_path) as f:
-        prev=f.read()
-except:
-    pass
-if prev!=blob:
+def write_if_changed(path,blob):
+    prev=''
     try:
-        if blob:
-            with open(name_path,'w') as f:
-                f.write(blob)
-        else:
-            os.remove(name_path)
+        with open(path) as f:
+            prev=f.read()
     except:
         pass
+    if prev==blob:
+        return
+    try:
+        if blob:
+            with open(path,'w') as f:
+                f.write(blob)
+        else:
+            os.remove(path)
+    except:
+        pass
+claude_sid=d.get('session_id','')
+if claude_sid:
+    write_if_changed(os.path.join(status_dir,sid+'.sessionid'),claude_sid)
+name=str(d.get('session_name') or '').strip()
+write_if_changed(os.path.join(status_dir,sid+'.name'),json.dumps({'name':name,'session_id':claude_sid}) if name else '')
 `;
 }
 

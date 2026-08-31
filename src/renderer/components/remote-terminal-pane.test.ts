@@ -9,6 +9,7 @@ class FakeTerminal {
 
   loadAddon(): void {}
   onData(): void {}
+  onSelectionChange(): void {}
   open(): void {}
   write(): void {}
   dispose(): void {}
@@ -54,6 +55,8 @@ class FakeElement {
   innerHTML = '';
 
   appendChild(child: FakeElement): FakeElement {
+    // Mirror the DOM: appending a node that already has a parent moves it.
+    child.remove();
     child.parentElement = this;
     this.children.push(child);
     return child;
@@ -123,5 +126,59 @@ describe('applyThemeToAllRemoteTerminals()', () => {
     const instance = getRemoteTerminalInstance('remote-2')!;
 
     expect((instance.terminal as unknown as FakeTerminal).options.theme).toBe(lightTerminalTheme);
+  });
+});
+
+describe('attachRemoteToContainer()', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    vi.stubGlobal('document', new FakeDocument());
+  });
+
+  /** Stand in for the .xterm node terminal.open() would have created. */
+  function markOpened(element: FakeElement): void {
+    const screen = new FakeElement();
+    screen.className = 'xterm';
+    element.querySelector('.xterm-wrap')!.appendChild(screen);
+  }
+
+  it('does not re-append a pane that is already in the container', async () => {
+    // appendChild on an existing child removes and re-inserts it, blurring
+    // whatever is focused inside and collapsing any selection.
+    const { createRemoteTerminalPane, attachRemoteToContainer, getRemoteTerminalInstance, _resetForTesting } =
+      await import('./remote-terminal-pane.js');
+    const container = new FakeElement();
+
+    _resetForTesting();
+    createRemoteTerminalPane('remote-attach', 'readonly', 80, 24, () => {});
+    attachRemoteToContainer('remote-attach', container as unknown as HTMLElement);
+
+    const element = getRemoteTerminalInstance('remote-attach')!.element as unknown as FakeElement;
+    markOpened(element);
+
+    attachRemoteToContainer('remote-attach', container as unknown as HTMLElement);
+    attachRemoteToContainer('remote-attach', container as unknown as HTMLElement);
+
+    expect(container.children).toEqual([element]);
+  });
+
+  it('moves a pane attached to a different container', async () => {
+    const { createRemoteTerminalPane, attachRemoteToContainer, getRemoteTerminalInstance, _resetForTesting } =
+      await import('./remote-terminal-pane.js');
+    const first = new FakeElement();
+    const second = new FakeElement();
+
+    _resetForTesting();
+    createRemoteTerminalPane('remote-move', 'readonly', 80, 24, () => {});
+    attachRemoteToContainer('remote-move', first as unknown as HTMLElement);
+
+    const element = getRemoteTerminalInstance('remote-move')!.element as unknown as FakeElement;
+    markOpened(element);
+
+    attachRemoteToContainer('remote-move', second as unknown as HTMLElement);
+
+    expect(first.children).toEqual([]);
+    expect(second.children).toEqual([element]);
   });
 });

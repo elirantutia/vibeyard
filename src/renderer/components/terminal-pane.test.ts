@@ -35,6 +35,7 @@ class FakeTerminal {
   registerLinkProvider(): void {}
   onData(cb: (data: string) => void): void { this.dataHandlers.push(cb); }
   onKey(cb: (e: { key: string; domEvent: KeyboardEvent }) => void): void { this.keyHandlers.push(cb); }
+  onSelectionChange(): void {}
   open(): void {}
   write(): void {}
   focus(): void { this.focusCount++; }
@@ -120,12 +121,19 @@ class FakeClassList {
   contains(token: string): boolean {
     return this.values.has(token);
   }
+
+  get value(): string {
+    return [...this.values].join(' ');
+  }
+
+  set value(v: string) {
+    this.values = new Set(v.split(/\s+/).filter(Boolean));
+  }
 }
 
 class FakeElement {
   children: FakeElement[] = [];
   parentElement: FakeElement | null = null;
-  className = '';
   classList = new FakeClassList();
   dataset: Record<string, string> = {};
   style: Record<string, string> = {};
@@ -133,7 +141,19 @@ class FakeElement {
 
   constructor(public tagName: string) {}
 
+  // One source of truth, as in the DOM: production reads classList while most
+  // setup writes className, and letting them drift makes these tests lie.
+  get className(): string {
+    return this.classList.value;
+  }
+
+  set className(value: string) {
+    this.classList.value = value;
+  }
+
   appendChild(child: FakeElement): FakeElement {
+    // Mirror the DOM: appending a node that already has a parent moves it.
+    child.remove();
     child.parentElement = this;
     this.children.push(child);
     return child;
@@ -157,10 +177,31 @@ class FakeElement {
 
   addEventListener(): void {}
 
+  matches(selector: string): boolean {
+    return selector.split(',').some((part) => {
+      const sel = part.trim();
+      if (sel.startsWith('.')) return this.hasClass(sel.slice(1));
+      return this.tagName.toLowerCase() === sel.toLowerCase();
+    });
+  }
+
+  closest(selector: string): FakeElement | null {
+    let node: FakeElement | null = this as FakeElement;
+    while (node) {
+      if (node.matches(selector)) return node;
+      node = node.parentElement;
+    }
+    return null;
+  }
+
+  hasClass(name: string): boolean {
+    return this.classList.contains(name);
+  }
+
   querySelector(selector: string): FakeElement | null {
     if (selector.startsWith('.')) {
       const className = selector.slice(1);
-      return this.find((child) => child.className.split(/\s+/).includes(className) || child.classList.contains(className));
+      return this.find((child) => child.hasClass(className));
     }
     return null;
   }
@@ -303,6 +344,160 @@ describe('terminal focus tracking', () => {
 
     expect(getFocusedSessionId()).toBe('key-1');
   });
+});
+
+describe('pane attach, focus and fit are idempotent', () => {
+  // Background session chatter (a statusLine tick, a status change) re-runs
+  // renderLayout(). Anything it does to the pane's DOM on a render that changed
+  // nothing is felt by the user as focus loss or a lost selection.
+  let doc: FakeDocument;
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+
+    doc = new FakeDocument();
+    vi.stubGlobal('document', doc);
+    vi.stubGlobal('window', makeWindowStub());
+    vi.stubGlobal('navigator', { platform: 'MacIntel', clipboard: { writeText: mockClipboardWrite } });
+  });
+
+  /** Stand in for the .xterm node terminal.open() would have created. */
+  function markOpened(element: FakeElement): void {
+    const wrap = element.querySelector('.xterm-wrap')!;
+    const screen = new FakeElement('div');
+    screen.className = 'xterm';
+    wrap.appendChild(screen);
+  }
+
+  it('does not re-append a pane that is already in the container', async () => {
+    const { createTerminalPane, attachToContainer, getTerminalInstance } = await import('./terminal-pane.js');
+    const container = doc.createElement('div') as unknown as HTMLElement;
+
+    createTerminalPane('attach-1', '/project', null, false, '', 'claude');
+    attachToContainer('attach-1', container);
+
+    const element = getTerminalInstance('attach-1')!.element as unknown as FakeElement;
+    markOpened(element);
+
+    // A focused input inside the pane — the Cmd+F find bar lives here.
+    const input = new FakeElement('input');
+    element.appendChild(input);
+    doc.activeElement = input;
+
+    attachToContainer('attach-1', container);
+    attachToContainer('attach-1', container);
+
+    expect((container as unknown as FakeElement).children).toEqual([element]);
+    expect(doc.activeElement).toBe(input);
+  });
+
+  it('moves a pane that is attached to a different container', async () => {
+    const { createTerminalPane, attachToContainer, getTerminalInstance } = await import('./terminal-pane.js');
+    const first = doc.createElement('div') as unknown as HTMLElement;
+    const second = doc.createElement('div') as unknown as HTMLElement;
+
+    createTerminalPane('attach-2', '/project', null, false, '', 'claude');
+    attachToContainer('attach-2', first);
+
+    const element = getTerminalInstance('attach-2')!.element as unknown as FakeElement;
+    markOpened(element);
+
+    attachToContainer('attach-2', second);
+
+    expect((first as unknown as FakeElement).children).toEqual([]);
+    expect((second as unknown as FakeElement).children).toEqual([element]);
+  });
+
+  it('leaves focus alone when it sits outside every pane', async () => {
+    // The project terminal panel, a modal, the sidebar — none of them are a pane.
+    const { createTerminalPane, setFocused, showPane, getTerminalInstance } = await import('./terminal-pane.js');
+
+    createTerminalPane('focus-1', '/project', null, false, '', 'claude');
+    showPane('focus-1', false);
+    const instance = getTerminalInstance('focus-1')!;
+    const term = instance.terminal as unknown as FakeTerminal;
+
+    const elsewhere = new FakeElement('input');
+    doc.body.appendChild(elsewhere);
+    doc.activeElement = elsewhere;
+
+    setFocused('focus-1');
+
+    expect(term.focusCount).toBe(0);
+    expect((instance.element as unknown as FakeElement).classList.contains('focused')).toBe(true);
+  });
+
+  it('takes focus from body, and from another pane on a tab switch', async () => {
+    // A find bar in the outgoing pane must not block the incoming one — the find
+    // bar is protected by not calling setFocused at all (see pane-focus.ts), not here.
+    const { createTerminalPane, setFocused, showPane, getTerminalInstance } = await import('./terminal-pane.js');
+
+    createTerminalPane('focus-2', '/project', null, false, '', 'claude');
+    createTerminalPane('focus-3', '/project', null, false, '', 'claude');
+    showPane('focus-2', false);
+    const paneA = getTerminalInstance('focus-3')!.element as unknown as FakeElement;
+    const term = getTerminalInstance('focus-2')!.terminal as unknown as FakeTerminal;
+
+    doc.activeElement = null;
+    setFocused('focus-2');
+    expect(term.focusCount).toBe(1);
+
+    const findBarInput = new FakeElement('input');
+    paneA.appendChild(findBarInput);
+    doc.activeElement = findBarInput;
+    setFocused('focus-2');
+    expect(term.focusCount).toBe(2);
+  });
+
+  it('resizes the PTY only when the geometry actually changed', async () => {
+    const { createTerminalPane, fitTerminal, showPane, getTerminalInstance } = await import('./terminal-pane.js');
+    const mockResize = (window as any).vibeyard.pty.resize;
+
+    createTerminalPane('fit-1', '/project', null, false, '', 'claude');
+    showPane('fit-1', false); // fitTerminal skips a hidden pane
+    const term = getTerminalInstance('fit-1')!.terminal as unknown as FakeTerminal;
+
+    fitTerminal('fit-1');
+    fitTerminal('fit-1');
+    expect(mockResize).toHaveBeenCalledTimes(1);
+    expect(mockResize).toHaveBeenCalledWith('fit-1', 120, 30);
+
+    term.rows = 24;
+    fitTerminal('fit-1');
+    expect(mockResize).toHaveBeenCalledTimes(2);
+    expect(mockResize).toHaveBeenLastCalledWith('fit-1', 120, 24);
+  });
+
+  it('re-sends the size once the PTY exists, even if the pane was fitted mid-spawn', async () => {
+    // Callers fire spawnTerminal() un-awaited and fit immediately after, so the
+    // first resize can reach main while pty:create is still suspended (Copilot
+    // awaits a hook install before registering the PTY) — resizePty drops it.
+    // Without a re-fit the memo would make that drop permanent and the CLI would
+    // wrap at the 120x30 spawn default forever.
+    const { createTerminalPane, fitTerminal, showPane, spawnTerminal, getTerminalInstance } = await import('./terminal-pane.js');
+    const mockResize = (window as any).vibeyard.pty.resize;
+    let releaseCreate: () => void;
+    (window as any).vibeyard.pty.create = vi.fn(
+      () => new Promise<void>((resolve) => { releaseCreate = resolve; }),
+    );
+
+    createTerminalPane('fit-2', '/project', null, false, '', 'claude');
+    showPane('fit-2', false);
+    (getTerminalInstance('fit-2')!.terminal as unknown as FakeTerminal).cols = 200;
+
+    const spawning = spawnTerminal('fit-2');
+    fitTerminal('fit-2'); // the resize main never sees
+    expect(mockResize).toHaveBeenCalledTimes(1);
+
+    releaseCreate!();
+    await spawning;
+
+    expect(mockResize).toHaveBeenCalledTimes(2);
+    expect(mockResize).toHaveBeenLastCalledWith('fit-2', 200, 30);
+  });
+
 });
 
 describe('applyThemeToAllTerminals()', () => {

@@ -880,11 +880,14 @@ class AppState {
     if (!project) return;
     const session = project.sessions.find((s) => s.id === sessionId);
     if (!session) return;
+    // Both the statusLine and the SessionStart/UserPromptSubmit hooks re-report the
+    // same id; each repeat costs a persist plus a `session-changed` fan-out.
+    if (session.cliSessionId === cliSessionId) return;
 
     // If session already had a different cliSessionId (e.g., /clear was used),
     // archive the previous session (only if its transcript exists) and reset the tab name.
     // isArchivable is checked while session.cliSessionId still holds the OLD id.
-    if (session.cliSessionId && session.cliSessionId !== cliSessionId) {
+    if (session.cliSessionId) {
       if (this.isArchivable(session, project)) {
         this.archiveSession(project, session);
       }

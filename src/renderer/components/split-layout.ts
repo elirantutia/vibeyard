@@ -88,6 +88,8 @@ import {
 } from './team/pane.js';
 import { quickNewSession } from './tab-bar.js';
 import { isCliSession } from '../session-utils.js';
+import { isInRelativeOrder } from './pane-order.js';
+import { shouldFocusPane, type PaneFocusMemo } from './pane-focus.js';
 
 const container = document.getElementById('terminal-container')!;
 
@@ -96,6 +98,62 @@ function setContainerClass(cls: string): void {
   const hasInspector = isInspectorOpen();
   container.className = cls;
   if (hasInspector) container.classList.add('inspector-open');
+}
+
+const paneInstanceFor: Record<string, (id: string) => { element: HTMLElement } | undefined> = {
+  'file-reader': getFileReaderInstance,
+  'diff-viewer': getFileViewerInstance,
+  'mcp-inspector': getInspectorInstance,
+  'remote-terminal': getRemoteTerminalInstance,
+  'browser-tab': getBrowserTabInstance,
+  'project-tab': getProjectTabInstance,
+  kanban: getKanbanInstance,
+  team: getTeamInstance,
+};
+
+/** The pane element backing a session, whatever its type, once it has been created. */
+function paneElementFor(session: { id: string; type?: string }): HTMLElement | undefined {
+  return (paneInstanceFor[session.type ?? ''] ?? getTerminalInstance)(session.id)?.element;
+}
+
+/**
+ * Lay `els` out inside `target` in that order — but only when they are not already
+ * in it. `appendChild` on a node that is already a child removes and re-inserts it,
+ * which blurs whatever is focused inside and collapses an in-progress selection, so
+ * every attach* helper leaves a placed pane alone and ordering is corrected here.
+ *
+ * Only *relative* order is compared: hidden panes stay in the container interleaved
+ * with the laid-out ones. Entries that are missing, or that a caller re-homed
+ * elsewhere afterwards, are dropped — keeping one would fail the check forever and
+ * re-append every pane on every render.
+ */
+function ensurePaneOrder(target: HTMLElement, els: readonly (HTMLElement | null | undefined)[]): void {
+  const wanted = els.filter((el): el is HTMLElement => !!el && el.parentElement === target);
+  if (isInRelativeOrder(Array.from(target.children), wanted)) return;
+  for (const el of wanted) target.appendChild(el);
+}
+
+/**
+ * Drop the swarm grid wrapper, leaving its panes detached — callers re-attach
+ * whatever must be visible, and a hidden pane is re-homed the next time it is shown.
+ */
+function removeSwarmWrapper(): void {
+  container.querySelector('.swarm-grid-wrapper')?.remove();
+}
+
+let lastFocusedPane: PaneFocusMemo | null = null;
+
+/** Move DOM focus into a pane, if this render is one that has any business doing so. */
+function focusPane(project: ProjectRecord, sessionId: string): void {
+  // Don't steal focus from an active tab rename input
+  if (document.querySelector('#tab-list .tab-name input')) return;
+
+  const activeEl = document.activeElement;
+  const target: PaneFocusMemo = { projectId: project.id, sessionId };
+  if (!shouldFocusPane(lastFocusedPane, target, !activeEl || activeEl === document.body)) return;
+
+  lastFocusedPane = target;
+  setFocused(sessionId);
 }
 
 export function initSplitLayout(): void {
@@ -227,7 +285,9 @@ export function renderLayout(): void {
   }
 
   removeEmptyState();
-  container.querySelectorAll('.swarm-grid-wrapper').forEach(el => el.remove());
+  // Filler cells hold nothing, so they are cheap to rebuild. The grid wrapper is
+  // not dropped here: it is reused across renders (removing it would detach every
+  // pane inside it), and the mode dispatch below decides when it has to go.
   container.querySelectorAll('.swarm-empty-cell').forEach(el => el.remove());
 
   // Ensure all sessions have their respective instances
@@ -282,11 +342,14 @@ export function renderLayout(): void {
   hideAllTeamPanes();
 
   if (project.layout.mode === 'swarm' && project.layout.splitPanes.length >= 1) {
-    renderSwarmMode(project);
-  } else if (project.layout.mode === 'split' && project.layout.splitPanes.length > 1) {
-    renderSplitMode(project);
+    renderSwarmMode(project); // owns the grid wrapper, including dropping it
   } else {
-    renderTabMode(project);
+    removeSwarmWrapper();
+    if (project.layout.mode === 'split' && project.layout.splitPanes.length > 1) {
+      renderSplitMode(project);
+    } else {
+      renderTabMode(project);
+    }
   }
 
   requestAnimationFrame(fitAllVisible);
@@ -341,10 +404,7 @@ function renderTabMode(project: ProjectRecord): void {
   attachToContainer(activeId, container);
   showPane(activeId, false);
 
-  // Don't steal focus from an active tab rename input
-  if (!document.querySelector('#tab-list .tab-name input')) {
-    setFocused(activeId);
-  }
+  focusPane(project, activeId);
 
   const instance = getTerminalInstance(activeId);
   if (instance && !instance.spawned && !instance.exited) {
@@ -357,32 +417,37 @@ function renderTabMode(project: ProjectRecord): void {
 
 /** Attach, show, and ensure-spawn for each pane in the list. */
 function showPanes(project: ProjectRecord, target: HTMLElement = container): void {
+  const laidOut: (HTMLElement | undefined)[] = [];
+
   for (const paneId of project.layout.splitPanes) {
     const session = project.sessions.find(s => s.id === paneId);
+    let el: HTMLElement | undefined;
+
     if (session && !isCliSession(session)) {
       attachNonCliPane(session, target, true);
-      continue;
+      el = paneElementFor(session);
+    } else {
+      attachToContainer(paneId, target);
+      showPane(paneId, true);
+
+      const instance = getTerminalInstance(paneId);
+      if (instance && !instance.spawned && !instance.exited) {
+        requestAnimationFrame(() => spawnTerminal(paneId));
+      }
+      el = instance?.element;
     }
 
-    attachToContainer(paneId, target);
-    showPane(paneId, true);
-
-    const instance = getTerminalInstance(paneId);
-    if (instance && !instance.spawned && !instance.exited) {
-      requestAnimationFrame(() => spawnTerminal(paneId));
-    }
+    laidOut.push(el);
   }
+
+  ensurePaneOrder(target, laidOut);
 }
 
 function focusActivePane(project: ProjectRecord): void {
-  // Don't steal focus from an active tab rename input
-  if (document.querySelector('#tab-list .tab-name input')) return;
-
-  if (project.activeSessionId && project.layout.splitPanes.includes(project.activeSessionId)) {
-    setFocused(project.activeSessionId);
-  } else if (project.layout.splitPanes.length > 0) {
-    setFocused(project.layout.splitPanes[0]);
-  }
+  const paneId = project.activeSessionId && project.layout.splitPanes.includes(project.activeSessionId)
+    ? project.activeSessionId
+    : project.layout.splitPanes[0];
+  if (paneId) focusPane(project, paneId);
 }
 
 function renderSplitMode(project: ProjectRecord): void {
@@ -417,26 +482,31 @@ function renderSwarmMode(project: ProjectRecord): void {
     container.style.gridTemplateColumns = colParts.join(' ');
     container.style.gridTemplateRows = '1fr';
 
-    const gridWrapper = document.createElement('div');
-    gridWrapper.className = 'swarm-grid-wrapper';
+    // Reuse the wrapper across renders: rebuilding it would detach — and so blur
+    // and de-select — every pane inside it on every state change.
+    let gridWrapper = container.querySelector<HTMLElement>('.swarm-grid-wrapper');
+    if (!gridWrapper) {
+      gridWrapper = document.createElement('div');
+      gridWrapper.className = 'swarm-grid-wrapper';
+      container.appendChild(gridWrapper);
+    }
     gridWrapper.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
     gridWrapper.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
-    container.appendChild(gridWrapper);
 
     showPanes(project, gridWrapper);
     appendEmptyCells(cols * rows - count, gridWrapper);
 
-    if (nonCliSession) {
-      attachNonCliPane(nonCliSession, container, true);
-    }
+    if (nonCliSession) attachNonCliPane(nonCliSession, container, true);
 
-    if (hasInspector) {
-      const inspectorEl = container.querySelector('#session-inspector');
-      if (inspectorEl) {
-        container.appendChild(inspectorEl);
-      }
-    }
+    // Grid placement follows DOM order: wrapper, then the non-CLI pane, then the
+    // inspector. Hidden panes are display:none and stay wherever they were left.
+    ensurePaneOrder(container, [
+      gridWrapper,
+      nonCliSession ? paneElementFor(nonCliSession) : null,
+      hasInspector ? container.querySelector<HTMLElement>('#session-inspector') : null,
+    ]);
   } else {
+    removeSwarmWrapper();
     container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
     container.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
     showPanes(project);
