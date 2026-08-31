@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.7] - 2026-08-31
+
+### Features
+
+- Open in Finder in the file tree context menu
+
+### Fixes
+
+- Active tab hidden in the tab strip's horizontal overflow
+- Tab strip jumping back to the active tab on unrelated re-renders
+
 ## [0.3.6] - 2026-08-24
 
 ### Fixes
