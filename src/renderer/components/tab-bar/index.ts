@@ -9,6 +9,7 @@ import { loadProviderAvailability, hasMultipleAvailableProviders } from '../../p
 import { getActiveContextMenu, hideTabContextMenu } from './menu.js';
 import { gitStatusEl } from './dom.js';
 import { render, updateTabStatus } from './tab-list.js';
+import { clearTabScrollState } from './tab-scroll.js';
 import { renderGitStatus, showBranchContextMenu } from './git-status-bar.js';
 import { showMoreMenu, promptNewSession, quickNewSession } from './session-menu.js';
 
@@ -58,6 +59,7 @@ export function initTabBar(): void {
   appState.on('project-changed', render);
   appState.on('session-added', render);
   appState.on('session-removed', render);
+  appState.on('project-removed', (id) => { if (typeof id === 'string') clearTabScrollState(id); });
   appState.on('session-changed', render);
   appState.on('layout-changed', render);
   onShareChange(render);
