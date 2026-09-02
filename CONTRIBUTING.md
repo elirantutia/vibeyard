@@ -5,11 +5,20 @@ Thanks for your interest in contributing! Here's how to get started.
 ## Development Setup
 
 1. **Node v24** is required — see `.nvmrc`. Use `nvm use` to switch.
-2. Install dependencies:
+2. **Windows only:** Visual Studio Build Tools 2022 with:
+   - "Desktop development with C++" workload
+   - MSVC v143 Spectre-mitigated libs (x86/x64) — install via the Individual Components tab, or from an admin terminal:
+     ```powershell
+     & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe" modify `
+       --installPath "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools" `
+       --add Microsoft.VisualStudio.Component.VC.14.43.17.13.x86.x64.Spectre `
+       --quiet --norestart
+     ```
+3. Install dependencies:
    ```bash
    npm install
    ```
-3. Build and run:
+4. Build and run:
    ```bash
    npm run build
    npm start
