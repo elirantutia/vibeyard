@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ContextWindowInfo, CostInfo } from '../../shared/types.js';
 
 const providerCaps = new Map([
   ['claude', { costTracking: true, contextWindow: true, pendingPromptTrigger: 'startup-arg' }],
@@ -84,6 +85,7 @@ vi.mock('../session-cost.js', () => ({
 
 vi.mock('../session-context.js', () => ({
   removeSession: vi.fn(),
+  getContext: vi.fn(() => null),
   getContextSeverity: vi.fn((pct: number) => (pct >= 90 ? 'critical' : pct >= 70 ? 'warning' : '')),
 }));
 
@@ -668,8 +670,14 @@ describe('profile label in status-line cost string', () => {
     return { id, name, providerId, configDir: `/cfg/${id}`, managed: true, createdAt: 0 };
   }
 
-  function costText(instance: any) {
-    return instance.element.querySelector('.cost-display')!.textContent as string;
+  // The cost cluster is span-composed, and FakeElement.textContent does not aggregate
+  // children — assert the segments, not the container's text.
+  function costParts(instance: any) {
+    const cd = instance.element.querySelector('.cost-display')!;
+    return {
+      pill: cd.querySelector('.ssl-pill')?.textContent ?? null,
+      cost: cd.querySelector('.ssl-cost')?.textContent ?? null,
+    };
   }
 
   // createTerminalPane(sessionId, projectPath, cliSessionId, isResume, args, providerId, projectId?, envVars?, configDir?)
@@ -684,7 +692,7 @@ describe('profile label in status-line cost string', () => {
 
     const instance = makePane(createTerminalPane, 'pb-1', 'claude', '/cfg/work');
 
-    expect(costText(instance)).toBe('$0.0000');
+    expect(costParts(instance)).toEqual({ pill: null, cost: '$0.0000' });
   });
 
   it('prefixes the cost string with the profile matching the spawned config dir', async () => {
@@ -694,7 +702,7 @@ describe('profile label in status-line cost string', () => {
 
     const instance = makePane(createTerminalPane, 'pb-2', 'claude', '/cfg/personal');
 
-    expect(costText(instance)).toBe('Personal  ·  $0.0000');
+    expect(costParts(instance)).toEqual({ pill: 'Personal', cost: '$0.0000' });
   });
 
   it('labels a session on the base config dir (no configDir) as "Default"', async () => {
@@ -704,7 +712,7 @@ describe('profile label in status-line cost string', () => {
 
     const instance = makePane(createTerminalPane, 'pb-3', 'claude', undefined); // base ~/.claude
 
-    expect(costText(instance)).toBe('Default  ·  $0.0000');
+    expect(costParts(instance)).toEqual({ pill: 'Default', cost: '$0.0000' });
   });
 
   it('folds the profile in front of the model name once cost data arrives', async () => {
@@ -771,7 +779,7 @@ describe('profile label in status-line cost string', () => {
 
     const instance = makePane(createTerminalPane, 'pb-4', 'claude', '/cfg/work');
 
-    expect(costText(instance)).toBe('$0.0000');
+    expect(costParts(instance)).toEqual({ pill: null, cost: '$0.0000' });
   });
 
   it('refreshProfileLabels re-renders the prefix after a second profile is added', async () => {
@@ -780,7 +788,7 @@ describe('profile label in status-line cost string', () => {
     appState.profiles.push(makeProfile('work', 'Work'));
 
     const instance = makePane(createTerminalPane, 'pb-5', 'claude', '/cfg/work');
-    expect(costText(instance)).toBe('$0.0000');
+    expect(costParts(instance)).toEqual({ pill: null, cost: '$0.0000' });
 
     appState.profiles.push(makeProfile('personal', 'Personal'));
     refreshProfileLabels();
@@ -847,5 +855,87 @@ describe('injectPromptIntoRunningSession', () => {
     expect(result).toBe(true);
     expect(mockPtyWrite).toHaveBeenNthCalledWith(1, 'inj-3', 'fix the bug');
     expect(mockPtyWrite).toHaveBeenNthCalledWith(2, 'inj-3', '\r');
+  });
+});
+
+describe('status rail is primed from restored cost/context', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+
+    vi.stubGlobal('document', new FakeDocument());
+    vi.stubGlobal('window', makeWindowStub());
+    vi.stubGlobal('navigator', { platform: 'MacIntel', clipboard: { writeText: mockClipboardWrite } });
+  });
+
+  const q = (root: unknown, selector: string): FakeElement =>
+    (root as FakeElement).querySelector(selector) as FakeElement;
+
+  async function primeStores(cost: CostInfo | null = null, context: ContextWindowInfo | null = null): Promise<void> {
+    const { getCost } = await import('../session-cost.js');
+    const { getContext } = await import('../session-context.js');
+    vi.mocked(getCost).mockReturnValue(cost);
+    vi.mocked(getContext).mockReturnValue(context);
+  }
+
+  // The meter has to be right the moment the pane exists: a resumed session reports the
+  // context that was already persisted, so `setContextData` dedupes it away and no
+  // change event ever arrives to build it.
+  it.each([
+    [14, 'ok'],
+    [95, 'crit'],
+  ])('paints the restored context meter and its severity state (%i%%)', async (pct, state) => {
+    const totalTokens = pct * 10_000;
+    await primeStores(null, { totalTokens, contextWindowSize: 1_000_000, usedPercentage: pct });
+    const { createTerminalPane } = await import('./terminal-pane.js');
+
+    const instance = createTerminalPane(`restored-${pct}`, '/project', 'cli-1', true, '', 'claude');
+
+    const indicator = q(instance.element, '.context-indicator');
+    expect(q(indicator, '.ssl-meter-fill').style.width).toBe(`${pct}%`);
+    expect(q(indicator, '.ssl-pct').textContent).toBe(`${pct}%`);
+    expect(q(indicator, '.ssl-tok').textContent).toBe(String(totalTokens));
+    expect(q(instance.element, '.session-status-bar').dataset.state).toBe(state);
+  });
+
+  it('renders restored cost instead of the $0.0000 placeholder', async () => {
+    await primeStores({
+      totalCostUsd: 4.5619,
+      totalInputTokens: 150_458,
+      totalOutputTokens: 1352,
+      cacheReadTokens: 149_745,
+      cacheCreationTokens: 711,
+      totalDurationMs: 298_140_212,
+      totalApiDurationMs: 782_216,
+      model: 'Opus 5',
+    });
+    const { createTerminalPane } = await import('./terminal-pane.js');
+
+    const instance = createTerminalPane('restored-cost', '/project', 'cli-3', true, '', 'claude');
+
+    const costDisplay = q(instance.element, '.cost-display');
+    expect(q(costDisplay, '.ssl-model').textContent).toBe('Opus 5');
+    expect(q(costDisplay, '.ssl-cost').textContent).toBe('$4.5619');
+    expect(q(costDisplay, '.ssl-io').textContent).toBe('150458 in / 1352 out');
+  });
+
+  it('leaves the context indicator empty for a brand-new session with nothing restored', async () => {
+    await primeStores();
+    const { createTerminalPane } = await import('./terminal-pane.js');
+
+    const instance = createTerminalPane('fresh-1', '/project', null, false, '', 'claude');
+
+    expect(q(instance.element, '.context-indicator').children.length).toBe(0);
+    expect(q(instance.element, '.ssl-cost').textContent).toBe('$0.0000');
+  });
+
+  it('does not paint a meter for a provider without context-window support', async () => {
+    await primeStores(null, { totalTokens: 10_000, contextWindowSize: 200_000, usedPercentage: 5 });
+    const { createTerminalPane } = await import('./terminal-pane.js');
+
+    const instance = createTerminalPane('restored-codex', '/project', 'cli-4', true, '', 'codex');
+
+    expect(q(instance.element, '.context-indicator').children.length).toBe(0);
   });
 });

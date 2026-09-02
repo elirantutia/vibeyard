@@ -6,7 +6,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { initSession, removeSession } from '../session-activity.js';
 import { markFreshSession } from '../session-insights.js';
 import { removeSession as removeCostSession, formatTokens, getCost, type CostInfo } from '../session-cost.js';
-import { removeSession as removeContextSession, getContextSeverity, type ContextWindowInfo } from '../session-context.js';
+import { removeSession as removeContextSession, getContext, getContextSeverity, type ContextWindowInfo } from '../session-context.js';
 import type { ProviderId } from '../types.js';
 import { getProviderCapabilities } from '../provider-availability.js';
 import { appState } from '../state.js';
@@ -80,11 +80,9 @@ export function createTerminalPane(
   const costDisplay = document.createElement('div');
   costDisplay.className = 'cost-display';
   const caps = getProviderCapabilities(providerId);
-  if (caps?.costTracking !== false) {
-    costDisplay.textContent = `${profilePrefix(providerId, configDir)}$0.0000`;
-  } else {
-    costDisplay.classList.add('hidden');
-  }
+  // The `$0.0000` placeholder is painted below by updateCostDisplay, which owns this
+  // node's DOM — the two must not render the profile label differently.
+  costDisplay.classList.toggle('hidden', caps?.costTracking === false);
   contextIndicator.classList.toggle('hidden', caps?.contextWindow === false);
   statusBar.appendChild(contextIndicator);
   statusBar.appendChild(costDisplay);
@@ -152,6 +150,18 @@ export function createTerminalPane(
   };
 
   instances.set(sessionId, instance);
+
+  // Paint the rail. A store with a silent `restore*` seeder has to be *pulled* by any
+  // consumer that builds its DOM lazily — a push-only consumer is only correct if its DOM
+  // provably predates every event, and this one does not. Without the pull a resumed
+  // session keeps an empty (CSS `:empty` → hidden) meter indefinitely: `setContextData`
+  // dedupes on identical values and a resume reports exactly what was persisted at quit,
+  // so `onContextChange` never fires. Cost would self-heal on its own (its dedupe includes
+  // the ticking duration), but goes through the same call so `updateCostDisplay` stays the
+  // single renderer of this node — it paints the `$0.0000` placeholder when cost is null.
+  updateCostDisplay(sessionId, getCost(sessionId));
+  const restoredContext = getContext(sessionId);
+  if (restoredContext) updateContextDisplay(sessionId, restoredContext);
 
   // Register file path link provider for Cmd+Click
   if (projectId) {
@@ -457,21 +467,12 @@ function showStatusBar(instance: TerminalInstance): void {
 }
 
 /**
- * Leading "<profile>  ·  " segment for the status-line cost string, shown only when
- * more than one profile exists for the provider. The profile is keyed off the
- * session's `configDir` — the exact dir threaded into the PTY spawn — so the label
- * can never disagree with the config the running session actually uses. No matching
- * dir (undefined → base ~/.claude) is labeled "Default". Empty string when not shown.
+ * Display name of the profile backing this session, or null when there is only a single
+ * (implicit) profile for the provider and the label would be noise. Keyed off the
+ * session's `configDir` — the exact dir threaded into the PTY spawn — so the label can
+ * never disagree with the config the running session actually uses. No matching dir
+ * (undefined → base ~/.claude) is labeled "Default".
  */
-function profilePrefix(providerId: ProviderId, configDir?: string): string {
-  const providerProfiles = appState.profiles.filter((p) => p.providerId === providerId);
-  if (providerProfiles.length <= 1) return '';
-  const profile = configDir ? providerProfiles.find((p) => p.configDir === configDir) : undefined;
-  return `${profile?.name ?? 'Default'}  ·  `;
-}
-
-/** Resolve the display name of the profile backing this session, or null when
- *  there is only a single (implicit) profile for the provider. */
 function resolveProfileName(providerId: ProviderId, configDir?: string): string | null {
   const providerProfiles = appState.profiles.filter((p) => p.providerId === providerId);
   if (providerProfiles.length <= 1) return null;
