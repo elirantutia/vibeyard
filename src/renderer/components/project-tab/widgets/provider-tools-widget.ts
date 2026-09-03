@@ -1,4 +1,5 @@
 import { appState } from '../../../state.js';
+import { openFileReaderChecked } from '../../../open-file-reader.js';
 import { showMcpAddModal } from '../../mcp-add-modal.js';
 import { createCustomSelect, type CustomSelectInstance } from '../../custom-select.js';
 import { esc } from '../../../dom-utils.js';
@@ -97,7 +98,7 @@ export const createProviderToolsWidget: WidgetFactory = (host: WidgetHost): Widg
 
   const openConfigFile = (filePath: string) => {
     if (!filePath) return;
-    appState.addFileReaderSession(projectId, filePath);
+    void openFileReaderChecked(projectId, filePath);
   };
 
   const renderSection = (title: string, items: HTMLElement[], count: number, onAdd?: () => void): HTMLElement => {

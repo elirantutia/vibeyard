@@ -1,4 +1,5 @@
 import { appState } from '../state.js';
+import { openFileReaderChecked } from '../open-file-reader.js';
 
 let overlay: HTMLElement | null = null;
 let input: HTMLInputElement | null = null;
@@ -151,7 +152,7 @@ function selectFile(): void {
   if (!project) return;
 
   const { lineNumber } = parseQuery(input?.value ?? '');
-  appState.addFileReaderSession(project.id, filePath, lineNumber);
+  void openFileReaderChecked(project.id, filePath, lineNumber);
   hideQuickOpen();
 }
 

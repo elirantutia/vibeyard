@@ -1,4 +1,5 @@
 import type { CliProviderCapabilities, Preferences, Profile, ProjectRecord, ProviderId, SessionRecord } from '../../shared/types.js';
+import { isAbsolutePath } from '../../shared/platform.js';
 
 /** Resolve the provider id for a plan session: override → active session's → default → claude. */
 export function resolvePlanProvider(
@@ -58,6 +59,15 @@ export function findExistingDiffViewer(
 
 export function findExistingBrowserTab(project: ProjectRecord, url: string): SessionRecord | undefined {
   return project.sessions.find((s) => s.type === 'browser-tab' && s.browserTabUrl === url);
+}
+
+/**
+ * Normalize a file path against its project the way file-reader sessions store
+ * it. Shared so a pre-open existence check and the open itself can never
+ * disagree about which path they mean.
+ */
+export function resolveProjectFilePath(project: ProjectRecord, filePath: string): string {
+  return isAbsolutePath(filePath) ? filePath : `${project.path}/${filePath}`;
 }
 
 export function findExistingFileReader(project: ProjectRecord, filePath: string): SessionRecord | undefined {

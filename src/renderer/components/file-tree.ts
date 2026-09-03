@@ -1,4 +1,5 @@
 import { appState, ProjectRecord } from '../state.js';
+import { openFileReaderChecked } from '../open-file-reader.js';
 import { pathToFileURL } from '../file-url.js';
 import { showContextMenu, MenuOption } from './board/board-context-menu.js';
 import { showConfirmModal, showPropertiesDialog } from './modal.js';
@@ -267,7 +268,7 @@ function createEntry(projectId: string, depth: number, entry: DirEntry): HTMLEle
   });
   row.addEventListener('click', (e) => {
     e.stopPropagation();
-    appState.addFileReaderSession(projectId, entry.path);
+    void openFileReaderChecked(projectId, entry.path);
   });
   row.addEventListener('contextmenu', (e) => {
     e.preventDefault();

@@ -8,6 +8,7 @@ import { isAbsolutePath, dirname, samePath } from '../../shared/platform.js';
 import { estimateTokens, TOKEN_COUNT_MAX_CHARS } from '../../shared/token-estimate.js';
 import { pathToFileURL } from '../file-url.js';
 import { resolveMarkdownLink } from '../markdown-link.js';
+import { openFileReaderChecked } from '../open-file-reader.js';
 import { slugifyHeading } from '../../shared/slug.js';
 
 interface FileReaderInstance {
@@ -73,26 +74,6 @@ function scrollToHeading(wrapper: HTMLElement, slug: string): void {
   heading.scrollIntoView({ block: 'start' });
 }
 
-async function openMarkdownLinkTarget(path: string): Promise<void> {
-  // Check first: opening a dead link would spawn a tab that loadFile's
-  // closeSessionIfFileMissing immediately tears down again. `exists` is also
-  // true for directories, whose read fails with EISDIR — and that tab would
-  // never be reaped, since the path really is there.
-  const [exists, isDir] = await Promise.all([
-    window.vibeyard.fs.exists(path),
-    window.vibeyard.fs.isDirectory(path),
-  ]);
-  if (!exists || isDir) {
-    console.warn(`[markdown-link] not an openable file: ${path}`);
-    return;
-  }
-  // Re-read after the await: the user may have switched projects while the IPC
-  // was in flight, and appending to the stale one would silently steal its tab
-  // selection.
-  const project = appState.activeProject;
-  if (project) appState.addFileReaderSession(project.id, path);
-}
-
 /**
  * Route clicks on links inside rendered Markdown. The default action is always
  * suppressed: the renderer is a `file://` document, so letting an anchor
@@ -117,11 +98,14 @@ function handleMarkdownClick(wrapper: HTMLElement, baseDir: string | undefined, 
         .openExternal(target.url)
         .catch((err: unknown) => console.warn(`[markdown-link] could not open ${target.url}`, err));
       break;
-    case 'file':
-      openMarkdownLinkTarget(target.path).catch((err: unknown) =>
-        console.warn(`[markdown-link] could not open ${target.path}`, err),
-      );
+    case 'file': {
+      // openFileReaderChecked validates the path before it spawns a tab — a
+      // dead link would otherwise open a tab that loadFile tears down again,
+      // dropping the reader on an unrelated tab.
+      const project = appState.activeProject;
+      if (project) void openFileReaderChecked(project.id, target.path);
       break;
+    }
     case 'ignore':
       console.warn(`[markdown-link] not a routable link: ${href}`);
       break;

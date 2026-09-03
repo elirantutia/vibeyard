@@ -33,8 +33,8 @@ vi.mock('../provider-availability.js', () => ({
 }));
 
 import { appState, _resetForTesting } from '../state';
-import { resolveProfile } from './specialized-sessions.js';
-import type { Profile } from '../../shared/types.js';
+import { resolveProfile, resolveProjectFilePath } from './specialized-sessions.js';
+import type { Profile, ProjectRecord } from '../../shared/types.js';
 import { getCost } from '../session-cost.js';
 const mockGetCost = vi.mocked(getCost);
 
@@ -102,6 +102,20 @@ describe('addDiffViewerSession()', () => {
 
   it('returns undefined for nonexistent project', () => {
     expect(appState.addDiffViewerSession('nope', '/f', 'staged')).toBeUndefined();
+  });
+});
+
+describe('resolveProjectFilePath()', () => {
+  // Shared by addFileReaderSession and the pre-open existence check, so the two
+  // can never disagree about which path they mean.
+  const project = { path: '/p' } as ProjectRecord;
+
+  it('joins a relative path onto the project path', () => {
+    expect(resolveProjectFilePath(project, 'src/foo.ts')).toBe('/p/src/foo.ts');
+  });
+
+  it('leaves an absolute path alone', () => {
+    expect(resolveProjectFilePath(project, '/elsewhere/foo.ts')).toBe('/elsewhere/foo.ts');
   });
 });
 

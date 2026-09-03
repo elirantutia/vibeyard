@@ -1,5 +1,5 @@
 import type { ILinkProvider, ILink, IBufferRange, Terminal } from '@xterm/xterm';
-import { appState } from '../state.js';
+import { openFileReaderChecked } from '../open-file-reader.js';
 
 // Matches GitHub issue/PR references like #123
 const GITHUB_REF_RE = /#(\d+)/g;
@@ -80,7 +80,10 @@ export class FilePathLinkProvider implements ILinkProvider {
         text: fullMatchText,
         activate: (event: MouseEvent, _text: string) => {
           if (!event.metaKey) return;
-          appState.addFileReaderSession(this.projectId, filePath, lineNumber);
+          // Paths scraped from terminal output go stale constantly (deleted
+          // files, a different cwd), so validate before opening — see
+          // openFileReaderChecked for why opening first is not recoverable.
+          void openFileReaderChecked(this.projectId, filePath, lineNumber);
         },
       });
     }

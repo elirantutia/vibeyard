@@ -1,6 +1,7 @@
 import type { TopFile, ProviderId, CliProviderMeta } from '../../../../shared/types.js';
 import { buildSplitFilesPrompt } from '../../../../shared/split-file-prompt.js';
 import { appState } from '../../../state.js';
+import { openFileReaderChecked } from '../../../open-file-reader.js';
 import { formatTokens } from '../../../session-cost.js';
 import { setPendingPrompt } from '../../terminal-pane.js';
 import { getAvailableProviderMetas } from '../../../provider-availability.js';
@@ -58,7 +59,7 @@ export const createTopFilesWidget: WidgetFactory = (host) => {
     row.appendChild(buildRowActions(file, planProviders));
 
     row.addEventListener('click', () => {
-      appState.addFileReaderSession(host.projectId, file.path);
+      void openFileReaderChecked(host.projectId, file.path);
     });
 
     return row;
