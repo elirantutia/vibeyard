@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.8] - 2026-09-03
+
+### Fixes
+
+- Opening a non-existent file stealing the tab and losing focus
+- Context meter missing from the status rail on resumed sessions
+- Sidebar project name staying unread after selecting the session
+- Background re-renders stealing focus and killing terminal selection
+- Nested CLAUDE.md/AGENTS.md size alerts naming the root file
+
+### Changes
+
+- Improve tab strip remembering each project's scroll offset
+
 ## [0.3.7] - 2026-08-31
 
 ### Features
