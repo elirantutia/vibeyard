@@ -404,6 +404,27 @@ export function fitAllVisible(): void {
   }
 }
 
+let fitAllDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Trailing-debounced `fitAllVisible`, for resize storms (window drag-resize,
+ * ResizeObserver). A drag fires resize events ~60×/sec; firing `fit()` — and the
+ * `pty.resize()` SIGWINCH behind it — on every one floods the CLI with intermediate
+ * sizes. An in-place-redrawing TUI (e.g. Claude Code) tracks how many rows its last
+ * frame occupied to know how many to erase before repainting; when the width changes
+ * mid-frame that bookkeeping desyncs from xterm's actual wrapping, so stale rows are
+ * left behind and committed to scrollback as duplicates (persistent text corruption).
+ * Coalescing to a single fit once the drag settles means the CLI only ever sees a
+ * stable size, so it always redraws cleanly.
+ */
+export function fitAllVisibleDebounced(delay = 100): void {
+  if (fitAllDebounceTimer) clearTimeout(fitAllDebounceTimer);
+  fitAllDebounceTimer = setTimeout(() => {
+    fitAllDebounceTimer = null;
+    fitAllVisible();
+  }, delay);
+}
+
 export function getSearchAddon(sessionId: string): SearchAddon | undefined {
   return instances.get(sessionId)?.searchAddon;
 }

@@ -13,6 +13,7 @@ import {
   showPane,
   hideAllPanes,
   fitAllVisible,
+  fitAllVisibleDebounced,
   setFocused,
   spawnTerminal,
   setPendingPrompt,
@@ -169,9 +170,10 @@ export function initSplitLayout(): void {
     if (project?.layout.mode === 'swarm') updateSwarmPaneStyles(project);
   });
 
-  // Refit on window resize
+  // Refit on window resize. Debounced so a drag-resize doesn't flood the PTY with
+  // intermediate sizes, which corrupts the CLI's in-place redraw (duplicated rows).
   window.addEventListener('resize', () => {
-    requestAnimationFrame(fitAllVisible);
+    fitAllVisibleDebounced();
   });
 
   // Click delegation for swarm mode: clicking a dimmed pane makes it active
