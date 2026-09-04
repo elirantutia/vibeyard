@@ -99,6 +99,66 @@ npm install && npm start
 
 Requires Node v24+ (see `.nvmrc`).
 
+## MCP Server Configuration (Optional)
+
+Vibeyard includes built-in support for [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) servers, which provide additional capabilities to your AI agents like web search, file access, and API integrations.
+
+### Setup
+
+Configure MCP servers by creating a JSON config file:
+
+**User-level** (applies to all projects):
+```bash
+mkdir -p ~/.copilot
+```
+
+**Project-level** (project-specific):
+```bash
+mkdir -p .copilot
+```
+
+### Configuration File
+
+Create `mcp-config.json` in either location:
+
+```json
+{
+  "mcpServers": {
+    "you-search": {
+      "url": "https://api.you.com/mcp?profile=free"
+    },
+    "filesystem": {
+      "command": "npx @modelcontextprotocol/server-filesystem",
+      "args": ["/path/to/allowed/directory"]
+    }
+  }
+}
+```
+
+See [`examples/mcp-config-example.json`](examples/mcp-config-example.json) for more server options.
+
+### Available MCP Servers
+
+**You.com Search & Research** (web search, URL content, research):
+- **Keyless**: `https://api.you.com/mcp?profile=free` (basic web search)
+- **Authenticated**: `https://api.you.com/mcp` (requires `YDC_API_KEY` env var)
+- **Specialized**: `https://api.you.com/mcp?tools=you-finance` (finance research)
+
+**Built-in MCP Servers**:
+- `@modelcontextprotocol/server-filesystem` — file system access
+- `@modelcontextprotocol/server-sqlite` — SQLite database operations
+- `@modelcontextprotocol/server-git` — Git repository operations
+
+Find more servers in the [MCP servers directory](https://github.com/modelcontextprotocol/servers).
+
+### Usage
+
+1. **MCP Inspector**: Open a new session → select "MCP Inspector" to browse connected servers, available tools, and resources
+2. **Agent Sessions**: Configured MCP servers automatically become available to your AI agents in Claude Code, Codex, and Gemini CLI sessions
+3. **Search Integration**: Use You.com's web search directly in your coding sessions — ask your agent to "search for React performance best practices" or "find the latest TypeScript documentation"
+
+User-level configurations take priority over project-level ones when server names conflict.
+
 ## Contributing
 
 PRs welcome! See the [Contributing Guide](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md).
