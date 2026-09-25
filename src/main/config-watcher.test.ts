@@ -162,6 +162,38 @@ describe('config-watcher', () => {
     expect(watchFileCallbacks.has('/projects/other/.mcp.json')).toBe(true);
   });
 
+  it('watches opencode config files and directories for a project', () => {
+    const win = createMockWin();
+    vi.mocked(fs.watchFile).mockClear();
+    vi.mocked(fs.watch).mockClear();
+    startConfigWatcher(win, '/projects/test', 'opencode');
+
+    expect(fs.watchFile).toHaveBeenCalledTimes(2);
+    expect(watchFileCallbacks.has('/home/testuser/.config/opencode/opencode.json')).toBe(true);
+    expect(watchFileCallbacks.has('/projects/test/opencode.json')).toBe(true);
+
+    expect(fs.watch).toHaveBeenCalledTimes(6);
+    expect(watchDirCallbacks.has('/home/testuser/.config/opencode/agents')).toBe(true);
+    expect(watchDirCallbacks.has('/home/testuser/.config/opencode/skills')).toBe(true);
+    expect(watchDirCallbacks.has('/home/testuser/.config/opencode/commands')).toBe(true);
+    expect(watchDirCallbacks.has('/projects/test/.opencode/agents')).toBe(true);
+    expect(watchDirCallbacks.has('/projects/test/.opencode/skills')).toBe(true);
+    expect(watchDirCallbacks.has('/projects/test/.opencode/commands')).toBe(true);
+  });
+
+  it('restarts watchers when switching to opencode provider', () => {
+    const win = createMockWin();
+    startConfigWatcher(win, '/projects/test');
+
+    vi.mocked(fs.watchFile).mockClear();
+    vi.mocked(fs.watch).mockClear();
+
+    startConfigWatcher(win, '/projects/test', 'opencode');
+
+    expect(fs.watchFile).toHaveBeenCalledTimes(2);
+    expect(watchFileCallbacks.has('/projects/test/opencode.json')).toBe(true);
+  });
+
   it('handles fs.watch errors gracefully', () => {
     vi.mocked(fs.watch).mockImplementation(() => {
       throw new Error('ENOENT');
