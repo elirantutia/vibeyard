@@ -13,6 +13,7 @@ vi.mock('./webrtc-utils.js', () => ({
 }));
 
 vi.mock('./share-crypto.js', () => ({
+  validateShareKey: (key: string) => /^[0-9a-f]{32}$/i.test(key) ? null : 'Invalid share key',
   generateChallenge: vi.fn(() => new Uint8Array(32).fill(7)),
   computeChallengeResponse: vi.fn(async () => 'expected-response'),
   bytesToHex: vi.fn(() => 'deadbeef'),
@@ -130,21 +131,25 @@ function deliver(msg: unknown): void {
 }
 
 describe('startShare', () => {
+  it('rejects short sharing keys before opening a peer', () => {
+    expect(() => startShare('s1', 'readonly', '1234')).toThrow(/share key/i);
+  });
+
   it('throws when no terminal instance is available', () => {
-    expect(() => startShare('missing', 'readonly', '1234')).toThrow(/No terminal instance/);
+    expect(() => startShare('missing', 'readonly', '0123456789abcdef0123456789abcdef')).toThrow(/No terminal instance/);
   });
 
   it('sends an auth-challenge when the data channel opens', () => {
-    startShare('s1', 'readonly', '1234');
+    startShare('s1', 'readonly', '0123456789abcdef0123456789abcdef');
     lastDc!.onopen?.();
     expect(sentMessages[0].msg).toMatchObject({ type: 'auth-challenge', challenge: 'deadbeef' });
     expect(isSharing('s1')).toBe(true);
     expect(getShareMode('s1')).toBe('readonly');
-    expect(isConnected('s1')).toBe(true);
+    expect(isConnected('s1')).toBe(false);
   });
 
   it('emits onConnected + sends init once auth succeeds', async () => {
-    const handle = startShare('s1', 'readwrite', '1234');
+    const handle = startShare('s1', 'readwrite', '0123456789abcdef0123456789abcdef');
     const connectedCb = vi.fn();
     handle.onConnected(connectedCb);
     lastDc!.onopen?.();
@@ -160,7 +165,7 @@ describe('startShare', () => {
 
   it('chunks scrollback when it exceeds CHUNK_SIZE', async () => {
     serializeReturn.value = 'x'.repeat(64 * 1024 + 10);
-    const handle = startShare('s1', 'readonly', '1234');
+    const handle = startShare('s1', 'readonly', '0123456789abcdef0123456789abcdef');
     lastDc!.onopen?.();
     deliver({ type: 'auth-response', response: 'expected-response' });
     await new Promise((r) => setTimeout(r, 0));
@@ -173,7 +178,7 @@ describe('startShare', () => {
   });
 
   it('fires authFailed and stops on wrong response', async () => {
-    const handle = startShare('s1', 'readonly', '1234');
+    const handle = startShare('s1', 'readonly', '0123456789abcdef0123456789abcdef');
     const authFailed = vi.fn();
     handle.onAuthFailed(authFailed);
     lastDc!.onopen?.();
@@ -185,7 +190,7 @@ describe('startShare', () => {
 
   it('fires authFailed on auth timeout', async () => {
     vi.useFakeTimers();
-    const handle = startShare('s1', 'readonly', '1234');
+    const handle = startShare('s1', 'readonly', '0123456789abcdef0123456789abcdef');
     const authFailed = vi.fn();
     handle.onAuthFailed(authFailed);
     lastDc!.onopen?.();
@@ -195,7 +200,7 @@ describe('startShare', () => {
   });
 
   it('ignores non-auth messages before verification', () => {
-    startShare('s1', 'readwrite', '1234');
+    startShare('s1', 'readwrite', '0123456789abcdef0123456789abcdef');
     lastDc!.onopen?.();
     sentMessages.length = 0;
     deliver({ type: 'input', payload: 'rm -rf /' });
@@ -203,7 +208,7 @@ describe('startShare', () => {
   });
 
   it('forwards input to pty after verification in readwrite mode', async () => {
-    startShare('s1', 'readwrite', '1234');
+    startShare('s1', 'readwrite', '0123456789abcdef0123456789abcdef');
     lastDc!.onopen?.();
     deliver({ type: 'auth-response', response: 'expected-response' });
     await new Promise((r) => setTimeout(r, 0));
@@ -212,7 +217,7 @@ describe('startShare', () => {
   });
 
   it('does not forward input in readonly mode', async () => {
-    startShare('s1', 'readonly', '1234');
+    startShare('s1', 'readonly', '0123456789abcdef0123456789abcdef');
     lastDc!.onopen?.();
     deliver({ type: 'auth-response', response: 'expected-response' });
     await new Promise((r) => setTimeout(r, 0));
@@ -222,7 +227,7 @@ describe('startShare', () => {
 
   it('resets missedPongs when a pong is received', async () => {
     vi.useFakeTimers();
-    startShare('s1', 'readonly', '1234');
+    startShare('s1', 'readonly', '0123456789abcdef0123456789abcdef');
     lastDc!.onopen?.();
     deliver({ type: 'auth-response', response: 'expected-response' });
     // Flush the async auth promise microtask
@@ -239,7 +244,7 @@ describe('startShare', () => {
 
   it('disconnects after MAX_MISSED_PONGS exceeded', async () => {
     vi.useFakeTimers();
-    startShare('s1', 'readonly', '1234');
+    startShare('s1', 'readonly', '0123456789abcdef0123456789abcdef');
     lastDc!.onopen?.();
     deliver({ type: 'auth-response', response: 'expected-response' });
     await Promise.resolve();
@@ -257,8 +262,13 @@ describe('broadcast / query helpers', () => {
   });
 
   it('broadcastData sends when connected', async () => {
-    startShare('s1', 'readonly', '1234');
+    startShare('s1', 'readonly', '0123456789abcdef0123456789abcdef');
     lastDc!.onopen?.();
+    sentMessages.length = 0;
+    broadcastData('s1', 'hello');
+    expect(sentMessages).toHaveLength(0);
+    deliver({ type: 'auth-response', response: 'expected-response' });
+    await Promise.resolve();
     sentMessages.length = 0;
     broadcastData('s1', 'hello');
     expect(sentMessages).toContainEqual({ msg: { type: 'data', payload: 'hello' } });
@@ -270,8 +280,13 @@ describe('broadcast / query helpers', () => {
   });
 
   it('broadcastResize sends when connected', async () => {
-    startShare('s1', 'readonly', '1234');
+    startShare('s1', 'readonly', '0123456789abcdef0123456789abcdef');
     lastDc!.onopen?.();
+    sentMessages.length = 0;
+    broadcastResize('s1', 100, 30);
+    expect(sentMessages).toHaveLength(0);
+    deliver({ type: 'auth-response', response: 'expected-response' });
+    await Promise.resolve();
     sentMessages.length = 0;
     broadcastResize('s1', 100, 30);
     expect(sentMessages).toContainEqual({ msg: { type: 'resize', cols: 100, rows: 30 } });
@@ -285,12 +300,12 @@ describe('broadcast / query helpers', () => {
 });
 
 describe('stopShare', () => {
-  it('sends end frame and cleans up when stopping a connected share', () => {
-    startShare('s1', 'readonly', '1234');
+  it('cleans up an unauthenticated share without sending session frames', () => {
+    startShare('s1', 'readonly', '0123456789abcdef0123456789abcdef');
     lastDc!.onopen?.();
     sentMessages.length = 0;
     stopShare('s1');
-    expect(sentMessages.some((s) => (s.msg as { type: string }).type === 'end')).toBe(true);
+    expect(sentMessages).toHaveLength(0);
     expect(isSharing('s1')).toBe(false);
   });
 
@@ -299,10 +314,10 @@ describe('stopShare', () => {
   });
 
   it('closes existing share when startShare is called on the same sessionId', () => {
-    startShare('s1', 'readonly', '1234');
+    startShare('s1', 'readonly', '0123456789abcdef0123456789abcdef');
     const firstDc = lastDc!;
     lastDc!.onopen?.();
-    startShare('s1', 'readwrite', '1234');
+    startShare('s1', 'readwrite', '0123456789abcdef0123456789abcdef');
     expect(firstDc.close).toHaveBeenCalled();
     expect(getShareMode('s1')).toBe('readwrite');
   });
@@ -310,13 +325,13 @@ describe('stopShare', () => {
 
 describe('getOffer / acceptAnswer', () => {
   it('getOffer produces the encoded offer', async () => {
-    const handle = startShare('s1', 'readonly', '1234');
+    const handle = startShare('s1', 'readonly', '0123456789abcdef0123456789abcdef');
     const offer = await handle.getOffer();
     expect(offer).toBe('encoded-offer');
   });
 
   it('acceptAnswer decodes and sets the remote description', async () => {
-    const handle = startShare('s1', 'readonly', '1234');
+    const handle = startShare('s1', 'readonly', '0123456789abcdef0123456789abcdef');
     await handle.acceptAnswer('answer-code');
     expect(lastPc!.setRemoteDescription).toHaveBeenCalled();
   });
@@ -324,12 +339,155 @@ describe('getOffer / acceptAnswer', () => {
 
 describe('ICE disconnect', () => {
   it('fires onDisconnected when ICE transitions to failed', () => {
-    const handle = startShare('s1', 'readonly', '1234');
+    const handle = startShare('s1', 'readonly', '0123456789abcdef0123456789abcdef');
     const onDisc = vi.fn();
     handle.onDisconnected(onDisc);
     lastDc!.onopen?.();
     (lastPc as unknown as { iceConnectionState: RTCIceConnectionState }).iceConnectionState = 'failed';
     lastPc!.oniceconnectionstatechange?.();
     expect(onDisc).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('native resource teardown', () => {
+  const KEY = '0123456789abcdef0123456789abcdef';
+
+  it('closes both natives and fires one notification on ICE disconnected', () => {
+    const handle = startShare('s1', 'readonly', KEY);
+    const onDisc = vi.fn();
+    handle.onDisconnected(onDisc);
+    const dc = lastDc!;
+    const pc = lastPc!;
+    lastDc!.onopen?.();
+    pc.iceConnectionState = 'disconnected';
+    pc.oniceconnectionstatechange?.();
+    expect(dc.close).toHaveBeenCalledTimes(1);
+    expect(pc.close).toHaveBeenCalledTimes(1);
+    expect(onDisc).toHaveBeenCalledTimes(1);
+    expect(isSharing('s1')).toBe(false);
+  });
+
+  it('closes both natives and fires one notification on ICE failed', () => {
+    const handle = startShare('s1', 'readonly', KEY);
+    const onDisc = vi.fn();
+    handle.onDisconnected(onDisc);
+    const dc = lastDc!;
+    const pc = lastPc!;
+    lastDc!.onopen?.();
+    pc.iceConnectionState = 'failed';
+    pc.oniceconnectionstatechange?.();
+    expect(dc.close).toHaveBeenCalledTimes(1);
+    expect(pc.close).toHaveBeenCalledTimes(1);
+    expect(onDisc).toHaveBeenCalledTimes(1);
+    expect(isSharing('s1')).toBe(false);
+  });
+
+  it('closes both natives when the data channel closes', () => {
+    const handle = startShare('s1', 'readonly', KEY);
+    const onDisc = vi.fn();
+    handle.onDisconnected(onDisc);
+    const dc = lastDc!;
+    const pc = lastPc!;
+    lastDc!.onopen?.();
+    dc.onclose?.();
+    expect(dc.close).toHaveBeenCalledTimes(1);
+    expect(pc.close).toHaveBeenCalledTimes(1);
+    expect(onDisc).toHaveBeenCalledTimes(1);
+    expect(isSharing('s1')).toBe(false);
+  });
+
+  it('closes both natives on passphrase mismatch', async () => {
+    const handle = startShare('s1', 'readonly', KEY);
+    const authFailed = vi.fn();
+    handle.onAuthFailed(authFailed);
+    const dc = lastDc!;
+    const pc = lastPc!;
+    lastDc!.onopen?.();
+    deliver({ type: 'auth-response', response: 'wrong' });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(authFailed).toHaveBeenCalledWith('Passphrase mismatch');
+    expect(dc.close).toHaveBeenCalledTimes(1);
+    expect(pc.close).toHaveBeenCalledTimes(1);
+    expect(isSharing('s1')).toBe(false);
+  });
+
+  it('closes both natives on auth timeout', () => {
+    vi.useFakeTimers();
+    const handle = startShare('s1', 'readonly', KEY);
+    const authFailed = vi.fn();
+    handle.onAuthFailed(authFailed);
+    const dc = lastDc!;
+    const pc = lastPc!;
+    lastDc!.onopen?.();
+    vi.advanceTimersByTime(10_000);
+    expect(authFailed).toHaveBeenCalledWith('Authentication timed out');
+    expect(dc.close).toHaveBeenCalledTimes(1);
+    expect(pc.close).toHaveBeenCalledTimes(1);
+    expect(isSharing('s1')).toBe(false);
+  });
+
+  it('explicit stop closes both natives exactly once', () => {
+    startShare('s1', 'readonly', KEY);
+    const dc = lastDc!;
+    const pc = lastPc!;
+    lastDc!.onopen?.();
+    stopShare('s1');
+    expect(dc.close).toHaveBeenCalledTimes(1);
+    expect(pc.close).toHaveBeenCalledTimes(1);
+    expect(isSharing('s1')).toBe(false);
+    // A second stop is a no-op: no double close.
+    stopShare('s1');
+    expect(dc.close).toHaveBeenCalledTimes(1);
+    expect(pc.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('replacing a share closes the old natives and keeps the new share', () => {
+    startShare('s1', 'readonly', KEY);
+    const oldDc = lastDc!;
+    const oldPc = lastPc!;
+    startShare('s1', 'readwrite', KEY);
+    const newDc = lastDc!;
+    const newPc = lastPc!;
+    expect(oldDc.close).toHaveBeenCalledTimes(1);
+    expect(oldPc.close).toHaveBeenCalledTimes(1);
+    expect(newDc.close).not.toHaveBeenCalled();
+    expect(newPc.close).not.toHaveBeenCalled();
+    expect(isSharing('s1')).toBe(true);
+    expect(getShareMode('s1')).toBe('readwrite');
+  });
+
+  it('ignores a late close event from a replaced peer', () => {
+    startShare('s1', 'readonly', KEY);
+    const oldDc = lastDc!;
+    // Capture the old peer's disconnect handler before replacement detaches it.
+    const lateClose = oldDc.onclose;
+    startShare('s1', 'readwrite', KEY);
+    const newDc = lastDc!;
+    const newPc = lastPc!;
+    // Simulate the old peer's close event arriving after replacement.
+    lateClose?.();
+    expect(newDc.close).not.toHaveBeenCalled();
+    expect(newPc.close).not.toHaveBeenCalled();
+    expect(isSharing('s1')).toBe(true);
+    expect(getShareMode('s1')).toBe('readwrite');
+  });
+
+  it('closes each native exactly once when close events fire recursively', () => {
+    const handle = startShare('s1', 'readonly', KEY);
+    const onDisc = vi.fn();
+    handle.onDisconnected(onDisc);
+    const dc = lastDc!;
+    const pc = lastPc!;
+    lastDc!.onopen?.();
+    // Capture both terminal handlers before the first one detaches them.
+    const onclose = dc.onclose;
+    const onIce = pc.oniceconnectionstatechange;
+    onclose?.();
+    pc.iceConnectionState = 'failed';
+    onIce?.();
+    expect(dc.close).toHaveBeenCalledTimes(1);
+    expect(pc.close).toHaveBeenCalledTimes(1);
+    expect(onDisc).toHaveBeenCalledTimes(1);
+    expect(isSharing('s1')).toBe(false);
   });
 });

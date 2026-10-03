@@ -1,6 +1,6 @@
 import { appState } from '../state.js';
-import { ProjectRecord, Preferences } from '../../shared/types.js';
-import { getStatus, SessionStatus, onChange as onActivityChange } from '../session-activity.js';
+import { ProjectRecord } from '../../shared/types.js';
+import { getStatus, SessionStatus, onChange as onActivityChange, STATUS_GLYPH } from '../session-activity.js';
 import { STATUS_PRIORITY } from '../project-status.js';
 import { isCliSession } from '../session-utils.js';
 import { esc } from '../dom-utils.js';
@@ -14,53 +14,43 @@ export interface ActiveSessionRow {
   status: SessionStatus;
 }
 
-type ActiveStatusConfig = NonNullable<Preferences['activeSessionStatuses']>;
 
-/** The status keys a session can be filtered on, and the canonical default set. */
-export const ACTIVE_STATUS_KEYS = ['working', 'waiting', 'input', 'completed'] as const;
-export const DEFAULT_ACTIVE_SESSION_STATUSES: ActiveStatusConfig = {
-  working: true,
-  waiting: false,
-  input: true,
-  completed: true,
-};
-
-/** Resolve the configured set of statuses that count as "active". */
-export function resolveActiveStatuses(prefs: Preferences): Set<SessionStatus> {
-  const cfg = prefs.activeSessionStatuses ?? DEFAULT_ACTIVE_SESSION_STATUSES;
-  return new Set(ACTIVE_STATUS_KEYS.filter((k) => cfg[k]));
-}
 
 /**
- * Pure selector: gather every open CLI session across all projects whose live
- * status is in `activeStatuses`, ordered by urgency (`STATUS_PRIORITY`) then
- * project name. DOM-free so it can be unit-tested.
+ * Pure selector: gather every open CLI session across all projects, ordered
+ * by urgency (`STATUS_PRIORITY`) then project name then session name. Live
+ * status is display and ordering only — it never hides a row. DOM-free so it
+ * can be unit-tested.
  */
 export function selectActiveSessions(
   projects: ProjectRecord[],
   statusOf: (sessionId: string) => SessionStatus,
-  activeStatuses: Set<SessionStatus>,
 ): ActiveSessionRow[] {
   const rows: ActiveSessionRow[] = [];
   for (const project of projects) {
     for (const session of project.sessions) {
       if (!isCliSession(session)) continue;
-      const status = statusOf(session.id);
-      if (!activeStatuses.has(status)) continue;
       rows.push({
         projectId: project.id,
         projectName: project.name,
         sessionId: session.id,
         sessionName: session.name,
-        status,
+        status: statusOf(session.id),
       });
     }
   }
   rows.sort((a, b) => {
-    const pa = STATUS_PRIORITY.indexOf(a.status);
-    const pb = STATUS_PRIORITY.indexOf(b.status);
+    // idle is not in STATUS_PRIORITY — rank it after completed, not before input.
+    const rank = (s: SessionStatus) => {
+      const i = STATUS_PRIORITY.indexOf(s);
+      return i === -1 ? STATUS_PRIORITY.length : i;
+    };
+    const pa = rank(a.status);
+    const pb = rank(b.status);
     if (pa !== pb) return pa - pb;
-    return a.projectName.localeCompare(b.projectName);
+    const pn = a.projectName.localeCompare(b.projectName);
+    if (pn !== 0) return pn;
+    return a.sessionName.localeCompare(b.sessionName);
   });
   return rows;
 }
@@ -81,9 +71,7 @@ export function renderActiveSessions(): void {
   // just duplicate that project's own tab bar, so the section stays hidden.
   const enabled =
     (appState.preferences.sidebarViews?.activeSessions ?? true) && appState.projects.length > 1;
-  const rows = enabled
-    ? selectActiveSessions(appState.projects, getStatus, resolveActiveStatuses(appState.preferences))
-    : [];
+  const rows = enabled ? selectActiveSessions(appState.projects, getStatus) : [];
 
   if (rows.length === 0) {
     containerEl.classList.add('hidden');
@@ -106,7 +94,7 @@ export function renderActiveSessions(): void {
 function rowHtml(row: ActiveSessionRow): string {
   return `
     <div class="active-session-row" data-project-id="${esc(row.projectId)}" data-session-id="${esc(row.sessionId)}" title="${esc(row.projectName)}">
-      <span class="project-status ${row.status}" aria-hidden="true"></span>
+      <span class="project-status ${row.status}" aria-hidden="true">${STATUS_GLYPH[row.status]}</span>
       <span class="active-session-name">${esc(row.sessionName)}</span>
       <span class="active-session-project">${esc(row.projectName)}</span>
     </div>

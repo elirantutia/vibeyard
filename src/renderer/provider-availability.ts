@@ -61,6 +61,11 @@ export function getTeamChatProviderMetas(): CliProviderMeta[] {
   return getAvailableProviderMetas().filter(p => p.capabilities.systemPromptInjection);
 }
 
+/** The ids of installed providers that can run team personas (system-prompt injection). */
+export function getTeamCapableProviderIds(): Set<ProviderId> {
+  return new Set(getTeamChatProviderMetas().map((m) => m.id));
+}
+
 export function getProviderCapabilities(providerId: ProviderId): CliProviderCapabilities | null {
   if (!cachedProviders) return null;
   return cachedProviders.find(provider => provider.id === providerId)?.capabilities ?? null;

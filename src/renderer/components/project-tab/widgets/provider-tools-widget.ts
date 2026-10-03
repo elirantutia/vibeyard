@@ -2,7 +2,6 @@ import { appState } from '../../../state.js';
 import { openFileReaderChecked } from '../../../open-file-reader.js';
 import { showMcpAddModal } from '../../mcp-add-modal.js';
 import { createCustomSelect, type CustomSelectInstance } from '../../custom-select.js';
-import { esc } from '../../../dom-utils.js';
 import {
   getAvailableProviderMetas,
   getProviderAvailabilitySnapshot,
@@ -10,9 +9,12 @@ import {
 } from '../../../provider-availability.js';
 import type { ProviderConfig, ProviderId, McpServer, Agent, Skill, Command } from '../../../types.js';
 import type { WidgetFactory, WidgetHost, WidgetInstance } from './widget-host.js';
-
-function scopeBadge(scope: 'user' | 'project'): string {
-  return `<span class="scope-badge ${scope}">${scope}</span>`;
+import { resolveProfile } from '../../../state/specialized-sessions.js';
+function scopeBadgeEl(scope: 'user' | 'project'): HTMLElement {
+  const el = document.createElement('span');
+  el.className = `scope-badge ${scope}`;
+  el.textContent = scope;
+  return el;
 }
 
 export const createProviderToolsWidget: WidgetFactory = (host: WidgetHost): WidgetInstance => {
@@ -48,10 +50,40 @@ export const createProviderToolsWidget: WidgetFactory = (host: WidgetHost): Widg
     return p?.path ?? null;
   };
 
-  const mcpItem = (server: McpServer, projectPath: string): HTMLElement => {
+  /**
+   * The config dir this project's next session under `providerId` will actually
+   * run with, resolved through the same chain the spawn path uses (project pin
+   * → the provider's global default). Sharing that resolution is load-bearing:
+   * the widget must not show one login's MCP servers for a project that runs as
+   * another. Undefined means "use the provider's default dir".
+   */
+  const getEffectiveConfigDir = (providerId: ProviderId): string | undefined => {
+    const project = appState.projects.find(pr => pr.id === projectId);
+    if (!project) return undefined;
+    const profile = resolveProfile(undefined, project, appState.preferences, providerId, appState.profiles);
+    return profile?.configDir;
+  };
+
+  /**
+   * Build the name/detail/badge row from DOM nodes. The previous shape used
+   * innerHTML with esc() on every field; textContent removes the injection
+   * surface entirely and lets every item builder share one code path.
+   */
+  const configItem = (name: string, detail: string, scope: 'user' | 'project'): HTMLElement => {
     const el = document.createElement('div');
     el.className = 'config-item config-item-clickable';
-    el.innerHTML = `<span class="config-item-name">${esc(server.name)}</span><span class="config-item-detail">${esc(server.status)}</span>${scopeBadge(server.scope)}`;
+    const nameEl = document.createElement('span');
+    nameEl.className = 'config-item-name';
+    nameEl.textContent = name;
+    const detailEl = document.createElement('span');
+    detailEl.className = 'config-item-detail';
+    detailEl.textContent = detail;
+    el.append(nameEl, detailEl, scopeBadgeEl(scope));
+    return el;
+  };
+
+  const mcpItem = (server: McpServer, projectPath: string): HTMLElement => {
+    const el = configItem(server.name, server.status, server.scope);
 
     const removeBtn = document.createElement('button');
     removeBtn.className = 'config-item-remove-btn';
@@ -73,25 +105,19 @@ export const createProviderToolsWidget: WidgetFactory = (host: WidgetHost): Widg
   };
 
   const agentItem = (agent: Agent): HTMLElement => {
-    const el = document.createElement('div');
-    el.className = 'config-item config-item-clickable';
-    el.innerHTML = `<span class="config-item-name">${esc(agent.name)}</span><span class="config-item-detail">${esc(agent.model)}</span>${scopeBadge(agent.scope)}`;
+    const el = configItem(agent.name, agent.model, agent.scope);
     el.addEventListener('click', () => openConfigFile(agent.filePath));
     return el;
   };
 
   const skillItem = (skill: Skill): HTMLElement => {
-    const el = document.createElement('div');
-    el.className = 'config-item config-item-clickable';
-    el.innerHTML = `<span class="config-item-name">${esc(skill.name)}</span><span class="config-item-detail">${esc(skill.description)}</span>${scopeBadge(skill.scope)}`;
+    const el = configItem(skill.name, skill.description, skill.scope);
     el.addEventListener('click', () => openConfigFile(skill.filePath));
     return el;
   };
 
   const commandItem = (cmd: Command): HTMLElement => {
-    const el = document.createElement('div');
-    el.className = 'config-item config-item-clickable';
-    el.innerHTML = `<span class="config-item-name">/${esc(cmd.name)}</span><span class="config-item-detail">${esc(cmd.description)}</span>${scopeBadge(cmd.scope)}`;
+    const el = configItem(`/${cmd.name}`, cmd.description, cmd.scope);
     el.addEventListener('click', () => openConfigFile(cmd.filePath));
     return el;
   };
@@ -107,7 +133,11 @@ export const createProviderToolsWidget: WidgetFactory = (host: WidgetHost): Widg
 
     const sectionHeader = document.createElement('div');
     sectionHeader.className = 'config-section-header';
-    sectionHeader.innerHTML = `${esc(title)}<span class="config-section-count">${count}</span>`;
+    const countEl = document.createElement('span');
+    countEl.className = 'config-section-count';
+    countEl.textContent = String(count);
+    // Bare text node for the title keeps the original markup shape intact.
+    sectionHeader.append(title, countEl);
 
     if (onAdd) {
       const addBtn = document.createElement('button');
@@ -192,7 +222,11 @@ export const createProviderToolsWidget: WidgetFactory = (host: WidgetHost): Widg
 
     let config: ProviderConfig;
     try {
-      config = await window.vibeyard.provider.getConfig(providerId, projectPath);
+      config = await window.vibeyard.provider.getConfig(
+        providerId,
+        projectPath,
+        getEffectiveConfigDir(providerId)
+      );
     } catch {
       body.innerHTML = '';
       return;

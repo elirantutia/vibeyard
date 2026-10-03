@@ -113,6 +113,22 @@ describe('board-state', () => {
       const task = addTask({ title: 'T', prompt: 'p' });
       expect('profileId' in task!).toBe(false);
     });
+
+    it('persists assigneeId when provided', () => {
+      const member = appState.addTeamMember({ name: 'CMO', role: 'Marketing', systemPrompt: 'x', source: 'custom' });
+      const task = addTask({ title: 'T', prompt: 'p', assigneeId: member.id });
+      expect(task!.assigneeId).toBe(member.id);
+    });
+
+    it('omits assigneeId when absent', () => {
+      const task = addTask({ title: 'T', prompt: 'p' });
+      expect('assigneeId' in task!).toBe(false);
+    });
+
+    it('strips a dangling assigneeId', () => {
+      const task = addTask({ title: 'T', prompt: 'p', assigneeId: 'ghost-member' });
+      expect(task!.assigneeId).toBeUndefined();
+    });
   });
 
   describe('updateTask', () => {
@@ -145,6 +161,21 @@ describe('board-state', () => {
       const task = addTask({ title: 'T', prompt: 'p' })!;
       updateTask(task.id, { profileId: 'prof-2' });
       expect(task.profileId).toBe('prof-2');
+    });
+
+    it('sets and clears assigneeId', () => {
+      const member = appState.addTeamMember({ name: 'CMO', role: 'Marketing', systemPrompt: 'x', source: 'custom' });
+      const task = addTask({ title: 'T', prompt: 'p' })!;
+      updateTask(task.id, { assigneeId: member.id });
+      expect(task.assigneeId).toBe(member.id);
+      updateTask(task.id, { assigneeId: undefined });
+      expect(task.assigneeId).toBeUndefined();
+    });
+
+    it('strips a dangling assigneeId', () => {
+      const task = addTask({ title: 'T', prompt: 'p' })!;
+      updateTask(task.id, { assigneeId: 'ghost-member' });
+      expect(task.assigneeId).toBeUndefined();
     });
 
     it('strips invalid columnId from updates', () => {

@@ -58,6 +58,15 @@ describe('setHookStatus', () => {
     expect(getStatus('s1')).toBe('completed');
   });
 
+  it('lets polled (Transcript) waiting overwrite completed', () => {
+    initSession('s1');
+    setHookStatus('s1', 'completed');
+    // A polled tail that moved to error arrives as waiting/'Transcript' — it
+    // must NOT be masked by the hook sticky-completed guard.
+    setHookStatus('s1', 'waiting', 'Transcript');
+    expect(getStatus('s1')).toBe('waiting');
+  });
+
   it('allows working to overwrite completed (new prompt)', () => {
     initSession('s1');
     setHookStatus('s1', 'completed');

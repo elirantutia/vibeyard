@@ -8,11 +8,67 @@ import { resolveBinary, validateBinaryExists } from './resolve-binary';
 import { getGeminiConfig } from '../gemini-config';
 import { installGeminiHooks, validateGeminiHooks, cleanupGeminiHooks, SESSION_ID_VAR } from '../gemini-hooks';
 import { startConfigWatcher as startConfigWatch, stopConfigWatcher as stopConfigWatch } from '../config-watcher';
-import { MAX_INDEX_CHARS_PER_SESSION, TRANSCRIPT_TEXT_SEPARATOR } from './transcript-utils';
+import { MAX_INDEX_FILE_BYTES, IndexTextBudget } from './transcript-utils';
 import { writeAgentFile, deleteAgentFile } from './agent-files';
 import type { BrowserWindow } from 'electron';
 
 const binaryCache = { path: null as string | null };
+
+/** Read at most `bytes` from the head of a file (bounded, sync). */
+function readHeadSync(filePath: string, bytes: number): string {
+  const fd = fs.openSync(filePath, 'r');
+  try {
+    const buf = Buffer.alloc(bytes);
+    const n = fs.readSync(fd, buf, 0, bytes, 0);
+    return buf.toString('utf-8', 0, n);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/**
+ * Discovery reads only this much from the head of a session file to
+ * extract the id. Gemini writes sessionId near the top; a file whose id
+ * falls outside this window (odd field ordering) falls back to a full
+ * read, which the caller has already bounded by MAX_INDEX_FILE_BYTES.
+ */
+const DISCOVERY_HEADER_BYTES = 64 * 1024;
+
+const SESSION_ID_RE = /"sessionId"\s*:\s*"([0-9a-f-]+)"/i;
+
+/** Extract the sessionId from a session file without reading the whole transcript. */
+async function readSessionId(transcriptPath: string, size: number): Promise<string | null> {
+  let raw: string;
+  if (size <= DISCOVERY_HEADER_BYTES) {
+    // Small file: the header window is the whole file, one read suffices.
+    raw = await fs.promises.readFile(transcriptPath, 'utf-8');
+  } else {
+    const handle = await fs.promises.open(transcriptPath, 'r');
+    try {
+      const buffer = Buffer.alloc(DISCOVERY_HEADER_BYTES);
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+      raw = buffer.toString('utf-8', 0, bytesRead);
+    } finally {
+      await handle.close();
+    }
+  }
+  const id = raw.match(SESSION_ID_RE)?.[1];
+  if (id) return id;
+  if (size <= DISCOVERY_HEADER_BYTES) return parseSessionId(raw);
+  raw = await fs.promises.readFile(transcriptPath, 'utf-8');
+  const full = raw.match(SESSION_ID_RE)?.[1];
+  if (full) return full;
+  return parseSessionId(raw);
+}
+
+function parseSessionId(raw: string): string | null {
+  try {
+    const parsed: { sessionId?: unknown } = JSON.parse(raw);
+    return typeof parsed?.sessionId === 'string' ? parsed.sessionId : null;
+  } catch {
+    return null;
+  }
+}
 
 export class GeminiProvider implements CliProvider {
   readonly meta: CliProviderMeta = {
@@ -29,6 +85,9 @@ export class GeminiProvider implements CliProvider {
       pendingPromptTrigger: 'startup-arg',
       planModeArg: '--approval-mode=plan',
       systemPromptInjection: false,
+      profiles: false,
+      selfTitles: false,
+      polledStatus: false,
     },
     defaultContextWindowSize: 1_000_000,
   };
@@ -48,7 +107,7 @@ export class GeminiProvider implements CliProvider {
     return env;
   }
 
-  buildArgs(opts: { cliSessionId: string | null; isResume: boolean; extraArgs: string; initialPrompt?: string; systemPrompt?: string }): string[] {
+  buildArgs(opts: { sessionId: string; cliSessionId: string | null; isResume: boolean; extraArgs: string; initialPrompt?: string; systemPrompt?: string }): string[] {
     const args: string[] = [];
     if (opts.isResume && opts.cliSessionId) {
       args.push('-r', opts.cliSessionId);
@@ -147,9 +206,10 @@ export class GeminiProvider implements CliProvider {
 
       for (const c of candidates) {
         try {
-          const raw = fs.readFileSync(c.full, 'utf-8');
           // Gemini transcripts are JSON; session id typically appears near the top.
-          // Cheap substring check avoids a full parse.
+          // Read only a bounded head (cheap substring check avoids a full parse
+          // and keeps this sync interface from blocking on a whole file).
+          const raw = readHeadSync(c.full, 8 * 1024);
           if (raw.includes(cliSessionId)) return c.full;
         } catch {
           // unreadable — skip
@@ -161,7 +221,7 @@ export class GeminiProvider implements CliProvider {
     }
   }
 
-  async discoverTranscripts(): Promise<TranscriptDescriptor[]> {
+  async discoverTranscripts(signal?: AbortSignal): Promise<TranscriptDescriptor[]> {
     const tmpRoot = path.join(os.homedir(), '.gemini', 'tmp');
     let keys: string[];
     try {
@@ -171,6 +231,7 @@ export class GeminiProvider implements CliProvider {
     }
     const out: TranscriptDescriptor[] = [];
     for (const key of keys) {
+      if (signal?.aborted) return out;
       const projectDir = path.join(tmpRoot, key);
       let projectCwd = '';
       try {
@@ -186,15 +247,22 @@ export class GeminiProvider implements CliProvider {
         continue;
       }
       for (const file of files) {
+        if (signal?.aborted) return out;
         if (!file.startsWith('session-') || !file.endsWith('.json')) continue;
         const transcriptPath = path.join(chatsDir, file);
-        // The full sessionId lives inside the JSON; the filename only encodes the first 8 chars.
+        // The indexer indexes files above MAX_INDEX_FILE_BYTES to empty text,
+        // so skip them here too — reading a whole oversized transcript just
+        // to extract its id would pay for content search can never use.
+        let size: number;
+        try {
+          size = (await fs.promises.stat(transcriptPath)).size;
+        } catch {
+          continue;
+        }
+        if (size > MAX_INDEX_FILE_BYTES) continue;
         let cliSessionId: string | null = null;
         try {
-          const raw = await fs.promises.readFile(transcriptPath, 'utf-8');
-          const m = raw.match(/"sessionId"\s*:\s*"([0-9a-f-]+)"/i);
-          if (m) cliSessionId = m[1];
-          else cliSessionId = JSON.parse(raw)?.sessionId ?? null;
+          cliSessionId = await readSessionId(transcriptPath, size);
         } catch {
           continue;
         }
@@ -206,16 +274,22 @@ export class GeminiProvider implements CliProvider {
   }
 
   async indexTranscript(transcriptPath: string): Promise<{ text: string; cwd: string }> {
+    let size: number;
+    try {
+      size = (await fs.promises.stat(transcriptPath)).size;
+    } catch {
+      return { text: '', cwd: '' };
+    }
+    if (size > MAX_INDEX_FILE_BYTES) return { text: '', cwd: '' };
     let parsed: { messages?: Array<{ type?: string; content?: unknown }> };
     try {
       parsed = JSON.parse(await fs.promises.readFile(transcriptPath, 'utf-8'));
     } catch {
       return { text: '', cwd: '' };
     }
-    const texts: string[] = [];
-    let totalChars = 0;
+    const budget = new IndexTextBudget();
     for (const msg of parsed.messages ?? []) {
-      if (totalChars >= MAX_INDEX_CHARS_PER_SESSION) break;
+      if (budget.full) break;
       if (msg?.type !== 'user') continue;
       let text = '';
       const c = msg.content;
@@ -228,12 +302,9 @@ export class GeminiProvider implements CliProvider {
           }
         }
       }
-      if (text) {
-        texts.push(text.trim());
-        totalChars += text.length;
-      }
+      if (text) budget.push(text);
     }
-    return { text: texts.join(TRANSCRIPT_TEXT_SEPARATOR), cwd: '' };
+    return { text: budget.join(), cwd: '' };
   }
 }
 

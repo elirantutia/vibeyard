@@ -70,12 +70,14 @@
   background: var(--accent);
 }
 
-/* Session status indicator */
+/* Session status indicator (typographic glyph, replaces the dot). */
 .tab-status {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+  width: 1.1em;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1;
   flex-shrink: 0;
+  color: var(--text-muted);
 }
 
 @keyframes pulse {
@@ -84,25 +86,25 @@
 }
 
 .tab-status.working {
-  background: var(--accent);
+  color: var(--accent);
   animation: pulse 1.5s ease-in-out infinite;
 }
 
 .tab-status.waiting {
-  background: var(--status-waiting);
+  color: var(--status-waiting);
 }
 
 .tab-status.completed {
-  background: var(--status-completed);
+  color: var(--status-completed);
 }
 
 .tab-status.input {
-  background: var(--status-input);
+  color: var(--status-input);
   animation: pulse 1.2s ease-in-out infinite;
 }
 
 .tab-status.idle {
-  background: var(--text-muted);
+  color: var(--text-muted);
 }
 
 .tab-name input {

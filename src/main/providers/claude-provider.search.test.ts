@@ -2,6 +2,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 vi.mock('fs', () => ({
   existsSync: vi.fn(),
+  createReadStream: vi.fn(),
   promises: { readFile: vi.fn(), readdir: vi.fn(), stat: vi.fn() },
 }));
 vi.mock('os', () => ({ homedir: () => '/mock/home' }));
@@ -16,6 +17,7 @@ vi.mock('./resolve-binary', () => ({ resolveBinary: () => '', validateBinaryExis
 vi.mock('../store', () => ({ loadState: vi.fn(() => ({ profiles: [] })) }));
 
 import * as fs from 'fs';
+import { Readable } from 'stream';
 import * as path from 'path';
 import { ClaudeProvider } from './claude-provider';
 import { loadState } from '../store';
@@ -31,6 +33,11 @@ function file(name: string) { return { name, isDirectory: () => false } as fs.Di
 
 function makeJsonl(entries: object[]): string {
   return entries.map(e => JSON.stringify(e)).join('\n');
+}
+
+function mockIndexFile(jsonl: string): void {
+  vi.mocked(fs.promises.stat).mockResolvedValueOnce({ size: Buffer.byteLength(jsonl) } as fs.Stats);
+  vi.mocked(fs.createReadStream).mockReturnValueOnce(Readable.from([jsonl]) as fs.ReadStream);
 }
 
 beforeEach(() => {
@@ -109,7 +116,7 @@ describe('ClaudeProvider.indexTranscript()', () => {
       { type: 'user', message: { content: 'hello world' } },
       { type: 'assistant', message: { content: 'never indexed' } },
     ]);
-    mockReadFile.mockResolvedValueOnce(jsonl as any);
+    mockIndexFile(jsonl);
     const r = await new ClaudeProvider().indexTranscript('/p');
     expect(r.cwd).toBe('/Users/me/repo');
     expect(r.text).toContain('hello world');
@@ -123,15 +130,22 @@ describe('ClaudeProvider.indexTranscript()', () => {
         { type: 'tool_use', id: 't1' },
       ] } },
     ]);
-    mockReadFile.mockResolvedValueOnce(jsonl as any);
+    mockIndexFile(jsonl);
     const r = await new ClaudeProvider().indexTranscript('/p');
     expect(r.text).toContain('refactor authentication');
   });
 
   it('tolerates malformed JSONL lines', async () => {
     const jsonl = 'not json\n{"type":"user","message":{"content":"valid"}}\n{broken';
-    mockReadFile.mockResolvedValueOnce(jsonl as any);
+    mockIndexFile(jsonl);
     const r = await new ClaudeProvider().indexTranscript('/p');
     expect(r.text).toContain('valid');
+  });
+
+  it('caps one oversized user message at the per-session index limit', async () => {
+    const jsonl = makeJsonl([{ type: 'user', message: { content: 'x'.repeat(100_000) } }]);
+    mockIndexFile(jsonl);
+    const r = await new ClaudeProvider().indexTranscript('/p');
+    expect(r.text.length).toBe(50 * 1024);
   });
 });

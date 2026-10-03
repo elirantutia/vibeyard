@@ -1,7 +1,7 @@
 import type { BoardTask, CostInfo, ContextWindowInfo, ArchivedSession, ProviderId } from '../../../shared/types.js';
 import { appState } from '../../state.js';
 import { getColumnByBehavior, updateTask, moveTask, deleteTask, getTagColor } from '../../board-state.js';
-import { getStatus, type SessionStatus } from '../../session-activity.js';
+import { getStatus, STATUS_GLYPH, type SessionStatus } from '../../session-activity.js';
 import { getCost, formatTokens } from '../../session-cost.js';
 import { getContext, getContextSeverity } from '../../session-context.js';
 import { hasMultipleAvailableProviders } from '../../provider-availability.js';
@@ -82,6 +82,17 @@ export function createCardElement(task: BoardTask): HTMLElement {
     el.appendChild(tagsEl);
   }
 
+  // Assignee badge (task assigned to a team member); silently skipped when the
+  // member no longer exists (dangling id).
+  const assignee = task.assigneeId ? appState.getTeamMemberById(task.assigneeId) : undefined;
+  if (assignee) {
+    const assigneeEl = document.createElement('div');
+    assigneeEl.className = 'board-card-assignee';
+    assigneeEl.textContent = assignee.name;
+    if (assignee.role) assigneeEl.title = assignee.role;
+    el.appendChild(assigneeEl);
+  }
+
   if (task.sessionId) {
     const status = getStatus(task.sessionId);
     if (status) {
@@ -92,6 +103,7 @@ export function createCardElement(task: BoardTask): HTMLElement {
       statusEl.className = 'board-card-status-inline';
       const dot = document.createElement('span');
       dot.className = `card-status-dot ${status}`;
+      dot.textContent = STATUS_GLYPH[status];
       dot.dataset.sessionId = task.sessionId;
       statusEl.appendChild(dot);
       statusEl.appendChild(document.createTextNode(statusLabel(status)));
@@ -170,9 +182,18 @@ export async function runTask(task: BoardTask): Promise<void> {
       return;
     }
     const sessionName = task.title || task.prompt.slice(0, 40);
-    const session = task.planMode
-      ? appState.addPlanSession(project.id, sessionName, true, task.providerId, task.profileId)
-      : appState.addSession(project.id, sessionName, undefined, task.providerId, task.profileId);
+    // An assigned task runs as a team-chat session for that member (persona +
+    // pinned profile); unassigned tasks keep the plain-session behavior. If no
+    // team-capable provider is installed, startTeamChat returns undefined and
+    // the `||` falls back to a plain session so the task still runs.
+    const member = task.assigneeId
+      ? appState.getTeamMemberById(task.assigneeId)
+      : undefined;
+    const session =
+      (member && appState.startTeamChat(project.id, member, task.providerId)) ||
+      (task.planMode
+        ? appState.addPlanSession(project.id, sessionName, true, task.providerId, task.profileId)
+        : appState.addSession(project.id, sessionName, undefined, task.providerId, task.profileId));
     if (session) {
       updateTask(task.id, { sessionId: session.id });
       const activeCol = getColumnByBehavior('active');
@@ -206,7 +227,7 @@ function resolveTaskProviderId(task: BoardTask): ProviderId {
     const session = project.sessions.find(s => s.id === task.sessionId);
     if (session?.providerId) return session.providerId;
   }
-  return task.providerId ?? appState.preferences.defaultProvider ?? 'claude';
+  return task.providerId ?? project?.defaultProvider ?? appState.preferences.defaultProvider ?? 'claude';
 }
 
 function getArchivedCost(task: BoardTask): ArchivedSession['cost'] | null {

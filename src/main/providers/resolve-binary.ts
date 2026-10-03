@@ -12,6 +12,7 @@ const COMMON_BIN_DIRS = isWin
       path.join(os.homedir(), 'AppData', 'Local', 'Programs'),
       path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'claude'),
       path.join(os.homedir(), '.local', 'bin'),
+      path.join(os.homedir(), '.bun', 'bin'),
       path.join(os.homedir(), 'scoop', 'shims'),
       path.join(os.homedir(), '.volta', 'bin'),
       path.join(process.env.ProgramData || 'C:\\ProgramData', 'chocolatey', 'bin'),
@@ -20,6 +21,7 @@ const COMMON_BIN_DIRS = isWin
       '/usr/local/bin',
       '/opt/homebrew/bin',
       path.join(os.homedir(), '.local', 'bin'),
+      path.join(os.homedir(), '.bun', 'bin'),
       path.join(os.homedir(), '.npm-global', 'bin'),
     ];
 

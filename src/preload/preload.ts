@@ -13,13 +13,14 @@ export interface VibeyardApi {
     kill(sessionId: string): Promise<void>;
     getCwd(sessionId: string): Promise<string | null>;
     onData(callback: (sessionId: string, data: string) => void): () => void;
-    onExit(callback: (sessionId: string, exitCode: number, signal?: number) => void): () => void;
+      onExit(callback: (sessionId: string, exitCode: number, signal?: number, exitReason?: string, pid?: number) => void): () => void;
   };
   session: {
     buildResumeWithPrompt(sourceProviderId: ProviderId, sourceCliSessionId: string | null, projectPath: string, sessionName: string, configDir?: string): Promise<string>;
     transcriptExists(providerId: ProviderId, cliSessionId: string | null, projectPath: string, configDir?: string): Promise<boolean>;
     transcriptExistsSync(providerId: ProviderId, cliSessionId: string | null, projectPath: string, configDir?: string): boolean;
     deepSearch(query: string): Promise<DeepSearchResult[]>;
+    cancelDeepSearch(): void;
     onHookStatus(callback: (sessionId: string, status: 'working' | 'waiting' | 'completed' | 'input', hookName: string) => void): () => void;
     onCliSessionId(callback: (sessionId: string, cliSessionId: string) => void): () => void;
     /** @deprecated Use onCliSessionId instead */
@@ -27,6 +28,8 @@ export interface VibeyardApi {
     onCostData(callback: (sessionId: string, costData: CostData) => void): () => void;
     onSessionName(callback: (sessionId: string, name: string, cliSessionId: string) => void): () => void;
     resyncStatus(): void;
+    syncRestored(sessions: { sessionId: string; providerId: ProviderId; cliSessionId: string | null; cwd: string; configDir?: string; createdAt: string }[]): Promise<void>;
+    release(sessionId: string): void;
     onToolFailure(callback: (sessionId: string, data: ToolFailureData) => void): () => void;
     onInspectorEvents(callback: (sessionId: string, events: InspectorEvent[]) => void): () => void;
   };
@@ -54,11 +57,11 @@ export interface VibeyardApi {
     save(state: unknown): Promise<void>;
   };
   profiles: {
-    provision(profileId: string, customPath?: string): Promise<{ configDir: string; managed: boolean }>;
+    provision(profileId: string, customPath?: string, providerId?: ProviderId): Promise<{ configDir: string; managed: boolean }>;
     keychainStatus(): Promise<{ status: 'supported' | 'unsupported' | 'unknown'; version: string | null }>;
   };
   provider: {
-    getConfig(providerId: ProviderId, projectPath: string): Promise<ProviderConfig>;
+    getConfig(providerId: ProviderId, projectPath: string, configDir?: string): Promise<ProviderConfig>;
     getMeta(providerId: ProviderId): Promise<CliProviderMeta>;
     listProviders(): Promise<CliProviderMeta[]>;
     checkBinary(providerId?: ProviderId): Promise<boolean>;
@@ -187,9 +190,9 @@ const api: VibeyardApi = {
       ipcRenderer.invoke('pty:getCwd', sessionId),
     onData: (callback) =>
       onChannel('pty:data', (sessionId, data) => callback(sessionId as string, data as string)),
-    onExit: (callback) =>
-      onChannel('pty:exit', (sessionId, exitCode, signal) =>
-        callback(sessionId as string, exitCode as number, signal as number | undefined)),
+      onExit: (callback) =>
+        onChannel('pty:exit', (sessionId, exitCode, signal, exitReason, pid) =>
+          callback(sessionId as string, exitCode as number, signal as number | undefined, exitReason as string | undefined, pid as number | undefined)),
   },
   session: {
     buildResumeWithPrompt: (sourceProviderId, sourceCliSessionId, projectPath, sessionName, configDir) =>
@@ -198,6 +201,7 @@ const api: VibeyardApi = {
       ipcRenderer.invoke('session:transcriptExists', providerId, cliSessionId, projectPath, configDir),
     transcriptExistsSync: (providerId, cliSessionId, projectPath, configDir) =>
       ipcRenderer.sendSync('session:transcriptExistsSync', providerId, cliSessionId, projectPath, configDir),
+    cancelDeepSearch: () => ipcRenderer.send('session:cancelDeepSearch'),
     deepSearch: (query) =>
       ipcRenderer.invoke('session:deepSearch', query),
     onHookStatus: (callback) =>
@@ -216,6 +220,8 @@ const api: VibeyardApi = {
       onChannel('session:sessionName', (sessionId, name, cliSessionId) =>
         callback(sessionId as string, name as string, (cliSessionId as string) || '')),
     resyncStatus: () => ipcRenderer.send('session:resyncStatus'),
+    syncRestored: (sessions) => ipcRenderer.invoke('session:syncRestored', sessions),
+    release: (sessionId) => ipcRenderer.send('session:release', sessionId),
     onToolFailure: (callback) =>
       onChannel('session:toolFailure', (sessionId, data) =>
         callback(sessionId as string, data as ToolFailureData)),
@@ -243,7 +249,7 @@ const api: VibeyardApi = {
     getDroppedFilePath: (file: File) => webUtils.getPathForFile(file),
   },
   provider: {
-    getConfig: (providerId, projectPath) => ipcRenderer.invoke('provider:getConfig', providerId, projectPath),
+    getConfig: (providerId, projectPath, configDir?) => ipcRenderer.invoke('provider:getConfig', providerId, projectPath, configDir),
     getMeta: (providerId) => ipcRenderer.invoke('provider:getMeta', providerId),
     listProviders: () => ipcRenderer.invoke('provider:listProviders'),
     checkBinary: (providerId) => ipcRenderer.invoke('provider:checkBinary', providerId || 'claude'),
@@ -260,7 +266,7 @@ const api: VibeyardApi = {
     save: (state) => ipcRenderer.invoke('store:save', state),
   },
   profiles: {
-    provision: (profileId, customPath) => ipcRenderer.invoke('profiles:provision', profileId, customPath),
+    provision: (profileId, customPath, providerId) => ipcRenderer.invoke('profiles:provision', profileId, customPath, providerId),
     keychainStatus: () => ipcRenderer.invoke('profiles:keychainStatus'),
   },
   git: {

@@ -12,10 +12,18 @@ vi.mock('fs', () => ({
   readFileSync: vi.fn(),
   readdirSync: vi.fn(),
   statSync: vi.fn(),
+  openSync: vi.fn(),
+  fstatSync: vi.fn(),
+  readSync: vi.fn(),
+  closeSync: vi.fn(),
   unlinkSync: vi.fn(),
   rmdirSync: vi.fn(),
   rmSync: vi.fn(),
   watch: vi.fn(),
+  promises: {
+    readdir: vi.fn(),
+    stat: vi.fn(),
+  },
 }));
 
 vi.mock('os', () => ({
@@ -55,6 +63,8 @@ beforeEach(() => {
   vi.mocked(fs.readFileSync).mockImplementation(vi.fn() as any);
   vi.mocked(fs.readdirSync).mockReturnValue([] as any);
   vi.mocked(fs.statSync).mockImplementation(vi.fn() as any);
+  vi.mocked(fs.promises.readdir).mockResolvedValue([] as any);
+  vi.mocked(fs.promises.stat).mockRejectedValue(new Error('ENOENT') as any);
   vi.mocked(fs.unlinkSync).mockImplementation(vi.fn() as any);
   vi.mocked(fs.rmdirSync).mockImplementation(vi.fn() as any);
   vi.mocked(fs.watch).mockImplementation((_path: any, cb: any) => {
@@ -568,42 +578,42 @@ sys.stdout.write(json.dumps({'afterRepeat':after_repeat,'total':len(writes),'fin
   });
 
   describe('polling fallback', () => {
-    it('detects changed files on poll interval', () => {
+    it('detects changed files on poll interval', async () => {
       const win = createMockWin();
       registerSession('s1');
 
       // First poll seeds mtimes
-      vi.mocked(fs.readdirSync).mockReturnValue(['s1.cost'] as any);
-      vi.mocked(fs.statSync).mockReturnValue({ mtimeMs: 1000 } as any);
+      vi.mocked(fs.promises.readdir).mockResolvedValue(['s1.cost'] as any);
+      vi.mocked(fs.promises.stat).mockResolvedValue({ mtimeMs: 1000 } as any);
 
       startWatching(win);
 
       // Advance to trigger first poll — seeds mtimes, no handleFileChange
-      vi.advanceTimersByTime(2000);
+      await vi.advanceTimersByTimeAsync(2000);
       expect(mockSend).not.toHaveBeenCalled();
 
       // Now file has changed mtime
-      vi.mocked(fs.statSync).mockReturnValue({ mtimeMs: 2000 } as any);
+      vi.mocked(fs.promises.stat).mockResolvedValue({ mtimeMs: 2000 } as any);
       const costData = { cost: { total: 0.5 }, context_window: {} };
       vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(costData));
 
-      vi.advanceTimersByTime(2000);
+      await vi.advanceTimersByTimeAsync(2000);
       expect(mockSend).toHaveBeenCalledWith('session:costData', 's1', costData);
     });
 
-    it('skips files with unchanged mtime', () => {
+    it('skips files with unchanged mtime', async () => {
       const win = createMockWin();
 
-      vi.mocked(fs.readdirSync).mockReturnValue(['s1.cost'] as any);
-      vi.mocked(fs.statSync).mockReturnValue({ mtimeMs: 1000 } as any);
+      vi.mocked(fs.promises.readdir).mockResolvedValue(['s1.cost'] as any);
+      vi.mocked(fs.promises.stat).mockResolvedValue({ mtimeMs: 1000 } as any);
 
       startWatching(win);
 
       // Seed mtimes
-      vi.advanceTimersByTime(2000);
+      await vi.advanceTimersByTimeAsync(2000);
 
       // Same mtime — no change
-      vi.advanceTimersByTime(2000);
+      await vi.advanceTimersByTimeAsync(2000);
       expect(mockSend).not.toHaveBeenCalled();
     });
 

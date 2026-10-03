@@ -3,6 +3,9 @@ import type { InspectorEvent, ToolUsageStats, ContextDataPoint } from '../shared
 type ChangeCallback = (sessionId: string) => void;
 
 const MAX_EVENTS = 2000;
+const MAX_EVENT_CHARS = 64 * 1024;
+const MAX_SESSION_CHARS = 2 * 1024 * 1024;
+const eventSizes = new Map<string, number[]>();
 const sessionEvents = new Map<string, InspectorEvent[]>();
 const listeners: ChangeCallback[] = [];
 
@@ -11,11 +14,17 @@ const costDeltaCache = new Map<string, { length: number; deltas: { index: number
 
 export function addEvents(sessionId: string, events: InspectorEvent[]): void {
   const existing = sessionEvents.get(sessionId) ?? [];
-  existing.push(...events);
-  // Cap at MAX_EVENTS, drop oldest
-  if (existing.length > MAX_EVENTS) {
-    existing.splice(0, existing.length - MAX_EVENTS);
+  const sizes = eventSizes.get(sessionId) ?? [];
+  let total = sizes.reduce((sum, size) => sum + size, 0);
+  for (const event of events) {
+    const size = JSON.stringify(event).length;
+    if (size > MAX_EVENT_CHARS) continue;
+    while (existing.length && (existing.length >= MAX_EVENTS || total + size > MAX_SESSION_CHARS)) {
+      existing.shift(); total -= sizes.shift()!;
+    }
+    existing.push(event); sizes.push(size); total += size;
   }
+  eventSizes.set(sessionId, sizes);
   sessionEvents.set(sessionId, existing);
   // Invalidate cache when events change
   costDeltaCache.delete(sessionId);
@@ -110,12 +119,14 @@ export function onChange(callback: ChangeCallback): void {
 
 export function clearSession(sessionId: string): void {
   sessionEvents.delete(sessionId);
+  eventSizes.delete(sessionId);
   costDeltaCache.delete(sessionId);
 }
 
 /** @internal Test-only: reset all module state */
 export function _resetForTesting(): void {
   sessionEvents.clear();
+  eventSizes.clear();
   costDeltaCache.clear();
   listeners.length = 0;
 }

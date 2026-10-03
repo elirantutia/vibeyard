@@ -25,8 +25,12 @@ out/
 # Log files
 *.log
 
-# Superpowers brainstorm artifacts
+# Agent / tooling scratch artifacts
 .superpowers/
+.remember/
+
+# Local electron-builder overrides
+electron-builder.local.json
 
 vibeyard-copilot-hooks.json
 

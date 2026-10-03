@@ -19,6 +19,7 @@ const entryCache = new Map<string, DirEntry[]>();
 const inflight = new Map<string, Promise<DirEntry[]>>();
 const watchedByProject = new Map<string, Set<string>>();
 const activeTrees = new Map<string, { project: ProjectRecord; container: HTMLElement }>();
+const projectPaths = new Map<string, string>();
 let unsubFileChanged: (() => void) | null = null;
 
 function getWatchedSet(projectId: string): Set<string> {
@@ -138,8 +139,21 @@ export function isExpanded(projectId: string, folderPath: string): boolean {
 }
 
 export function clearProjectState(projectId: string): void {
+  const projectPath = projectPaths.get(projectId);
+  projectPaths.delete(projectId);
   expandedFolders.delete(projectId);
   closeFileTree(projectId);
+  if (projectPath) {
+    // The project record is already gone from appState when project-removed
+    // fires, so the path comes from the tree's own record. Evict the cached
+    // listings for its directories so a re-added project re-reads from disk.
+    for (const key of [...entryCache.keys(), ...inflight.keys()]) {
+      if (isPathUnder(key, projectPath)) {
+        entryCache.delete(key);
+        inflight.delete(key);
+      }
+    }
+  }
 }
 
 export function closeFileTree(projectId: string): void {
@@ -489,6 +503,8 @@ function confirmAndTrash(entry: DirEntry): void {
 
 export function renderFileTree(project: ProjectRecord, container: HTMLElement): void {
   ensureChangeSubscription();
+  activeTrees.set(project.id, { project, container });
+  projectPaths.set(project.id, project.path);
   activeTrees.set(project.id, { project, container });
   container.innerHTML = '';
   renderChildren(project.id, project.path, 0, container);

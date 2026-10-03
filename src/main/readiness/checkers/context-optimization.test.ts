@@ -85,21 +85,14 @@ describe('genericContextProducer', () => {
     expect(tagged[0].check.providerIds).toBeUndefined();
   });
 
-  it('creates .vibeyardignore with default patterns when it does not exist', () => {
+  it('does not create .vibeyardignore during a scan', () => {
     mockFs.statSync.mockImplementation(() => { throw new Error('ENOENT'); });
     mockVibeyardignoreAutoCreate();
     mockCountFileLines({ 'small.ts': Array(100).fill('line').join('\n') });
 
     genericContextProducer.produce('/test/project', makeCtx(['small.ts']));
 
-    expect(mockFs.writeFileSync).toHaveBeenCalledWith(
-      expect.stringContaining('.vibeyardignore'),
-      expect.stringContaining('package-lock.json'),
-      'utf-8',
-    );
-    const writtenContent = String(mockFs.writeFileSync.mock.calls[0][1]);
-    expect(writtenContent).toContain('*.min.js');
-    expect(writtenContent).toContain('*.generated.*');
+    expect(mockFs.writeFileSync).not.toHaveBeenCalled();
   });
 
   it('does not overwrite existing .vibeyardignore', () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseEnvVars, findInvalidEnvLines } from './env-vars';
+import { parseEnvVars, findInvalidEnvLines, partitionUserEnv } from './env-vars';
 
 describe('parseEnvVars', () => {
   it('returns an empty object for empty/whitespace input', () => {
@@ -29,6 +29,22 @@ describe('parseEnvVars', () => {
 
   it('skips malformed lines (no "=" or empty key)', () => {
     expect(parseEnvVars('NOEQUALS\n=value\nGOOD=1')).toEqual({ GOOD: '1' });
+  });
+});
+
+describe('profile-owned environment', () => {
+  it('drops casing variants that Windows treats as the same variable', () => {
+    expect(partitionUserEnv({ claude_config_dir: '/other', Pi_Coding_Agent_Dir: '/other', SAFE: 'yes' })).toEqual({
+      allowed: { SAFE: 'yes' },
+      dropped: ['claude_config_dir', 'Pi_Coding_Agent_Dir'],
+    });
+  });
+
+  it('drops the pi/omp profile and directory selectors in any casing', () => {
+    expect(partitionUserEnv({ OMP_PROFILE: 'x', pi_profile: 'y', PI_CONFIG_DIR: 'z', PI_CODING_AGENT_DIR: 'w', SAFE: 'yes' })).toEqual({
+      allowed: { SAFE: 'yes' },
+      dropped: ['OMP_PROFILE', 'pi_profile', 'PI_CONFIG_DIR', 'PI_CODING_AGENT_DIR'],
+    });
   });
 });
 

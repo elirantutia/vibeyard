@@ -3,7 +3,7 @@
 
 export class DecryptionError extends Error {
   constructor() {
-    super('Invalid PIN or corrupted code');
+    super('Invalid share key or corrupted code');
     this.name = 'DecryptionError';
   }
 }
@@ -12,17 +12,16 @@ const PBKDF2_ITERATIONS = 100_000;
 const SALT_LENGTH = 16;
 const IV_LENGTH = 12;
 const CHALLENGE_SALT = new TextEncoder().encode('vibeyard-challenge-v1');
-const MIN_PIN_LENGTH = 4;
-const MAX_PIN_LENGTH = 8;
-
-export function validatePin(pin: string): string | null {
-  if (!/^\d+$/.test(pin)) return 'PIN must contain only digits';
-  if (pin.length < MIN_PIN_LENGTH) return `PIN must be at least ${MIN_PIN_LENGTH} digits`;
-  if (pin.length > MAX_PIN_LENGTH) return `PIN must be at most ${MAX_PIN_LENGTH} digits`;
-  return null;
+// A random 128-bit key makes captured connection codes resistant to offline guessing.
+export function generateShareKey(): string {
+  return bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
 }
 
-async function deriveKey(passphrase: string, salt: Uint8Array, usage: KeyUsage[]): Promise<CryptoKey> {
+export function validateShareKey(key: string): string | null {
+  return /^[0-9a-f]{32}$/i.test(key) ? null : 'Share key must be 32 hexadecimal characters';
+}
+
+async function deriveKey(passphrase: string, salt: Uint8Array<ArrayBuffer>, usage: KeyUsage[]): Promise<CryptoKey> {
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(passphrase),
@@ -86,7 +85,7 @@ export async function decryptPayload(encoded: string, passphrase: string): Promi
   return new TextDecoder().decode(decrypted);
 }
 
-export function generateChallenge(): Uint8Array {
+export function generateChallenge(): Uint8Array<ArrayBuffer> {
   return crypto.getRandomValues(new Uint8Array(32));
 }
 
@@ -94,7 +93,7 @@ export function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-export function hexToBytes(hex: string): Uint8Array {
+export function hexToBytes(hex: string): Uint8Array<ArrayBuffer> {
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < hex.length; i += 2) {
     bytes[i / 2] = parseInt(hex.slice(i, i + 2), 16);
@@ -102,7 +101,7 @@ export function hexToBytes(hex: string): Uint8Array {
   return bytes;
 }
 
-export async function computeChallengeResponse(challenge: Uint8Array, passphrase: string): Promise<string> {
+export async function computeChallengeResponse(challenge: Uint8Array<ArrayBuffer>, passphrase: string): Promise<string> {
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(passphrase),

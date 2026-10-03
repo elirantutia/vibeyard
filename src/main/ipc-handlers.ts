@@ -2,13 +2,15 @@ import { ipcMain, BrowserWindow, app, dialog, shell, clipboard } from 'electron'
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { execSync } from 'child_process';
-import { spawnPty, spawnShellPty, writePty, resizePty, killPty, isSilencedExit, getPtyCwd } from './pty-manager';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { spawnPty, spawnShellPty, writePty, resizePty, killPty, getPtyCwd } from './pty-manager';
 import { addMcpServer, removeMcpServer } from './claude-cli';
 import type { McpServerConfig } from './claude-cli';
-import { loadState, saveState, PersistedState } from './store';
-import { startWatching, cleanupSessionStatus, resyncAllSessions } from './hook-status';
-import { startCodexSessionWatcher, registerPendingCodexSession, unregisterCodexSession } from './codex-session-watcher';
+import { loadState, saveState, getKnownProjectPaths, PersistedState } from './store';
+import { startWatching, cleanupSessionStatus, resyncAllSessions, registerSession } from './hook-status';
+import { registerTranscriptSync, unregisterTranscriptSync, getSyncedTranscriptPath } from './session-transcript-sync';
+import type { SessionExitReason } from './providers/pi-compatible-transcripts';
 import { getGitStatus, getGitFiles, getGitDiff, getGitWorktrees, gitStageFile, gitUnstageFile, gitDiscardFile, getGitRemoteUrl, listGitBranches, checkoutGitBranch, createGitBranch } from './git-status';
 import { startGitWatcher, stopGitWatcher, notifyGitChanged } from './git-watcher';
 import { watchDir, unwatchDir, setFileWatcherWindow } from './file-watcher';
@@ -22,7 +24,7 @@ import type { ProviderId, GitFileEntry, SettingsValidationResult, ReadFileResult
 import { estimateTokens, TOKEN_COUNT_MAX_CHARS } from '../shared/token-estimate';
 import { analyzeReadiness } from './readiness/analyzer';
 import { isGhAvailable, listPullRequests, listIssues, detectRepo } from './github-cli';
-import { expandUserPath, isBinaryBuffer, isLikelyBinaryFile, isMacPackagePath, BINARY_SNIFF_BYTES } from './fs-utils';
+import { expandUserPath, isBinaryBuffer, isMacPackagePath, BINARY_SNIFF_BYTES } from './fs-utils';
 import { isLinux, isMac, isWin } from './platform';
 import { listProfiles as listChromeProfiles, runImport as runChromeImport, clearImportedCookies, getCookieCount } from './chrome-import/importer';
 import type { ChromeImportOptions, ChromeImportProgress, ClipboardSource } from '../shared/types';
@@ -30,14 +32,35 @@ import { shouldWarnStatusLine } from './settings-guard';
 import { buildVibeyardignoreMatcher } from './vibeyardignore';
 import { setCloseConfirmed } from './close-state';
 import { provisionProfileDir } from './profiles';
+import { launchSessionDir } from './launch-session-dir';
 import { getKeychainIsolationStatus } from './claude-keychain';
+
+const MAX_READ_FILE_BYTES = 8 * 1024 * 1024;
 
 /**
  * Check if a resolved path is within one of the known project directories.
  */
 function isWithinKnownProject(resolvedPath: string): boolean {
-  const state = loadState();
-  return state.projects.some(p => resolvedPath.startsWith(p.path + path.sep) || resolvedPath === p.path);
+  const target = canonicalPath(resolvedPath);
+  const paths = getKnownProjectPaths();
+  return paths.some(p => isWithin(canonicalPath(p), target));
+}
+
+/** Resolve existing links, including a link in an existing parent directory. */
+function canonicalPath(filePath: string): string {
+  const resolved = path.resolve(filePath);
+  try {
+    return fs.realpathSync(resolved);
+  } catch {
+    const parent = path.dirname(resolved);
+    if (parent === resolved) return resolved;
+    return path.join(canonicalPath(parent), path.basename(resolved));
+  }
+}
+
+function isWithin(root: string, target: string): boolean {
+  const relative = path.relative(root, target);
+  return relative === '' || (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative));
 }
 
 /**
@@ -80,21 +103,22 @@ function isAllowedReadPath(resolvedPath: string): boolean {
   const allowedPaths = [
     path.join(home, '.claude.json'),
     path.join(home, '.mcp.json'),
-    path.join(home, '.claude') + path.sep,
-    path.join(home, '.codex') + path.sep,
-    path.join(home, '.gemini') + path.sep,
-    path.join(home, '.copilot') + path.sep,
+    path.join(home, '.claude'),
+    path.join(home, '.codex'),
+    path.join(home, '.gemini'),
+    path.join(home, '.copilot'),
   ];
 
   if (isMac) {
-    allowedPaths.push('/Library/Application Support/ClaudeCode/');
+    allowedPaths.push('/Library/Application Support/ClaudeCode');
   } else if (isWin) {
-    allowedPaths.push('C:\\Program Files\\ClaudeCode\\');
+    allowedPaths.push('C:\\Program Files\\ClaudeCode');
   } else {
-    allowedPaths.push('/etc/claude-code/');
+    allowedPaths.push('/etc/claude-code');
   }
 
-  return allowedPaths.some(allowed => resolvedPath === allowed || resolvedPath.startsWith(allowed));
+  const target = canonicalPath(resolvedPath);
+  return allowedPaths.some(allowed => isWithin(canonicalPath(allowed), target));
 }
 
 /**
@@ -102,14 +126,16 @@ function isAllowedReadPath(resolvedPath: string): boolean {
  * falls back to a depth- and count-limited recursive walk when not a git repo.
  * Returns repo-relative paths.
  */
-function enumerateProjectFiles(resolvedCwd: string): string[] {
+const execFileAsync = promisify(execFile);
+
+async function enumerateProjectFiles(resolvedCwd: string): Promise<string[]> {
   try {
-    const output = execSync('git ls-files --cached --others --exclude-standard', {
-      cwd: resolvedCwd,
-      encoding: 'utf-8',
-      timeout: 5000,
-    });
-    return output.split('\n').filter(Boolean);
+    const { stdout } = await execFileAsync(
+      'git',
+      ['ls-files', '--cached', '--others', '--exclude-standard'],
+      { cwd: resolvedCwd, encoding: 'utf-8', timeout: 5000 },
+    );
+    return stdout.split('\n').filter(Boolean);
   } catch {
     const files: string[] = [];
     const IGNORE = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', '.next', '__pycache__']);
@@ -141,6 +167,16 @@ export function resetHookWatcher(): void {
   hookWatcherStarted = false;
 }
 
+/** A session restored from a previous run, sent to `session:syncRestored`. */
+interface RestoredSession {
+  sessionId: string;
+  providerId: ProviderId;
+  cliSessionId: string | null;
+  cwd: string;
+  configDir?: string;
+  createdAt: string;
+}
+
 export function registerIpcHandlers(): void {
   ipcMain.handle('pty:create', async (_event, sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs: string, providerId: ProviderId = 'claude', initialPrompt?: string, systemPrompt?: string, envVars: string = '', configDir?: string) => {
     const win = BrowserWindow.getAllWindows()[0];
@@ -154,39 +190,102 @@ export function registerIpcHandlers(): void {
 
     const provider = getProvider(providerId);
 
-    // For Codex sessions without a cliSessionId, start watching history.jsonl
-    if (providerId === 'codex' && !cliSessionId) {
-      startCodexSessionWatcher(win);
-      registerPendingCodexSession(sessionId);
+    // Providers without a hook system that reports the CLI session id
+    // discover it from on-disk artifacts after spawn (codex: history.jsonl,
+    if (!cliSessionId) {
+      provider.onSessionStarted?.(sessionId, cwd, win, configDir);
+    } else {
+      // The session already knows its cli id, so discovery never runs —
+      // start mirroring the CLI's own title / derived status from the
+      // known conversation. The sync derives what to poll from the
+      // provider's capabilities (a provider can be both, e.g. OMP).
+      // sessionDir (Pi/OMP) is the launch's exclusive transcript dir:
+      // path resolution checks it first, so a post-`/clear` transcript is
+      // found where the CLI wrote it, not only in the legacy trees.
+      const sessionDir = providerId === 'pi' || providerId === 'omp'
+        ? launchSessionDir(providerId, sessionId)
+        : undefined;
+      registerTranscriptSync(sessionId, providerId, cliSessionId, cwd, configDir, { sessionDir });
+      // ...and let the provider re-attach to its own on-disk state,
+      // seeding the sessions watcher as an ADOPTED entry (known id +
+      // existing transcript path) so a later `/clear` — a brand-new
+      // transcript under a new id in the launch's own dir — is
+      // re-adopted instead of the tab freezing on the pre-clear file.
+      provider.onSessionResumed?.(sessionId, cwd, win, configDir, cliSessionId);
     }
 
-    await spawnPty(
-      sessionId,
-      cwd,
-      cliSessionId,
-      isResume,
-      extraArgs,
-      providerId,
-      initialPrompt,
-      systemPrompt,
-      envVars,
-      (data) => {
-        const w = BrowserWindow.getAllWindows()[0];
-        if (w && !w.isDestroyed()) {
-          w.webContents.send('pty:data', sessionId, data);
-        }
-      },
-      (exitCode, signal) => {
-        cleanupSessionStatus(sessionId);
-        unregisterCodexSession(sessionId);
-        if (isSilencedExit(sessionId)) return; // old PTY killed for re-spawn
-        const w = BrowserWindow.getAllWindows()[0];
-        if (w && !w.isDestroyed()) {
-          w.webContents.send('pty:exit', sessionId, exitCode, signal);
-        }
-      },
-      configDir
-    );
+    const launchStartedAt = Date.now();
+    try {
+      await spawnPty(
+        sessionId,
+        cwd,
+        cliSessionId,
+        isResume,
+        extraArgs,
+        providerId,
+        initialPrompt,
+        systemPrompt,
+        envVars,
+        (data) => {
+          if (!win.isDestroyed()) {
+            win.webContents.send('pty:data', sessionId, data);
+          }
+        },
+        (exitCode, signal, pid) => {
+          // pty-manager suppresses the replaced process's callback before it
+          // reaches this handler, regardless of which PTY exits first.
+          // The session is about to be destroyed — read the CLI's own crash
+          // reason from the transcript before the sync entry is torn down.
+          let reason: SessionExitReason | null = null;
+          let transcriptPath = getSyncedTranscriptPath(sessionId);
+          if (!transcriptPath && cliSessionId) {
+            try {
+              transcriptPath = provider.getTranscriptPath?.(cliSessionId, cwd, configDir, providerId === 'omp' || providerId === 'pi' ? launchSessionDir(providerId, sessionId) : undefined) ?? null;
+            } catch {
+              transcriptPath = null;
+            }
+          }
+          if (transcriptPath && provider.readSessionExitReason) {
+            try {
+              reason = provider.readSessionExitReason(transcriptPath);
+            } catch {
+              reason = null;
+            }
+          }
+          if (reason?.timestamp) {
+            const markerTime = Date.parse(reason.timestamp);
+            if (!Number.isFinite(markerTime) || markerTime < launchStartedAt) reason = null;
+          }
+          const exitReason = reason && reason.kind !== 'normal' && reason.reason !== 'dispose'
+            ? reason.reason
+            : exitCode !== 0
+              ? `exited with code ${exitCode}${signal ? ` (signal ${signal})` : ''}`
+              : signal ? `exited with signal ${signal}` : undefined;
+          if (providerId === 'omp') {
+            console.info('[omp-session-exit]', JSON.stringify({ at: new Date().toISOString(), sessionId, pid, exitCode, signal, exitReason, transcriptFound: !!transcriptPath }));
+          }
+          unregisterTranscriptSync(sessionId);
+          cleanupSessionStatus(sessionId);
+          provider.onSessionExited?.(sessionId);
+          const w = BrowserWindow.getAllWindows()[0];
+          if (w && !w.isDestroyed()) {
+            w.webContents.send('pty:exit', sessionId, exitCode, signal, exitReason, pid);
+          }
+        },
+        configDir
+      );
+    } catch (err) {
+      // spawnPty threw before installing the exit callback — cancel pending
+      // id discovery so it can't match an unrelated run later, and drop
+      // the transcript sync and status state registered above. Nothing will
+      // ever fire the exit callback for a PTY that never spawned, so its 2s
+      // poller, fs.watch and name/status IPC would run forever for a session
+      // the renderer has already discarded.
+      provider.onSessionExited?.(sessionId);
+      unregisterTranscriptSync(sessionId);
+      cleanupSessionStatus(sessionId);
+      throw err;
+    }
 
     // Validate after spawnPty — Copilot installs per-project hooks there, so
     // validating earlier would see an empty config on a project's first spawn.
@@ -297,8 +396,8 @@ export function registerIpcHandlers(): void {
 
   // Provision (create) a profile's config dir. Returns the resolved absolute
   // path and whether it is the auto-managed location.
-  ipcMain.handle('profiles:provision', (_event, profileId: string, customPath?: string) => {
-    const configDir = provisionProfileDir(profileId, customPath);
+  ipcMain.handle('profiles:provision', (_event, profileId: string, customPath?: string, providerId?: ProviderId) => {
+    const configDir = provisionProfileDir(profileId, customPath, providerId, loadState().profiles ?? []);
     return { configDir, managed: !customPath?.trim() };
   });
 
@@ -321,10 +420,16 @@ export function registerIpcHandlers(): void {
     if (source === 'selection' && isLinux) clipboard.writeText(text, 'selection');
   });
 
-  ipcMain.handle('provider:getConfig', async (_event, providerId: ProviderId, projectPath: string) => {
-    const provider = getProvider(providerId);
-    return provider.getConfig(projectPath);
-  });
+  ipcMain.handle(
+    'provider:getConfig',
+    async (_event, providerId: ProviderId, projectPath: string, configDir?: string) => {
+      const provider = getProvider(providerId);
+      // configDir is the project's pinned profile dir. Providers whose config
+      // lives in a relocated agent tree (Pi's mcp.json) must read from it —
+      // otherwise a project running as one login shows another login's servers.
+      return provider.getConfig(projectPath, configDir);
+    }
+  );
 
   // Backward compatibility alias
   ipcMain.handle('claude:getConfig', async (_event, projectPath: string) => {
@@ -397,8 +502,19 @@ export function registerIpcHandlers(): void {
     event.returnValue = transcriptExists(providerId, cliSessionId, projectPath, configDir);
   });
 
-  ipcMain.handle('session:deepSearch', (_event, query: string) => {
-    return searchSessions(query);
+  const searches = new WeakMap<Electron.WebContents, AbortController>();
+  ipcMain.on('session:cancelDeepSearch', (event) => searches.get(event.sender)?.abort());
+  ipcMain.handle('session:deepSearch', async (event, query: string) => {
+    searches.get(event.sender)?.abort();
+    const controller = new AbortController();
+    searches.set(event.sender, controller);
+    const cancel = () => controller.abort();
+    event.sender.once('destroyed', cancel);
+    try { return await searchSessions(query, controller.signal); }
+    finally {
+      event.sender.removeListener('destroyed', cancel);
+      if (searches.get(event.sender) === controller) searches.delete(event.sender);
+    }
   });
 
   ipcMain.handle('provider:checkBinary', (_event, providerId: ProviderId = 'claude') => {
@@ -440,6 +556,59 @@ export function registerIpcHandlers(): void {
     if (w) resyncAllSessions(w);
   });
 
+  // Re-derive titles for sessions restored from a previous run. A Pi/OMP tab
+  // only ever learns the CLI's own title while a live PTY drives
+  // `registerTranscriptSync`; after a restart nothing re-reads the transcript,
+  // so a tab whose title was generated/changed while Vibeyard was closed stays
+  // frozen on its default name. The renderer sends every restored self-titling
+  // session; main mirrors each KNOWN-id session's title from its exact
+  // transcript. A session whose `cliSessionId` was never persisted stays
+  // UNRESOLVED: ownership is not inferred from cwd + creation time (that path
+  // can assign an unrelated conversation and persist it), so the tab keeps its
+  // default name until it is resumed.
+  ipcMain.handle('session:syncRestored', (_event, sessions: RestoredSession[]) => {
+    const win = BrowserWindow.getAllWindows()[0];
+    if (!win || win.isDestroyed() || !Array.isArray(sessions)) return;
+    // transcript-sync writes `.name` into STATUS_DIR for the watcher to forward,
+    // but the watcher only starts on the first `pty:create` — start it now.
+    if (!hookWatcherStarted) {
+      startWatching(win);
+      hookWatcherStarted = true;
+    }
+    for (const s of sessions) {
+      // Validate the record at the IPC boundary. A malformed record is dropped,
+      // never allowed to abort the rest of the batch.
+      if (!s || typeof s.sessionId !== 'string' || !s.sessionId) continue;
+      if (typeof s.providerId !== 'string') continue;
+      if (typeof s.cwd !== 'string') continue;
+      if (typeof s.createdAt !== 'string' || !Number.isFinite(Date.parse(s.createdAt))) continue;
+      // Only a KNOWN conversation id gets a title mirror. An unknown id stays
+      // unresolved — we do not guess ownership from cwd + time.
+      if (typeof s.cliSessionId !== 'string' || !s.cliSessionId) continue;
+      try {
+        // Pi/OMP: the restored tab's launch dir is derivable from its UI
+        // session id, so a post-`/clear` transcript written to it before
+        // the restart is resolvable without any persisted mapping.
+        const sessionDir = s.providerId === 'pi' || s.providerId === 'omp'
+          ? launchSessionDir(s.providerId, s.sessionId)
+          : undefined;
+        if (registerTranscriptSync(s.sessionId, s.providerId, s.cliSessionId, s.cwd, s.configDir, { titleOnly: true, sessionDir })) {
+          registerSession(s.sessionId);
+        }
+      } catch {
+        // Unknown provider id (registerTranscriptSync → getProvider throws):
+        // drop this record and keep going.
+      }
+    }
+  });
+
+  // Drop the restored-session sync registered above when a tab is closed without
+  // ever being resumed (a live PTY tears its own down on exit).
+  ipcMain.on('session:release', (_event, sessionId: string) => {
+    unregisterTranscriptSync(sessionId);
+    cleanupSessionStatus(sessionId);
+  });
+
   ipcMain.on('app:focus', () => {
     app.focus({ steal: true });
     const win = BrowserWindow.getAllWindows()[0];
@@ -468,7 +637,9 @@ export function registerIpcHandlers(): void {
     try {
       const entries = await fs.promises.readdir(dir);
       const now = Date.now();
-      await Promise.all(entries.map(async (name) => {
+      // Sequential: this is background cleanup, and iterating avoids both the
+      // array-callback-return trap and unbounded concurrent deletes.
+      for (const name of entries) {
         const full = path.join(dir, name);
         try {
           const stat = await fs.promises.stat(full);
@@ -478,7 +649,7 @@ export function registerIpcHandlers(): void {
         } catch (err) {
           console.warn('Failed to prune screenshot', full, err);
         }
-      }));
+      }
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
         console.warn('Failed to read screenshots dir for pruning', err);
@@ -558,7 +729,14 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('app:openExternal', (_event, url: string) => {
-    const parsed = new URL(url);
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      // Same outcome as before — the invoke rejects — but explicit rather than
+      // an escaping TypeError.
+      throw new Error('Invalid URL');
+    }
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
       throw new Error('Only HTTP(S) URLs are allowed');
     }
@@ -615,13 +793,13 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('pty:getCwd', (_event, sessionId: string) => getPtyCwd(sessionId));
 
-  ipcMain.handle('fs:listFiles', (_event, cwd: string, query: string) => {
+  ipcMain.handle('fs:listFiles', async (_event, cwd: string, query: string) => {
     try {
       const resolvedCwd = path.resolve(cwd);
       if (!isWithinKnownProject(resolvedCwd)) {
         return [];
       }
-      let files = enumerateProjectFiles(resolvedCwd);
+      let files = await enumerateProjectFiles(resolvedCwd);
 
       if (query) {
         const lower = query.toLowerCase();
@@ -653,7 +831,7 @@ export function registerIpcHandlers(): void {
       }
       const clampedLimit = Math.max(1, Math.min(100, Math.floor(limit) || 10));
       const isIgnored = buildVibeyardignoreMatcher(resolvedCwd);
-      const relFiles = enumerateProjectFiles(resolvedCwd).filter((rel) => !isIgnored(rel));
+      const relFiles = (await enumerateProjectFiles(resolvedCwd)).filter((rel) => !isIgnored(rel));
 
       const results: TopFile[] = [];
       let scanned = 0;
@@ -688,12 +866,15 @@ export function registerIpcHandlers(): void {
         }
       }
 
-      const workers = Array.from({ length: Math.min(CONCURRENCY, relFiles.length) }, async () => {
-        while (cursor < relFiles.length) {
-          const rel = relFiles[cursor++];
-          try { await processOne(rel); } catch { skipped++; }
-        }
-      });
+      const workers: Promise<void>[] = [];
+      for (let i = Math.min(CONCURRENCY, relFiles.length); i > 0; i--) {
+        workers.push((async () => {
+          while (cursor < relFiles.length) {
+            const rel = relFiles[cursor++];
+            try { await processOne(rel); } catch { skipped++; }
+          }
+        })());
+      }
       await Promise.all(workers);
 
       results.sort((a, b) => b.tokens - a.tokens);
@@ -737,10 +918,27 @@ export function registerIpcHandlers(): void {
       }
       // Sniff the head before slurping the whole file so a multi-MB binary
       // (e.g. build artifacts in build/) doesn't get allocated just to be discarded.
-      if (isLikelyBinaryFile(resolved)) {
-        return { ok: false, reason: 'binary' };
+      // One fd for both: open once, sniff 8KB, read the remainder from the same fd.
+      const fd = fs.openSync(resolved, 'r');
+      try {
+        const head = Buffer.alloc(BINARY_SNIFF_BYTES);
+        const headBytes = fs.readSync(fd, head, 0, BINARY_SNIFF_BYTES, 0);
+        if (isBinaryBuffer(head.subarray(0, headBytes))) {
+          return { ok: false, reason: 'binary' };
+        }
+        const size = fs.fstatSync(fd).size;
+        if (size > MAX_READ_FILE_BYTES) return { ok: false, reason: 'error' };
+        const rest = Buffer.alloc(Math.max(0, size - headBytes));
+        let off = 0;
+        while (off < rest.length) {
+          const n = fs.readSync(fd, rest, off, rest.length - off, headBytes + off);
+          if (n === 0) break; // EOF (file shrank between fstat and read)
+          off += n;
+        }
+        return { ok: true, content: Buffer.concat([head.subarray(0, headBytes), rest.subarray(0, off)]).toString('utf-8') };
+      } finally {
+        fs.closeSync(fd);
       }
-      return { ok: true, content: fs.readFileSync(resolved, 'utf-8') };
     } catch (err) {
       console.warn('fs:readFile failed:', err);
       return { ok: false, reason: 'error' };

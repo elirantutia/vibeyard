@@ -349,3 +349,66 @@ describe('createCardElement provider icon', () => {
     expect(icon!.src).toBe('assets/providers/copilot.png');
   });
 });
+
+describe('createCardElement assignee badge', () => {
+  function assigneeEl(task: ReturnType<typeof addTask>): StubEl | undefined {
+    const card = createCardElement(task!) as unknown as StubEl;
+    return card.children.find((c) => c.className === 'board-card-assignee');
+  }
+
+  it('renders the member name when the task is assigned', () => {
+    const member = appState.addTeamMember({ name: 'CMO', role: 'Marketing', systemPrompt: 'x', source: 'custom' });
+    const task = addTask({ title: 'T', prompt: 'p', columnId: 'col-backlog', assigneeId: member.id });
+    const badge = assigneeEl(task);
+    expect(badge).toBeTruthy();
+    expect(badge!.textContent).toBe('CMO');
+  });
+
+  it('omits the badge when no assignee is set', () => {
+    const task = addTask({ title: 'T', prompt: 'p', columnId: 'col-backlog' });
+    expect(assigneeEl(task)).toBeUndefined();
+  });
+
+  it('omits the badge when the assignee no longer exists', () => {
+    const task = addTask({ title: 'T', prompt: 'p', columnId: 'col-backlog', assigneeId: 'ghost-member' });
+    expect(assigneeEl(task)).toBeUndefined();
+  });
+});
+
+describe('runTask assignee', () => {
+  it('starts a team-chat session for the assigned member', async () => {
+    const chatSpy = vi.spyOn(appState, 'startTeamChat').mockReturnValue({ id: 'team-sess' } as never);
+    const addSpy = vi.spyOn(appState, 'addSession');
+    const member = appState.addTeamMember({ name: 'CMO', role: 'Marketing', systemPrompt: 'x', source: 'custom' });
+    const task = addTask({ title: 'T', prompt: 'do it', columnId: 'col-backlog', providerId: 'claude', assigneeId: member.id })!;
+
+    await runTask(task);
+
+    expect(chatSpy).toHaveBeenCalledWith(appState.activeProject!.id, member, 'claude');
+    expect(addSpy).not.toHaveBeenCalled();
+  });
+
+  it('runs a plain session when the assignee no longer exists', async () => {
+    const chatSpy = vi.spyOn(appState, 'startTeamChat');
+    const addSpy = vi.spyOn(appState, 'addSession').mockReturnValue({ id: 'new-sess' } as never);
+    const task = addTask({ title: 'T', prompt: 'do it', columnId: 'col-backlog', providerId: 'claude' })!;
+    task.assigneeId = 'ghost-member'; // a stale reference that resolves to no member
+
+    await runTask(task);
+
+    expect(chatSpy).not.toHaveBeenCalled();
+    expect(addSpy).toHaveBeenCalled();
+  });
+
+  it('falls back to a plain session when no team-capable provider is available', async () => {
+    const chatSpy = vi.spyOn(appState, 'startTeamChat').mockReturnValue(undefined);
+    const addSpy = vi.spyOn(appState, 'addSession').mockReturnValue({ id: 'new-sess' } as never);
+    const member = appState.addTeamMember({ name: 'CMO', role: 'Marketing', systemPrompt: 'x', source: 'custom' });
+    const task = addTask({ title: 'T', prompt: 'do it', columnId: 'col-backlog', providerId: 'claude', assigneeId: member.id })!;
+
+    await runTask(task);
+
+    expect(chatSpy).toHaveBeenCalled();
+    expect(addSpy).toHaveBeenCalled();
+  });
+});

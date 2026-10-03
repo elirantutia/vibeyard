@@ -10,6 +10,7 @@ import {
 } from '../../provider-availability.js';
 import { appState } from '../../state.js';
 import { runTask } from './board-card.js';
+import { resolvePinnedTeamProfile } from '../../state/team-state.js';
 import { t } from '../../i18n.js';
 
 export interface TaskModalPrefill {
@@ -76,6 +77,7 @@ export function showTaskModal(
 
   let currentProviderId: ProviderId =
     task?.providerId
+    ?? appState.activeProject?.defaultProvider
     ?? appState.preferences.defaultProvider
     ?? 'claude';
   // Only the task's own explicit profile pre-selects the dropdown. "Default"
@@ -83,6 +85,7 @@ export function showTaskModal(
   // pre-fill the resolved default id here, or selecting "Default" would never
   // stick (it would reappear as the default profile on reopen).
   let currentProfileId: string = task?.profileId ?? '';
+  let currentAssigneeId: string = task?.assigneeId ?? '';
   const initialPlanMode = task?.planMode ?? (mode === 'create');
   const { row: planModeRow, checkbox: planModeCheckbox } =
     createPlanModeRow('Plan mode', initialPlanMode);
@@ -113,6 +116,7 @@ export function showTaskModal(
         tags: currentTags.length > 0 ? currentTags : undefined,
         providerId: currentProviderId,
         profileId: currentProfileId || undefined,
+        assigneeId: currentAssigneeId || undefined,
         planMode,
       });
     } else if (task) {
@@ -123,6 +127,7 @@ export function showTaskModal(
         tags: currentTags.length > 0 ? currentTags : undefined,
         providerId: currentProviderId,
         profileId: currentProfileId || undefined,
+        assigneeId: currentAssigneeId || undefined,
         planMode,
         ...(values.columnId ? { columnId: values.columnId } : {}),
       });
@@ -261,7 +266,7 @@ export function showTaskModal(
   const onProviderChange = (value: string) => {
     currentProviderId = value as ProviderId;
     refreshPlanModeAvailability();
-    renderProfileField();
+    applyAssigneeFieldVisibility();
   };
 
   const initialProviderOptions = buildProviderOptions();
@@ -276,7 +281,7 @@ export function showTaskModal(
   providerFieldDiv.appendChild(providerSelect.element);
   registerModalCleanup(() => providerSelect.destroy());
 
-  // Profile dropdown (provider-scoped; today only Claude has profiles).
+  // Profile dropdown (provider-scoped; today Claude, Pi and OMP have profiles).
   // Hidden entirely when the selected provider has no profiles.
   const profileFieldDiv = document.createElement('div');
   profileFieldDiv.className = 'modal-field';
@@ -310,7 +315,7 @@ export function showTaskModal(
     // (empty) rather than pinning a copy of that id onto the task.
     const defaultId =
       appState.activeProject?.defaultProfileId
-      ?? appState.preferences.defaultProfileId
+      ?? appState.preferences.defaultProfiles?.[currentProviderId]
       ?? '';
     const defaultProfile = profiles.find(p => p.id === defaultId);
     // Fold an explicit pin of the default profile into "follow default" so the
@@ -328,20 +333,71 @@ export function showTaskModal(
     profileFieldDiv.appendChild(profileSelect.element);
   }
 
+  // Assignee dropdown (team member the task is assigned to; running it starts
+  // a team-chat session as that member). "Unassigned" (empty) keeps the plain
+  // session behavior.
+  const assigneeFieldDiv = document.createElement('div');
+  assigneeFieldDiv.className = 'modal-field';
+  const assigneeLabel = document.createElement('label');
+  assigneeLabel.textContent = t('board.taskModal.assigneeLabel');
+  assigneeFieldDiv.appendChild(assigneeLabel);
+  const assigneeOptions = [
+    { value: '', label: t('board.taskModal.assigneeUnassigned') },
+    ...appState.getTeamMembers().map(m => ({ value: m.id, label: m.name })),
+  ];
+  // A dangling assigneeId renders as "Unassigned" here (createCustomSelect
+  // falls back to the first option) and is stripped on save by updateTask.
+  const assigneeSelect = createCustomSelect('taskAssignee', assigneeOptions, currentAssigneeId, (v) => {
+    currentAssigneeId = v;
+    applyAssigneeFieldVisibility();
+  });
+  assigneeFieldDiv.appendChild(assigneeSelect.element);
+  registerModalCleanup(() => assigneeSelect.destroy());
+
   const planModeFieldDiv = document.createElement('div');
   planModeFieldDiv.className = 'modal-field modal-field-checkbox';
   planModeFieldDiv.appendChild(planModeRow);
 
+  // An assigned task runs as a team-chat session, which resolves its own
+  // profile and never applies plan mode — hide those two fields so the modal
+  // doesn't promise settings that get discarded at run time. The provider
+  // field stays visible only when it actually steers the backend: an assignee
+  // pinned to a profile fixes the provider via the pin (resolveTeamChatBackend
+  // returns the pin's provider before consulting the override), so the pick
+  // would be inert and the field is hidden — matching the member card.
+  function applyAssigneeFieldVisibility(): void {
+    if (currentAssigneeId) {
+      // An assigned task runs as team-chat under the member's pinned
+      // profile; the task's own profile is never applied. Clear it so a
+      // provider change while assigned can't persist a profileId that
+      // belongs to a different provider.
+      currentProfileId = '';
+      profileFieldDiv.style.display = 'none';
+      planModeFieldDiv.style.display = 'none';
+      const member = appState.getTeamMemberById(currentAssigneeId);
+      const pinned = member ? resolvePinnedTeamProfile(member, appState.profiles) : null;
+      providerFieldDiv.style.display = pinned ? 'none' : '';
+    } else {
+      renderProfileField(); // restores the natural profile visibility + rebuilds the select
+      planModeFieldDiv.style.display = '';
+      providerFieldDiv.style.display = '';
+    }
+  }
+
   refreshPlanModeAvailability();
-  renderProfileField();
+  // applyAssigneeFieldVisibility() rebuilds the profile select in its
+  // unassigned branch, so no separate renderProfileField() call is needed here.
+  applyAssigneeFieldVisibility();
 
   if (columnField) {
     modalBody.insertBefore(providerFieldDiv, columnField);
     modalBody.insertBefore(profileFieldDiv, columnField);
+    modalBody.insertBefore(assigneeFieldDiv, columnField);
     modalBody.insertBefore(planModeFieldDiv, columnField);
   } else {
     modalBody.appendChild(providerFieldDiv);
     modalBody.appendChild(profileFieldDiv);
+    modalBody.appendChild(assigneeFieldDiv);
     modalBody.appendChild(planModeFieldDiv);
   }
 
@@ -384,6 +440,7 @@ export function showTaskModal(
           tags: currentTags.length > 0 ? currentTags : undefined,
           providerId: currentProviderId,
           profileId: currentProfileId || undefined,
+          assigneeId: currentAssigneeId || undefined,
           planMode,
           ...(columnId ? { columnId } : {}),
         });

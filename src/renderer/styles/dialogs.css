@@ -225,6 +225,14 @@
   display: inline-block;
 }
 
+.help-glyph {
+  display: inline-block;
+  width: 1.1em;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1;
+}
+
 .help-badge {
   font-size: 11px;
   padding: 1px 6px;

@@ -159,6 +159,8 @@ describe('buildEnv', () => {
   it('does not set CLAUDE_CONFIG_DIR when no configDir is given', () => {
     expect(provider.buildEnv('sess-123', {}).CLAUDE_CONFIG_DIR).toBeUndefined();
     expect(provider.buildEnv('sess-123', {}, {}).CLAUDE_CONFIG_DIR).toBeUndefined();
+    expect(provider.buildEnv('sess-123', { CLAUDE_CONFIG_DIR: '/other/account' }).CLAUDE_CONFIG_DIR).toBeUndefined();
+    expect(provider.buildEnv('sess-123', { claude_config_dir: '/other/account' })).not.toHaveProperty('claude_config_dir');
   });
 });
 

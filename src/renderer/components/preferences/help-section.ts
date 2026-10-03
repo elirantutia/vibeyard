@@ -1,4 +1,5 @@
-import { buildSection, dot, badge, mono } from '../help-shared.js';
+import { buildSection, badge, mono, glyph } from '../help-shared.js';
+import { STATUS_GLYPH } from '../../session-activity.js';
 import { t } from '../../i18n.js';
 import type { SectionController } from './section.js';
 
@@ -9,11 +10,11 @@ export function createHelpSection(): SectionController {
       helpContainer.className = 'help-container';
 
       helpContainer.appendChild(buildSection(t('help.tabStatusDot'), [
-        { visual: () => dot('var(--accent)', true), label: t('help.status.working'), description: t('help.status.workingDesc') },
-        { visual: () => dot('var(--status-waiting)'), label: t('help.status.waiting'), description: t('help.status.waitingDesc') },
-        { visual: () => dot('var(--status-completed)'), label: t('help.status.completed'), description: t('help.status.completedDesc') },
-        { visual: () => dot('var(--status-input)', true), label: t('help.status.input'), description: t('help.status.inputDesc') },
-        { visual: () => dot('var(--text-muted)'), label: t('help.status.idle'), description: t('help.status.idleDesc') },
+        { visual: () => glyph(STATUS_GLYPH.working, 'var(--accent)', true), label: t('help.status.working'), description: t('help.status.workingDesc') },
+        { visual: () => glyph(STATUS_GLYPH.waiting, 'var(--status-waiting)'), label: t('help.status.waiting'), description: t('help.status.waitingDesc') },
+        { visual: () => glyph(STATUS_GLYPH.completed, 'var(--status-completed)'), label: t('help.status.completed'), description: t('help.status.completedDesc') },
+        { visual: () => glyph(STATUS_GLYPH.input, 'var(--status-input)', true), label: t('help.status.input'), description: t('help.status.inputDesc') },
+        { visual: () => glyph(STATUS_GLYPH.idle, 'var(--text-muted)'), label: t('help.status.idle'), description: t('help.status.idleDesc') },
       ]));
 
       helpContainer.appendChild(buildSection(t('help.tabBadges'), [

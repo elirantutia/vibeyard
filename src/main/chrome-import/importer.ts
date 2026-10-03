@@ -46,14 +46,23 @@ export async function runImport(
         skippedV11 += ck;
         onProgress({ stage: 'cookies', done: 0, total: records.length });
         const sess = session.fromPartition(BROWSER_DEFAULT_PARTITION, { cache: true });
-        const results = await Promise.allSettled(
-          records.map(async (r, i) => {
-            await sess.cookies.set(r);
-            if (i % 25 === 0) {
-              onProgress({ stage: 'cookies', done: i + 1, total: records.length });
-            }
-          }),
-        );
+        // Batch into chunks: an unbounded Promise.allSettled over every
+        // cookie floods the session's cookie store with concurrent sets.
+        const CHUNK_SIZE = 50;
+        const results: PromiseSettledResult<void>[] = [];
+        for (let start = 0; start < records.length; start += CHUNK_SIZE) {
+          results.push(
+            ...(await Promise.allSettled(
+              records.slice(start, start + CHUNK_SIZE).map(async (r, j) => {
+                const i = start + j;
+                await sess.cookies.set(r);
+                if (i % 25 === 0) {
+                  onProgress({ stage: 'cookies', done: i + 1, total: records.length });
+                }
+              }),
+            )),
+          );
+        }
         for (const r of results) {
           if (r.status === 'fulfilled') cookieCount++;
           else errors.push(String(r.reason));

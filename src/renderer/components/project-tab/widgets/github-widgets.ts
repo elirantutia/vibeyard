@@ -57,6 +57,7 @@ function makeGithubWidget(kind: ListKind, host: WidgetHost): WidgetInstance {
   let lastError: string | null = null;
   let pollHandle: number | null = null;
   let destroyed = false;
+  let refreshGeneration = 0;
   const projectId = host.projectId;
 
   function getConfig(): GithubConfig {
@@ -200,12 +201,13 @@ function makeGithubWidget(kind: ListKind, host: WidgetHost): WidgetInstance {
 
   async function refresh(): Promise<void> {
     if (destroyed) return;
+    const generation = ++refreshGeneration;
     loading = true;
     lastError = null;
     render();
 
     const repo = await ensureRepo();
-    if (destroyed) return;
+    if (destroyed || generation !== refreshGeneration) return;
     if (!repo) {
       loading = false;
       render();
@@ -213,17 +215,19 @@ function makeGithubWidget(kind: ListKind, host: WidgetHost): WidgetInstance {
     }
 
     if (!(await window.vibeyard.github.isAvailable())) {
+      if (destroyed || generation !== refreshGeneration) return;
       lastError = 'gh CLI not installed. Install from cli.github.com and run `gh auth login`.';
       loading = false;
       render();
       return;
     }
 
+    if (destroyed || generation !== refreshGeneration) return;
     const cfg = getConfig();
     const result = kind === 'prs'
       ? await window.vibeyard.github.listPRs(repo, cfg.state, cfg.max)
       : await window.vibeyard.github.listIssues(repo, cfg.state, cfg.max);
-    if (destroyed) return;
+    if (destroyed || generation !== refreshGeneration) return;
 
     if (!result.ok) {
       lastError = result.error ?? 'Failed to fetch from GitHub.';
@@ -239,6 +243,7 @@ function makeGithubWidget(kind: ListKind, host: WidgetHost): WidgetInstance {
   }
 
   function startPolling(): void {
+    if (destroyed) return;
     stopPolling();
     const cfg = getConfig();
     const intervalMs = Math.max(60_000, cfg.refreshSeconds * 1000);

@@ -7,7 +7,7 @@ export const ZOOM_MAX = 2.0;
 
 // --- Provider ---
 
-export type ProviderId = 'claude' | 'codex' | 'copilot' | 'gemini';
+export type ProviderId = 'claude' | 'codex' | 'copilot' | 'gemini' | 'pi' | 'omp';
 export type PendingPromptTrigger = 'session-start' | 'first-output' | 'startup-arg';
 
 /**
@@ -16,6 +16,12 @@ export type PendingPromptTrigger = 'session-start' | 'first-output' | 'startup-a
  * renderer; the renderer is the source of truth for the actual catalog.
  */
 export type Locale = 'en' | 'zh-CN';
+
+/**
+ * The session statuses a provider can report through the `.status` channel.
+ * `idle` is renderer-only (PTY exited) and never crosses the channel.
+ */
+export type CliSessionStatus = 'working' | 'waiting' | 'completed' | 'input';
 
 export interface CliProviderCapabilities {
   sessionResume: boolean;
@@ -27,6 +33,22 @@ export interface CliProviderCapabilities {
   pendingPromptTrigger: PendingPromptTrigger;
   planModeArg?: string;
   systemPromptInjection: boolean;
+  /** The provider's buildEnv honors a profile's configDir. */
+  profiles: boolean;
+  /**
+   * The CLI titles its sessions itself and the tab adopts the title.
+   * When true, the main process polls the provider's readSessionTitle()
+   * and mirrors the result into the `.name` channel. Claude self-titles
+   * too, but pushes via its statusLine hook, so it does not need polling.
+   */
+  selfTitles: boolean;
+  /**
+   * The CLI has no hooks to report status, so the main process polls its
+   * on-disk transcript and derives a status (working/completed/idle),
+   * mirroring it into the same `.status` channel Claude's hooks push to.
+   * Mutually exclusive with hookStatus: a provider is one or the other.
+   */
+  polledStatus: boolean;
 }
 
 export interface CliProviderMeta {
@@ -143,6 +165,13 @@ export interface TeamMember {
   installAsAgent?: boolean;
   /** Sticky slug assigned on first install; preserved across renames so the right file is removed. */
   agentSlug?: string;
+  /**
+   * Sticky: pins this member's Chat sessions to a specific Profile, which carries
+   * the provider (backend) and config dir. Unset → Chat falls back to the
+   * project's defaultProfileId, then the provider's global default profile
+   * (preferences.defaultProfiles[providerId]), then no profile.
+   */
+  profileId?: string;
 }
 
 export interface TeamData {
@@ -155,8 +184,9 @@ export interface TeamData {
 /**
  * A named CLI-provider profile backed by a separate config directory, injected
  * via the provider's config-dir env var (e.g. CLAUDE_CONFIG_DIR). Lets a user
- * isolate multiple licenses/logins (work vs personal). Currently only the
- * 'claude' provider injects it; the interface stays uniform for future providers.
+ * isolate multiple licenses/logins (work vs personal). Claude, Pi, and OMP
+ * inject it (CLAUDE_CONFIG_DIR / PI_CODING_AGENT_DIR); the interface stays
+ * uniform for future providers.
  */
 export interface Profile {
   id: string;
@@ -186,6 +216,14 @@ export interface ArchivedSession {
     totalOutputTokens: number;
     totalDurationMs: number;
   } | null;
+  /** Why the CLI process exited abnormally (e.g. 'unhandled_rejection'); absent on clean exit. */
+  exitReason?: string;
+  /** Process metadata captured when this session ended; helps correlate OMP logs. */
+  exitCode?: number;
+  exitSignal?: number;
+  processId?: number;
+  /** False when a crash was recorded without a resumable transcript. */
+  transcriptAvailable?: boolean;
 }
 
 export interface InitialContextSnapshot {
@@ -239,6 +277,8 @@ export interface BoardTask {
   providerId?: ProviderId;
   /** Profile (CLI config dir) to run this task under; falls back to project/global default when unset. */
   profileId?: string;
+  /** Team member to assign this task to; running it starts a team-chat session as that member. */
+  assigneeId?: string;
   planMode?: boolean;
   tags?: string[];
   createdAt: number;
@@ -271,6 +311,8 @@ export interface ProjectRecord {
   sessionHistory?: ArchivedSession[];
   insights?: ProjectInsightsData;
   defaultArgs?: string;
+  /** Coding provider for new sessions in this project; absent follows global default. */
+  defaultProvider?: ProviderId;
   /** Default profile applied to new sessions in this project (overridden per-session). */
   defaultProfileId?: string;
   defaultEnv?: string;
@@ -354,8 +396,8 @@ export interface Preferences {
   defaultProvider?: ProviderId;
   /** UI language tag. See `Locale` for the supported set. */
   locale?: Locale;
-  /** Global fallback profile applied when neither the session nor the project specifies one. */
-  defaultProfileId?: string;
+  /** Per-provider global fallback profile, applied when neither the session nor the project specifies one. */
+  defaultProfiles?: Partial<Record<ProviderId, string>>;
   statusLineConsent?: 'granted' | 'declined' | null;
   // The foreign statusLine command the user was asked about when they made
   // the consent decision. Used to detect new conflicts (different command)
@@ -372,16 +414,6 @@ export interface Preferences {
     fileTree: boolean;
     /** Show the global cross-project "Active Sessions" section in the sidebar. */
     activeSessions: boolean;
-  };
-  /**
-   * Which live session statuses count as "active" for the global Active Sessions
-   * sidebar section. Absent ⇒ the default set (working, input, completed).
-   */
-  activeSessionStatuses?: {
-    working: boolean;
-    waiting: boolean;
-    input: boolean;
-    completed: boolean;
   };
   boardCardMetrics?: boolean;
   chromeImport?: ChromeImportSummary;

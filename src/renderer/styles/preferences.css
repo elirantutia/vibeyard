@@ -97,6 +97,24 @@
   padding: 8px 0;
 }
 
+.profile-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.profile-group + .profile-group {
+  margin-top: 10px;
+}
+
+.profile-group-heading {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
 .profile-row {
   display: flex;
   align-items: center;

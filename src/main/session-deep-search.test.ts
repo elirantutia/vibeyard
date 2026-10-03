@@ -1,3 +1,4 @@
+vi.mock('./session-search-index', () => ({ readSearchIndex: vi.fn(async () => null), writeSearchIndex: vi.fn(async () => {}), pruneSearchIndex: vi.fn(async () => {}) }));
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import type { CliProvider, TranscriptDescriptor } from './providers/provider';
 import type { ProviderId } from '../shared/types';
@@ -14,6 +15,7 @@ vi.mock('./providers/registry', () => ({
 }));
 
 import * as fs from 'fs';
+import { readSearchIndex, writeSearchIndex } from './session-search-index';
 import { searchSessions, _resetForTesting } from './session-deep-search';
 
 const mockStat = vi.mocked(fs.promises.stat);
@@ -48,12 +50,35 @@ function fakeProvider(opts: FakeProviderOpts): CliProvider {
 }
 
 beforeEach(() => {
+  vi.mocked(readSearchIndex).mockReset().mockResolvedValue(null);
+  vi.mocked(writeSearchIndex).mockReset().mockResolvedValue(undefined);
   vi.clearAllMocks();
   _resetForTesting();
   providersForTest.length = 0;
 });
 
 describe('searchSessions()', () => {
+  it('limits transcript indexing to four concurrent files per provider', async () => {
+    let active = 0;
+    let peak = 0;
+    const provider = fakeProvider({
+      id: 'claude',
+      descriptors: Array.from({ length: 12 }, (_, i) => ({ cliSessionId: `s${i}`, transcriptPath: `/p${i}` })),
+    });
+    provider.indexTranscript = async () => {
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      active--;
+      return { text: 'match', cwd: '' };
+    };
+    providersForTest.push(provider);
+    mockStat.mockResolvedValue(makeStat(1));
+    await searchSessions('match');
+    expect(peak).toBeLessThanOrEqual(4);
+    expect(peak).toBeGreaterThan(1);
+  });
+
   it('returns empty when no providers are registered', async () => {
     expect(await searchSessions('hello')).toEqual([]);
   });
@@ -141,7 +166,7 @@ describe('searchSessions()', () => {
     expect(await searchSessions('find me')).toHaveLength(20);
   });
 
-  it('dedupes by (providerId, cliSessionId), keeping the highest-scoring hit', async () => {
+  it('dedupes by (providerId, profileId, cliSessionId), keeping the highest-scoring hit', async () => {
     // Same Claude session indexed under two project slugs — both transcripts contain
     // the query but with different match strength. Only the higher-scoring one survives.
     providersForTest.push(fakeProvider({
@@ -165,6 +190,28 @@ describe('searchSessions()', () => {
     expect(dup).toBeDefined();
     expect(dup!.score).toBe(100);
     expect(dup!.projectSlug).toBe('slug-a');
+  });
+
+  it('keeps separate entries when the same cliSessionId appears under two profiles', async () => {
+    // Copied history: the same session UUID legitimately exists in two
+    // profile config dirs. Both must stay separately discoverable.
+    providersForTest.push(fakeProvider({
+      id: 'claude',
+      descriptors: [
+        { cliSessionId: 'dup', transcriptPath: '/one/dup.jsonl', profileId: 'one', projectCwd: '/one' },
+        { cliSessionId: 'dup', transcriptPath: '/two/dup.jsonl', profileId: 'two', projectCwd: '/two' },
+      ],
+      index: {
+        '/one/dup.jsonl': { text: 'find me', cwd: '/one' },
+        '/two/dup.jsonl': { text: 'find me', cwd: '/two' },
+      },
+    }));
+    mockStat.mockResolvedValue(makeStat(1));
+
+    const results = await searchSessions('find me');
+    expect(results).toHaveLength(2);
+    expect(new Set(results.map(r => r.profileId))).toEqual(new Set(['one', 'two']));
+    expect(new Set(results.map(r => r.projectCwd))).toEqual(new Set(['/one', '/two']));
   });
 
   it('keeps separate entries when different providers report the same cliSessionId', async () => {
@@ -273,4 +320,48 @@ describe('searchSessions()', () => {
     mockStat.mockResolvedValue(makeStat(1));
     expect(await searchSessions('asdcv')).toEqual([]);
   });
+});
+
+
+it('shares reads and keeps aggregate indexing concurrency at four across requests', async () => {
+  let active = 0, peak = 0;
+  const provider = fakeProvider({ id: 'claude', descriptors: Array.from({length: 30}, (_, i) => ({cliSessionId: 's'+i, transcriptPath: '/p'+i})) });
+  const index = vi.fn(async () => {
+    peak = Math.max(peak, ++active);
+    await new Promise(resolve => setTimeout(resolve, 1));
+    active--;
+    return {text: 'shared match', cwd: ''};
+  });
+  provider.indexTranscript = index;
+  providersForTest.push(provider); mockStat.mockResolvedValue(makeStat(1));
+  await Promise.all([searchSessions('match'), searchSessions('shared')]);
+  expect(peak).toBeLessThanOrEqual(4);
+  expect(index).toHaveBeenCalledTimes(30);
+});
+
+it('stops scheduling transcript reads after cancellation', async () => {
+  const controller = new AbortController();
+  const provider = fakeProvider({ id: 'claude', descriptors: Array.from({length: 1000}, (_, i) => ({cliSessionId: 's'+i, transcriptPath: '/p'+i})) });
+  provider.indexTranscript = vi.fn(async () => { controller.abort(); return {text: 'match', cwd: ''}; });
+  providersForTest.push(provider); mockStat.mockResolvedValue(makeStat(1));
+  expect(await searchSessions('match', controller.signal)).toEqual([]);
+  expect(provider.indexTranscript).toHaveBeenCalledTimes(4);
+});
+
+it('does not reparse unchanged transcripts when the corpus exceeds the memory cache', async () => {
+  const disk = new Map<string, any>();
+  vi.mocked(readSearchIndex).mockImplementation(async (_provider, source, version) => {
+    const record = disk.get(source);
+    return record?.mtime === version.mtime ? record : null;
+  });
+  vi.mocked(writeSearchIndex).mockImplementation(async (_provider, source, data) => { disk.set(source, data); });
+  const provider = fakeProvider({ id: 'claude', descriptors: Array.from({length: 1000}, (_, i) => ({cliSessionId: 's'+i, transcriptPath: '/p'+i})) });
+  provider.indexTranscript = vi.fn(async () => ({text: 'match ' + 'x'.repeat(51194), cwd: ''}));
+  providersForTest.push(provider); mockStat.mockResolvedValue(makeStat(1));
+  await searchSessions('match');
+  await searchSessions('match');
+  expect(provider.indexTranscript).toHaveBeenCalledTimes(1000);
+  _resetForTesting();
+  await searchSessions('match');
+  expect(provider.indexTranscript).toHaveBeenCalledTimes(1000);
 });

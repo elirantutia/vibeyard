@@ -28,6 +28,12 @@ vi.mock('../config-watcher', () => ({
   stopConfigWatcher: vi.fn(),
 }));
 
+vi.mock('../codex-session-watcher', () => ({
+  startCodexSessionWatcher: vi.fn(),
+  registerPendingCodexSession: vi.fn(),
+  unregisterCodexSession: vi.fn(),
+}));
+
 vi.mock('../codex-hooks', () => ({
   installCodexHooks: vi.fn(),
   validateCodexHooks: vi.fn(() => ({ statusLine: 'vibeyard', hooks: 'complete', hookDetails: {} })),

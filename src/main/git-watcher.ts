@@ -23,6 +23,9 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let dirWatchers: fs.FSWatcher[] = [];
 let currentProjectPath: string | null = null;
 let currentWin: BrowserWindow | null = null;
+// Bumped on every start/stop so a call that is still awaiting setupWatchers
+// can tell, when it resumes, that a newer call (or a stop) superseded it.
+let watcherGeneration = 0;
 
 function notify(): void {
   if (debounceTimer) clearTimeout(debounceTimer);
@@ -51,7 +54,7 @@ function hasIgnoredSegment(filename: string): boolean {
  * so git internals are filtered out here and handled by the fine-grained `.git`
  * watches in setupWatchers instead.
  */
-function watchRecursiveWorkingTree(root: string): void {
+function watchRecursiveWorkingTree(root: string, sink: fs.FSWatcher[]): void {
   try {
     const watcher = fs.watch(root, { recursive: true }, (_event, filename) => {
       // filename is relative to root (incl. subpath) or null when the OS
@@ -59,34 +62,34 @@ function watchRecursiveWorkingTree(root: string): void {
       if (!filename || !hasIgnoredSegment(filename)) notify();
     });
     watcher.on('error', () => {}); // ignore (dir deleted, etc.)
-    dirWatchers.push(watcher);
+    sink.push(watcher);
   } catch {
     // Recursive watch unavailable/failed — fall back to per-dir BFS so we still
     // get some signal (the 60s git-status poll is the ultimate backstop).
-    walkAndWatch(root);
+    walkAndWatch(root, sink);
   }
 }
 
-function watchOne(dirPath: string, onEvent: (filename: string | null) => void): void {
-  if (dirWatchers.length >= MAX_WATCHES) return;
+function watchOne(dirPath: string, onEvent: (filename: string | null) => void, sink: fs.FSWatcher[]): void {
+  if (dirWatchers.length + sink.length >= MAX_WATCHES) return;
   try {
     const watcher = fs.watch(dirPath, (_event, filename) => {
       onEvent(filename);
     });
     watcher.on('error', () => {}); // ignore errors (dir deleted, etc.)
-    dirWatchers.push(watcher);
+    sink.push(watcher);
   } catch {
     // Directory doesn't exist or unreadable — that's fine
   }
 }
 
-function walkAndWatch(root: string): void {
+function walkAndWatch(root: string, sink: fs.FSWatcher[]): void {
   // BFS so we watch shallower dirs first; if we hit the cap, deep dirs are skipped
   // rather than dropping the more useful top-level signals.
   const queue: string[] = [root];
   let capWarned = false;
   while (queue.length > 0) {
-    if (dirWatchers.length >= MAX_WATCHES) {
+    if (dirWatchers.length + sink.length >= MAX_WATCHES) {
       if (!capWarned) {
         console.warn(
           `[git-watcher] reached MAX_WATCHES=${MAX_WATCHES} for ${root}; remaining subdirs will not be watched (60s poll will cover them)`
@@ -96,7 +99,7 @@ function walkAndWatch(root: string): void {
       break;
     }
     const dir = queue.shift()!;
-    watchOne(dir, () => notify());
+    watchOne(dir, () => notify(), sink);
 
     let entries: fs.Dirent[];
     try {
@@ -136,7 +139,8 @@ function stopAll(): void {
   dirWatchers = [];
 }
 
-async function setupWatchers(projectPath: string): Promise<void> {
+async function setupWatchers(projectPath: string): Promise<fs.FSWatcher[]> {
+  const sink: fs.FSWatcher[] = [];
   const gitDir = await resolveGitDir(projectPath);
 
   // Working tree. macOS + Windows support a single recursive watch (one OS-level
@@ -144,9 +148,9 @@ async function setupWatchers(projectPath: string): Promise<void> {
   // support recursive fs.watch (and the old recursive path leaked inotify
   // watches, #139), so it keeps the walk-time-filtered, non-recursive, capped BFS.
   if (isLinux) {
-    walkAndWatch(projectPath);
+    walkAndWatch(projectPath, sink);
   } else {
-    watchRecursiveWorkingTree(projectPath);
+    watchRecursiveWorkingTree(projectPath, sink);
   }
 
   // Git internals: non-recursive watch on .git/ itself, only react to a small allow-list
@@ -155,14 +159,14 @@ async function setupWatchers(projectPath: string): Promise<void> {
   // .git/objects/ which is huge and produces no useful UI signal.
   watchOne(gitDir, (filename) => {
     if (filename && GIT_DIR_FILES.has(filename)) notify();
-  });
+  }, sink);
 
   // Refs: non-recursive watch on each top-level refs subdirectory. Triggers on any
   // ref change within. We accept that ref churn inside a single remote is debounced
   // at the parent — that's fine for UI status.
   for (const sub of ['heads', 'tags', 'remotes']) {
     const refsSubdir = path.join(gitDir, 'refs', sub);
-    watchOne(refsSubdir, () => notify());
+    watchOne(refsSubdir, () => notify(), sink);
   }
 
   // HEAD file directly: belt-and-suspenders for branch-switch detection on macOS
@@ -171,21 +175,34 @@ async function setupWatchers(projectPath: string): Promise<void> {
   try {
     const watcher = fs.watch(headPath, () => notify());
     watcher.on('error', () => {});
-    dirWatchers.push(watcher);
+    sink.push(watcher);
   } catch {
     // HEAD doesn't exist (unlikely for a valid git repo)
   }
+  return sink;
 }
 
 export async function startGitWatcher(win: BrowserWindow, projectPath: string): Promise<void> {
   if (projectPath === currentProjectPath) return;
+  const generation = ++watcherGeneration;
   stopAll();
   currentWin = win;
   currentProjectPath = projectPath;
-  await setupWatchers(projectPath);
+  const mine = await setupWatchers(projectPath);
+  if (generation !== watcherGeneration) {
+    // A newer call (or stop) started while we were awaiting. Its stopAll() ran
+    // before our watchers were installed, so close only ours — a blanket
+    // stopAll() here could kill the newer call's watchers if they were
+    // installed first. The latest call's state (currentProjectPath/currentWin)
+    // stands.
+    for (const w of mine) w.close();
+  } else {
+    dirWatchers.push(...mine);
+  }
 }
 
 export function stopGitWatcher(): void {
+  ++watcherGeneration; // invalidate any in-flight startGitWatcher
   stopAll();
   currentWin = null;
   currentProjectPath = null;

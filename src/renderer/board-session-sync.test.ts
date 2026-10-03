@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.stubGlobal('window', {
   vibeyard: {
     store: { load: vi.fn(), save: vi.fn() },
+    session: { transcriptExistsSync: vi.fn(() => false) },
   },
 });
 
@@ -64,7 +65,7 @@ describe('board-session-sync', () => {
     expect(updated!.columnId).toBe('col-done');
   });
 
-  it('moves task to Done when session is removed', () => {
+  it('keeps unfinished task in its column when session is removed', () => {
     const project = appState.activeProject!;
     const session = appState.addSession(project.id, 'Test Session')!;
     const task = addTask({ title: 'T', prompt: 'p', columnId: 'col-running' })!;
@@ -73,7 +74,7 @@ describe('board-session-sync', () => {
     appState.removeSession(project.id, session.id);
 
     const updated = getBoard()!.tasks.find(t => t.id === task.id);
-    expect(updated!.columnId).toBe('col-done');
+    expect(updated!.columnId).toBe('col-running');
   });
 
   it('clears sessionId when session is removed', () => {
@@ -112,6 +113,24 @@ describe('board-session-sync', () => {
 
     const updated = getBoard()!.tasks.find(t => t.id === task.id);
     expect(updated!.cliSessionId).toBe('cli-abc');
+  });
+
+  it('updates a background project on completion and removal', () => {
+    const first = appState.activeProject!;
+    const session = appState.addSession(first.id, 'Background')!;
+    const task = addTask({ title: 'Background task', columnId: 'col-running' })!;
+    updateTask(task.id, { sessionId: session.id });
+    const second = appState.addProject('Other', '/other');
+    second.board = { columns: [{ id: 'other', title: 'Other', order: 0, behavior: 'inbox' }], tasks: [] };
+    appState.setActiveProject(second.id);
+
+    appState.updateSessionCliId(first.id, session.id, 'cli-background');
+    expect(getBoard(first.id)!.tasks[0].cliSessionId).toBe('cli-background');
+    initSession(session.id);
+    setHookStatus(session.id, 'completed');
+    expect(getBoard(first.id)!.tasks[0].columnId).toBe('col-done');
+    appState.removeSession(first.id, session.id);
+    expect(getBoard(first.id)!.tasks[0].sessionId).toBeUndefined();
   });
 });
 

@@ -88,21 +88,8 @@ export function getGitStatus(cwd: string): Promise<GitStatus> {
 }
 
 export function getGitDiff(cwd: string, filePath: string, area: string): Promise<string> {
+  if (area === 'untracked') return readUntrackedDiff(path.join(cwd, filePath), filePath);
   return new Promise((resolve) => {
-    if (area === 'untracked') {
-      // Read file content and format as "all added" diff
-      const fullPath = path.join(cwd, filePath);
-      try {
-        const content = fs.readFileSync(fullPath, 'utf-8');
-        const lines = content.split('\n');
-        const header = `--- /dev/null\n+++ b/${filePath}\n@@ -0,0 +1,${lines.length} @@\n`;
-        const body = lines.map(l => `+${l}`).join('\n');
-        resolve(header + body);
-      } catch {
-        resolve('(unable to read file)');
-      }
-      return;
-    }
 
     const args = area === 'staged'
       ? ['diff', '--cached', '--', filePath]
@@ -132,11 +119,22 @@ function xyToStatus(ch: string): 'added' | 'modified' | 'deleted' | 'renamed' {
   }
 }
 
+/** Porcelain-v2 metadata has a fixed field count; filenames may contain spaces. */
+function pathAfterFields(line: string, fieldCount: number): string | null {
+  let cursor = 0;
+  for (let i = 0; i < fieldCount; i++) {
+    cursor = line.indexOf(' ', cursor);
+    if (cursor < 0) return null;
+    cursor++;
+  }
+  return line.slice(cursor) || null;
+}
+
 export function getGitFiles(cwd: string): Promise<GitFileEntry[]> {
   return new Promise((resolve) => {
     execFile(
       'git',
-      ['status', '--porcelain=v2', '--untracked-files=all'],
+      ['status', '--porcelain=v2', '-z', '--untracked-files=all'],
       { cwd, timeout: 5000, maxBuffer: 1024 * 1024 },
       (err, stdout) => {
         if (err) {
@@ -145,20 +143,21 @@ export function getGitFiles(cwd: string): Promise<GitFileEntry[]> {
         }
 
         const entries: GitFileEntry[] = [];
+        // -z output is NUL-terminated; paths are raw bytes, never C-quoted.
+        // A rename record is followed by a separate NUL chunk holding the
+        // original path, which is informational and not part of GitFileEntry.
+        const records = stdout.split('\0');
 
-        for (const line of stdout.split('\n')) {
-          if (line.startsWith('1 ') || line.startsWith('2 ')) {
-            // Ordinary (1) or rename (2) entry
-            const parts = line.split('\t');
-            const fields = parts[0].split(' ');
-            const xy = fields[1];
-            // For type 1: path is last space-delimited field
-            // For type 2: path is the second tab-delimited field (new name)
-            const path = line.startsWith('2 ') && parts.length >= 2
-              ? parts[parts.length - 1]
-              : fields[fields.length - 1];
-
-            if (xy && xy.length >= 2) {
+        for (let i = 0; i < records.length; i++) {
+          const record = records[i];
+          if (record.startsWith('1 ') || record.startsWith('2 ')) {
+            const xy = record.slice(2, 4);
+            // Type 2 (rename) has 9 fields before the current path; type 1 has 8.
+            const path = pathAfterFields(record, record.startsWith('2 ') ? 9 : 8);
+            if (record.startsWith('2 ')) {
+              i++; // skip the original-path chunk
+            }
+            if (path && xy.length >= 2) {
               const x = xy[0]; // staged
               const y = xy[1]; // working tree
               if (x !== '.') {
@@ -168,14 +167,13 @@ export function getGitFiles(cwd: string): Promise<GitFileEntry[]> {
                 entries.push({ path, status: xyToStatus(y), area: 'working' });
               }
             }
-          } else if (line.startsWith('u ')) {
+          } else if (record.startsWith('u ')) {
             // Unmerged entry
-            const parts = line.split('\t');
-            const path = parts.length >= 2 ? parts[parts.length - 1] : line.split(' ').pop()!;
-            entries.push({ path, status: 'conflicted', area: 'conflicted' });
-          } else if (line.startsWith('? ')) {
-            const path = line.slice(2);
-            entries.push({ path, status: 'untracked', area: 'untracked' });
+            const path = pathAfterFields(record, 10);
+            if (path) entries.push({ path, status: 'conflicted', area: 'conflicted' });
+          } else if (record.startsWith('? ')) {
+            const path = record.slice(2);
+            if (path) entries.push({ path, status: 'untracked', area: 'untracked' });
           }
         }
 
@@ -309,4 +307,27 @@ export function getGitRemoteUrl(cwd: string): Promise<string | null> {
       resolve(raw.replace(/\.git$/, '') || null);
     });
   });
+}
+
+// Bound both disk input and expanded diff output, even if a file grows during the read.
+async function readUntrackedDiff(fullPath: string, filePath: string): Promise<string> {
+  const limit = 256 * 1024;
+  let handle: fs.promises.FileHandle | undefined;
+  try {
+    handle = await fs.promises.open(fullPath, 'r');
+    if ((await handle.stat()).size > limit) return '(file too large to preview; limit 256 KiB)';
+    const buffer = Buffer.alloc(limit + 1);
+    let length = 0;
+    while (length < buffer.length) {
+      const { bytesRead } = await handle.read(buffer, length, buffer.length - length, length);
+      if (!bytesRead) break;
+      length += bytesRead;
+    }
+    if (length > limit) return '(file too large to preview; limit 256 KiB)';
+    if (buffer.subarray(0, length).includes(0)) return '(binary file; no text preview)';
+    const lines = buffer.toString('utf8', 0, length).split('\n');
+    if (lines.length > 5000) return '(too many lines to preview; limit 5,000 lines)';
+    return '--- /dev/null\n+++ b/' + filePath + '\n@@ -0,0 +1,' + lines.length + ' @@\n' + lines.map(line => '+' + line).join('\n');
+  } catch { return '(unable to read file)'; }
+  finally { await handle?.close().catch(() => {}); }
 }

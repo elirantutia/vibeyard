@@ -1,6 +1,6 @@
 {
   "name": "vibeyard",
-  "version": "0.3.8",
+  "version": "0.3.9-dev",
   "description": "A terminal-centric IDE for AI-powered CLI tools, built on Electron",
   "author": {
     "name": "Eliran Tutia",
@@ -78,6 +78,7 @@
       "notarize": true
     },
     "linux": {
+      "artifactName": "Vibeyard-${version}-linux-${arch}.${ext}",
       "target": [
         "AppImage",
         "deb"

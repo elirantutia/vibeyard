@@ -423,31 +423,30 @@
   box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
-/* Aggregate session status dot on inactive rows. */
+/* Aggregate session status glyph on inactive rows (replaces the dot). */
 .project-status {
   flex-shrink: 0;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--text-muted);
+  width: 1.1em;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text-muted);
 }
 
 .project-status.working {
-  background: var(--status-working);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-working) 15%, transparent);
+  color: var(--status-working);
 }
 
 .project-status.waiting {
-  background: var(--status-waiting);
+  color: var(--status-waiting);
 }
 
 .project-status.input {
-  background: var(--status-input);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-input) 15%, transparent);
+  color: var(--status-input);
 }
 
 .project-status.completed {
-  background: var(--status-completed);
+  color: var(--status-completed);
 }
 
 .project-main {
@@ -512,7 +511,8 @@
 /* Claude-profile badge on the active card (shown only with multiple profiles). */
 .project-profile-badge {
   flex-shrink: 0;
-  max-width: 120px;
+  /* Widened for the "Tool · Profile" content; ellipsis still guards long names. */
+  max-width: 170px;
   padding: 2px 8px;
   border-radius: 20px;
   background: var(--bg-tertiary);
@@ -523,6 +523,23 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Rows with nothing to show keep an empty node so the active tab can repaint it
+   without rebuilding the list — hide the pill rather than show an empty one. */
+.project-profile-badge:empty {
+  display: none;
+}
+
+/* The coding tool reads as a prefix; the profile is the payload. */
+.project-profile-badge .badge-tool {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.project-profile-badge .badge-tool::after {
+  content: '·';
+  margin: 0 5px;
 }
 
 .project-item.dragging {

@@ -1,4 +1,5 @@
 import { appState } from '../../state.js';
+import { loadProviderAvailability } from '../../provider-availability.js';
 import { instances } from './instance.js';
 import { createMemberCard } from './member-card.js';
 import { showTeamMemberModal } from './member-modal.js';
@@ -19,6 +20,16 @@ export function initTeamView(): void {
     if (isTeamActive()) renderTeam();
   });
   appState.on('project-changed', () => {
+    if (isTeamActive()) renderTeam();
+  });
+  // A pinned member's badge shows the Profile name, so profile renames/removals
+  // must re-render the grid too.
+  appState.on('profiles-changed', () => {
+    if (isTeamActive()) renderTeam();
+  });
+  // Provider availability loads asynchronously at app start; re-render once
+  // it's ready so Chat buttons enable and pinned badges appear.
+  void loadProviderAvailability().then(() => {
     if (isTeamActive()) renderTeam();
   });
 }

@@ -11,7 +11,7 @@ export function buildResumeWithProviderItems(
   onPick: (targetProviderId: ProviderId) => void,
 ): HTMLElement[] {
   const snapshot = getProviderAvailabilitySnapshot();
-  const others = (snapshot?.providers ?? []).filter((p) => p.id !== currentProviderId && snapshot.availability.get(p.id));
+  const others = (snapshot?.providers ?? []).filter((p) => p.id !== currentProviderId && snapshot?.availability.get(p.id));
   if (others.length === 0) return [];
 
   const elements: HTMLElement[] = [];

@@ -47,7 +47,8 @@ async function refreshWorktrees(projectId: string, projectPath: string): Promise
       manualOverride.delete(projectId);
     }
 
-    if (!prev || JSON.stringify(prev) !== JSON.stringify(worktrees)) {
+    const serialized = JSON.stringify(worktrees);
+    if (!prev || JSON.stringify(prev) !== serialized) {
       for (const cb of worktreeChangeListeners) cb();
     }
   } catch {
@@ -246,6 +247,21 @@ export function startPolling(): void {
   appState.on('state-loaded', onActiveProjectChanged);
   appState.on('project-changed', onActiveProjectChanged);
   appState.on('session-added', () => poll());
+  // Drop the session→worktree mapping when a session closes (the map would
+  // otherwise grow by one entry per session ever run, for the app's lifetime).
+  appState.on('session-removed', (data) => {
+    const sessionId = (data as { sessionId?: string })?.sessionId;
+    if (sessionId) sessionWorktreeMap.delete(sessionId);
+  });
+  // Prune the per-project caches when a project is removed (they would
+  // otherwise grow by one entry per project ever opened, for the app's lifetime).
+  appState.on('project-removed', (data) => {
+    const projectId = typeof data === 'string' ? data : undefined;
+    if (projectId) {
+      cache.delete(projectId);
+      worktreeCache.delete(projectId);
+    }
+  });
 
   // Detect worktree on session change
   appState.on('session-changed', () => {

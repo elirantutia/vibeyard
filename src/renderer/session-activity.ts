@@ -1,6 +1,20 @@
 import { STOP_INFLIGHT_TRUST_MS } from '../shared/constants';
 export type SessionStatus = 'working' | 'waiting' | 'idle' | 'completed' | 'input';
 
+/**
+ * The typographic glyph shown for each status (replaces the colored dot).
+ * Simple punctuation, not emoji: themeable via CSS color and identical across
+ * platforms. `waiting` and `input` share "?" (both mean "your turn") and are
+ * told apart by color, as the old dots were.
+ */
+export const STATUS_GLYPH: Record<SessionStatus, string> = {
+  working: '…',
+  waiting: '?',
+  input: '?',
+  completed: '✓',
+  idle: '·',
+};
+
 type StatusChangeCallback = (sessionId: string, status: SessionStatus) => void;
 
 interface SessionState {
@@ -58,9 +72,13 @@ export function setHookStatus(sessionId: string, status: 'working' | 'waiting' |
   // re-armed below only if this event is itself a Stop that resolved to 'working'.
   clearStopFallback(sessionId);
 
-  // Don't let Stop/StopFailure ('waiting') overwrite a just-set 'completed' status.
-  // Completed is sticky until a new prompt ('working') or PTY exit ('idle').
-  if (status === 'waiting' && state.status === 'completed') return;
+  // Don't let a hook Stop/StopFailure ('waiting') overwrite a just-set
+  // 'completed' status. Completed is sticky until a new prompt ('working')
+  // or PTY exit ('idle'). NOT applied to polled (Transcript) status: there
+  // the transcript tail is authoritative, and a `waiting` after `completed`
+  // is a real error the poller caught (the guard would otherwise mask it —
+  // the poll can miss the intermediate `working` on a fast user→error).
+  if (status === 'waiting' && state.status === 'completed' && hookName !== 'Transcript') return;
 
   // UserPromptSubmit is a deliberate new user action — always clears the interrupt flag.
   if (hookName === 'UserPromptSubmit') state.interrupted = false;

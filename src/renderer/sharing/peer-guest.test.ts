@@ -13,11 +13,16 @@ vi.mock('./webrtc-utils.js', () => ({
 }));
 
 vi.mock('./share-crypto.js', () => ({
+  validateShareKey: (key: string) => /^[0-9a-f]{32}$/i.test(key) ? null : 'Invalid share key',
   hexToBytes: vi.fn((hex: string) => new Uint8Array([hex.length])),
   computeChallengeResponse: vi.fn(async () => 'response-hex'),
 }));
 
 import { joinShare, _resetForTesting } from './peer-guest.js';
+
+it('rejects short sharing keys', () => {
+  expect(() => joinShare('offer-code', '1234')).toThrow(/share key/i);
+});
 
 // ---- RTCPeerConnection / RTCDataChannel stubs ----
 interface FakeDataChannel {
@@ -94,14 +99,14 @@ function attachChannel(): FakeDataChannel {
 
 describe('joinShare', () => {
   it('returns a unique guestId and a handle', () => {
-    const a = joinShare('offer-code', '1234');
-    const b = joinShare('offer-code', '1234');
+    const a = joinShare('offer-code', '0123456789abcdef0123456789abcdef');
+    const b = joinShare('offer-code', '0123456789abcdef0123456789abcdef');
     expect(a.guestId).not.toBe(b.guestId);
     expect(typeof a.handle.getAnswer).toBe('function');
   });
 
   it('getAnswer decodes the offer and produces an encoded answer', async () => {
-    const { handle } = joinShare('offer-code', '1234');
+    const { handle } = joinShare('offer-code', '0123456789abcdef0123456789abcdef');
     const answer = await handle.getAnswer();
     expect(answer).toBe('encoded-answer');
     expect(lastPc!.setRemoteDescription).toHaveBeenCalled();
@@ -110,7 +115,7 @@ describe('joinShare', () => {
   });
 
   it('responds to an auth-challenge with an auth-response', async () => {
-    const { handle } = joinShare('offer-code', '1234');
+    const { handle } = joinShare('offer-code', '0123456789abcdef0123456789abcdef');
     void handle.getAnswer();
     const dc = attachChannel();
     deliver(dc, { type: 'auth-challenge', challenge: 'deadbeef' });
@@ -122,7 +127,7 @@ describe('joinShare', () => {
   });
 
   it('fires onAuthFailed and disconnects when auth-result.ok is false', () => {
-    const { handle } = joinShare('offer-code', '1234');
+    const { handle } = joinShare('offer-code', '0123456789abcdef0123456789abcdef');
     const authFailed = vi.fn();
     handle.onAuthFailed(authFailed);
     const dc = attachChannel();
@@ -133,7 +138,7 @@ describe('joinShare', () => {
   });
 
   it('ignores non-auth messages before authentication completes', () => {
-    const { handle } = joinShare('offer-code', '1234');
+    const { handle } = joinShare('offer-code', '0123456789abcdef0123456789abcdef');
     const onData = vi.fn();
     handle.onData(onData);
     const dc = attachChannel();
@@ -142,7 +147,7 @@ describe('joinShare', () => {
   });
 
   it('routes init/data/resize/end messages after successful auth', () => {
-    const { handle } = joinShare('offer-code', '1234');
+    const { handle } = joinShare('offer-code', '0123456789abcdef0123456789abcdef');
     const onInit = vi.fn();
     const onData = vi.fn();
     const onResize = vi.fn();
@@ -177,7 +182,7 @@ describe('joinShare', () => {
   });
 
   it('replies to ping with a pong after auth', () => {
-    const { handle } = joinShare('offer-code', '1234');
+    const { handle } = joinShare('offer-code', '0123456789abcdef0123456789abcdef');
     void handle;
     const dc = attachChannel();
     deliver(dc, { type: 'auth-result', ok: true });
@@ -187,14 +192,14 @@ describe('joinShare', () => {
   });
 
   it('ignores malformed JSON without throwing', () => {
-    joinShare('offer-code', '1234');
+    joinShare('offer-code', '0123456789abcdef0123456789abcdef');
     const dc = attachChannel();
     expect(() => dc.onmessage?.({ data: 'not-json' })).not.toThrow();
   });
 
   describe('sendInput', () => {
     it('is a no-op in readonly mode', () => {
-      const { handle } = joinShare('offer-code', '1234');
+      const { handle } = joinShare('offer-code', '0123456789abcdef0123456789abcdef');
       const dc = attachChannel();
       deliver(dc, { type: 'auth-result', ok: true });
       deliver(dc, {
@@ -211,7 +216,7 @@ describe('joinShare', () => {
     });
 
     it('sends an input message in readwrite mode', () => {
-      const { handle } = joinShare('offer-code', '1234');
+      const { handle } = joinShare('offer-code', '0123456789abcdef0123456789abcdef');
       const dc = attachChannel();
       deliver(dc, { type: 'auth-result', ok: true });
       deliver(dc, {
@@ -230,7 +235,7 @@ describe('joinShare', () => {
     });
 
     it('is a no-op before connection is open', () => {
-      const { handle } = joinShare('offer-code', '1234');
+      const { handle } = joinShare('offer-code', '0123456789abcdef0123456789abcdef');
       handle.sendInput('x');
       expect(sentMessages).toHaveLength(0);
     });
@@ -238,7 +243,7 @@ describe('joinShare', () => {
 
   describe('disconnect', () => {
     it('fires onDisconnected exactly once even when called multiple times', () => {
-      const { handle } = joinShare('offer-code', '1234');
+      const { handle } = joinShare('offer-code', '0123456789abcdef0123456789abcdef');
       const onDisc = vi.fn();
       handle.onDisconnected(onDisc);
       const dc = attachChannel();
@@ -248,7 +253,7 @@ describe('joinShare', () => {
     });
 
     it('also fires on ICE disconnected state', () => {
-      const { handle } = joinShare('offer-code', '1234');
+      const { handle } = joinShare('offer-code', '0123456789abcdef0123456789abcdef');
       const onDisc = vi.fn();
       handle.onDisconnected(onDisc);
       attachChannel();
@@ -258,7 +263,7 @@ describe('joinShare', () => {
     });
 
     it('manual disconnect() closes the connection', () => {
-      const { handle } = joinShare('offer-code', '1234');
+      const { handle } = joinShare('offer-code', '0123456789abcdef0123456789abcdef');
       attachChannel();
       handle.disconnect();
       expect(lastPc!.close).toHaveBeenCalled();
@@ -267,13 +272,13 @@ describe('joinShare', () => {
 
   describe('_resetForTesting', () => {
     it('disconnects all active guests and resets the id counter', () => {
-      joinShare('offer-code', '1234');
+      joinShare('offer-code', '0123456789abcdef0123456789abcdef');
       attachChannel();
       const pcRef = lastPc!;
       _resetForTesting();
       expect(pcRef.close).toHaveBeenCalled();
       // counter should restart
-      const fresh = joinShare('offer-code', '1234');
+      const fresh = joinShare('offer-code', '0123456789abcdef0123456789abcdef');
       expect(fresh.guestId).toBe('guest-1');
     });
   });

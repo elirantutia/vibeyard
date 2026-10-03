@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as readline from 'readline';
 import * as path from 'path';
 import * as os from 'os';
 import type { BrowserWindow } from 'electron';
@@ -9,7 +10,7 @@ import { resolveBinary, validateBinaryExists } from './resolve-binary';
 import { getCopilotConfig, AGENT_EXT } from '../copilot-config';
 import { installCopilotHooks, validateCopilotHooks, cleanupCopilotHooks, SESSION_ID_VAR } from '../copilot-hooks';
 import { startConfigWatcher as startConfigWatch, stopConfigWatcher as stopConfigWatch } from '../config-watcher';
-import { MAX_INDEX_CHARS_PER_SESSION, TRANSCRIPT_TEXT_SEPARATOR, UUID_RE } from './transcript-utils';
+import { MAX_INDEX_BYTES, MAX_INDEX_FILE_BYTES, IndexTextBudget, UUID_RE } from './transcript-utils';
 import { writeAgentFile, deleteAgentFile } from './agent-files';
 
 const binaryCache = { path: null as string | null };
@@ -29,6 +30,9 @@ export class CopilotProvider implements CliProvider {
       pendingPromptTrigger: 'startup-arg',
       planModeArg: '--mode plan',
       systemPromptInjection: false,
+      profiles: false,
+      selfTitles: false,
+      polledStatus: false,
     },
     defaultContextWindowSize: 128_000,
   };
@@ -48,7 +52,7 @@ export class CopilotProvider implements CliProvider {
     return env;
   }
 
-  buildArgs(opts: { cliSessionId: string | null; isResume: boolean; extraArgs: string; initialPrompt?: string; systemPrompt?: string }): string[] {
+  buildArgs(opts: { sessionId: string; cliSessionId: string | null; isResume: boolean; extraArgs: string; initialPrompt?: string; systemPrompt?: string }): string[] {
     const args: string[] = [];
     if (opts.isResume && opts.cliSessionId) {
       args.push(`--resume=${opts.cliSessionId}`);
@@ -113,7 +117,7 @@ export class CopilotProvider implements CliProvider {
     return fs.existsSync(filePath) ? filePath : null;
   }
 
-  async discoverTranscripts(): Promise<TranscriptDescriptor[]> {
+  async discoverTranscripts(signal?: AbortSignal): Promise<TranscriptDescriptor[]> {
     const root = path.join(os.homedir(), '.copilot', 'session-state');
     let entries: fs.Dirent[];
     try {
@@ -123,6 +127,7 @@ export class CopilotProvider implements CliProvider {
     }
     const out: TranscriptDescriptor[] = [];
     for (const entry of entries) {
+      if (signal?.aborted) return out;
       if (!entry.isDirectory() || !UUID_RE.test(entry.name)) continue;
       const cliSessionId = entry.name;
       const dir = path.join(root, cliSessionId);
@@ -141,23 +146,37 @@ export class CopilotProvider implements CliProvider {
   }
 
   async indexTranscript(transcriptPath: string): Promise<{ text: string; cwd: string }> {
-    const content = await fs.promises.readFile(transcriptPath, 'utf-8');
-    const texts: string[] = [];
-    let totalChars = 0;
-    for (const line of content.split('\n')) {
-      if (!line.trim() || totalChars >= MAX_INDEX_CHARS_PER_SESSION) continue;
-      try {
-        const entry = JSON.parse(line);
-        if (entry.type !== 'user.message') continue;
-        const c = entry.data?.content;
-        if (typeof c !== 'string' || !c) continue;
-        texts.push(c.trim());
-        totalChars += c.length;
-      } catch {
-        // partial-write tolerance
-      }
+    let size: number;
+    try {
+      size = (await fs.promises.stat(transcriptPath)).size;
+    } catch {
+      return { text: '', cwd: '' };
     }
-    return { text: texts.join(TRANSCRIPT_TEXT_SEPARATOR), cwd: '' };
+    if (size > MAX_INDEX_FILE_BYTES) return { text: '', cwd: '' };
+
+    const budget = new IndexTextBudget();
+
+    const input = fs.createReadStream(transcriptPath, { end: MAX_INDEX_BYTES - 1 });
+    const lines = readline.createInterface({ input, crlfDelay: Infinity });
+    try {
+      for await (const line of lines) {
+        if (!line.trim() || budget.full) continue;
+        try {
+          const entry = JSON.parse(line);
+          if (entry.type !== 'user.message') continue;
+          const c = entry.data?.content;
+          budget.push(c);
+        } catch {
+          // partial-write tolerance
+        }
+      }
+    } catch {
+      // Best-effort: keep whatever was extracted before the stream failed.
+    } finally {
+      lines.close();
+      input.destroy();
+    }
+    return { text: budget.join(), cwd: '' };
   }
 }
 

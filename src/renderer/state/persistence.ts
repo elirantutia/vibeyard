@@ -19,6 +19,16 @@ export function createDefaultBoard(): BoardData {
  */
 export function hydrateLoadedState(state: PersistedState, defaultPreferences: Preferences): void {
   state.preferences = { ...defaultPreferences, ...state.preferences };
+  // Legacy: a single global default profile → per-provider map, keyed on the
+  // profile's own provider. A dangling id is dropped (it would never resolve).
+  const legacyDefault = (state.preferences as { defaultProfileId?: string }).defaultProfileId;
+  if (legacyDefault) {
+    const profile = (state.profiles ?? []).find((p) => p.id === legacyDefault);
+    if (profile) {
+      state.preferences.defaultProfiles = { ...state.preferences.defaultProfiles, [profile.providerId]: profile.id };
+    }
+    delete (state.preferences as { defaultProfileId?: string }).defaultProfileId;
+  }
   for (const project of state.projects) {
     for (const session of project.sessions) {
       if (session.cost) restoreCost(session.id, session.cost);

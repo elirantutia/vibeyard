@@ -29,6 +29,7 @@ const mockAppState = vi.hoisted(() => {
     toggleBookmark: vi.fn(),
     removeHistoryEntry: vi.fn(),
     resumeFromHistory: vi.fn(),
+    resumeFromHistorySafe: vi.fn(() => Promise.resolve()),
     emit(event: string) {
       listeners.get(event)?.forEach(cb => cb());
     },
@@ -56,6 +57,7 @@ const mockAppState = vi.hoisted(() => {
       state.toggleBookmark.mockClear();
       state.removeHistoryEntry.mockClear();
       state.resumeFromHistory.mockClear();
+      state.resumeFromHistorySafe.mockClear();
       state.on.mockClear();
     },
   };
@@ -321,5 +323,43 @@ describe('renderSessionHistory', () => {
 
     expect(sidebarContainer.innerHTML).toBe('');
     expect(dialogContainer.innerHTML).toBe('');
+  });
+});
+
+describe('crash badge', () => {
+  it('renders a crash badge with the reason in the title for entries with exitReason', async () => {
+    mockAppState.activeProject.sessionHistory[0].exitReason = 'unhandled_rejection';
+    const container = await renderHistory();
+    const badge = container.querySelector('.history-crash-badge');
+
+    expect(badge).not.toBeNull();
+    expect(badge?.title).toBe('Session ended unexpectedly: unhandled_rejection');
+  });
+
+  it('does not render a crash badge for entries without exitReason', async () => {
+    const container = await renderHistory();
+    expect(container.querySelector('.history-crash-badge')).toBeNull();
+  });
+
+  it('shows a resume action and process details for a crashed session', async () => {
+    Object.assign(mockAppState.activeProject.sessionHistory[0], {
+      exitReason: 'unhandled_rejection', exitCode: 1, processId: 2028,
+    });
+    const container = await renderHistory();
+    const badge = container.querySelector('.history-crash-badge');
+    expect(badge?.title).toContain('PID 2028');
+    const resume = container.querySelector('.history-resume-btn');
+    expect(resume?.textContent).toBe('Resume');
+    resume!.dispatch('click', { stopPropagation() {} });
+    expect(mockAppState.resumeFromHistorySafe).toHaveBeenCalledWith('p1', 'h1');
+  });
+
+  it('keeps crash details without offering resume when no transcript exists', async () => {
+    Object.assign(mockAppState.activeProject.sessionHistory[0], {
+      exitReason: 'unhandled_rejection', processId: 2028, transcriptAvailable: false,
+    });
+    const container = await renderHistory();
+    expect(container.querySelector('.history-crash-badge')).not.toBeNull();
+    expect(container.querySelector('.history-resume-btn')).toBeNull();
   });
 });

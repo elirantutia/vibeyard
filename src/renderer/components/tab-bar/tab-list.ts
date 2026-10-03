@@ -1,6 +1,6 @@
 import { appState, MAX_SESSION_NAME_LENGTH, type ProjectRecord, type SessionRecord } from '../../state.js';
 import type { ProviderId } from '../../../shared/types.js';
-import { getStatus, type SessionStatus } from '../../session-activity.js';
+import { getStatus, STATUS_GLYPH, type SessionStatus } from '../../session-activity.js';
 import { isUnread } from '../../session-unread.js';
 import { hasUnreadInProject as hasGithubUnread } from '../../github-unread.js';
 import { ICON_KANBAN, ICON_TEAM, ICON_OVERVIEW } from '../../icons.js';
@@ -27,6 +27,48 @@ import { t } from '../../i18n.js';
 function buildTooltip(status: SessionStatus, cliSessionId?: string): string {
   const statusLine = t('tab.tooltip.statusPrefix', { status });
   return cliSessionId ? `${statusLine}\n${t('tab.tooltip.sessionPrefix', { cliSessionId })}` : statusLine;
+}
+
+function tabDisplayName(project: ProjectRecord, session: SessionRecord): string {
+  return session.type === 'project-tab'
+    ? t('tab.title.overview', { name: project.name })
+    : session.type === 'kanban'
+      ? t('tab.title.kanban', { name: project.name })
+      : session.type === 'team'
+        ? t('tab.title.team', { name: project.name })
+        : session.name;
+}
+
+function tabNamePrefix(session: SessionRecord): string {
+  switch (session.type) {
+    case 'diff-viewer': return '<span class="tab-diff-badge">DIFF</span> ';
+    case 'mcp-inspector': return '<span class="tab-mcp-badge">MCP</span> ';
+    case 'file-reader': return '<span class="tab-file-badge">FILE</span> ';
+    case 'remote-terminal': return '<span class="tab-remote-badge">P2P</span> ';
+    case 'browser-tab': return '<span class="tab-browser-badge">WEB</span> ';
+    case 'project-tab': return `<span class="tab-project-badge">${ICON_OVERVIEW}</span> `;
+    case 'kanban': return `<span class="tab-kanban-badge">${ICON_KANBAN}</span> `;
+    case 'team': return `<span class="tab-team-badge">${ICON_TEAM}</span> `;
+    default: {
+      if (!hasMultipleAvailableProviders()) return '';
+      const providerId = session.providerId || 'claude';
+      return `<img class="tab-provider-icon" src="assets/providers/${providerId}.png" alt="${providerId}" onerror="this.style.display='none'"> `;
+    }
+  }
+}
+
+function tabTitle(project: ProjectRecord, session: SessionRecord, status: SessionStatus): string {
+  switch (session.type) {
+    case 'diff-viewer': return t('tab.tooltip.diff', { name: session.diffFilePath || session.name });
+    case 'mcp-inspector': return t('tab.tooltip.mcpInspector');
+    case 'file-reader': return t('tab.tooltip.file', { name: session.fileReaderPath || session.name });
+    case 'remote-terminal': return t('tab.tooltip.remote', { name: session.remoteHostName || session.name });
+    case 'browser-tab': return t('tab.tooltip.browser', { url: session.browserTabUrl || t('tab.tooltip.browserNew') });
+    case 'project-tab': return t('tab.tooltip.projectTools');
+    case 'kanban': return t('tab.tooltip.kanbanBoard');
+    case 'team': return t('tab.tooltip.team');
+    default: return buildTooltip(status, session.cliSessionId ?? undefined);
+  }
 }
 
 function startRename(tab: HTMLElement, project: ProjectRecord, session: SessionRecord): void {
@@ -317,16 +359,17 @@ export function render(): void {
     const isTeam = session.type === 'team';
     const isSpecial = isMcp || isDiff || isFileReader || isRemoteTab || isBrowserTab || isProjectTab || isKanban || isTeam;
     const sharing = isSharing(session.id);
-    const displayName = isProjectTab ? t('tab.title.overview', { name: project.name }) : isKanban ? t('tab.title.kanban', { name: project.name }) : isTeam ? t('tab.title.team', { name: project.name }) : session.name;
+    const displayName = tabDisplayName(project, session);
     tab.className = 'tab-item' + (isActive ? ' active' : '') + (unread ? ' unread' : '') + (sharing ? ' tab-sharing' : '') + (isRemoteTab ? ' tab-remote' : '');
     tab.dataset.sessionId = session.id;
+    tab.dataset.tabName = displayName;
+    tab.dataset.cliSessionId = session.cliSessionId ?? '';
     tab.draggable = true;
-    tab.title = isDiff ? t('tab.tooltip.diff', { name: session.diffFilePath || session.name }) : isMcp ? t('tab.tooltip.mcpInspector') : isFileReader ? t('tab.tooltip.file', { name: session.fileReaderPath || session.name }) : isRemoteTab ? t('tab.tooltip.remote', { name: session.remoteHostName || session.name }) : isBrowserTab ? t('tab.tooltip.browser', { url: session.browserTabUrl || t('tab.tooltip.browserNew') }) : isProjectTab ? t('tab.tooltip.projectTools') : isKanban ? t('tab.tooltip.kanbanBoard') : isTeam ? t('tab.tooltip.team') : buildTooltip(getStatus(session.id), session.cliSessionId);
-    const providerId = session.providerId || 'claude';
-    const providerIcon = hasMultipleAvailableProviders() ? `<img class="tab-provider-icon" src="assets/providers/${providerId}.png" alt="${providerId}" onerror="this.style.display='none'"> ` : '';
-    const namePrefix = isDiff ? '<span class="tab-diff-badge">DIFF</span> ' : isMcp ? '<span class="tab-mcp-badge">MCP</span> ' : isFileReader ? '<span class="tab-file-badge">FILE</span> ' : isRemoteTab ? '<span class="tab-remote-badge">P2P</span> ' : isBrowserTab ? '<span class="tab-browser-badge">WEB</span> ' : isProjectTab ? `<span class="tab-project-badge">${ICON_OVERVIEW}</span> ` : isKanban ? `<span class="tab-kanban-badge">${ICON_KANBAN}</span> ` : isTeam ? `<span class="tab-team-badge">${ICON_TEAM}</span> ` : !isSpecial ? providerIcon : '';
+    const status = getStatus(session.id);
+    tab.title = tabTitle(project, session, status);
+    const namePrefix = tabNamePrefix(session);
     const shareIndicator = sharing ? `<span class="tab-share-indicator" title="${esc(t('tab.shareIndicatorTooltip'))}"></span>` : '';
-    const statusDot = isSpecial ? '' : `<span class="tab-status ${getStatus(session.id)}"></span>`;
+    const statusDot = isSpecial ? '' : `<span class="tab-status ${status}" aria-hidden="true">${STATUS_GLYPH[status]}</span>`;
     tab.innerHTML = `
       ${statusDot}
       <span class="tab-name">${namePrefix}${esc(displayName)}</span>
@@ -439,10 +482,11 @@ export function updateTabStatus(sessionId: string, status: SessionStatus): void 
   const dot = tabListEl.querySelector(`.tab-item[data-session-id="${sessionId}"] .tab-status`) as HTMLElement | null;
   if (dot) {
     dot.className = `tab-status ${status}`;
+    dot.textContent = STATUS_GLYPH[status];
   }
   const tab = tabListEl.querySelector(`.tab-item[data-session-id="${sessionId}"]`) as HTMLElement | null;
   if (tab) {
     const session = appState.activeProject?.sessions.find(s => s.id === sessionId);
-    tab.title = buildTooltip(status, session?.cliSessionId);
+    tab.title = buildTooltip(status, session?.cliSessionId ?? undefined);
   }
 }

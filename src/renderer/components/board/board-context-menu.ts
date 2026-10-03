@@ -60,6 +60,11 @@ export function showContextMenu(x: number, y: number, options: MenuOption[]): vo
 }
 
 export function hideContextMenu(): void {
+  if (pendingCloseHandler) {
+    document.removeEventListener('click', pendingCloseHandler);
+    document.removeEventListener('keydown', pendingCloseHandler);
+    pendingCloseHandler = null;
+  }
   if (activeMenu) {
     activeMenu.remove();
     activeMenu = null;

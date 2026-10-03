@@ -1,5 +1,5 @@
 import type { VibeyardApi } from './types.js';
-import type { SessionRecord, ProjectRecord, Preferences, PersistedState, ArchivedSession, ProviderId, CostInfo, ContextWindowInfo, InitialContextSnapshot, ReadinessResult, ReadinessSnapshot, TeamMember, TeamData, Profile, OverviewLayout } from '../shared/types.js';
+import type { SessionRecord, ProjectRecord, Preferences, PersistedState, ArchivedSession, ProviderId, CostInfo, ContextWindowInfo, InitialContextSnapshot, ReadinessResult, TeamMember, TeamData, Profile, OverviewLayout } from '../shared/types.js';
 import { getProviderCapabilities, getProviderAvailabilitySnapshot } from './provider-availability.js';
 import { basename } from '../shared/platform.js';
 import { isCliSession } from './session-utils.js';
@@ -34,9 +34,9 @@ import {
   buildNewMember,
   buildTeamChatSession,
   fireAndForgetRemoveAgent,
-  pickTeamChatProvider,
   reconcileAgent as reconcileAgentPure,
   removeMember,
+  resolveTeamChatBackend,
   syncAgentInstall as syncAgentInstallPure,
 } from './state/team-state.js';
 import {
@@ -120,6 +120,11 @@ class AppState {
   private state: PersistedState = { version: 1, projects: [], activeProjectId: null, preferences: { ...defaultPreferences } };
   private listeners = new Map<EventType, Set<EventCallback>>();
   private nav = new NavHistory();
+  /** sessionId → owning project + session record, kept in sync by the add/remove paths (O(1) lookups). */
+  private sessionIndex = new Map<string, { project: ProjectRecord; session: SessionRecord }>();
+  /** Coalesced persist for high-frequency cost/context ticks (see scheduleCostFlush). */
+  private pendingCostFlush = false;
+  private costFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
   private pushNav(sessionId: string | null | undefined): void {
     this.nav.push(sessionId);
@@ -129,15 +134,21 @@ class AppState {
     this.nav.prune(sessionId);
   }
 
-  /** Resolve a session id to both the session and its owning project in one scan. */
+  /** Resolve a session id to both the session and its owning project (O(1) via sessionIndex). */
   findSessionWithProject(
     sessionId: string,
   ): { project: ProjectRecord; session: SessionRecord } | undefined {
+    return this.sessionIndex.get(sessionId);
+  }
+
+  /** Rebuild the O(1) session index from the whole state (used after a full state load). */
+  private rebuildSessionIndex(): void {
+    this.sessionIndex.clear();
     for (const project of this.state.projects) {
-      const session = project.sessions.find((s) => s.id === sessionId);
-      if (session) return { project, session };
+      for (const session of project.sessions) {
+        this.sessionIndex.set(session.id, { project, session });
+      }
     }
-    return undefined;
   }
 
   private findProjectBySession(sessionId: string): ProjectRecord | undefined {
@@ -190,12 +201,29 @@ class AppState {
       this.state.appLaunchCount = (this.state.appLaunchCount ?? 0) + 1;
       this.persist();
     }
+    this.rebuildSessionIndex();
 
     this.emit('state-loaded');
   }
 
   private persist(): void {
     window.vibeyard.store.save(serializeForSave(this.state));
+  }
+
+  /**
+   * Coalesce high-frequency cost/context ticks into a single persist ~1s later.
+   * Each tick costs a full serialize + structured clone over IPC; the 1s window
+   * is short enough that a quit at any point loses at most ~1s of cost data
+   * (the main-side store flushes on quit).
+   */
+  private scheduleCostFlush(): void {
+    this.pendingCostFlush = true;
+    if (this.costFlushTimer !== null) return;
+    this.costFlushTimer = setTimeout(() => {
+      this.costFlushTimer = null;
+      this.pendingCostFlush = false;
+      this.persist();
+    }, 1000);
   }
 
   get projects(): ProjectRecord[] {
@@ -329,6 +357,7 @@ class AppState {
     const sessions = project?.sessions ?? [];
 
     this.state.projects = this.state.projects.filter((p) => p.id !== id);
+    for (const s of sessions) this.sessionIndex.delete(s.id);
     if (this.state.activeProjectId === id) {
       this.state.activeProjectId = this.state.projects[0]?.id ?? null;
     }
@@ -368,7 +397,7 @@ class AppState {
     const project = this.state.projects.find((p) => p.id === projectId);
     if (!project) return undefined;
 
-    const cliProviderId = resolveCliProvider(this.state.preferences, providerId);
+    const cliProviderId = resolveCliProvider(this.state.preferences, providerId, project);
     // Pin the effective profile (explicit > project default > global default,
     // provider-matched) onto the session at creation so it stays sticky — resume
     // must reuse the same config dir even if a default changes later.
@@ -396,6 +425,8 @@ class AppState {
   }
 
   private commitNewSession(projectId: string, session: SessionRecord): void {
+    const project = this.state.projects.find((p) => p.id === projectId);
+    if (project) this.sessionIndex.set(session.id, { project, session });
     this.pushNav(session.id);
     this.persist();
     this.emit('session-added', { projectId, session });
@@ -496,6 +527,10 @@ class AppState {
     return this.team.members;
   }
 
+  getTeamMemberById(id: string): TeamMember | undefined {
+    return this.team.members.find((m) => m.id === id);
+  }
+
   addTeamMember(input: Omit<TeamMember, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): TeamMember {
     const member = buildNewMember(input);
     this.team.members.push(member);
@@ -512,15 +547,36 @@ class AppState {
     if (!result) return undefined;
     this.persist();
     this.emit('team-changed');
+    // A rename/role edit changes the assignee badge on any board task assigned
+    // to this member; board views key off board-changed, so announce it here.
+    if (this.boardReferencesMember(id)) this.notifyBoardChanged();
     void reconcileAgentPure(window.vibeyard.provider, this.team, result.before, result.after, () => this.persist());
     return result.after;
+  }
+
+  /** True when any project's board has a task assigned to the given member. */
+  private boardReferencesMember(memberId: string): boolean {
+    return this.state.projects.some((p) =>
+      (p.board?.tasks ?? []).some((t) => t.assigneeId === memberId),
+    );
   }
 
   removeTeamMember(id: string): void {
     const removed = removeMember(this.team, id);
     if (!removed) return;
+    // Don't orphan board tasks assigned to the deleted member.
+    let boardChanged = false;
+    for (const project of this.state.projects) {
+      for (const task of project.board?.tasks ?? []) {
+        if (task.assigneeId === id) {
+          task.assigneeId = undefined;
+          boardChanged = true;
+        }
+      }
+    }
     this.persist();
     this.emit('team-changed');
+    if (boardChanged) this.notifyBoardChanged();
     if (removed.installAsAgent && removed.agentSlug) {
       fireAndForgetRemoveAgent(window.vibeyard.provider, removed.agentSlug);
     }
@@ -553,7 +609,7 @@ class AppState {
    */
   async addProfile(input: { name: string; providerId: ProviderId; customPath?: string }): Promise<Profile> {
     const id = crypto.randomUUID();
-    const { configDir, managed } = await window.vibeyard.profiles.provision(id, input.customPath);
+    const { configDir, managed } = await window.vibeyard.profiles.provision(id, input.customPath, input.providerId);
     const profile: Profile = {
       id,
       name: input.name.trim(),
@@ -577,9 +633,18 @@ class AppState {
     return profile;
   }
 
+  isProfileInUse(id: string): boolean {
+    return this.state.projects.some((project) =>
+      project.sessions.some((session) => session.profileId === id) ||
+      (project.sessionHistory ?? []).some((archived) => archived.profileId === id)
+    );
+  }
+
   removeProfile(id: string): void {
     const idx = this.profiles.findIndex((p) => p.id === id);
     if (idx === -1) return;
+    // A conversation must never silently resume under a different account.
+    if (this.isProfileInUse(id)) return;
     this.profiles.splice(idx, 1);
     // Don't orphan references: any session/project/preference pointing at the
     // deleted profile falls back to the default config dir.
@@ -591,9 +656,21 @@ class AppState {
       for (const archived of project.sessionHistory ?? []) {
         if (archived.profileId === id) archived.profileId = undefined;
       }
+      for (const task of project.board?.tasks ?? []) {
+        if (task.profileId === id) task.profileId = undefined;
+      }
     }
-    if (this.state.preferences.defaultProfileId === id) {
-      this.state.preferences.defaultProfileId = undefined;
+    const defaultProfiles = this.state.preferences.defaultProfiles;
+    if (defaultProfiles) {
+      for (const providerId of Object.keys(defaultProfiles)) {
+        if (defaultProfiles[providerId as ProviderId] === id) delete defaultProfiles[providerId as ProviderId];
+      }
+    }
+    for (const member of this.team.members) {
+      if (member.profileId === id) {
+        member.profileId = undefined;
+        member.updatedAt = Date.now();
+      }
     }
     this.persist();
     this.emit('profiles-changed');
@@ -607,6 +684,24 @@ class AppState {
     this.emit('project-changed');
   }
 
+  setProjectCodingDefaults(projectId: string, providerId: ProviderId | undefined, profileId?: string): void {
+    const project = this.state.projects.find(p => p.id === projectId);
+    if (!project) return;
+    const effectiveProvider = providerId ?? this.state.preferences.defaultProvider ?? 'claude';
+    project.defaultProvider = providerId;
+    project.defaultProfileId = this.profiles.find(p => p.id === profileId && p.providerId === effectiveProvider)?.id;
+    this.persist();
+    this.emit('project-changed');
+  }
+
+  /** Set (or clear) the global default profile for one provider. */
+  setProviderDefaultProfile(providerId: ProviderId, profileId: string | undefined): void {
+    const map = { ...this.state.preferences.defaultProfiles };
+    if (profileId) map[providerId] = profileId;
+    else delete map[providerId];
+    this.setPreference('defaultProfiles', map);
+  }
+
   startTeamChat(
     projectId: string,
     member: TeamMember,
@@ -616,10 +711,17 @@ class AppState {
     if (!project) return undefined;
 
     const activeSession = project.sessions.find((s) => s.id === project.activeSessionId);
-    const providerId = pickTeamChatProvider(activeSession, this.state.preferences.defaultProvider, overrideProviderId);
-    if (!providerId) return undefined;
+    const backend = resolveTeamChatBackend(
+      member,
+      project,
+      this.state.preferences,
+      activeSession,
+      this.profiles,
+      overrideProviderId,
+    );
+    if (!backend) return undefined;
 
-    const session = buildTeamChatSession(project, member, providerId, MAX_SESSION_NAME_LENGTH);
+    const session = buildTeamChatSession(project, member, backend.providerId, MAX_SESSION_NAME_LENGTH, backend.profileId);
     attachSessionToProject(project, session, { addToSwarm: true });
     this.commitNewSession(projectId, session);
     return session;
@@ -674,20 +776,22 @@ class AppState {
     return session;
   }
 
-  removeSession(projectId: string, sessionId: string): void {
+  removeSession(projectId: string, sessionId: string, opts?: { exitReason?: string; exitCode?: number; exitSignal?: number; processId?: number }): void {
     const project = this.state.projects.find((p) => p.id === projectId);
     if (!project) return;
 
     // Archive CLI sessions before removing (cost data must be captured before session-removed triggers destroyTerminal)
     const session = project.sessions.find((s) => s.id === sessionId);
     if (session && isCliSession(session) && this.state.preferences.sessionHistoryEnabled) {
-      if (this.isArchivable(session, project)) {
-        this.archiveSession(project, session);
+      const transcriptAvailable = this.isArchivable(session, project);
+      if (opts?.exitReason || transcriptAvailable) {
+        this.archiveSession(project, session, { ...opts, transcriptAvailable });
       }
     }
 
     const closingIndex = project.sessions.findIndex((s) => s.id === sessionId);
     project.sessions = project.sessions.filter((s) => s.id !== sessionId);
+    this.sessionIndex.delete(sessionId);
     this.pruneNav(sessionId);
     if (project.activeSessionId === sessionId) {
       const newIndex = closingIndex > 0 ? closingIndex - 1 : 0;
@@ -724,8 +828,8 @@ class AppState {
     );
   }
 
-  private archiveSession(project: ProjectRecord, session: SessionRecord): void {
-    archiveSessionPure(project, session);
+  private archiveSession(project: ProjectRecord, session: SessionRecord, opts?: { exitReason?: string; exitCode?: number; exitSignal?: number; processId?: number; transcriptAvailable?: boolean }): void {
+    archiveSessionPure(project, session, opts);
     this.emit('history-changed', project.id);
   }
 
@@ -763,6 +867,7 @@ class AppState {
 
     const archived = project.sessionHistory?.find((a) => a.id === archivedSessionId);
     if (!archived || !archived.cliSessionId) return undefined;
+    if (archived.transcriptAvailable === false) return undefined;
 
     const existing = findCliSessionTab(project, archived.cliSessionId);
     if (existing) return this.activateExistingSession(project, existing);
@@ -785,6 +890,7 @@ class AppState {
 
     const archived = project.sessionHistory?.find((a) => a.id === archivedSessionId);
     if (!archived || !archived.cliSessionId) return undefined;
+    if (archived.transcriptAvailable === false) return undefined;
 
     const exists = await window.vibeyard.session.transcriptExists(
       archived.providerId,
@@ -793,7 +899,8 @@ class AppState {
       this.profileConfigDir(archived.providerId, archived.profileId),
     );
     if (!exists) {
-      this.removeHistoryEntry(projectId, archivedSessionId);
+      // Preserve crash diagnostics even when the transcript disappeared.
+      if (!archived.exitReason) this.removeHistoryEntry(projectId, archivedSessionId);
       return undefined;
     }
 
@@ -919,14 +1026,14 @@ class AppState {
     const session = this.findSessionById(sessionId);
     if (!session) return;
     session.cost = { ...cost };
-    this.persist();
+    this.scheduleCostFlush();
   }
 
   updateSessionContext(sessionId: string, context: ContextWindowInfo): void {
     const session = this.findSessionById(sessionId);
     if (!session) return;
     session.contextWindow = { ...context };
-    this.persist();
+    this.scheduleCostFlush();
   }
 
   updateSessionBrowserTabUrl(sessionId: string, url: string): void {
@@ -1118,6 +1225,11 @@ export function _resetForTesting(): void {
   (appState as any)['state'] = { version: 1, projects: [], activeProjectId: null, preferences: { ...defaultPreferences } };
   (appState as any)['listeners'] = new Map();
   (appState as any)['nav'] = new NavHistory();
+  if ((appState as any)['costFlushTimer'] !== null) {
+    clearTimeout((appState as any)['costFlushTimer']);
+    (appState as any)['costFlushTimer'] = null;
+  }
+  (appState as any)['pendingCostFlush'] = false;
 }
 
 export const appState = new AppState();

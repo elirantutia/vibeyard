@@ -37,11 +37,11 @@ import { getContext } from './session-context.js';
 import { initSessionInspector } from './components/session-inspector.js';
 import { initFilePrompt } from './components/file-prompt.js';
 import { applyThemeToAllRemoteTerminals } from './components/remote-terminal-pane.js';
-import { loadProviderMetas } from './provider-availability.js';
-import { setLocale as setI18nLocale, getLocale } from './i18n.js';
+import { loadProviderMetas, getProviderCapabilities } from './provider-availability.js';
+import { setLocale as setI18nLocale, getLocale, t } from './i18n.js';
 import { resolveSystemLocale } from './system-locale.js';
 import { rerenderOpenPreferencesModal } from './components/preferences-modal.js';
-import type { Locale } from '../shared/types.js';
+import type { Locale, ProviderId } from '../shared/types.js';
 
 function initI18n(): void {
   const saved = appState.preferences.locale;
@@ -68,6 +68,46 @@ window.vibeyard.app.onQuitting(() => {
 window.vibeyard.app.onConfirmClose(() => {
   confirmAppClose(() => window.vibeyard.app.closeConfirmed());
 });
+
+/**
+ * Restored sessions whose provider mirrors its own title from a transcript poll
+ * (Pi/OMP). Claude self-titles too but pushes via its statusLine hook, so it
+ * needs no re-derivation and is excluded. Sent to `session:syncRestored` at
+ * startup so a reopened tab whose `cliSessionId` is already known catches up to
+ * a title the CLI set while Vibeyard was closed. A tab whose id was never
+ * persisted stays unresolved — its title is not re-derived from a guessed
+ * conversation.
+ */
+type RestoredSyncSession = {
+  sessionId: string;
+  providerId: ProviderId;
+  cliSessionId: string | null;
+  cwd: string;
+  configDir?: string;
+  createdAt: string;
+};
+
+function collectRestoredSelfTitlingSessions(): RestoredSyncSession[] {
+  const out: RestoredSyncSession[] = [];
+  for (const project of appState.projects) {
+    for (const session of project.sessions) {
+      const providerId = session.providerId;
+      if (!providerId || getProviderCapabilities(providerId)?.selfTitles !== true) continue;
+      const configDir = session.profileId
+        ? appState.profiles.find((p) => p.id === session.profileId && p.providerId === providerId)?.configDir
+        : undefined;
+      out.push({
+        sessionId: session.id,
+        providerId,
+        cliSessionId: session.cliSessionId ?? null,
+        cwd: project.path,
+        configDir,
+        createdAt: session.createdAt,
+      });
+    }
+  }
+  return out;
+}
 
 async function main(): Promise<void> {
   // Wire PTY data/exit events from main process
@@ -154,8 +194,8 @@ async function main(): Promise<void> {
     }
   });
 
-  window.vibeyard.pty.onExit((sessionId, exitCode) => {
-    logDebugEvent('ptyExit', sessionId, { exitCode });
+  window.vibeyard.pty.onExit((sessionId, exitCode, signal, exitReason, pid) => {
+    logDebugEvent('ptyExit', sessionId, { exitCode, signal, exitReason, pid });
     if (isShellSessionId(sessionId)) {
       handleShellPtyExit(sessionId, exitCode);
     } else if (!isMcpSession(sessionId) && !isQuitting) {
@@ -167,7 +207,8 @@ async function main(): Promise<void> {
       const project = appState.projects.find(p => p.sessions.some(s => s.id === sessionId));
       if (project) {
         destroyTerminal(sessionId);
-        appState.removeSession(project.id, sessionId);
+        appState.removeSession(project.id, sessionId, { exitReason, exitCode, exitSignal: signal, processId: pid });
+        if (exitReason) notifySessionCrash(exitReason);
       }
     }
   });
@@ -212,6 +253,16 @@ async function main(): Promise<void> {
     return false;
   }
 
+  /** Desktop notification for an abnormal CLI exit, reusing the standard notification gate. */
+  function notifySessionCrash(reason: string): void {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    if (!appState.preferences.notificationsDesktop) return;
+    new Notification(t('session.crashedTitle'), {
+      body: t('session.crashedBody', { reason }),
+      silent: true,
+    });
+  }
+
   // Log AppState events to debug panel
   const stateEvents = [
     'project-added', 'project-removed', 'project-changed',
@@ -226,6 +277,23 @@ async function main(): Promise<void> {
 
   // Load persisted state
   await appState.load();
+
+  // Re-derive titles for sessions restored from a previous run (see
+  // collectRestoredSelfTitlingSessions). Main mirrors each tab's title from
+  // its transcript only when the conversation id is already known; an unknown
+  // id stays unresolved (ownership is not inferred from cwd + creation time).
+  const restored = collectRestoredSelfTitlingSessions();
+  if (restored.length) {
+    await window.vibeyard.session.syncRestored(restored);
+  }
+
+  // A restored tab that is closed without ever being resumed has no PTY exit to
+  // tear down its transcript-sync entry; release it here. A live session's exit
+  // already cleaned up in main, so this is an idempotent no-op for it.
+  appState.on('session-removed', (data) => {
+    const { sessionId } = data as { sessionId: string };
+    window.vibeyard.session.release(sessionId);
+  });
 
   // Initialize the UI locale before anything else renders strings.
   // Persisted choice wins; otherwise fall back to the OS language and persist

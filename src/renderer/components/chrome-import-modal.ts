@@ -1,6 +1,6 @@
 import { createModalShell, createModalButton } from './modal-shell.js';
 import { bindModalDismiss } from './modal-manager.js';
-import { createCustomSelect } from './custom-select.js';
+import { createCustomSelect, type CustomSelectInstance } from './custom-select.js';
 import type { ChromeProfile, ChromeImportProgress, ChromeImportResult } from '../../shared/types.js';
 
 let cleanupFn: (() => void) | null = null;
@@ -64,11 +64,12 @@ export async function showChromeImportModal(onClosed?: () => void): Promise<void
     note.textContent = `Failed to read Chrome profiles: ${(err as Error).message}`;
   }
 
+  let select: CustomSelectInstance | null = null;
   if (profiles.length === 0) {
     note.textContent = 'Chrome installation not found. Install Google Chrome and sign in to a profile, then try again.';
     importBtn.disabled = true;
   } else {
-    const select = createCustomSelect(
+    select = createCustomSelect(
       'chrome-import-profile-select',
       profiles.map((p) => ({ value: p.id, label: p.displayName })),
       profiles[0]!.id,
@@ -105,7 +106,7 @@ export async function showChromeImportModal(onClosed?: () => void): Promise<void
       let result: ChromeImportResult;
       try {
         result = await window.vibeyard.chromeImport.run({
-          profileId: select.getValue(),
+          profileId: select!.getValue(),
         });
       } catch (err) {
         unsub();
@@ -143,6 +144,7 @@ export async function showChromeImportModal(onClosed?: () => void): Promise<void
   const teardownDismiss = bindModalDismiss({ overlay, onClose: close });
 
   cleanupFn = () => {
+    select?.destroy();
     teardownDismiss();
   };
 

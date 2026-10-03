@@ -1,9 +1,8 @@
 import type { TeamMember } from '../../../../shared/types.js';
 import { appState } from '../../../state.js';
 import { showMemberSessionsModal } from '../../team/member-sessions-modal.js';
-import { showContextMenu } from '../../board/board-context-menu.js';
+import { buildTeamChatControl } from '../../team/chat-control.js';
 import {
-  getTeamChatProviderMetas,
   loadProviderAvailability,
 } from '../../../provider-availability.js';
 import { createWidgetEmpty } from './widget-empty.js';
@@ -56,6 +55,9 @@ export const createTeamWidget: WidgetFactory = (host) => {
   }
 
   const offTeam = appState.on('team-changed', () => render());
+  // A member's Chat shape (chevron hidden when pinned) and the pin itself depend
+  // on profiles, so a profile delete/rename must re-render too.
+  const offProfiles = appState.on('profiles-changed', () => render());
 
   render();
 
@@ -71,6 +73,7 @@ export const createTeamWidget: WidgetFactory = (host) => {
     destroy() {
       destroyed = true;
       offTeam();
+      offProfiles();
     },
     refresh() {
       render();
@@ -116,7 +119,12 @@ function buildCard(member: TeamMember, projectId: string): HTMLElement {
   const actions = document.createElement('div');
   actions.className = 'widget-team-card-actions';
 
-  actions.appendChild(buildChatControl(projectId, member));
+  actions.appendChild(buildTeamChatControl(projectId, member, {
+    chat: 'btn-primary btn-sm',
+    chatMain: 'widget-team-card-chat-main',
+    chevron: 'btn-primary btn-sm widget-team-card-chat-dropdown',
+    group: 'widget-team-card-chat-group',
+  }));
 
   const sessionsBtn = document.createElement('button');
   sessionsBtn.className = 'btn-secondary btn-sm widget-team-card-btn';
@@ -127,54 +135,6 @@ function buildCard(member: TeamMember, projectId: string): HTMLElement {
   card.appendChild(actions);
 
   return card;
-}
-
-function buildChatControl(projectId: string, member: TeamMember): HTMLElement {
-  const teamProviders = getTeamChatProviderMetas();
-
-  const chatBtn = document.createElement('button');
-  chatBtn.className = 'btn-primary btn-sm';
-  chatBtn.textContent = 'Chat';
-
-  if (teamProviders.length === 0) {
-    chatBtn.disabled = true;
-    chatBtn.title = 'No installed CLI supports team personas. Install Claude or Codex.';
-    return chatBtn;
-  }
-
-  chatBtn.addEventListener('click', () => {
-    appState.startTeamChat(projectId, member);
-  });
-
-  if (teamProviders.length === 1) return chatBtn;
-
-  chatBtn.classList.add('widget-team-card-chat-main');
-
-  const chevronBtn = document.createElement('button');
-  chevronBtn.className = 'btn-primary btn-sm widget-team-card-chat-dropdown';
-  chevronBtn.setAttribute('aria-label', 'Chat with another provider');
-  chevronBtn.setAttribute('aria-haspopup', 'menu');
-  chevronBtn.textContent = '▼';
-  chevronBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const r = chevronBtn.getBoundingClientRect();
-    showContextMenu(
-      r.right,
-      r.bottom + 4,
-      teamProviders.map((p) => ({
-        label: p.displayName,
-        action: () => {
-          appState.startTeamChat(projectId, member, p.id);
-        },
-      })),
-    );
-  });
-
-  const group = document.createElement('div');
-  group.className = 'widget-team-card-chat-group';
-  group.appendChild(chatBtn);
-  group.appendChild(chevronBtn);
-  return group;
 }
 
 function initials(name: string): string {

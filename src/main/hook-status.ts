@@ -1,3 +1,4 @@
+import { BoundedEventReader } from './bounded-event-reader';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -21,11 +22,85 @@ const KNOWN_EXTENSIONS = ['.status', '.sessionid', '.cost', '.name', '.toolfailu
 let watcher: fs.FSWatcher | null = null;
 let pollInterval: ReturnType<typeof setInterval> | null = null;
 const lastMtimes = new Map<string, number>();
-const eventFileOffsets = new Map<string, number>();
+const eventReaders = new Map<string, BoundedEventReader>();
+const eventContinuations = new Map<string, ReturnType<typeof setTimeout>>();
 const knownSessionIds = new Set<string>();
 
 export function registerSession(sessionId: string): void {
   knownSessionIds.add(sessionId);
+}
+
+let statusDirEnsured = false;
+/**
+ * Create STATUS_DIR once per process. The write helpers below run on every
+ * status/title/id change; re-mkdir-ing an already-existing dir each time
+ * is a wasted syscall. installStatusLineScript/startWatching still mkdir
+ * directly (they own their own one-time setup).
+ */
+function ensureStatusDir(): void {
+  if (statusDirEnsured) return;
+  fs.mkdirSync(STATUS_DIR, { recursive: true, mode: 0o700 });
+  statusDirEnsured = true;
+}
+
+/**
+ * A UI session id becomes a filename inside STATUS_DIR, so it must not be able
+ * to escape that directory. Ids are `crypto.randomUUID()` in practice, so this
+ * accepts exactly that shape with a small permissive margin, and rejects
+ * anything carrying a path separator or `..`.
+ *
+ * An unsafe id is logged and skipped rather than thrown: every caller runs
+ * inside a watcher or IPC callback, where an exception would take the status
+ * pipeline down for every other session.
+ */
+const UI_SESSION_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+
+function statusFilePath(uiSessionId: string, ext: string): string | null {
+  if (!UI_SESSION_ID_RE.test(uiSessionId)) {
+    console.warn(
+      `Refusing to write .${ext} for unsafe session id: ${JSON.stringify(uiSessionId)}`
+    );
+    return null;
+  }
+  return path.join(STATUS_DIR, `${uiSessionId}.${ext}`);
+}
+
+/**
+ * Record the CLI session id a UI session resolved to. The STATUS_DIR watcher
+ * forwards it as `session:cliSessionId`. Used by providers without hooks
+ * (codex, pi) that discover the id from on-disk artifacts.
+ */
+export function writeCliSessionId(uiSessionId: string, cliSessionId: string): void {
+  const filePath = statusFilePath(uiSessionId, 'sessionid');
+  if (filePath === null) return;
+  ensureStatusDir();
+  fs.writeFileSync(filePath, cliSessionId);
+}
+
+/**
+ * Provider-facing title channel (the same `.name` file Claude's statusLine
+ * writes): the STATUS_DIR watcher forwards it as `session:sessionName`.
+ * `cliSessionId` lets the renderer drop a title left over from a cleared
+ * conversation. Callers write only when the title actually changed.
+ */
+export function writeCliSessionName(uiSessionId: string, name: string, cliSessionId: string): void {
+  const filePath = statusFilePath(uiSessionId, 'name');
+  if (filePath === null) return;
+  ensureStatusDir();
+  fs.writeFileSync(filePath, JSON.stringify({ name, session_id: cliSessionId }));
+}
+
+/**
+ * Provider-facing status channel (the same `.status` file Claude's hooks
+ * write): the STATUS_DIR watcher forwards it as `session:hookStatus`. Used
+ * by providers without hooks (omp, pi) that derive status from their
+ * transcript. Callers write only when the status actually changed.
+ */
+export function writeStatus(uiSessionId: string, status: string): void {
+  const filePath = statusFilePath(uiSessionId, 'status');
+  if (filePath === null) return;
+  ensureStatusDir();
+  fs.writeFileSync(filePath, `Transcript:${status}`);
 }
 
 export function unregisterSession(sessionId: string): void {
@@ -233,46 +308,36 @@ function handleFileChange(win: BrowserWindow, filename: string): void {
   } else if (filename.endsWith('.events')) {
     const sessionId = filename.replace('.events', '');
     const filePath = path.join(STATUS_DIR, filename);
-    const offset = eventFileOffsets.get(sessionId) ?? 0;
-
-    let fd: number | null = null;
+    // Watch notifications and continuations share a reader and never duplicate offsets.
+    let reader = eventReaders.get(sessionId);
+    if (!reader) { reader = new BoundedEventReader(); eventReaders.set(sessionId, reader); }
     try {
-      fd = fs.openSync(filePath, 'r');
-      const stat = fs.fstatSync(fd);
-      if (stat.size > offset) {
-        const buf = Buffer.alloc(stat.size - offset);
-        fs.readSync(fd, buf, 0, buf.length, offset);
-        eventFileOffsets.set(sessionId, stat.size);
-
-        const lines = buf.toString('utf-8').trim().split('\n').filter(Boolean);
-        const events = [];
-        for (const line of lines) {
-          try { events.push(JSON.parse(line)); } catch { /* skip malformed */ }
-        }
-        if (events.length > 0 && !win.isDestroyed()) {
-          win.webContents.send('session:inspectorEvents', sessionId, events);
-        }
+      const { events, more } = reader.read(filePath);
+      if (events.length && !win.isDestroyed()) win.webContents.send('session:inspectorEvents', sessionId, events);
+      if (more && !eventContinuations.has(sessionId) && !win.isDestroyed()) {
+        eventContinuations.set(sessionId, setTimeout(() => {
+          eventContinuations.delete(sessionId);
+          if (knownSessionIds.has(sessionId) && !win.isDestroyed()) handleFileChange(win, filename);
+        }, 0));
       }
-    } catch {
-      // File may not exist yet
-    } finally {
-      if (fd !== null) {
-        try { fs.closeSync(fd); } catch { /* already closed */ }
-      }
-    }
+    } catch { /* File removed or temporarily unreadable. */ }
   }
 }
 
-function pollForChanges(win: BrowserWindow): void {
+let pollInFlight = false;
+
+async function pollForChanges(win: BrowserWindow): Promise<void> {
   if (win.isDestroyed()) return;
+  if (pollInFlight) return;
+  pollInFlight = true;
 
   try {
-    const files = fs.readdirSync(STATUS_DIR);
+    const files = await fs.promises.readdir(STATUS_DIR);
     for (const filename of files) {
       if (!isKnownExtension(filename)) continue;
       const filePath = path.join(STATUS_DIR, filename);
       try {
-        const stat = fs.statSync(filePath);
+        const stat = await fs.promises.stat(filePath);
         const mtime = stat.mtimeMs;
         const prev = lastMtimes.get(filename);
         // `!==`, not `>`: `.name` is deleted and rewritten on /clear, and a
@@ -289,12 +354,14 @@ function pollForChanges(win: BrowserWindow): void {
     }
   } catch {
     // Directory may not exist yet
+  } finally {
+    pollInFlight = false;
   }
 }
 
 function startPolling(win: BrowserWindow): void {
   stopPolling();
-  pollInterval = setInterval(() => pollForChanges(win), 2000);
+  pollInterval = setInterval(() => { void pollForChanges(win); }, 2000);
 }
 
 function stopPolling(): void {
@@ -350,17 +417,24 @@ export function startWatching(win: BrowserWindow): void {
 
 export function cleanupSessionStatus(sessionId: string): void {
   for (const ext of KNOWN_EXTENSIONS) {
+    const filename = `${sessionId}${ext}`;
+    lastMtimes.delete(filename);
     try {
-      fs.unlinkSync(path.join(STATUS_DIR, `${sessionId}${ext}`));
+      fs.unlinkSync(path.join(STATUS_DIR, filename));
     } catch {
       // Already gone
     }
   }
-  eventFileOffsets.delete(sessionId);
+  eventReaders.delete(sessionId);
+  clearTimeout(eventContinuations.get(sessionId));
+  eventContinuations.delete(sessionId);
   unregisterSession(sessionId);
 }
 
 export function cleanupAll(): void {
+  for (const timer of eventContinuations.values()) clearTimeout(timer);
+  eventContinuations.clear();
+  eventReaders.clear();
   stopPolling();
   knownSessionIds.clear();
   if (watcher) {

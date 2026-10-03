@@ -1,4 +1,4 @@
-import { renderSchemaForm } from './mcp-schema-form.js';
+import { renderSchemaForm, type JsonSchema } from './mcp-schema-form.js';
 
 type NavTab = 'tools' | 'resources' | 'prompts';
 
@@ -97,6 +97,7 @@ async function doConnect(
   dot.className = 'mcp-status connecting';
 
   const result = await window.vibeyard.mcp.connect(sessionId, url);
+  if (instances.get(sessionId) !== instance) return;
   if (result.success) {
     instance.connected = true;
     instance.url = url;
@@ -120,6 +121,7 @@ async function doDisconnect(
   content: HTMLElement,
 ): Promise<void> {
   await window.vibeyard.mcp.disconnect(sessionId);
+  if (instances.get(sessionId) !== instance) return;
   instance.connected = false;
   instance.toolsList = [];
   instance.resourcesList = [];
@@ -203,7 +205,8 @@ function renderToolsList(sessionId: string, tools: unknown[], container: HTMLEle
       if (!isOpen && body.children.length === 0) {
         // Build form
         if (tool.inputSchema && (tool.inputSchema as Record<string, unknown>).properties) {
-          const { element, getValues } = renderSchemaForm(tool.inputSchema as { properties: Record<string, unknown>; required?: string[] });
+          // SAFETY: MCP tool schemas are opaque JSON; renderSchemaForm only reads properties/required.
+          const { element, getValues } = renderSchemaForm(tool.inputSchema as unknown as JsonSchema);
           formRef = { getValues };
           body.appendChild(element);
         }
@@ -367,8 +370,10 @@ function renderPromptsList(sessionId: string, prompts: unknown[], container: HTM
 export function destroyInspectorPane(sessionId: string): void {
   const instance = instances.get(sessionId);
   if (!instance) return;
-  instance.element.remove();
   instances.delete(sessionId);
+  instance.element.remove();
+  // Request teardown even while a connect is still pending.
+  void window.vibeyard.mcp.disconnect(sessionId);
 }
 
 export function showInspectorPane(sessionId: string, split: boolean): void {
@@ -408,9 +413,10 @@ export function getInspectorInstance(sessionId: string): McpInspectorInstance | 
 
 export async function disconnectInspector(sessionId: string): Promise<void> {
   const instance = instances.get(sessionId);
-  if (instance?.connected) {
-    await window.vibeyard.mcp.disconnect(sessionId);
-  }
+  if (!instance) return;
+  // Request teardown even while a connect is still pending.
+  await window.vibeyard.mcp.disconnect(sessionId);
+  instance.connected = false;
 }
 
 function esc(s: string): string {

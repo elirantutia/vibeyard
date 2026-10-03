@@ -10,6 +10,7 @@ import { initProviders, getAllProviders } from './providers/registry';
 import { initAutoUpdater } from './auto-updater';
 import { stopGitWatcher } from './git-watcher';
 import { stopAllFileWatchers } from './file-watcher';
+import { disconnectAll } from './mcp-client';
 import { checkPythonAvailable } from './prerequisites';
 import { isMac } from './platform';
 import { isCloseConfirmed, setCloseConfirmed } from './close-state';
@@ -171,6 +172,9 @@ app.on('before-quit', (event) => {
   killAllPtys();
   stopGitWatcher();
   stopAllFileWatchers();
+  // Close any open MCP inspector connections (the pane-close path disconnects
+  // its own session; this catches connections left open at quit).
+  void disconnectAll();
   // Cleanup all providers
   for (const provider of getAllProviders()) {
     provider.cleanup();

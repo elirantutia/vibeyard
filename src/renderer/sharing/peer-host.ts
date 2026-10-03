@@ -5,7 +5,7 @@ import type { ShareMode, ShareMessage } from '../../shared/sharing-types.js';
 import { getTerminalInstance } from '../components/terminal-pane.js';
 import { SerializeAddon } from '@xterm/addon-serialize';
 import { ICE_CONFIG, sendMessage, waitForIceGathering, encodeConnectionCode, decodeConnectionCode } from './webrtc-utils.js';
-import { generateChallenge, computeChallengeResponse, bytesToHex, hexToBytes } from './share-crypto.js';
+import { generateChallenge, computeChallengeResponse, bytesToHex, validateShareKey } from './share-crypto.js';
 
 interface HostPeer {
   sessionId: string;
@@ -15,11 +15,12 @@ interface HostPeer {
   dc: RTCDataChannel;
   connected: boolean;
   authState: 'none' | 'pending' | 'verified';
-  authChallenge: Uint8Array | null;
+  authChallenge: Uint8Array<ArrayBuffer> | null;
   authTimeout: ReturnType<typeof setTimeout> | null;
   keepaliveTimer: ReturnType<typeof setInterval> | null;
   missedPongs: number;
   serializeAddon: SerializeAddon;
+  tornDown: boolean;
 }
 
 const hostPeers = new Map<string, HostPeer>();
@@ -41,6 +42,8 @@ export interface ShareHandle {
 }
 
 export function startShare(sessionId: string, mode: ShareMode, passphrase: string): ShareHandle {
+  const keyError = validateShareKey(passphrase);
+  if (keyError) throw new Error(keyError);
   stopShare(sessionId);
 
   const instance = getTerminalInstance(sessionId);
@@ -70,11 +73,12 @@ export function startShare(sessionId: string, mode: ShareMode, passphrase: strin
     keepaliveTimer: null,
     missedPongs: 0,
     serializeAddon,
+    tornDown: false,
   };
 
   hostPeers.set(sessionId, hostPeer);
 
-  function sendInitAndStartKeepalive(): void {
+  const sendInitAndStartKeepalive = (): void => {
     const scrollback = serializeAddon.serialize();
     const { cols, rows } = instance.terminal;
     const sessionName = instance.sessionId;
@@ -112,8 +116,7 @@ export function startShare(sessionId: string, mode: ShareMode, passphrase: strin
   }
 
   dc.onopen = () => {
-    hostPeer.connected = true;
-
+    if (hostPeers.get(sessionId) !== hostPeer) return;
     // Start auth handshake — do not send session data until verified
     const challenge = generateChallenge();
     hostPeer.authChallenge = challenge;
@@ -121,7 +124,7 @@ export function startShare(sessionId: string, mode: ShareMode, passphrase: strin
     sendMessage(dc, { type: 'auth-challenge', challenge: bytesToHex(challenge) });
 
     hostPeer.authTimeout = setTimeout(() => {
-      if (hostPeer.authState !== 'verified') {
+      if (hostPeers.get(sessionId) === hostPeer && hostPeer.authState !== 'verified') {
         for (const cb of authFailedCbs) cb('Authentication timed out');
         stopShare(sessionId);
       }
@@ -139,12 +142,14 @@ export function startShare(sessionId: string, mode: ShareMode, passphrase: strin
     // Auth handshake
     if (hostPeer.authState === 'pending' && msg.type === 'auth-response') {
       computeChallengeResponse(hostPeer.authChallenge!, passphrase).then((expected) => {
+        if (hostPeers.get(sessionId) !== hostPeer || hostPeer.authState !== 'pending') return;
         if (hostPeer.authTimeout) {
           clearTimeout(hostPeer.authTimeout);
           hostPeer.authTimeout = null;
         }
         if (expected === msg.response) {
           hostPeer.authState = 'verified';
+          hostPeer.connected = true;
           sendMessage(dc, { type: 'auth-result', ok: true });
           sendInitAndStartKeepalive();
         } else {
@@ -167,10 +172,11 @@ export function startShare(sessionId: string, mode: ShareMode, passphrase: strin
   };
 
   const handleDisconnect = () => {
+    if (hostPeers.get(sessionId) !== hostPeer) return;
     if (disconnectFired) return;
     disconnectFired = true;
     hostPeer.connected = false;
-    cleanup(sessionId);
+    teardown(hostPeer);
     for (const cb of disconnectedCbs) cb();
   };
 
@@ -215,20 +221,18 @@ export function stopShare(sessionId: string): void {
   if (hostPeer.connected) {
     try { sendMessage(hostPeer.dc, { type: 'end' }); } catch { /* ignore */ }
   }
-  cleanup(sessionId);
-  hostPeer.dc.close();
-  hostPeer.pc.close();
+  teardown(hostPeer);
 }
 
 export function broadcastData(sessionId: string, data: string): void {
   const hostPeer = hostPeers.get(sessionId);
-  if (!hostPeer?.connected) return;
+  if (!hostPeer?.connected || hostPeer.authState !== 'verified') return;
   sendMessage(hostPeer.dc, { type: 'data', payload: data });
 }
 
 export function broadcastResize(sessionId: string, cols: number, rows: number): void {
   const hostPeer = hostPeers.get(sessionId);
-  if (!hostPeer?.connected) return;
+  if (!hostPeer?.connected || hostPeer.authState !== 'verified') return;
   sendMessage(hostPeer.dc, { type: 'resize', cols, rows });
 }
 
@@ -244,24 +248,48 @@ export function getShareMode(sessionId: string): ShareMode | null {
   return hostPeers.get(sessionId)?.mode ?? null;
 }
 
-function cleanup(sessionId: string): void {
-  const hostPeer = hostPeers.get(sessionId);
-  if (!hostPeer) return;
-  if (hostPeer.keepaliveTimer) {
-    clearInterval(hostPeer.keepaliveTimer);
-    hostPeer.keepaliveTimer = null;
+/**
+ * Idempotent teardown for one specific peer instance. Closes both native
+ * resources (data channel and peer connection) and releases ownership.
+ *
+ * Safe to call from any terminal path (ICE disconnect/failed, channel close,
+ * auth failure/timeout, explicit stop, replacement). Handlers are detached
+ * before the natives are closed so the resulting close events cannot
+ * re-enter teardown. Ownership is only removed if this peer is still the
+ * owner of its session id, so a late teardown of a replaced peer cannot
+ * delete the replacement's map entry.
+ */
+function teardown(peer: HostPeer): void {
+  if (peer.tornDown) return;
+  peer.tornDown = true;
+
+  // Detach handlers so native close events cannot re-enter teardown.
+  peer.dc.onclose = null;
+  peer.dc.onopen = null;
+  peer.dc.onmessage = null;
+  peer.pc.oniceconnectionstatechange = null;
+
+  if (peer.keepaliveTimer) {
+    clearInterval(peer.keepaliveTimer);
+    peer.keepaliveTimer = null;
   }
-  if (hostPeer.authTimeout) {
-    clearTimeout(hostPeer.authTimeout);
-    hostPeer.authTimeout = null;
+  if (peer.authTimeout) {
+    clearTimeout(peer.authTimeout);
+    peer.authTimeout = null;
   }
-  hostPeer.serializeAddon.dispose();
-  hostPeers.delete(sessionId);
+  peer.serializeAddon.dispose();
+
+  try { peer.dc.close(); } catch { /* ignore */ }
+  try { peer.pc.close(); } catch { /* ignore */ }
+
+  if (hostPeers.get(peer.sessionId) === peer) {
+    hostPeers.delete(peer.sessionId);
+  }
 }
 
 export function _resetForTesting(): void {
-  for (const [sessionId] of hostPeers) {
-    stopShare(sessionId);
+  for (const peer of [...hostPeers.values()]) {
+    teardown(peer);
   }
   hostPeers.clear();
 }

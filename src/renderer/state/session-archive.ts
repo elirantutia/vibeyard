@@ -8,7 +8,7 @@ const HISTORY_CAP = 500;
  * shares the same cliSessionId, update it in place; otherwise push a new one.
  * Caps history at 500 entries while preserving bookmarked entries.
  */
-export function archiveSession(project: ProjectRecord, session: SessionRecord): void {
+export function archiveSession(project: ProjectRecord, session: SessionRecord, opts?: { exitReason?: string; exitCode?: number; exitSignal?: number; processId?: number; transcriptAvailable?: boolean }): void {
   const costInfo = getCost(session.id);
   const archived: ArchivedSession = {
     id: crypto.randomUUID(),
@@ -25,6 +25,11 @@ export function archiveSession(project: ProjectRecord, session: SessionRecord): 
       totalOutputTokens: costInfo.totalOutputTokens,
       totalDurationMs: costInfo.totalDurationMs,
     } : null,
+    ...(opts?.exitReason ? { exitReason: opts.exitReason } : {}),
+    ...(opts?.exitReason && opts.exitCode !== undefined ? { exitCode: opts.exitCode } : {}),
+    ...(opts?.exitReason && opts.exitSignal !== undefined ? { exitSignal: opts.exitSignal } : {}),
+    ...(opts?.exitReason && opts.processId !== undefined ? { processId: opts.processId } : {}),
+    ...(opts?.exitReason && opts.transcriptAvailable === false ? { transcriptAvailable: false } : {}),
   };
 
   if (!project.sessionHistory) project.sessionHistory = [];
@@ -43,6 +48,13 @@ export function archiveSession(project: ProjectRecord, session: SessionRecord): 
     }
     // Always sync (not just when truthy) so clearing a session's profile is reflected.
     project.sessionHistory[existingIndex].profileId = archived.profileId;
+    if (opts?.exitReason) {
+      project.sessionHistory[existingIndex].exitReason = opts.exitReason;
+      project.sessionHistory[existingIndex].exitCode = opts.exitCode;
+      project.sessionHistory[existingIndex].exitSignal = opts.exitSignal;
+      project.sessionHistory[existingIndex].processId = opts.processId;
+      project.sessionHistory[existingIndex].transcriptAvailable = opts.transcriptAvailable;
+    }
   } else {
     project.sessionHistory.push(archived);
   }

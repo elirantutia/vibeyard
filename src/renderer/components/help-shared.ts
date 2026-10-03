@@ -12,6 +12,15 @@ export function dot(color: string, animate?: boolean): HTMLElement {
   return el;
 }
 
+export function glyph(text: string, color: string, animate?: boolean): HTMLElement {
+  const el = document.createElement('span');
+  el.className = 'help-glyph';
+  el.textContent = text;
+  el.style.color = color;
+  if (animate) el.style.animation = 'pulse 1.5s ease-in-out infinite';
+  return el;
+}
+
 export function badge(text: string, color?: string, bgColor?: string): HTMLElement {
   const el = document.createElement('span');
   el.className = 'help-badge';

@@ -1,3 +1,4 @@
+import { filePreview, PREVIEW_LINES } from '../file-preview.js';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { appState } from '../state.js';
@@ -21,6 +22,7 @@ interface FileReaderInstance {
   kind: 'text' | 'image';
   unsupported: boolean;
   rawContent?: string;
+  previewFirstLine?: number;
   imageDataUrl?: string;
 }
 
@@ -38,8 +40,13 @@ function isHtmlFile(filePath: string): boolean {
 
 const instances = new Map<string, FileReaderInstance>();
 let unwatchFileChanged: (() => void) | null = null;
+// Pending coalesced reloads: a burst of fs changes for the same file (atomic
+// saves, editor events) is drained as one reload per session after the
+// main-process 150ms coalescing window, instead of overlapping full re-reads.
+const pendingReloads = new Set<string>();
+let reloadTimer: ReturnType<typeof setTimeout> | null = null;
 
-function renderFileContent(content: string): HTMLElement {
+function renderFileContent(content: string, firstLine = 1): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.className = 'file-reader-content';
 
@@ -50,7 +57,7 @@ function renderFileContent(content: string): HTMLElement {
 
     const lineNum = document.createElement('span');
     lineNum.className = 'file-reader-line-num';
-    lineNum.textContent = String(i + 1);
+    lineNum.textContent = String(i + firstLine);
 
     const lineText = document.createElement('span');
     lineText.className = 'file-reader-line-text';
@@ -138,6 +145,7 @@ function renderBody(instance: FileReaderInstance): void {
   if (sel && sel.rangeCount > 0 && !sel.isCollapsed && body.contains(sel.anchorNode)) {
     return;
   }
+  destroySearchBar(instance.element.dataset.sessionId!);
   body.innerHTML = '';
   if (instance.kind === 'image') {
     if (instance.imageDataUrl) {
@@ -145,10 +153,31 @@ function renderBody(instance: FileReaderInstance): void {
     }
     return;
   }
+  const preview = filePreview(instance.rawContent!, instance.previewFirstLine ?? 1);
+  instance.previewFirstLine = preview.firstLine;
+  if (preview.limited) {
+    const notice = document.createElement('div');
+    notice.className = 'file-reader-preview-notice';
+    notice.textContent = 'Partial preview from line ' + preview.firstLine + '. Search covers this preview only; long lines may be truncated. ';
+    for (const [label, first] of [['Previous', Math.max(1, preview.firstLine - PREVIEW_LINES)], ['Next', preview.nextLine]] as const) {
+      const button = document.createElement('button');
+      button.textContent = label;
+      button.className = 'search-toggle-btn';
+      button.disabled = label === 'Previous' ? preview.firstLine === 1 : !preview.hasMore || filePreview(instance.rawContent!, first).firstLine < first;
+      button.addEventListener('click', () => {
+        window.getSelection()?.removeAllRanges();
+        instance.previewFirstLine = first;
+        destroySearchBar(instance.element.dataset.sessionId!);
+        renderBody(instance);
+      });
+      notice.appendChild(button);
+    }
+    body.appendChild(notice);
+  }
   if (instance.viewMode === 'rendered') {
-    body.appendChild(renderMarkdownContent(instance.rawContent!, dirname(resolveFilePath(instance))));
+    body.appendChild(renderMarkdownContent(preview.text, dirname(resolveFilePath(instance))));
   } else {
-    body.appendChild(renderFileContent(instance.rawContent!));
+    body.appendChild(renderFileContent(preview.text, preview.firstLine));
   }
 }
 
@@ -397,13 +426,20 @@ function scrollToLine(instance: FileReaderInstance): void {
   const body = instance.element.querySelector('.file-reader-body');
   if (!body) return;
 
+  const first = instance.previewFirstLine ?? 1;
+  if (line < first || line >= first + body.querySelectorAll('.file-reader-line').length) {
+    window.getSelection()?.removeAllRanges();
+    instance.previewFirstLine = line;
+    destroySearchBar(instance.element.dataset.sessionId!);
+    renderBody(instance);
+  }
   // Clear previous highlights
   body.querySelectorAll('.file-reader-line-highlight').forEach((el) => {
     el.classList.remove('file-reader-line-highlight');
   });
 
   const lines = body.querySelectorAll('.file-reader-line');
-  const targetEl = lines[line - 1] as HTMLElement | undefined;
+  const targetEl = lines[line - (instance.previewFirstLine ?? 1)] as HTMLElement | undefined;
   if (!targetEl) return;
 
   targetEl.classList.add('file-reader-line-highlight');
@@ -508,7 +544,7 @@ export function hideGoToLineBar(sessionId: string): void {
   entry.bar.classList.add('hidden');
   const instance = instances.get(sessionId);
   if (instance) {
-    instance.element.querySelector('.file-reader-body')?.focus();
+    instance.element.querySelector<HTMLElement>('.file-reader-body')?.focus();
   }
 }
 

@@ -2,12 +2,13 @@ import { appState, MAX_PROJECT_NAME_LENGTH, ProjectRecord } from '../state.js';
 import { showModal, setModalError, closeModal, showConfirmDialog, FieldDef } from './modal.js';
 import { showPreferencesModal } from './preferences-modal.js';
 import { hasUnreadInProject, onChange as onUnreadChange } from '../session-unread.js';
-import { onChange as onActivityChange } from '../session-activity.js';
+import { onChange as onActivityChange, STATUS_GLYPH } from '../session-activity.js';
 import { getProjectStatus, projectInitial } from '../project-status.js';
 import { init as initDiscussionsBadge, getNewCount as getDiscussionsNewCount, markSeen as markDiscussionsSeen, onChange as onDiscussionsChange, DISCUSSIONS_URL } from '../discussions-badge.js';
 import { basename, lastSeparatorIndex } from '../../shared/platform.js';
 import { deriveProjectName } from '../../shared/project-name.js';
 import { esc } from '../dom-utils.js';
+import { projectProfileBadge, providerProfileOptions } from '../profile-utils.js';
 import { renderFileTree, clearProjectState as clearFileTreeState, closeFileTree } from './file-tree.js';
 import {
   renderSessionHistory,
@@ -19,9 +20,13 @@ import { mountGitPanel, closeGitPanel } from './git-panel.js';
 import { gitChangeCount, onChange as onGitStatusChange } from '../git-status.js';
 import { ICON_KANBAN, ICON_TEAM, ICON_OVERVIEW, ICON_SESSIONS, ICON_FILES, ICON_GIT } from '../icons.js';
 import { t } from '../i18n.js';
+import { promptProjectSettings } from './project-settings.js';
 
 type ProjectPanel = 'history' | 'files' | 'git' | null;
 const projectPanelOpen = new Map<string, ProjectPanel>();
+// The project the sidebar last rendered as active; a switch must release the
+// outgoing project's panel resources (file-tree dir watches, history panel).
+let lastActiveProjectId: string | null = null;
 
 const projectListEl = document.getElementById('project-list')!;
 let activeProjectContextMenu: HTMLElement | null = null;
@@ -85,6 +90,10 @@ export function initSidebar(): void {
   appState.on('session-added', render);
   appState.on('session-removed', render);
   appState.on('layout-changed', render);
+  // The badge tracks the project's *current* coding tool, which moves whenever
+  // the active tab changes. `session-changed` deliberately does not re-render
+  // the sidebar (it fires constantly), so patch the one node instead.
+  appState.on('session-changed', syncProfileBadge);
   appState.on('readiness-changed', render);
 
   onUnreadChange(render);
@@ -115,7 +124,10 @@ export function initSidebar(): void {
     const dot = projectListEl.querySelector(
       `.project-item[data-project-id="${project.id}"] .project-status`,
     );
-    if (dot) dot.className = `project-status ${getProjectStatus(project)}`;
+    if (dot) {
+      dot.className = `project-status ${getProjectStatus(project)}`;
+      dot.textContent = STATUS_GLYPH[getProjectStatus(project)];
+    }
   });
   appState.on('preferences-changed', () => {
     applyDiscussionsVisibility();
@@ -140,6 +152,17 @@ interface RenderOpts {
 function render(): void {
   if (renamingProjectId) return;
   hideProjectContextMenu();
+
+  const activeId = appState.activeProjectId;
+  if (lastActiveProjectId && lastActiveProjectId !== activeId) {
+    // Panel state (projectPanelOpen) is kept, so the panel reopens on return;
+    // only the live resources are released. Both close fns are idempotent.
+    const prevPanel = projectPanelOpen.get(lastActiveProjectId) ?? null;
+    if (prevPanel === 'files') closeFileTree(lastActiveProjectId);
+    if (prevPanel === 'history') closeSessionHistory(lastActiveProjectId);
+  }
+  lastActiveProjectId = activeId;
+
   projectListEl.innerHTML = '';
 
   const opts: RenderOpts = {
@@ -171,18 +194,42 @@ export function projectRenderOrder(
 }
 
 /**
- * Label for the project's effective Claude profile, or `undefined` when no badge
- * should render. Shown only when more than one Claude profile exists (mirrors the
- * session status-line gate in terminal-pane.ts). Resolution matches `resolveProfile`:
- * `project.defaultProfileId ?? preferences.defaultProfileId`; a missing/unknown id
- * (base ~/.claude) is labeled "Default".
+ * Fill a project card's badge node: the coding tool as a dimmed prefix, then
+ * the profile that tool runs under. Built from DOM nodes rather than an HTML
+ * string so neither the initial paint nor the live repaint can inject.
+ * Idempotent — a `data-badge` marker skips the write when nothing changed, so a
+ * repaint triggered by an unrelated `session-changed` costs nothing.
  */
-export function projectProfileLabel(project: ProjectRecord): string | undefined {
-  const providerProfiles = appState.profiles.filter((p) => p.providerId === 'claude');
-  if (providerProfiles.length <= 1) return undefined;
-  const id = project.defaultProfileId ?? appState.preferences.defaultProfileId;
-  if (!id) return t('sidebar.default');
-  return providerProfiles.find((p) => p.id === id)?.name ?? t('sidebar.default');
+function renderProfileBadgeInto(
+  node: HTMLElement,
+  badge: { tool: string; profile: string } | undefined,
+): void {
+  const marker = badge ? `${badge.tool}\u0000${badge.profile}` : '';
+  if (node.dataset.badge === marker) return;
+  node.dataset.badge = marker;
+  node.replaceChildren();
+  if (!badge) return;
+  const tool = document.createElement('span');
+  tool.className = 'badge-tool';
+  tool.textContent = badge.tool;
+  node.appendChild(tool);
+  node.appendChild(document.createTextNode(badge.profile));
+}
+
+/**
+ * Repaint the active project's badge in place. The active tab decides the
+ * project's coding tool, and `session-changed` deliberately does not re-render
+ * the sidebar, so the node is patched directly instead of rebuilding the list.
+ */
+function syncProfileBadge(): void {
+  const node = projectListEl.querySelector(
+    '.project-row.active .project-profile-badge',
+  ) as HTMLElement | null;
+  if (!node) return;
+  renderProfileBadgeInto(
+    node,
+    appState.activeProject ? projectProfileBadge(appState.activeProject) : undefined,
+  );
 }
 
 function buildProjectRow(project: ProjectRecord, isActive: boolean, opts: RenderOpts): HTMLElement {
@@ -201,17 +248,15 @@ function buildProjectRow(project: ProjectRecord, isActive: boolean, opts: Render
   // status dot reflecting their aggregate session activity.
   const lead = isActive
     ? `<div class="project-avatar" aria-hidden="true">${esc(projectInitial(project.name))}</div>`
-    : `<span class="project-status ${getProjectStatus(project)}" aria-hidden="true"></span>`;
+    : `<span class="project-status ${getProjectStatus(project)}" aria-hidden="true">${STATUS_GLYPH[getProjectStatus(project)]}</span>`;
   const countPill = project.sessions.length
     ? `<span class="project-session-count">${project.sessions.length}</span>`
     : '';
-  // Only the active card surfaces the profile badge, and only when multiple
-  // Claude profiles exist (the session count is hidden on the active card, so
-  // the badge takes that slot).
-  const profileLabel = isActive ? projectProfileLabel(project) : undefined;
-  const profileBadge = profileLabel
-    ? `<span class="project-profile-badge" title="${esc(t('sidebar.claudeProfileTooltip'))}">${esc(profileLabel)}</span>`
-    : '';
+  // The badge node is rendered on every row, empty ones hidden by `:empty`, so
+  // activating a project without a list rebuild still leaves a node to repaint.
+  // Content is filled in below from DOM nodes, never interpolated here.
+  const profileBadge =
+    `<span class="project-profile-badge" title="${esc(t('sidebar.profileTooltip'))}"></span>`;
   el.innerHTML = `
     ${lead}
     <div class="project-main">
@@ -222,6 +267,10 @@ function buildProjectRow(project: ProjectRecord, isActive: boolean, opts: Render
     ${countPill}
     <span class="project-delete" title="${esc(t('sidebar.removeProjectTooltip'))}">&times;</span>
   `;
+  if (isActive) {
+    const badgeNode = el.querySelector('.project-profile-badge') as HTMLElement | null;
+    if (badgeNode) renderProfileBadgeInto(badgeNode, projectProfileBadge(project));
+  }
 
   el.addEventListener('click', (e) => {
     const target = e.target as HTMLElement;
@@ -426,7 +475,9 @@ export function toggleGitPanel(): void {
 }
 
 export function promptNewProject(): void {
-  const claudeProfiles = appState.profiles.filter((p) => p.providerId === 'claude');
+  // A new project has no sessions yet, so its coding tool is the global
+  // default — scope the profile picker to that tool.
+  const profileOptions = providerProfileOptions(appState.preferences.defaultProvider ?? 'claude');
   const fields: FieldDef[] = [
     { label: t('sidebar.newProject.nameLabel'), id: 'project-name', placeholder: t('sidebar.newProject.namePlaceholder') },
     {
@@ -440,15 +491,15 @@ export function promptNewProject(): void {
       },
     },
   ];
-  if (claudeProfiles.length > 0) {
+  if (profileOptions.length > 0) {
     fields.push({
       label: t('sidebar.newProject.defaultProfileLabel'),
       id: 'profile',
       type: 'select',
-      defaultValue: appState.preferences.defaultProfileId ?? '',
+      defaultValue: '',
       options: [
         { value: '', label: t('sidebar.defaultProfileOption') },
-        ...claudeProfiles.map((p) => ({ value: p.id, label: p.name })),
+        ...profileOptions,
       ],
     });
   }
@@ -710,20 +761,15 @@ function showProjectContextMenu(x: number, y: number, project: ProjectRecord): v
   const separator = document.createElement('div');
   separator.className = 'tab-context-menu-separator';
 
-  // Project Settings — currently just the default profile, shown only when
-  // the user has Claude profiles to choose from.
-  const claudeProfiles = appState.profiles.filter((p) => p.providerId === 'claude');
-  let settingsItem: HTMLDivElement | null = null;
-  if (claudeProfiles.length > 0) {
-    settingsItem = document.createElement('div');
-    settingsItem.className = 'tab-context-menu-item';
-    settingsItem.textContent = t('contextMenu.project.settings');
-    settingsItem.addEventListener('click', (e) => {
-      e.stopPropagation();
-      hideProjectContextMenu();
-      promptProjectSettings(project);
-    });
-  }
+  // Provider defaults can be changed even when no profiles have been created.
+  const settingsItem = document.createElement('div');
+  settingsItem.className = 'tab-context-menu-item';
+  settingsItem.textContent = t('contextMenu.project.settings');
+  settingsItem.addEventListener('click', (e) => {
+    e.stopPropagation();
+    hideProjectContextMenu();
+    promptProjectSettings(project);
+  });
 
   const removeItem = document.createElement('div');
   removeItem.className = 'tab-context-menu-item';
@@ -736,7 +782,7 @@ function showProjectContextMenu(x: number, y: number, project: ProjectRecord): v
 
   menu.appendChild(renameItem);
   menu.appendChild(closeAllItem);
-  if (settingsItem) menu.appendChild(settingsItem);
+  menu.appendChild(settingsItem);
   menu.appendChild(separator);
   menu.appendChild(removeItem);
   document.body.appendChild(menu);
@@ -752,26 +798,6 @@ function hideProjectContextMenu(): void {
     activeProjectContextMenu.remove();
     activeProjectContextMenu = null;
   }
-}
-
-/** Project-level settings dialog. Currently just the default Claude profile. */
-function promptProjectSettings(project: ProjectRecord): void {
-  const claudeProfiles = appState.profiles.filter((p) => p.providerId === 'claude');
-  showModal(t('sidebar.projectSettings.title'), [
-    {
-      label: t('sidebar.projectSettings.defaultProfileLabel'),
-      id: 'profile',
-      type: 'select',
-      defaultValue: project.defaultProfileId ?? '',
-      options: [
-        { value: '', label: t('sidebar.defaultProfileOption') },
-        ...claudeProfiles.map((p) => ({ value: p.id, label: p.name })),
-      ],
-    },
-  ], (values) => {
-    appState.setProjectDefaultProfile(project.id, values['profile'] || undefined);
-    closeModal();
-  });
 }
 
 let lastDiscussionsCount = -1;

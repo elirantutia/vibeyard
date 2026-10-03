@@ -140,8 +140,11 @@
   display: none;
   position: absolute;
   left: 0;
-  right: 0;
   top: 100%;
+  /* Size to the widest item (items are nowrap) while never shrinking
+     below the trigger width. */
+  width: max-content;
+  min-width: 100%;
   max-height: 180px;
   overflow-y: auto;
   background: var(--bg-secondary);

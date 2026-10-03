@@ -24,9 +24,9 @@ describe('loadScanIgnorePatterns', () => {
     expect(loadScanIgnorePatterns('/proj')).toEqual(['*.min.js', 'dist/']);
   });
 
-  it('returns empty array when the file is missing', () => {
+  it('uses built-in patterns when the file is missing', () => {
     mockVibeyardignore(null);
-    expect(loadScanIgnorePatterns('/proj')).toEqual([]);
+    expect(loadScanIgnorePatterns('/proj')).toContain('*.min.js');
   });
 
   it('returns empty array when the file has only comments/blanks', () => {
@@ -50,9 +50,9 @@ describe('buildVibeyardignoreMatcher', () => {
     expect(isIgnored('lib/types.generated.ts')).toBe(false);
   });
 
-  it('never ignores when the file is missing or empty', () => {
+  it('uses built-in patterns when the file is missing', () => {
     mockVibeyardignore(null);
     const isIgnored = buildVibeyardignoreMatcher('/proj');
-    expect(isIgnored('anything.min.js')).toBe(false);
+    expect(isIgnored('anything.min.js')).toBe(true);
   });
 });

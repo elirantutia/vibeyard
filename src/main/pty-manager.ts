@@ -3,7 +3,8 @@ import { execSync, execFile } from 'child_process';
 import * as os from 'os';
 import * as path from 'path';
 import type { ProviderId } from '../shared/types';
-import { parseEnvVars } from '../shared/env-vars';
+import { parseEnvVars, partitionUserEnv } from '../shared/env-vars';
+import { findConflictingEnvKeys, findConflictingLaunchFlags, tokenizeArgs } from '../shared/launch-args';
 import { getProvider } from './providers/registry';
 import { registerSession } from './hook-status';
 import { installHooksOnly, installStatusLine } from './claude-cli';
@@ -17,7 +18,9 @@ interface PtyInstance {
 }
 
 const ptys = new Map<string, PtyInstance>();
-const silencedExits = new Set<string>();
+// Replacement suppresses only the old process's exit. A session-id marker can
+// be consumed by a fast-exiting replacement before the old kill completes.
+const replacedPtys = new WeakSet<pty.IPty>();
 
 /**
  * Get the full PATH by sourcing the user's login shell.
@@ -49,7 +52,11 @@ export function getRegistryPath(): string {
       'reg query "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment" /v Path',
       { encoding: 'utf-8', timeout: 3000, windowsHide: true },
     ));
-  } catch {}
+  } catch (err) {
+    // `reg query` exits non-zero when the value is absent; that hive simply
+    // contributes nothing to PATH.
+    console.debug('Could not read system PATH from registry:', err);
+  }
 
   let userPath = '';
   try {
@@ -57,7 +64,10 @@ export function getRegistryPath(): string {
       'reg query "HKCU\\Environment" /v Path',
       { encoding: 'utf-8', timeout: 3000, windowsHide: true },
     ));
-  } catch {}
+  } catch (err) {
+    // Same as above: a missing HKCU Environment\Path is normal, not an error.
+    console.debug('Could not read user PATH from registry:', err);
+  }
 
   return [systemPath, userPath].filter(Boolean).join(pathSep);
 }
@@ -153,6 +163,45 @@ export function withUtf8Locale<T extends Record<string, string | undefined>>(env
 }
 
 /**
+ * Make an argument safe to place on a cmd.exe command line.
+ *
+ * node-pty (`windowsPtyAgent.argsToCommandLine`) quotes an argument only when it
+ * contains a space or a tab. A whitespace-free token carrying `&`, `|`, `<`, `>`
+ * or `^` is therefore emitted raw and cmd.exe interprets it — `foo&calc.exe`
+ * runs calc.exe. Wrapping the whole argument in double quotes makes cmd treat it
+ * as literal text, and node-pty leaves an already-quoted argument untouched.
+ *
+ * A double quote, by contrast, CANNOT be conveyed through cmd.exe at all: cmd
+ * toggles its quoted state on every `"` and honours no escape for it. `\` is not
+ * an escape character to cmd, so `\"` does not yield a literal quote — it CLOSES
+ * the quoted region and leaves everything after it live. Verified against a real
+ * cmd.exe: the raw form `x"y&echo pwned>mk` is inert because the stray quote
+ * opens a quoted region over the payload, while the `\"`-escaped form executes
+ * it. Escaping is therefore worse than doing nothing.
+ *
+ * So an argument containing `"` is rejected rather than mangled. The caller
+ * surfaces this as a spawn failure, which is the correct outcome; silently
+ * producing an injectable command line is not.
+ *
+ * Residual, accepted: `%VAR%` still expands inside double quotes. That leaks an
+ * environment value into the argument; it is not code execution, so a percent
+ * sign stays legal rather than rejecting legitimate arguments that contain one.
+ */
+const CMDEXE_METACHARS = /[&|<>^]/;
+
+function quoteArgForCmdExe(arg: string): string {
+  if (arg.includes('"')) {
+    const shown = arg.length > 80 ? `${arg.slice(0, 77)}...` : arg;
+    throw new Error(
+      'Cannot pass an argument containing a double quote through cmd.exe: cmd ' +
+        'has no escape for a literal quote, so it cannot be quoted safely. ' +
+        `Offending argument: ${JSON.stringify(shown)}`
+    );
+  }
+  return CMDEXE_METACHARS.test(arg) ? `"${arg}"` : arg;
+}
+
+/**
  * On Windows, .cmd/.bat and .ps1 files cannot be spawned directly by node-pty
  * (CreateProcess returns error 193). Wrap them via cmd.exe or powershell.exe.
  */
@@ -173,7 +222,115 @@ export function resolveWindowsShell(
   }
   // Everything else (.cmd, .bat, bare names, extensionless paths):
   // wrap with cmd.exe so CreateProcess doesn't choke on non-PE binaries.
-  return { shell: 'cmd.exe', args: ['/c', shell, ...args] };
+  // Every token must be quoted for cmd.exe — see quoteArgForCmdExe.
+  return {
+    shell: 'cmd.exe',
+    args: ['/c', quoteArgForCmdExe(shell), ...args.map(quoteArgForCmdExe)],
+  };
+}
+
+/**
+ * The effective session storage mode for a launch. T2 always resolves
+ * 'default' (the profile's own sessions tree); 'custom-dir' and
+ * 'nonpersistent' are rejected pre-spawn until per-launch storage is
+ * tracked end-to-end.
+ */
+export type SessionStorageMode = 'default' | 'custom-dir' | 'nonpersistent';
+
+/**
+ * One effective launch: the executable, argv, environment,
+ * provider/profile identity and storage mode a session is spawned with.
+ * Resolved once in spawnPty before any side effect; the child environment
+ * and every lifecycle reader must agree on this single spec.
+ */
+export interface LaunchSpec {
+  executable: string;
+  argv: string[];
+  env: Record<string, string>;
+  providerId: ProviderId;
+  /** Pinned profile config dir; undefined = the provider's default agent dir. */
+  configDir: string | undefined;
+  /** Effective session storage mode for this launch. */
+  storageMode: SessionStorageMode;
+}
+
+/** Thrown when a launch request uses options Vibeyard cannot track. */
+export class LaunchSpecError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'LaunchSpecError';
+  }
+}
+
+/**
+ * Resolve the single effective launch spec for a session: executable,
+ * argv, environment, provider/profile identity and storage mode.
+ *
+ * Profile isolation: the providers' buildEnv strips inherited native
+ * profile/storage selectors, and partitionUserEnv drops user env that
+ * would undo the pinned profile. Unsupported options (storage overrides,
+ * profile/session-identity flags in the extra args) are rejected here —
+ * before any side effect — with an actionable message.
+ */
+export function resolveLaunchSpec(params: {
+  sessionId: string;
+  cliSessionId: string | null;
+  isResume: boolean;
+  extraArgs: string;
+  providerId: ProviderId;
+  initialPrompt?: string;
+  systemPrompt?: string;
+  envVars: string;
+  configDir?: string;
+}): LaunchSpec {
+  const { sessionId, cliSessionId, isResume, extraArgs, providerId, initialPrompt, systemPrompt, envVars, configDir } = params;
+  const provider = getProvider(providerId);
+  const issues: string[] = [];
+
+  const userEnv = parseEnvVars(envVars);
+  for (const key of findConflictingEnvKeys(userEnv)) {
+    issues.push(
+      `Environment variable ${key} is not supported: Vibeyard tracks sessions in the profile's default storage, ` +
+        'and a custom session dir would hide them from history, search and resume. Remove it from the session environment and start again.',
+    );
+  }
+
+  const env = provider.buildEnv(sessionId, withUtf8Locale({ ...process.env }) as Record<string, string>, { configDir });
+  // User-provided env vars are merged last so they can override provider-set
+  // vars like PATH ("user vars win") — EXCEPT the vars a provider owns for
+  // profile isolation, which would silently repoint the session at another
+  // login's config tree. Those are dropped and reported rather than applied.
+  const { allowed: userAllowed, dropped } = partitionUserEnv(userEnv);
+  if (dropped.length > 0) {
+    console.warn(
+      `Ignoring provider-owned env var(s) for session ${sessionId}: ${dropped.join(', ')} ` +
+        '— the pinned profile owns these.',
+    );
+  }
+  Object.assign(env, userAllowed);
+
+  // Conflict detection runs on the user's extra args only — never on the
+  // flags Vibeyard itself adds (e.g. its own --session/--resume).
+  for (const conflict of findConflictingLaunchFlags(tokenizeArgs(extraArgs))) {
+    issues.push(`${conflict.raw}: ${conflict.reason}`);
+  }
+
+  if (issues.length > 0) {
+    throw new LaunchSpecError(
+      'Unsupported launch options for this session:\n' +
+        issues.map((issue) => '  - ' + issue).join('\n') +
+        '\nRemove the options above and start the session again.',
+    );
+  }
+
+  return {
+    executable: provider.resolveBinaryPath(),
+    argv: provider.buildArgs({ sessionId, cliSessionId, isResume, extraArgs, initialPrompt, systemPrompt }),
+    env,
+    providerId,
+    configDir,
+    storageMode: 'default',
+  };
 }
 
 export async function spawnPty(
@@ -187,12 +344,29 @@ export async function spawnPty(
   systemPrompt: string | undefined,
   envVars: string,
   onData: (data: string) => void,
-  onExit: (exitCode: number, signal?: number) => void,
+  onExit: (exitCode: number, signal?: number, pid?: number) => void,
   configDir?: string
 ): Promise<void> {
+  // Resolve the single effective launch spec (executable, argv, env,
+  // profile identity, storage mode) before ANY side effect — no session
+  // registration, hook install, PTY kill or spawn. Unsupported
+  // profile/storage/session options fail here with an actionable message
+  // instead of desyncing the child from the transcript readers. The
+  // rejection goes through onData + onExit (not a throw) because the
+  // renderer fires pty.create without awaiting; the exit callback tears
+  // down the watcher/sync state registered for this session.
+  let spec: LaunchSpec;
+  try {
+    spec = resolveLaunchSpec({ sessionId, cliSessionId, isResume, extraArgs, providerId, initialPrompt, systemPrompt, envVars, configDir });
+  } catch (err) {
+    const message = err instanceof LaunchSpecError ? err.message : `Failed to prepare the launch: ${err}`;
+    onData('\r\n\x1b[31m' + message + '\x1b[0m\r\n');
+    onExit(1);
+    return;
+  }
+
   if (ptys.has(sessionId)) {
-    // Silence the old PTY's exit event so it doesn't remove the new session
-    silencedExits.add(sessionId);
+    replacedPtys.add(ptys.get(sessionId)!.process);
     killPty(sessionId);
   }
 
@@ -246,30 +420,25 @@ export async function spawnPty(
     }
   }
 
-  const env = provider.buildEnv(sessionId, withUtf8Locale({ ...process.env }) as Record<string, string>, { configDir });
-  // User-provided env vars are merged last so they can override anything,
-  // including provider-set vars like PATH (see plan: "user vars win").
-  Object.assign(env, parseEnvVars(envVars));
-  const args = provider.buildArgs({ cliSessionId, isResume, extraArgs, initialPrompt, systemPrompt });
-  const resolvedShell = provider.resolveBinaryPath();
-  const { shell, args: spawnArgs } = resolveWindowsShell(resolvedShell, args);
+  const { shell, args: spawnArgs } = resolveWindowsShell(spec.executable, spec.argv);
 
   const ptyProcess = pty.spawn(shell, spawnArgs, {
     name: 'xterm-256color',
     cols: 120,
     rows: 30,
     cwd,
-    env,
+    env: spec.env,
   });
 
   ptyProcess.onData((data) => onData(data));
   ptyProcess.onExit(({ exitCode, signal }) => {
+    if (replacedPtys.delete(ptyProcess)) return;
     // Only remove from map if this PTY is still the active one for this session
     const current = ptys.get(sessionId);
     if (current?.process === ptyProcess) {
       ptys.delete(sessionId);
     }
-    onExit(exitCode, signal);
+    onExit(exitCode, signal, ptyProcess.pid);
   });
 
   ptys.set(sessionId, { process: ptyProcess, sessionId });
@@ -333,17 +502,20 @@ export function resizePty(sessionId: string, cols: number, rows: number): void {
   }
 }
 
-export function killPty(sessionId: string): void {
+export function killPty(sessionId: string): boolean {
   const instance = ptys.get(sessionId);
-  if (!instance) return;
+  if (!instance) return false;
+  let killed = false;
   try {
     instance.process.kill();
+    killed = true;
   } catch (err) {
     console.warn(`[pty-manager] killPty(${formatSessionIdForLog(sessionId)}) failed: ${(err as Error).message}`);
   } finally {
     // kill is an intentional teardown — always drop the handle, even on throw.
     ptys.delete(sessionId);
   }
+  return killed;
 }
 
 export function spawnShellPty(
@@ -353,6 +525,7 @@ export function spawnShellPty(
   onExit: (exitCode: number, signal?: number) => void
 ): void {
   if (ptys.has(sessionId)) {
+    replacedPtys.add(ptys.get(sessionId)!.process);
     killPty(sessionId);
   }
 
@@ -370,15 +543,16 @@ export function spawnShellPty(
 
   ptyProcess.onData((data) => onData(data));
   ptyProcess.onExit(({ exitCode, signal }) => {
-    ptys.delete(sessionId);
+    if (replacedPtys.delete(ptyProcess)) return;
+    // Only remove from map if this PTY is still the active one for this session
+    const current = ptys.get(sessionId);
+    if (current?.process === ptyProcess) {
+      ptys.delete(sessionId);
+    }
     onExit(exitCode, signal);
   });
 
   ptys.set(sessionId, { process: ptyProcess, sessionId });
-}
-
-export function isSilencedExit(sessionId: string): boolean {
-  return silencedExits.delete(sessionId);
 }
 
 export function killAllPtys(): void {

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  validatePin,
+  validateShareKey,
+  generateShareKey,
   encryptPayload,
   decryptPayload,
   DecryptionError,
@@ -10,33 +11,18 @@ import {
   hexToBytes,
 } from './share-crypto.js';
 
-describe('validatePin', () => {
-  it('accepts 4-digit PIN', () => {
-    expect(validatePin('1234')).toBeNull();
+describe('share key', () => {
+  it('generates distinct 128-bit keys', () => {
+    const a = generateShareKey();
+    const b = generateShareKey();
+    expect(validateShareKey(a)).toBeNull();
+    expect(a).not.toBe(b);
   });
 
-  it('accepts 6-digit PIN', () => {
-    expect(validatePin('482901')).toBeNull();
-  });
-
-  it('accepts 8-digit PIN', () => {
-    expect(validatePin('12345678')).toBeNull();
-  });
-
-  it('rejects PIN shorter than 4 digits', () => {
-    expect(validatePin('123')).toMatch(/at least 4/);
-  });
-
-  it('rejects PIN longer than 8 digits', () => {
-    expect(validatePin('123456789')).toMatch(/at most 8/);
-  });
-
-  it('rejects non-digit characters', () => {
-    expect(validatePin('12ab')).toMatch(/only digits/);
-  });
-
-  it('rejects empty string', () => {
-    expect(validatePin('')).not.toBeNull();
+  it('rejects short and malformed keys', () => {
+    expect(validateShareKey('1234')).not.toBeNull();
+    expect(validateShareKey('g'.repeat(32))).not.toBeNull();
+    expect(validateShareKey('')).not.toBeNull();
   });
 });
 

@@ -227,3 +227,17 @@ describe('session-inspector-state', () => {
     });
   });
 });
+
+
+it('bounds retained inspector payloads as well as event count', () => {
+  _resetForTesting();
+  const batch = Array.from({length: 2000}, (_, i) => makeEvent({type: 'tool_use', timestamp: i, tool_name: 'x'.repeat(32000)}));
+  addEvents('large', batch);
+  expect(JSON.stringify(getEvents('large')).length).toBeLessThan(2 * 1024 * 1024 + 2000);
+  expect(getEvents('large').at(-1)?.timestamp).toBe(1999);
+  addEvents('large', [makeEvent({type: 'tool_use', tool_name: 'x'.repeat(100000)})]);
+  expect(getEvents('large').at(-1)?.timestamp).toBe(1999);
+  clearSession('large');
+  addEvents('large', [makeEvent({type: 'user_prompt'})]);
+  expect(getEvents('large')).toHaveLength(1);
+});

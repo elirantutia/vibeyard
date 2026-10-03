@@ -16,7 +16,7 @@ vi.mock('../state.js', () => ({
 vi.mock('../session-close.js', () => ({ closeSessionIfFileMissing: vi.fn() }));
 vi.mock('./search-bar.js', () => ({ destroySearchBar: vi.fn() }));
 
-const { renderMarkdownContent } = await import('./file-reader.js');
+const { renderMarkdownContent, createFileReaderPane, showFileReaderPane, getFileReaderInstance, setFileReaderLine, destroyFileReaderPane } = await import('./file-reader.js');
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -112,4 +112,29 @@ describe('renderMarkdownContent link handling', () => {
     expect(event.defaultPrevented).toBe(false);
     expect(addFileReaderSession).not.toHaveBeenCalled();
   });
+});
+
+
+it('keeps a large file DOM bounded while navigating to a distant line', async () => {
+  const content = Array.from({length: 200000}, (_, i) => 'line ' + (i + 1)).join('\n');
+  Object.assign(window.vibeyard.fs, {
+    readFile: vi.fn(async () => ({ok: true, content})),
+    watchDir: vi.fn(), unwatchDir: vi.fn(), onFsChange: vi.fn(() => () => {}),
+  });
+  createFileReaderPane('large-preview', '/repo/large.txt');
+  const instance = getFileReaderInstance('large-preview')!;
+  document.body.appendChild(instance.element);
+  try {
+    showFileReaderPane('large-preview', false);
+    await vi.waitFor(() => expect(instance.loaded).toBe(true));
+    expect(instance.element.querySelectorAll('.file-reader-line')).toHaveLength(2000);
+    expect(instance.element.querySelector('.file-reader-preview-notice')?.textContent).toContain('Search covers this preview only');
+    setFileReaderLine('large-preview', 150000);
+    expect(instance.element.querySelector('.file-reader-line-highlight')?.textContent).toBe('150000line 150000');
+    expect(instance.element.querySelectorAll('.file-reader-line')).toHaveLength(2000);
+    const next = [...instance.element.querySelectorAll('button')].find(button => button.textContent === 'Next')!;
+    next.click();
+    expect(instance.element.querySelector('.file-reader-line-num')?.textContent).toBe('152000');
+    expect(instance.element.querySelectorAll('.file-reader-line')).toHaveLength(2000);
+  } finally { destroyFileReaderPane('large-preview'); }
 });

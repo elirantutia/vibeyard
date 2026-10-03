@@ -44,6 +44,16 @@ let resolvedResults: ResolvedResult[] = [];
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let latestSearchToken = 0;
 
+
+/**
+ * Composite identity for a CLI session: provider + profile (empty string
+ * for the default profile) + CLI session id. The same CLI id can
+ * legitimately appear under two profiles (copied/imported history) or even
+ * across providers, so the bare id is not a unique key.
+ */
+export function sessionIdentityKey(providerId: string | undefined, profileId: string | undefined, cliSessionId: string): string {
+  return [providerId ?? '', profileId ?? '', cliSessionId].join('\u0000');
+}
 function buildSessionMap(): Map<string, SessionMapEntry> {
   const map = new Map<string, SessionMapEntry>();
   // Active sessions take precedence: if a session is open as a tab, opening from
@@ -51,7 +61,7 @@ function buildSessionMap(): Map<string, SessionMapEntry> {
   for (const project of appState.projects) {
     for (const session of project.sessions) {
       if (!session.cliSessionId) continue;
-      map.set(session.cliSessionId, {
+      map.set(sessionIdentityKey(session.providerId, session.profileId, session.cliSessionId), {
         projectId: project.id,
         name: session.name,
         archivedId: null,
@@ -61,8 +71,10 @@ function buildSessionMap(): Map<string, SessionMapEntry> {
   }
   for (const project of appState.projects) {
     for (const archived of appState.getSessionHistory(project.id)) {
-      if (!archived.cliSessionId || map.has(archived.cliSessionId)) continue;
-      map.set(archived.cliSessionId, {
+      if (!archived.cliSessionId) continue;
+      const key = sessionIdentityKey(archived.providerId, archived.profileId, archived.cliSessionId);
+      if (map.has(key)) continue;
+      map.set(key, {
         projectId: project.id,
         name: archived.name,
         archivedId: archived.id,
@@ -71,6 +83,11 @@ function buildSessionMap(): Map<string, SessionMapEntry> {
     }
   }
   return map;
+}
+
+/** @internal Test-only: expose the session identity map for assertions. */
+export function _buildSessionMapForTesting(): Map<string, SessionMapEntry> {
+  return buildSessionMap();
 }
 
 function createOverlay(): void {
@@ -124,6 +141,8 @@ function createOverlay(): void {
 }
 
 function onInput(): void {
+  latestSearchToken++;
+  window.vibeyard.session.cancelDeepSearch();
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => searchSessions(), 400);
 }
@@ -155,7 +174,7 @@ async function searchSessions(): Promise<void> {
 
   const sessionMap = buildSessionMap();
   resolvedResults = raw.map(r => {
-    const match = sessionMap.get(r.cliSessionId) ?? null;
+    const match = sessionMap.get(sessionIdentityKey(r.providerId, r.profileId, r.cliSessionId)) ?? null;
     return {
       ...r,
       sessionName: match?.name ?? null,
@@ -287,6 +306,7 @@ export function showSessionSearchPalette(): void {
 }
 
 function hidePalette(): void {
+  window.vibeyard.session.cancelDeepSearch();
   if (overlay) overlay.style.display = 'none';
   if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
   latestSearchToken++;

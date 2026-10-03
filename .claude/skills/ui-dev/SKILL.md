@@ -21,6 +21,11 @@ const select = createCustomSelect('my-select', [
 ], 'a'); // default value
 
 // select.getValue() — get current value
+// select.setValue(v) — set value (no-op if v absent/disabled)
+// select.setOptions(newOptions, value?) — replace the option list in place
+//   (same element + hidden input id); `value` is kept when it exists in the
+//   new list, else the first enabled option is selected. Use to re-scope a
+//   select when a related field changes (e.g. profiles by coding tool).
 // select.destroy() — cleanup
 ```
 

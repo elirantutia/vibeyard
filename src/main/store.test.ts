@@ -5,6 +5,7 @@ vi.mock('fs', () => ({
   readFileSync: vi.fn(),
   writeFileSync: vi.fn(),
   mkdirSync: vi.fn(),
+  renameSync: vi.fn(),
 }));
 
 vi.mock('os', () => ({
@@ -19,6 +20,7 @@ const mockExistsSync = vi.mocked(fs.existsSync);
 const mockReadFileSync = vi.mocked(fs.readFileSync);
 const mockWriteFileSync = vi.mocked(fs.writeFileSync);
 const mockMkdirSync = vi.mocked(fs.mkdirSync);
+const mockRenameSync = vi.mocked(fs.renameSync);
 
 const DEFAULT_STATE: PersistedState = {
   version: 1,
@@ -77,6 +79,8 @@ describe('saveState', () => {
 
     vi.advanceTimersByTime(1);
     expect(mockWriteFileSync).toHaveBeenCalledOnce();
+    expect(String(mockRenameSync.mock.calls[0][0]).replaceAll('\\', '/')).toContain('/mock/home/.vibeyard/state.json.tmp');
+    expect(String(mockRenameSync.mock.calls[0][1]).replaceAll('\\', '/')).toContain('/mock/home/.vibeyard/state.json');
   });
 
   it('resets timer on rapid calls', () => {
@@ -88,6 +92,7 @@ describe('saveState', () => {
     vi.advanceTimersByTime(300);
 
     expect(mockWriteFileSync).toHaveBeenCalledOnce();
+    expect(mockRenameSync).toHaveBeenCalledOnce();
     const written = JSON.parse(String(mockWriteFileSync.mock.calls[0][1]));
     expect(written.activeProjectId).toBe('p1');
   });

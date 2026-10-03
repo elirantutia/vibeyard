@@ -31,14 +31,13 @@
     "sessionHistory": "会话历史",
     "discussions": "讨论",
     "activeSessions": "活动会话",
-    "activeSessionStatuses": "活动会话状态",
     "board": "看板",
     "showMetricsOnCards": "在卡片上显示指标"
   },
   "sidebar": {
     "default": "默认",
-    "defaultProfileOption": "默认（~/.claude）",
-    "claudeProfileTooltip": "Claude 配置文件",
+    "defaultProfileOption": "默认",
+    "profileTooltip": "编码工具与默认配置文件",
     "removeProjectTooltip": "移除项目",
     "overview": "概览",
     "kanban": "看板",
@@ -240,6 +239,8 @@
       "tagsLabel": "标签",
       "tagInputPlaceholder": "添加标签…",
       "providerLabel": "提供方",
+      "assigneeLabel": "负责人",
+      "assigneeUnassigned": "未分配",
       "planModeUnsupportedTooltip": "该提供方不支持计划模式",
       "providerLoading": "加载中…",
       "focusSessionButton": "聚焦会话",
@@ -318,7 +319,8 @@
       "chatButton": "聊天",
       "chatUnsupportedTooltip": "没有已安装的 CLI 支持团队角色。请安装 Claude 或 Codex。",
       "chatProviderAriaLabel": "使用其他提供方聊天",
-      "chatChevronGlyph": "▼"
+      "chatChevronGlyph": "▼",
+      "backendBadgeTooltip": "运行于配置：{profile}"
     },
     "memberModal": {
       "nameLabel": "名称",
@@ -330,6 +332,9 @@
       "systemPromptLabel": "系统提示",
       "systemPromptPlaceholder": "您是...的首席营销官……",
       "installAsAgentLabel": "安装为代理（在 CLI 会话中通过 /<slug> 调用）",
+      "backendLabel": "后端配置",
+      "backendDefaultOption": "默认（项目 / 全局）",
+      "backendNotTeamCapable": "{name} · {provider}（无法运行团队角色）",
       "titleCreate": "新建团队成员",
       "titleEdit": "编辑团队成员",
       "confirmCreate": "创建",
@@ -393,8 +398,11 @@
     "recordingPrompt": "请按键…"
   },
   "profiles": {
-    "heading": "Claude 配置文件",
-    "description": "每个配置文件在独立的配置目录（CLAUDE_CONFIG_DIR）下运行 Claude Code，可隔离登录、设置和历史记录——非常适合工作和个人许可证分开使用。创建配置文件后，使用它启动一个会话并运行一次 /login 进行登录。",
+    "heading": "CLI 配置文件",
+    "description": "每个配置文件让 CLI 在独立的配置目录下运行，可隔离登录、设置和历史记录——非常适合工作和个人许可证分开使用。",
+    "descriptionClaude": "Claude Code：配置目录通过 CLAUDE_CONFIG_DIR 注入。创建配置文件后，使用它启动一个会话并运行一次 /login 进行登录。",
+    "descriptionPi": "Pi：配置目录通过 PI_CODING_AGENT_DIR 注入。创建配置文件后，请在该配置目录中完成认证和模型配置。",
+    "descriptionOmp": "Oh my Pi：配置目录通过 PI_CODING_AGENT_DIR 注入（与 Pi 相同的 omp agent dir 机制）。请确保已安装 omp CLI，创建配置文件后，请在该配置目录中完成认证和模型配置。",
     "keychainUnsupported": "此版本的 Claude Code{version} 将所有登录信息存储在同一个 macOS 钥匙串条目中，因此配置文件无法保持账号隔离。请更新 Claude Code 后再创建并使用配置文件。",
     "keychainUnknown": "Vibeyard 还无法确认此 Claude Code 版本是否在 macOS 钥匙串中隔离配置文件登录。请登录一次配置文件，隔离状态将自动验证。",
     "defaultLabel": "默认配置文件",
@@ -410,6 +418,7 @@
     "addModalTitle": "添加配置文件",
     "addNameLabel": "名称",
     "addNamePlaceholder": "例如：工作",
+    "addProviderLabel": "提供商",
     "addPathLabel": "自定义配置路径（可选）",
     "addPathPlaceholder": "留空则使用托管目录",
     "nameRequired": "名称不能为空",
@@ -516,5 +525,9 @@
     "about": "关于",
     "general": "通用",
     "appearance": "外观"
+  },
+  "session": {
+    "crashedTitle": "会话异常结束",
+    "crashedBody": "会话已崩溃：{reason}"
   }
 }

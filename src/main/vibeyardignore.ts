@@ -1,15 +1,17 @@
 import * as path from 'path';
 import picomatch from 'picomatch';
 import { readFileSafe } from './fs-utils';
+import { DEFAULT_SCAN_IGNORE } from '../shared/constants';
 
 /**
  * Reads `.vibeyardignore` from a project root and returns its active glob
- * patterns (blank lines and `#` comments stripped). Returns an empty array
- * when the file is absent or contains no patterns.
+ * patterns (blank lines and `#` comments stripped). When the file is absent,
+ * built-in exclusions apply in memory without creating a project file.
  */
 export function loadScanIgnorePatterns(projectPath: string): string[] {
   const patterns: string[] = [];
   const content = readFileSafe(path.join(projectPath, '.vibeyardignore'));
+  if (content === null) return [...DEFAULT_SCAN_IGNORE];
   if (content) {
     for (const raw of content.split('\n')) {
       const line = raw.trim();

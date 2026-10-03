@@ -13,7 +13,7 @@ const isWin = process.platform === 'win32';
 const isMac = process.platform === 'darwin';
 const APP_PATH = isWin
   ? path.join(APP_DIR, 'Vibeyard.exe')
-  : path.join(APP_DIR, 'Vibeyard.app');
+  : isMac ? path.join(APP_DIR, 'Vibeyard.app') : path.join(APP_DIR, 'Vibeyard.AppImage');
 const REPO = 'elirantutia/vibeyard';
 const RELEASES_URL = `https://github.com/${REPO}/releases`;
 
@@ -115,7 +115,10 @@ function extract(zipPath) {
 
   fs.rmSync(APP_PATH, { recursive: true, force: true });
 
-  if (isWin) {
+  if (!isMac && !isWin) {
+    fs.renameSync(zipPath, APP_PATH);
+    fs.chmodSync(APP_PATH, 0o755);
+  } else if (isWin) {
     // Use PowerShell to extract on Windows
     // Escape single quotes for PowerShell single-quoted strings (e.g. O'Brien in username)
     const psEscape = (p) => p.replace(/'/g, "''");
@@ -123,7 +126,7 @@ function extract(zipPath) {
   } else {
     execSync(`unzip -oq "${zipPath}" -d "${APP_DIR}"`);
   }
-  fs.unlinkSync(zipPath);
+  if (isMac || isWin) fs.unlinkSync(zipPath);
 
   // Clear macOS quarantine flag
   if (isMac) {
@@ -145,11 +148,13 @@ function launch(args) {
       detached: true,
       stdio: 'ignore',
     });
-  } else {
+  } else if (isMac) {
     child = spawn('open', [APP_PATH, '--args', ...args], {
       detached: true,
       stdio: 'ignore',
     });
+  } else {
+    child = spawn(APP_PATH, args, { detached: true, stdio: 'ignore' });
   }
   child.unref();
 }
@@ -177,10 +182,12 @@ Any other arguments are forwarded to the Vibeyard app.`);
     return;
   }
 
-  if (!isMac && !isWin) {
-    console.error('The npm launcher currently supports macOS and Windows.');
-    console.error(`For Linux, download from: ${RELEASES_URL}`);
+  if (!isMac && !isWin && process.platform !== 'linux') {
+    console.error(`Unsupported platform ${process.platform}. Download from: ${RELEASES_URL}`);
     process.exit(1);
+  }
+  if (process.platform === 'linux' && process.arch !== 'x64') {
+    throw new Error(`No Linux ${process.arch} release asset is published; use an x64 system or build from source.`);
   }
 
   const assetName = getAssetName();

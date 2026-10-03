@@ -42,7 +42,7 @@ vi.mock('./providers/nvm', () => ({
 
 import * as fs from 'fs';
 import * as child_process from 'child_process';
-import { spawnPty, writePty, resizePty, killPty, getPtyCwd, getRegistryPath, getFullPath, resetPathCache, resolveWindowsShell, withUtf8Locale } from './pty-manager';
+import { spawnPty, writePty, resizePty, killPty, getPtyCwd, getRegistryPath, getFullPath, resetPathCache, resolveWindowsShell, withUtf8Locale, resolveLaunchSpec, LaunchSpecError } from './pty-manager';
 import { initProviders } from './providers/registry';
 
 const mockExistsSync = vi.mocked(fs.existsSync);
@@ -179,13 +179,14 @@ describe('spawnPty', () => {
 
   it('forwards exit event to callback', () => {
     const proc = createMockPtyProcess();
+    (proc as unknown as { pid: number }).pid = 2028;
     mockSpawn.mockReturnValue(proc);
     const onExit = vi.fn();
 
     spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, '', vi.fn(), onExit);
     proc._emitExit(0, 0);
 
-    expect(onExit).toHaveBeenCalledWith(0, 0);
+    expect(onExit).toHaveBeenCalledWith(0, 0, 2028);
   });
 
   it('uses resolved claude path when found', async () => {
@@ -269,6 +270,86 @@ describe('spawnPty', () => {
       expect(envPath).toContain('/usr/local/bin');
       expect(envPath).toContain('/opt/homebrew/bin');
       expect(envPath).toContain('/mock/home/.local/bin');
+    }
+  });
+
+  it('rejects unsupported extra args before spawning (actionable message, exit 1, no PTY)', () => {
+    const onData = vi.fn();
+    const onExit = vi.fn();
+    spawnPty('s1', '/project', null, false, '--no-session', 'omp', undefined, undefined, '', onData, onExit);
+
+    expect(mockSpawn).not.toHaveBeenCalled();
+    expect(onData).toHaveBeenCalledTimes(1);
+    expect(onData.mock.calls[0][0]).toContain('--no-session');
+    expect(onExit).toHaveBeenCalledWith(1);
+  });
+
+  it('spawns with tokenized (quoted) extra args', () => {
+    const proc = createMockPtyProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    spawnPty('s1', '/project', null, false, '--append-system-prompt "Use concise replies"', 'omp', undefined, undefined, '', vi.fn(), vi.fn());
+
+    if (isWin) {
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'cmd.exe',
+        ['/c', 'omp', '--session-dir', expect.stringContaining('omp-sessions'), '--append-system-prompt', 'Use concise replies'],
+        expect.any(Object),
+      );
+    } else {
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'omp',
+        ['--session-dir', expect.stringContaining('omp-sessions'), '--append-system-prompt', 'Use concise replies'],
+        expect.any(Object),
+      );
+    }
+  });
+});
+
+describe('resolveLaunchSpec (T2)', () => {
+  const base = { sessionId: 's1', cliSessionId: null, isResume: false, extraArgs: '', providerId: 'omp' as const, envVars: '' };
+
+  it('resolves executable, argv, env, profile identity and default storage mode', () => {
+    const spec = resolveLaunchSpec({ ...base, extraArgs: '--model opus', configDir: '/profiles/work' });
+    expect(spec.executable).toBe('omp');
+    expect(spec.argv).toEqual(['--session-dir', expect.stringContaining('omp-sessions'), '--model', 'opus']);
+    expect(spec.env.PI_CODING_AGENT_DIR).toBe('/profiles/work');
+    expect(spec.providerId).toBe('omp');
+    expect(spec.configDir).toBe('/profiles/work');
+    expect(spec.storageMode).toBe('default');
+  });
+
+  it('resolves the default agent dir (no configDir) with storage mode default', () => {
+    const spec = resolveLaunchSpec(base);
+    expect(spec.configDir).toBeUndefined();
+    expect(spec.env.PI_CODING_AGENT_DIR).toBeUndefined();
+    expect(spec.storageMode).toBe('default');
+  });
+
+  it('rejects profile, storage and session-identity flags in extra args', () => {
+    for (const extra of ['--profile work', '--profile=work', '--session-dir /x', '--session-dir=/x', '--no-session', '--session abc', '--resume abc', '-r', '-c', '--continue']) {
+      expect(() => resolveLaunchSpec({ ...base, extraArgs: extra })).toThrow(LaunchSpecError);
+    }
+  });
+
+  it('rejects a custom session storage env var with an actionable message', () => {
+    expect(() => resolveLaunchSpec({ ...base, envVars: 'PI_CODING_AGENT_SESSION_DIR=/other' }))
+      .toThrow(/PI_CODING_AGENT_SESSION_DIR/);
+  });
+
+  it('keeps the pinned profile when user env tries to override it', () => {
+    const spec = resolveLaunchSpec({ ...base, envVars: 'PI_CODING_AGENT_DIR=/other\nOMP_PROFILE=intruder', configDir: '/profiles/work' });
+    expect(spec.env.PI_CODING_AGENT_DIR).toBe('/profiles/work');
+    expect(spec.env.OMP_PROFILE).toBeUndefined();
+  });
+
+  it('strips an inherited native profile selector from the child environment', () => {
+    process.env.OMP_PROFILE = 'inherited';
+    try {
+      const spec = resolveLaunchSpec(base);
+      expect(spec.env.OMP_PROFILE).toBeUndefined();
+    } finally {
+      delete process.env.OMP_PROFILE;
     }
   });
 });
@@ -452,6 +533,36 @@ describe('killPty', () => {
     mockWrite.mockClear();
     writePty('s1', 'input');
     expect(mockWrite).not.toHaveBeenCalled();
+  });
+});
+
+describe('PTY replacement exit ordering', () => {
+  it('suppresses only the replaced process when the new process exits first', async () => {
+    const oldProc = createMockPtyProcess();
+    const newProc = createMockPtyProcess();
+    mockSpawn.mockReturnValueOnce(oldProc).mockReturnValueOnce(newProc);
+    const oldExit = vi.fn();
+    const newExit = vi.fn();
+    await spawnPty('replacement-order', '/project', null, false, '', 'claude', undefined, undefined, '', vi.fn(), oldExit);
+    await spawnPty('replacement-order', '/project', null, false, '', 'claude', undefined, undefined, '', vi.fn(), newExit);
+    newProc._emitExit(1);
+    oldProc._emitExit(0);
+    expect(newExit).toHaveBeenCalledWith(1, undefined, undefined);
+    expect(oldExit).not.toHaveBeenCalled();
+  });
+
+  it('suppresses a synchronous exit emitted by kill during replacement', async () => {
+    const oldProc = createMockPtyProcess();
+    const newProc = createMockPtyProcess();
+    mockSpawn.mockReturnValueOnce(oldProc).mockReturnValueOnce(newProc);
+    const oldExit = vi.fn();
+    const newExit = vi.fn();
+    await spawnPty('replacement-sync', '/project', null, false, '', 'claude', undefined, undefined, '', vi.fn(), oldExit);
+    mockKill.mockImplementationOnce(() => oldProc._emitExit(0));
+    await spawnPty('replacement-sync', '/project', null, false, '', 'claude', undefined, undefined, '', vi.fn(), newExit);
+    expect(oldExit).not.toHaveBeenCalled();
+    newProc._emitExit(1);
+    expect(newExit).toHaveBeenCalledWith(1, undefined, undefined);
   });
 });
 
@@ -686,6 +797,70 @@ describe('resolveWindowsShell', () => {
         args: ['/c', 'C:\\tools\\claude', '--help'],
       });
     });
+
+  // Regression guard for the cmd.exe argv-injection finding.
+  //
+  // node-pty (windowsPtyAgent.argsToCommandLine) wraps an argument in double
+  // quotes only when it contains a space or a tab. Before the fix, a
+  // whitespace-free token carrying `&` / `|` / `<` / `>` / `^` — or a `"` that
+  // closes cmd's quoted section early — reached cmd.exe raw and was interpreted,
+  // so an attacker-controlled argument could run a second command.
+
+  /** Faithful model of node-pty's per-argument quoting. */
+  const nodePtyCommandLine = (shell: string, args: string[]): string =>
+    [shell, ...args]
+      .map((a) => {
+        const needsQuotes = /[\s\t]/.test(a);
+        const enclosed = a.startsWith('"') && a.endsWith('"');
+        return needsQuotes && !enclosed ? `"${a.replace(/"/g, '\\"')}"` : a;
+      })
+      .join(' ');
+
+  /**
+   * Everything cmd.exe would see outside a quoted region. cmd toggles its quoted
+   * state on every `"` and honours no escape for it, so a backslash before a
+   * quote does NOT keep the region closed — modelling that correctly is the whole
+   * point of these tests.
+   */
+  const unquotedContent = (line: string): string => {
+    let out = '';
+    let inQuotes = false;
+    for (const c of line) {
+      if (c === '"') inQuotes = !inQuotes;
+      else if (!inQuotes) out += c;
+    }
+    return out;
+  };
+
+  it('pre-quotes a whitespace-free arg carrying cmd metacharacters', () => {
+    const r = resolveWindowsShell('C:\\tools\\claude.cmd', ['--append-system-prompt=a&calc.exe']);
+    expect(r.args[2]).toBe('"--append-system-prompt=a&calc.exe"');
+  });
+
+  it('leaves no cmd metacharacter outside quotes in the final command line', () => {
+    for (const payload of ['a&calc.exe', 'a&&b', 'a|calc.exe', 'a||b', 'a>b.txt', 'a^&b']) {
+      const r = resolveWindowsShell('C:\\tools\\claude.cmd', [payload]);
+      const bare = unquotedContent(nodePtyCommandLine(r.shell, r.args));
+      expect(bare).not.toMatch(/[&|<>^]/);
+    }
+  });
+
+  // cmd.exe has no representation for a literal double quote, so the argument is
+  // refused rather than escaped into an injectable command line.
+  it('rejects an argument containing a double quote', () => {
+    expect(() => resolveWindowsShell('C:\\tools\\claude.cmd', ['x"y&calc.exe'])).toThrow(/double quote/);
+  });
+
+  it('quotes the binary path itself when it carries a metacharacter', () => {
+    const r = resolveWindowsShell('C:\\tools\\a&b.cmd', ['--help']);
+    const line = nodePtyCommandLine(r.shell, r.args);
+    expect(unquotedContent(line)).not.toContain('&');
+  });
+
+  it('does not over-quote metachar-free args', () => {
+    const r = resolveWindowsShell('C:\\tools\\claude.cmd', ['--help', 'plain.txt']);
+    expect(r.args).toEqual(['/c', 'C:\\tools\\claude.cmd', '--help', 'plain.txt']);
+  });
   } else {
     it('passes through unchanged on non-Windows', () => {
       const result = resolveWindowsShell('/usr/local/bin/claude', ['--help']);

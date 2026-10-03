@@ -1,5 +1,5 @@
 import type { TeamMember } from '../../../shared/types.js';
-import { TEAM_DOMAINS, TEAM_DOMAIN_LABELS } from '../../../shared/team-config.js';
+import { TEAM_DOMAINS, TEAM_DOMAIN_LABELS, type TeamDomain } from '../../../shared/team-config.js';
 import { appState } from '../../state.js';
 import { renderMarkdownContent } from '../file-reader.js';
 import { fetchPredefinedMembers, isCacheFresh } from './github-fetcher.js';

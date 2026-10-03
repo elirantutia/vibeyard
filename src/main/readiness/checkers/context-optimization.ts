@@ -1,27 +1,9 @@
 import * as path from 'path';
-import * as fs from 'fs';
 import type { ReadinessCheck } from '../../../shared/types';
 import type { ReadinessCheckProducer, TaggedCheck, AnalysisContext } from '../types';
-import { fileExists, countFileLines } from '../utils';
-import { DEFAULT_SCAN_IGNORE } from '../../../shared/constants';
+import { countFileLines } from '../utils';
 import { buildVibeyardignoreMatcher } from '../../vibeyardignore';
 import { buildSplitFilesPrompt } from '../../../shared/split-file-prompt';
-
-const VIBEYARDIGNORE_HEADER = `# Files and patterns to exclude from AI readiness large-file scanning.
-# One pattern per line. Supports glob syntax (e.g. *.min.js, src/**/*.generated.ts).
-# Lines starting with # are comments.
-
-`;
-
-export function ensureVibeyardignore(projectPath: string): void {
-  const filePath = path.join(projectPath, '.vibeyardignore');
-  if (fileExists(filePath)) return;
-  try {
-    fs.writeFileSync(filePath, VIBEYARDIGNORE_HEADER + DEFAULT_SCAN_IGNORE.join('\n') + '\n', 'utf-8');
-  } catch {
-    // Ignore write errors (e.g. read-only filesystem)
-  }
-}
 
 const TEXT_EXTENSIONS = new Set([
   '.ts', '.tsx', '.js', '.jsx', '.py', '.rb', '.go', '.rs', '.java', '.kt',
@@ -42,7 +24,6 @@ function checkLargeFiles(projectPath: string, trackedFiles: string[]): Readiness
     };
   }
 
-  ensureVibeyardignore(projectPath);
   const isIgnored = buildVibeyardignoreMatcher(projectPath);
 
   const largeFiles: string[] = [];

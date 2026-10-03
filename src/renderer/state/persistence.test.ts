@@ -3,8 +3,8 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('../session-cost.js', () => ({ restoreCost: vi.fn() }));
 vi.mock('../session-context.js', () => ({ restoreContext: vi.fn() }));
 
-import { serializeForSave } from './persistence.js';
-import type { PersistedState, SessionRecord } from '../../shared/types.js';
+import { serializeForSave, hydrateLoadedState } from './persistence.js';
+import type { PersistedState, Preferences, SessionRecord } from '../../shared/types.js';
 
 function baseState(session: Partial<SessionRecord>): PersistedState {
   return {
@@ -43,5 +43,28 @@ describe('serializeForSave', () => {
     state.profiles = [{ id: 'work', name: 'Work', providerId: 'claude', configDir: '/cfg/work', managed: true, createdAt: 0 }];
     const out = serializeForSave(state);
     expect(out.profiles).toEqual(state.profiles);
+  });
+});
+
+describe('hydrateLoadedState', () => {
+  it('migrates the legacy global defaultProfileId to the provider global default', () => {
+    const state = baseState({});
+    state.profiles = [{ id: 'work', name: 'Work', providerId: 'pi', configDir: '/cfg/work', managed: true, createdAt: 0 }];
+    (state.preferences as { defaultProfileId?: string }).defaultProfileId = 'work';
+
+    hydrateLoadedState(state, {} as Preferences);
+
+    expect(state.preferences.defaultProfiles).toEqual({ pi: 'work' });
+    expect((state.preferences as { defaultProfileId?: string }).defaultProfileId).toBeUndefined();
+  });
+
+  it('drops a dangling legacy defaultProfileId', () => {
+    const state = baseState({});
+    (state.preferences as { defaultProfileId?: string }).defaultProfileId = 'gone';
+
+    hydrateLoadedState(state, {} as Preferences);
+
+    expect(state.preferences.defaultProfiles).toBeUndefined();
+    expect((state.preferences as { defaultProfileId?: string }).defaultProfileId).toBeUndefined();
   });
 });

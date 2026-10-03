@@ -1,44 +1,65 @@
+// @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest';
 
-vi.mock('../state.js', () => ({ appState: {} }));
+// R-02 regression: the palette maps sessions by composite identity
+// (provider + profile + cliSessionId), so copied histories in two profiles
+// and cross-provider id collisions each resolve to their own tab/archive.
+const history: Record<string, any[]> = {};
+const appState = {
+  projects: [
+    {
+      id: 'project',
+      path: '/repo',
+      sessions: [
+        { id: 'tab-one', cliSessionId: 'same-id', providerId: 'claude', profileId: 'one', name: 'One' },
+        { id: 'tab-two', cliSessionId: 'same-id', providerId: 'claude', profileId: 'two', name: 'Two' },
+        { id: 'tab-shared', cliSessionId: 'cross-id', providerId: 'claude', name: 'Shared' },
+        { id: 'tab-shared-2', cliSessionId: 'cross-id', providerId: 'codex', name: 'Shared Codex' },
+      ],
+    },
+  ],
+  getSessionHistory: (projectId: string) => history[projectId] ?? [],
+};
+vi.mock('../state.js', () => ({ appState }));
+vi.mock('../provider-availability.js', () => ({ getProviderDisplayName: (id: string) => id }));
+vi.mock('./dom-search-backend.js', () => ({ escapeHtml: (s: string) => s, escapeRegExp: (s: string) => s }));
+vi.mock('../../shared/project-name.js', () => ({ deriveProjectName: (p: string) => p }));
 
-import { highlightMatches } from './session-search-palette.js';
+const { _buildSessionMapForTesting, sessionIdentityKey } = await import('./session-search-palette.js');
 
-describe('highlightMatches', () => {
-  it('returns escaped text when query is empty', () => {
-    expect(highlightMatches('hello <world>', '')).toBe('hello &lt;world&gt;');
-    expect(highlightMatches('plain', '   ')).toBe('plain');
+describe('session identity map', () => {
+  it('maps two tabs sharing a cliSessionId to their own profiles', () => {
+    const map = _buildSessionMapForTesting();
+    const one = map.get(sessionIdentityKey('claude', 'one', 'same-id'));
+    const two = map.get(sessionIdentityKey('claude', 'two', 'same-id'));
+    expect(one?.activeSessionId).toBe('tab-one');
+    expect(two?.activeSessionId).toBe('tab-two');
+    expect(map.size).toBe(4);
   });
 
-  it('wraps a single-word match (case-insensitive)', () => {
-    expect(highlightMatches('Hello world', 'hello'))
-      .toBe('<mark class="search-match">Hello</mark> world');
+  it('keeps cross-provider id collisions separate', () => {
+    const map = _buildSessionMapForTesting();
+    const claude = map.get(sessionIdentityKey('claude', undefined, 'cross-id'));
+    const codex = map.get(sessionIdentityKey('codex', undefined, 'cross-id'));
+    expect(claude?.activeSessionId).toBe('tab-shared');
+    expect(codex?.activeSessionId).toBe('tab-shared-2');
   });
 
-  it('highlights every occurrence of a multi-word query', () => {
-    const out = highlightMatches('claude code is fun. claude rocks. just code.', 'claude code');
-    expect(out).toBe(
-      '<mark class="search-match">claude code</mark> is fun. ' +
-      '<mark class="search-match">claude</mark> rocks. just ' +
-      '<mark class="search-match">code</mark>.',
-    );
-  });
+  it('maps archived sessions by composite identity without shadowing active tabs', () => {
+    history['project'] = [
+      { id: 'arch-one', cliSessionId: 'same-id', providerId: 'claude', profileId: 'one', name: 'Arch One' },
+      { id: 'arch-two', cliSessionId: 'same-id', providerId: 'claude', profileId: 'two', name: 'Arch Two' },
+    ];
+    const map = _buildSessionMapForTesting();
+    expect(map.get(sessionIdentityKey('claude', 'one', 'same-id'))?.activeSessionId).toBe('tab-one');
+    expect(map.get(sessionIdentityKey('claude', 'two', 'same-id'))?.activeSessionId).toBe('tab-two');
 
-  it('treats regex metacharacters as literals', () => {
-    expect(highlightMatches('call foo(bar) and foo.bar', 'foo(bar)'))
-      .toBe('call <mark class="search-match">foo(bar)</mark> and foo.bar');
-    expect(() => highlightMatches('anything', '.*')).not.toThrow();
-    expect(highlightMatches('a.*b plain', '.*'))
-      .toBe('a<mark class="search-match">.*</mark>b plain');
-  });
-
-  it('returns just the escaped text when nothing matches', () => {
-    expect(highlightMatches('nothing here & <ok>', 'zzz'))
-      .toBe('nothing here &amp; &lt;ok&gt;');
-  });
-
-  it('escapes HTML in both matched and unmatched segments', () => {
-    expect(highlightMatches('<script>alert("x")</script>', 'script'))
-      .toBe('&lt;<mark class="search-match">script</mark>&gt;alert(&quot;x&quot;)&lt;/<mark class="search-match">script</mark>&gt;');
+    history['project'] = [
+      { id: 'arch-three', cliSessionId: 'arch-id', providerId: 'claude', profileId: 'one', name: 'A' },
+      { id: 'arch-four', cliSessionId: 'arch-id', providerId: 'claude', profileId: 'two', name: 'B' },
+    ];
+    const map2 = _buildSessionMapForTesting();
+    expect(map2.get(sessionIdentityKey('claude', 'one', 'arch-id'))?.archivedId).toBe('arch-three');
+    expect(map2.get(sessionIdentityKey('claude', 'two', 'arch-id'))?.archivedId).toBe('arch-four');
   });
 });

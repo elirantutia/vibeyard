@@ -49,4 +49,11 @@ export function initNotificationSound(): void {
       playNotificationSound();
     }
   });
+
+  // Drop the previous-status entry when a session closes (mirrors
+  // notification-desktop); without this the map grows by one entry per session.
+  appState.on('session-removed', (data) => {
+    const sessionId = (data as { sessionId?: string })?.sessionId;
+    if (sessionId) previousStatus.delete(sessionId);
+  });
 }

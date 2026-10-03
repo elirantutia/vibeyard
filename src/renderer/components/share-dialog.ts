@@ -3,8 +3,7 @@
 import type { ShareMode } from '../../shared/sharing-types.js';
 import { shareSession, acceptShareAnswer, endShare } from '../sharing/share-manager.js';
 import { isSharing, isConnected } from '../sharing/peer-host.js';
-import { validatePin } from '../sharing/share-crypto.js';
-import { createPinInput } from '../dom-utils.js';
+import { generateShareKey } from '../sharing/share-crypto.js';
 import { bindModalDismiss } from './modal-manager.js';
 
 let activeOverlay: HTMLElement | null = null;
@@ -69,7 +68,7 @@ export function showShareDialog(sessionId: string): void {
   phase1.appendChild(modeSection);
   dialog.appendChild(phase1);
 
-  // ── Phase 2: PIN + Codes ──
+  // ── Phase 2: Share key + Codes ──
 
   const phase2 = document.createElement('div');
   phase2.className = 'share-phase hidden';
@@ -79,11 +78,23 @@ export function showShareDialog(sessionId: string): void {
 
   const pinLabel = document.createElement('div');
   pinLabel.className = 'share-label';
-  pinLabel.textContent = 'Choose a PIN (4–8 digits) to share with your peer';
+  pinLabel.textContent = 'Share this generated key with your peer';
 
-  const pinInput = createPinInput();
+  const pinInput = document.createElement('input');
+  pinInput.className = 'share-pin-input';
+  pinInput.value = generateShareKey();
+  pinInput.readOnly = true;
   pinSection.appendChild(pinLabel);
   pinSection.appendChild(pinInput);
+  const copyKeyBtn = document.createElement('button');
+  copyKeyBtn.className = 'btn-secondary share-btn';
+  copyKeyBtn.textContent = 'Copy Key';
+  copyKeyBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(pinInput.value);
+    copyKeyBtn.textContent = 'Copied!';
+    setTimeout(() => { copyKeyBtn.textContent = 'Copy Key'; }, 1500);
+  });
+  pinSection.appendChild(copyKeyBtn);
   phase2.appendChild(pinSection);
 
   // Offer code (hidden until generated)
@@ -219,12 +230,7 @@ export function showShareDialog(sessionId: string): void {
   // ── Start sharing flow ──
 
   startBtn.addEventListener('click', async () => {
-    const pin = pinInput.value.trim();
-    const pinError = validatePin(pin);
-    if (pinError) {
-      statusEl.textContent = pinError;
-      return;
-    }
+    const pin = pinInput.value;
 
     startBtn.disabled = true;
     startBtn.textContent = 'Generating code...';
@@ -236,7 +242,7 @@ export function showShareDialog(sessionId: string): void {
       const { offer, handle } = await shareSession(sessionId, selectedMode, pin);
 
       pinInput.readOnly = true;
-      pinLabel.textContent = 'Share this PIN with your peer';
+      pinLabel.textContent = 'Share this key with your peer';
       offerTextarea.value = offer;
       offerSection.classList.remove('hidden');
       answerSection.classList.remove('hidden');

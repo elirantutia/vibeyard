@@ -1,8 +1,9 @@
-import type { ProjectRecord, ProviderId, SessionRecord, TeamData, TeamMember } from '../../shared/types.js';
+import type { Preferences, Profile, ProjectRecord, ProviderId, SessionRecord, TeamData, TeamMember } from '../../shared/types.js';
 import { ensureUniqueSlug, nameToSlug } from '../../shared/slug.js';
 import { buildAgentMarkdown } from '../components/team/agent-markdown.js';
-import { getTeamChatProviderMetas } from '../provider-availability.js';
+import { getTeamCapableProviderIds } from '../provider-availability.js';
 import { isCliSession } from '../session-utils.js';
+import { resolveProfile } from './specialized-sessions.js';
 import { buildCliSession } from './session-factory.js';
 
 export function getTeamData(team: TeamData | undefined, ensure: () => TeamData): TeamData {
@@ -23,6 +24,7 @@ export function buildNewMember(
     sourceUrl: input.sourceUrl,
     installAsAgent: input.installAsAgent,
     agentSlug: input.agentSlug,
+    profileId: input.profileId,
     createdAt: now,
     updatedAt: now,
   };
@@ -66,7 +68,7 @@ export function pickTeamChatProvider(
   defaultProvider: ProviderId | undefined,
   override: ProviderId | undefined,
 ): ProviderId | undefined {
-  const teamCapable = new Set(getTeamChatProviderMetas().map((p) => p.id));
+  const teamCapable = getTeamCapableProviderIds();
   const candidates: (ProviderId | undefined)[] = [
     override,
     activeSession && isCliSession(activeSession) ? activeSession.providerId : undefined,
@@ -76,18 +78,62 @@ export function pickTeamChatProvider(
   return candidates.find((id): id is ProviderId => !!id && teamCapable.has(id));
 }
 
+/**
+ * The Profile a member is pinned to, but only when that profile's provider is
+ * team-capable (installed + supports system-prompt injection). Returns undefined
+ * for an unpinned member, a dangling pin, or a pin on a provider that can't run
+ * team personas. Shared by the backend resolution and the Chat controls, which
+ * hide the provider chevron when the pin already fixes the backend.
+ */
+export function resolvePinnedTeamProfile(
+  member: TeamMember,
+  profiles: Profile[],
+): Profile | undefined {
+  if (!member.profileId) return undefined;
+  const pinned = profiles.find((p) => p.id === member.profileId);
+  if (!pinned) return undefined;
+  return getTeamCapableProviderIds().has(pinned.providerId) ? pinned : undefined;
+}
+
+/**
+ * Resolve the backend (provider + profile) a team chat session runs on.
+ *
+ * A pinned member profile wins outright: the provider comes *from* the profile, so
+ * a member can never end up on a provider that contradicts its pin. If the pin is
+ * missing or targets a provider that isn't team-capable, fall back to the normal
+ * provider pick plus the project → global profile chain (same as a plain session).
+ * Returns undefined when no team-capable provider exists at all.
+ */
+export function resolveTeamChatBackend(
+  member: TeamMember,
+  project: ProjectRecord,
+  prefs: Preferences,
+  activeSession: SessionRecord | undefined,
+  profiles: Profile[],
+  overrideProviderId: ProviderId | undefined,
+): { providerId: ProviderId; profileId?: string } | undefined {
+  const pinned = resolvePinnedTeamProfile(member, profiles);
+  if (pinned) return { providerId: pinned.providerId, profileId: pinned.id };
+  const providerId = pickTeamChatProvider(activeSession, prefs.defaultProvider, overrideProviderId ?? project.defaultProvider);
+  if (!providerId) return undefined;
+  const profile = resolveProfile(undefined, project, prefs, providerId, profiles);
+  return { providerId, profileId: profile?.id };
+}
+
 /** Build the SessionRecord for a team chat session, including the pendingSystemPrompt and teamMemberId. */
 export function buildTeamChatSession(
   project: ProjectRecord,
   member: TeamMember,
   providerId: ProviderId,
   maxNameLength: number,
+  profileId?: string,
 ): SessionRecord {
   const sessionNum = project.sessions.filter((s) => s.teamMemberId === member.id).length + 1;
   const base = buildCliSession({
     name: `${member.name} - Session ${sessionNum}`.slice(0, maxNameLength),
     providerId,
     args: project.defaultArgs,
+    profileId,
   });
   return {
     ...base,

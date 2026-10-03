@@ -43,6 +43,7 @@ export function saveState(state: PersistedState): void {
     clearTimeout(saveTimer);
   }
   lastState = state;
+  knownProjectPaths = state.projects.map(p => p.path);
   saveTimer = setTimeout(() => {
     writeStateAtomically(state);
     saveTimer = null;
@@ -51,6 +52,19 @@ export function saveState(state: PersistedState): void {
 
 let lastState: PersistedState | null = null;
 
+// Project paths, cached for the hot fs:* path guards. loadState() re-reads and
+// re-parses state.json on every call, which made each fs IPC pay for a full
+// disk read + JSON.parse. State changes flow through saveState/saveStateSync,
+// so updating the cache there keeps it fresh without touching loadState.
+let knownProjectPaths: string[] | null = null;
+
+export function getKnownProjectPaths(): string[] {
+  if (knownProjectPaths === null) {
+    knownProjectPaths = loadState().projects.map(p => p.path);
+  }
+  return knownProjectPaths;
+}
+
 export function flushState(): void {
   if (lastState) {
     saveStateSync(lastState);
@@ -58,6 +72,7 @@ export function flushState(): void {
 }
 
 export function saveStateSync(state: PersistedState): void {
+  knownProjectPaths = state.projects.map(p => p.path);
   writeStateAtomically(state);
 }
 

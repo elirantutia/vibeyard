@@ -1,10 +1,10 @@
 import type { TeamMember } from '../../../shared/types.js';
 import { appState } from '../../state.js';
-import { getTeamChatProviderMetas } from '../../provider-availability.js';
-import { showContextMenu } from '../board/board-context-menu.js';
 import { showConfirmModal } from '../modal.js';
 import { showTeamMemberModal } from './member-modal.js';
 import { showMemberSessionsModal } from './member-sessions-modal.js';
+import { buildTeamChatControl } from './chat-control.js';
+import { resolvePinnedTeamProfile } from '../../state/team-state.js';
 import { t } from '../../i18n.js';
 
 export function createMemberCard(member: TeamMember, projectId: string): HTMLElement {
@@ -35,6 +35,19 @@ export function createMemberCard(member: TeamMember, projectId: string): HTMLEle
 
   header.appendChild(avatar);
   header.appendChild(heading);
+
+  // Backend badge: a pinned member shows which Profile (and thus provider) its
+  // Chat sessions actually run on. Uses the same team-capability check as the
+  // Chat control, so the badge disappears exactly when the pin stops being
+  // effective (provider uninstalled) rather than claiming a backend that won't be used.
+  const pinnedProfile = resolvePinnedTeamProfile(member, appState.profiles);
+  if (pinnedProfile) {
+    const badge = document.createElement('span');
+    badge.className = 'team-card-backend-badge';
+    badge.textContent = pinnedProfile.name;
+    badge.title = t('team.card.backendBadgeTooltip', { profile: pinnedProfile.name });
+    header.appendChild(badge);
+  }
 
   card.appendChild(header);
 
@@ -73,59 +86,16 @@ export function createMemberCard(member: TeamMember, projectId: string): HTMLEle
   });
   actions.appendChild(deleteBtn);
 
-  actions.appendChild(buildChatControl(projectId, member));
+  actions.appendChild(buildTeamChatControl(projectId, member, {
+    chat: 'btn-primary team-card-btn-primary',
+    chatMain: 'team-card-chat-main',
+    chevron: 'btn-primary team-card-chat-dropdown',
+    group: 'team-card-chat-group',
+  }));
 
   card.appendChild(actions);
 
   return card;
-}
-
-function buildChatControl(projectId: string, member: TeamMember): HTMLElement {
-  const teamProviders = getTeamChatProviderMetas();
-
-  const chatBtn = document.createElement('button');
-  chatBtn.className = 'btn-primary team-card-btn-primary';
-  chatBtn.textContent = t('team.card.chatButton');
-
-  if (teamProviders.length === 0) {
-    chatBtn.disabled = true;
-    chatBtn.title = t('team.card.chatUnsupportedTooltip');
-    return chatBtn;
-  }
-
-  chatBtn.addEventListener('click', () => {
-    appState.startTeamChat(projectId, member);
-  });
-
-  if (teamProviders.length === 1) return chatBtn;
-
-  chatBtn.classList.add('team-card-chat-main');
-
-  const chevronBtn = document.createElement('button');
-  chevronBtn.className = 'btn-primary team-card-chat-dropdown';
-  chevronBtn.setAttribute('aria-label', t('team.card.chatProviderAriaLabel'));
-  chevronBtn.setAttribute('aria-haspopup', 'menu');
-  chevronBtn.textContent = t('team.card.chatChevronGlyph');
-  chevronBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const r = chevronBtn.getBoundingClientRect();
-    showContextMenu(
-      r.right,
-      r.bottom + 4,
-      teamProviders.map((p) => ({
-        label: p.displayName,
-        action: () => {
-          appState.startTeamChat(projectId, member, p.id);
-        },
-      })),
-    );
-  });
-
-  const group = document.createElement('div');
-  group.className = 'team-card-chat-group';
-  group.appendChild(chatBtn);
-  group.appendChild(chevronBtn);
-  return group;
 }
 
 function initials(name: string): string {

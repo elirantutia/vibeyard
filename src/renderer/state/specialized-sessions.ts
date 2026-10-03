@@ -8,7 +8,7 @@ export function resolvePlanProvider(
   override: ProviderId | undefined,
 ): ProviderId {
   const activeSession = project.sessions.find((s) => s.id === project.activeSessionId);
-  return override ?? activeSession?.providerId ?? prefs.defaultProvider ?? 'claude';
+  return override ?? project.defaultProvider ?? activeSession?.providerId ?? prefs.defaultProvider ?? 'claude';
 }
 
 /** Build the args string for a plan session: project default args + plan-mode flag (if enabled). */
@@ -23,23 +23,24 @@ export function buildPlanSessionArgs(
 }
 
 /** Resolve the providerId used when creating a plain CLI session. */
-export function resolveCliProvider(prefs: Preferences, override: ProviderId | undefined): ProviderId {
-  return override ?? prefs.defaultProvider ?? 'claude';
+export function resolveCliProvider(prefs: Preferences, override: ProviderId | undefined, project?: ProjectRecord): ProviderId {
+  return override ?? project?.defaultProvider ?? prefs.defaultProvider ?? 'claude';
 }
 
 /**
- * Resolve the effective Profile for a session: session > project default > global
- * default > none. Only applies when the profile targets the session's provider
- * (returns undefined on mismatch, so the session uses the default config dir).
+ * Resolve the effective Profile for a session: session > project default > the
+ * provider's global default > none. Only applies when the profile targets the
+ * session's provider (returns undefined on mismatch, so the session uses the
+ * default config dir).
  */
 export function resolveProfile(
   session: Pick<SessionRecord, 'profileId'> | undefined,
   project: Pick<ProjectRecord, 'defaultProfileId'> | undefined,
-  prefs: Pick<Preferences, 'defaultProfileId'>,
+  prefs: Pick<Preferences, 'defaultProfiles'>,
   providerId: ProviderId,
   profiles: Profile[],
 ): Profile | undefined {
-  const id = session?.profileId ?? project?.defaultProfileId ?? prefs.defaultProfileId;
+  const id = session?.profileId ?? project?.defaultProfileId ?? prefs.defaultProfiles?.[providerId];
   if (!id) return undefined;
   const profile = profiles.find((p) => p.id === id);
   if (!profile || profile.providerId !== providerId) return undefined;

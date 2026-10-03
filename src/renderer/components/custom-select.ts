@@ -8,15 +8,24 @@ export interface CustomSelectInstance {
   element: HTMLElement;
   getValue(): string;
   setValue(value: string): void;
+  /**
+   * Replace the option list in place (same wrapper + hidden input id, so the
+   * surrounding form/value collection is untouched). `value` selects the new
+   * current option; when it is absent or disabled, the first enabled option is
+   * selected. Used to re-scope a select when a related field changes (e.g.
+   * profiles scoped to the chosen coding tool).
+   */
+  setOptions(options: SelectOption[], value?: string): void;
   destroy(): void;
 }
 
 export function createCustomSelect(
   id: string,
-  options: SelectOption[],
+  initialOptions: SelectOption[],
   defaultValue?: string,
   onChange?: (value: string) => void,
 ): CustomSelectInstance {
+  let options = initialOptions;
   const defaultOpt = options.find(o => o.value === defaultValue) ?? options.find(o => !o.disabled) ?? options[0];
 
   const wrapper = document.createElement('div');
@@ -38,29 +47,35 @@ export function createCustomSelect(
   let activeIndex = -1;
   const items: HTMLElement[] = [];
 
-  for (let i = 0; i < options.length; i++) {
-    const opt = options[i];
-    const item = document.createElement('div');
-    item.className = 'custom-select-item';
-    item.textContent = opt.label;
-    item.dataset.value = opt.value;
-    if (opt.disabled) item.classList.add('disabled');
-    if (opt.value === hidden.value) item.classList.add('selected');
+  function buildItems(): void {
+    dropdown.innerHTML = '';
+    items.length = 0;
+    for (let i = 0; i < options.length; i++) {
+      const opt = options[i];
+      const item = document.createElement('div');
+      item.className = 'custom-select-item';
+      item.textContent = opt.label;
+      item.dataset.value = opt.value;
+      if (opt.disabled) item.classList.add('disabled');
+      if (opt.value === hidden.value) item.classList.add('selected');
 
-    item.addEventListener('mouseenter', () => {
-      if (!opt.disabled) {
-        activeIndex = i;
-        updateActive();
-      }
-    });
+      item.addEventListener('mouseenter', () => {
+        if (!opt.disabled) {
+          activeIndex = i;
+          updateActive();
+        }
+      });
 
-    item.addEventListener('click', () => {
-      if (!opt.disabled) selectOption(i);
-    });
+      item.addEventListener('click', () => {
+        if (!opt.disabled) selectOption(i);
+      });
 
-    items.push(item);
-    dropdown.appendChild(item);
+      items.push(item);
+      dropdown.appendChild(item);
+    }
   }
+
+  buildItems();
 
   function selectOption(index: number): void {
     const opt = options[index];
@@ -152,6 +167,14 @@ export function createCustomSelect(
       hidden.value = options[index].value;
       trigger.textContent = options[index].label;
       items.forEach((el, i) => el.classList.toggle('selected', i === index));
+    },
+    setOptions(nextOptions: SelectOption[], value?: string) {
+      options = nextOptions;
+      const target = options.find(o => o.value === value && !o.disabled) ?? options.find(o => !o.disabled);
+      hidden.value = target?.value ?? '';
+      trigger.textContent = target?.label ?? '';
+      activeIndex = -1;
+      buildItems();
     },
     destroy() { document.removeEventListener('mousedown', onOutsideClick); },
   };

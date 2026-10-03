@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { BrowserWindow } from 'electron';
-import { STATUS_DIR } from './hook-status';
+import { writeCliSessionId } from './hook-status';
 
 const HISTORY_PATH = path.join(os.homedir(), '.codex', 'history.jsonl');
 
@@ -15,10 +15,24 @@ const HISTORY_PATH = path.join(os.homedir(), '.codex', 'history.jsonl');
 // Maps UI session ID → registration timestamp (for FIFO ordering)
 const pendingSessions = new Map<string, number>();
 const assignedCodexIds = new Set<string>();
+// Bounded: the set exists to dedupe ids already handed out; evict oldest
+// (Sets preserve insertion order) so it can't grow for the app's lifetime.
+const MAX_ASSIGNED_IDS = 1000;
+
+function rememberAssignedId(id: string): void {
+  if (assignedCodexIds.size >= MAX_ASSIGNED_IDS) {
+    const oldest = assignedCodexIds.values().next().value;
+    if (oldest !== undefined) assignedCodexIds.delete(oldest);
+  }
+  assignedCodexIds.add(id);
+}
 
 let watcher: fs.FSWatcher | null = null;
 let pollInterval: ReturnType<typeof setInterval> | null = null;
 let lastSize = 0;
+let pendingLine = '';
+const MAX_HISTORY_READ_BYTES = 256 * 1024;
+const MAX_HISTORY_LINE_CHARS = 1024 * 1024;
 
 function readNewEntries(): void {
   if (pendingSessions.size === 0) return;
@@ -30,16 +44,28 @@ function readNewEntries(): void {
     return;
   }
 
-  if (stat.size <= lastSize) return;
+  if (stat.size < lastSize) {
+    lastSize = 0;
+    pendingLine = '';
+  }
+  if (stat.size === lastSize) return;
 
   let fd: number | null = null;
   try {
     fd = fs.openSync(HISTORY_PATH, 'r');
-    const buf = Buffer.alloc(stat.size - lastSize);
-    fs.readSync(fd, buf, 0, buf.length, lastSize);
-    lastSize = stat.size;
-
-    const lines = buf.toString('utf-8').trim().split('\n').filter(Boolean);
+    const buf = Buffer.alloc(Math.min(stat.size - lastSize, MAX_HISTORY_READ_BYTES));
+    const bytesRead = fs.readSync(fd, buf, 0, buf.length, lastSize);
+    lastSize += bytesRead;
+    if (bytesRead === 0) return;
+    const data = pendingLine + buf.toString('utf-8', 0, bytesRead);
+    const lastNewline = data.lastIndexOf('\n');
+    if (lastNewline < 0) {
+      pendingLine = data.length <= MAX_HISTORY_LINE_CHARS ? data : '';
+      return;
+    }
+    const lines = data.slice(0, lastNewline).split('\n').filter(Boolean);
+    pendingLine = data.slice(lastNewline + 1);
+    if (pendingLine.length > MAX_HISTORY_LINE_CHARS) pendingLine = '';
 
     for (const line of lines) {
       try {
@@ -58,15 +84,11 @@ function readNewEntries(): void {
         }
 
         if (oldestId) {
-          assignedCodexIds.add(codexSessionId);
+          rememberAssignedId(codexSessionId);
           pendingSessions.delete(oldestId);
 
-          fs.mkdirSync(STATUS_DIR, { recursive: true, mode: 0o700 });
-          fs.writeFileSync(
-            path.join(STATUS_DIR, `${oldestId}.sessionid`),
-            codexSessionId
-          );
-          break;
+          writeCliSessionId(oldestId, codexSessionId);
+          if (pendingSessions.size === 0) break;
         }
       } catch {
         // Skip malformed lines
@@ -91,6 +113,7 @@ export function registerPendingCodexSession(sessionId: string): void {
     } catch {
       lastSize = 0;
     }
+    pendingLine = '';
   }
 
   pendingSessions.set(sessionId, Date.now());
@@ -115,10 +138,13 @@ export function startCodexSessionWatcher(win: BrowserWindow): void {
     // Directory might not exist; fall through to polling
   }
 
-  // Polling fallback — fs.watch can miss events on some systems
+  // Polling fallback — fs.watch can miss events on some systems. Look the
+  // window up per tick so a destroyed-and-recreated window doesn't kill the
+  // polling fallback for good.
   pollInterval = setInterval(() => {
-    if (pendingSessions.size > 0 && !win.isDestroyed()) {
-      readNewEntries();
+    if (pendingSessions.size > 0) {
+      const win = BrowserWindow.getAllWindows()[0];
+      if (win && !win.isDestroyed()) readNewEntries();
     }
   }, 2000);
 }
@@ -135,4 +161,5 @@ export function stopCodexSessionWatcher(): void {
   pendingSessions.clear();
   assignedCodexIds.clear();
   lastSize = 0;
+  pendingLine = '';
 }

@@ -149,7 +149,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   drawBtn.textContent = 'Draw';
   drawBtn.title = 'Draw on page and send annotated screenshot to AI';
 
-  const session = appState.findSessionById(sessionId);
+  const session = appState.findSessionWithProject(sessionId)?.session;
   const isIsolated = !!session?.browserIsolated;
 
   const isolationBtn = document.createElement('button');
@@ -162,7 +162,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   const importBtn = document.createElement('button');
   importBtn.className = 'browser-import-btn';
   importBtn.textContent = 'Import…';
-  importBtn.title = 'Import cookies and passwords from Chrome';
+  importBtn.title = 'Import cookies from Chrome';
 
   toolbar.appendChild(backBtn);
   toolbar.appendChild(fwdBtn);
@@ -211,6 +211,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
 
   viewportContainer.appendChild(newTabPage);
 
+  // SAFETY: Electron's <webview> tag has no DOM lib typing; WebviewElement describes the members this file uses.
   const webview = document.createElement('webview') as unknown as WebviewElement;
   webview.className = 'browser-webview';
   webview.setAttribute('allowpopups', '');
@@ -553,7 +554,7 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
   recordBtn.addEventListener('click', () => toggleFlowMode(instance));
   drawBtn.addEventListener('click', () => toggleDrawMode(instance));
   isolationBtn.addEventListener('click', () => {
-    const newIsolated = !appState.findSessionById(sessionId)?.browserIsolated;
+    const newIsolated = !appState.findSessionWithProject(sessionId)?.session?.browserIsolated;
     appState.setSessionBrowserIsolated(sessionId, newIsolated);
     const currentUrl = urlInput.value;
     const parent = el.parentElement;
@@ -639,19 +640,19 @@ export function createBrowserTabPane(sessionId: string, url?: string): void {
     addFlowStep(instance, { type: 'navigate', url });
   }
 
-  webview.addEventListener('did-navigate', ((e: CustomEvent) => {
+  webview.addEventListener('did-navigate', ((e: CustomEvent & { url: string }) => {
     urlInput.value = e.url;
     newTabPage.style.display = 'none';
     appState.updateSessionBrowserTabUrl(sessionId, e.url);
     if (instance.flowMode) recordNavigationStep(e.url);
   }) as EventListener);
-  webview.addEventListener('did-navigate-in-page', ((e: CustomEvent) => {
+  webview.addEventListener('did-navigate-in-page', ((e: CustomEvent & { url: string }) => {
     urlInput.value = e.url;
     appState.updateSessionBrowserTabUrl(sessionId, e.url);
     if (instance.flowMode) recordNavigationStep(e.url);
   }) as EventListener);
 
-  webview.addEventListener('ipc-message', ((e: CustomEvent) => {
+  webview.addEventListener('ipc-message', ((e: CustomEvent & { channel: string; args: unknown[] }) => {
     if (e.channel === 'element-selected') {
       const { metadata, x, y } = e.args[0] as { metadata: Omit<ElementInfo, 'activeSelector'>; x: number; y: number };
       const info: ElementInfo = { ...metadata, activeSelector: metadata.selectors[0] };

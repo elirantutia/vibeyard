@@ -499,7 +499,32 @@ describe('pane attach, focus and fit are idempotent', () => {
     expect(mockResize).toHaveBeenCalledTimes(2);
     expect(mockResize).toHaveBeenLastCalledWith('fit-2', 200, 30);
   });
+});
 
+describe('destroyTerminal() cleanup', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+
+    vi.stubGlobal('document', new FakeDocument());
+    vi.stubGlobal('window', makeWindowStub());
+    vi.stubGlobal('navigator', { platform: 'MacIntel', clipboard: { writeText: mockClipboardWrite } });
+  });
+
+  it('clears the per-session state of every sibling module', async () => {
+    const { createTerminalPane, destroyTerminal } = await import('./terminal-pane.js');
+    const { removeSession: removeActivity } = await import('../session-activity.js');
+    const { removeSession: removeCost } = await import('../session-cost.js');
+    const { removeSession: removeContext } = await import('../session-context.js');
+
+    createTerminalPane('clean-1', '/project', null, false, '', 'claude');
+    destroyTerminal('clean-1');
+
+    expect(removeActivity).toHaveBeenCalledWith('clean-1');
+    expect(removeCost).toHaveBeenCalledWith('clean-1');
+    expect(removeContext).toHaveBeenCalledWith('clean-1');
+  });
 });
 
 describe('applyThemeToAllTerminals()', () => {

@@ -19,7 +19,7 @@ vi.mock('../sharing/share-manager.js', () => ({
 
 // Mock share-crypto
 vi.mock('../sharing/share-crypto.js', () => ({
-  validatePin: () => null,
+  generateShareKey: () => '0123456789abcdef0123456789abcdef',
   DecryptionError: class DecryptionError extends Error {},
 }));
 

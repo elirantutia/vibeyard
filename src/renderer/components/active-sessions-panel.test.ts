@@ -1,90 +1,105 @@
 import { describe, it, expect } from 'vitest';
-import { selectActiveSessions, resolveActiveStatuses } from './active-sessions-panel.js';
+import { selectActiveSessions } from './active-sessions-panel.js';
 import type { SessionStatus } from '../session-activity.js';
-import type { ProjectRecord, Preferences } from '../../shared/types.js';
+import type { ProjectRecord, ProviderId } from '../../shared/types.js';
 
 // Minimal project/session factory — only the fields the selector reads.
-const project = (id: string, name: string, sessions: Array<{ id: string; name?: string; type?: string }>): ProjectRecord =>
+const project = (
+  id: string,
+  name: string,
+  sessions: Array<{ id: string; name?: string; type?: string; providerId?: ProviderId }>,
+): ProjectRecord =>
   ({
     id,
     name,
-    sessions: sessions.map((s) => ({ id: s.id, name: s.name ?? s.id, type: s.type })),
+    sessions: sessions.map((s) => ({
+      id: s.id,
+      name: s.name ?? s.id,
+      type: s.type,
+      providerId: s.providerId,
+      cliSessionId: null,
+      createdAt: new Date().toISOString(),
+    })),
   } as unknown as ProjectRecord);
 
 const statusMap = (m: Record<string, SessionStatus>) => (id: string): SessionStatus => m[id] ?? 'idle';
 
 describe('selectActiveSessions', () => {
-  it('keeps only sessions whose status is in the active set', () => {
-    const projects = [project('p1', 'Alpha', [
-      { id: 'a' }, { id: 'b' }, { id: 'c' },
-    ])];
-    const rows = selectActiveSessions(
-      projects,
-      statusMap({ a: 'working', b: 'idle', c: 'completed' }),
-      new Set<SessionStatus>(['working', 'completed']),
-    );
-    expect(rows.map((r) => r.sessionId)).toEqual(['a', 'c']);
+  it('lists every open CLI session across all projects, regardless of status', () => {
+    const projects = [
+      project('p1', 'Alpha', [
+        { id: 's1' },
+        { id: 's2' },
+        { id: 's3' },
+        { id: 's4' },
+      ]),
+      project('p2', 'Beta', [{ id: 's5' }]),
+    ];
+    const statusOf = statusMap({ s1: 'working', s2: 'waiting', s3: 'completed', s4: 'input', s5: 'idle' });
+
+    const rows = selectActiveSessions(projects, statusOf);
+
+    // Every open session is listed — waiting and idle included.
+    expect(rows.map((r) => r.sessionId).sort()).toEqual(['s1', 's2', 's3', 's4', 's5']);
+    expect(rows.find((r) => r.sessionId === 's2')!.status).toBe('waiting');
+    expect(rows.find((r) => r.sessionId === 's5')!.status).toBe('idle');
   });
 
   it('excludes non-CLI sessions (those with a type set)', () => {
-    const projects = [project('p1', 'Alpha', [
-      { id: 'cli' },
-      { id: 'kanban', type: 'kanban' },
-      { id: 'team', type: 'team' },
-    ])];
-    const rows = selectActiveSessions(
-      projects,
-      statusMap({ cli: 'working', kanban: 'working', team: 'working' }),
-      new Set<SessionStatus>(['working']),
-    );
+    const projects = [
+      project('p1', 'Alpha', [
+        { id: 'cli' },
+        { id: 'shell', type: 'shell' },
+      ]),
+    ];
+
+    const rows = selectActiveSessions(projects, statusMap({}));
+
     expect(rows.map((r) => r.sessionId)).toEqual(['cli']);
   });
 
-  it('aggregates across all projects', () => {
+  it('aggregates across all projects with project names', () => {
     const projects = [
-      project('p1', 'Alpha', [{ id: 'a' }]),
-      project('p2', 'Beta', [{ id: 'b' }]),
+      project('p1', 'Alpha', [{ id: 's1' }]),
+      project('p2', 'Beta', [{ id: 's2' }]),
     ];
-    const rows = selectActiveSessions(
-      projects,
-      statusMap({ a: 'working', b: 'input' }),
-      new Set<SessionStatus>(['working', 'input']),
-    );
-    expect(rows.map((r) => r.projectId).sort()).toEqual(['p1', 'p2']);
+
+    const rows = selectActiveSessions(projects, statusMap({}));
+
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => [r.projectId, r.projectName, r.sessionId].join('/')).sort()).toEqual([
+      'p1/Alpha/s1',
+      'p2/Beta/s2',
+    ]);
   });
 
-  it('orders by status priority (input > working > waiting > completed), then project name', () => {
+  it('orders by status priority (input > working > waiting > completed > idle), then project name, then session name', () => {
     const projects = [
-      project('p1', 'Zeta', [{ id: 'w' }]),
-      project('p2', 'Alpha', [{ id: 'i' }]),
-      project('p3', 'Mid', [{ id: 'c' }]),
-      project('p4', 'Beta', [{ id: 'w2' }]),
+      project('p1', 'Alpha', [
+        { id: 'idle-a', name: 'zeta' },
+        { id: 'input-a', name: 'alpha' },
+        { id: 'working-a', name: 'mid' },
+      ]),
+      project('p2', 'Beta', [
+        { id: 'input-b', name: 'beta' },
+        { id: 'completed-b', name: 'omega' },
+      ]),
     ];
-    const rows = selectActiveSessions(
-      projects,
-      statusMap({ w: 'working', i: 'input', c: 'completed', w2: 'working' }),
-      new Set<SessionStatus>(['working', 'input', 'completed']),
-    );
-    // input first, then the two working (tie broken by project name Beta < Zeta), then completed.
-    expect(rows.map((r) => r.sessionId)).toEqual(['i', 'w2', 'w', 'c']);
+    const statusOf = statusMap({
+      'idle-a': 'idle',
+      'input-a': 'input',
+      'working-a': 'working',
+      'input-b': 'input',
+      'completed-b': 'completed',
+    });
+
+    const rows = selectActiveSessions(projects, statusOf);
+
+    expect(rows.map((r) => r.sessionId)).toEqual(['input-a', 'input-b', 'working-a', 'completed-b', 'idle-a']);
   });
 
-  it('returns empty when the active set is empty', () => {
-    const projects = [project('p1', 'Alpha', [{ id: 'a' }])];
-    expect(selectActiveSessions(projects, statusMap({ a: 'working' }), new Set())).toEqual([]);
-  });
-});
-
-describe('resolveActiveStatuses', () => {
-  it('falls back to working/input/completed when unset', () => {
-    const set = resolveActiveStatuses({} as Preferences);
-    expect([...set].sort()).toEqual(['completed', 'input', 'working']);
-  });
-
-  it('reflects the configured flags', () => {
-    const set = resolveActiveStatuses({
-      activeSessionStatuses: { working: true, waiting: true, input: false, completed: false },
-    } as Preferences);
-    expect([...set].sort()).toEqual(['waiting', 'working']);
+  it('returns empty for no projects or no sessions', () => {
+    expect(selectActiveSessions([], statusMap({}))).toEqual([]);
+    expect(selectActiveSessions([project('p1', 'Alpha', [])], statusMap({}))).toEqual([]);
   });
 });

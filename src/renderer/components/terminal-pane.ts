@@ -1,4 +1,5 @@
 import { Terminal } from '@xterm/xterm';
+import { attachWin32TerminalKeys } from './win32-terminal-keys.js';
 import { getTerminalTheme } from '../terminal-theme.js';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
@@ -116,9 +117,12 @@ export function createTerminalPane(
   }));
 
   const writeToPty = (data: string) => window.vibeyard.pty.write(sessionId, data);
+  const handleWin32Key = attachWin32TerminalKeys(terminal, writeToPty);
 
   // Send CSI u encoding for Shift+Enter so Claude CLI treats it as newline
   attachClipboardCopyHandler(terminal, (e) => {
+    const handled = handleWin32Key(e);
+    if (handled !== undefined) return handled;
     if (e.shiftKey && e.key === 'Enter') {
       if (e.type === 'keydown') window.vibeyard.pty.write(sessionId, '\x1b[13;2u');
       e.preventDefault();
@@ -495,53 +499,52 @@ export function updateCostDisplay(sessionId: string, cost: CostInfo | null): voi
   const el = instance.element.querySelector('.cost-display') as HTMLElement | null;
   if (!el) return;
 
-  // Rebuild the rail's right cluster: [profile pill] · [model] · [cost] | [in/out].
-  // Separators are only inserted between segments that are actually present.
-  el.replaceChildren();
-  const segs: HTMLElement[] = [];
-
-  const profileName = resolveProfileName(instance.providerId, instance.configDir);
-  if (profileName) {
-    const pill = document.createElement('span');
-    pill.className = 'ssl-pill';
-    pill.textContent = profileName;
-    segs.push(pill);
-  }
-  if (cost?.model) {
-    const model = document.createElement('span');
-    model.className = 'ssl-model seg';
-    model.textContent = cost.model;
-    segs.push(model);
-  }
-  const costEl = document.createElement('span');
-  costEl.className = 'ssl-cost seg';
-  costEl.textContent = `$${(cost?.totalCostUsd ?? 0).toFixed(4)}`;
-  segs.push(costEl);
-
-  segs.forEach((seg, i) => {
-    if (i > 0) {
-      const dot = document.createElement('span');
-      dot.className = 'ssl-dot';
-      dot.textContent = '·';
-      el.appendChild(dot);
-    }
-    el.appendChild(seg);
-  });
-
   // `total_output_tokens` is per-turn and regresses at each turn boundary;
   // hold the session peak so the displayed "out" only ever ratchets up.
   if (cost) instance.peakOutputTokens = Math.max(instance.peakOutputTokens, cost.totalOutputTokens);
   const outTokens = instance.peakOutputTokens;
 
-  if (cost && (cost.totalInputTokens > 0 || outTokens > 0)) {
-    const vrule = document.createElement('span');
-    vrule.className = 'ssl-vrule';
-    el.appendChild(vrule);
-    const io = document.createElement('span');
-    io.className = 'ssl-io seg';
-    io.textContent = `${formatTokens(cost.totalInputTokens)} in / ${formatTokens(outTokens)} out`;
-    el.appendChild(io);
+  // Reconcile the rail's right cluster in place: [profile pill] · [model] · [cost] | [in/out].
+  // Separators are only inserted between segments that are actually present.
+  // Children that match by position and class are reused, so unchanged segments
+  // keep their node identity across the ~1/s cost ticks (a full rebuild churned
+  // the DOM on every tick).
+  const segments: { className: string; textContent: string }[] = [];
+  const profileName = resolveProfileName(instance.providerId, instance.configDir);
+  if (profileName) segments.push({ className: 'ssl-pill', textContent: profileName });
+  if (cost?.model) segments.push({ className: 'ssl-model seg', textContent: cost.model });
+  segments.push({ className: 'ssl-cost seg', textContent: `$${(cost?.totalCostUsd ?? 0).toFixed(4)}` });
 
+  const desired: { className: string; textContent: string }[] = [];
+  segments.forEach((seg, i) => {
+    if (i > 0) desired.push({ className: 'ssl-dot', textContent: '·' });
+    desired.push(seg);
+  });
+  if (cost && (cost.totalInputTokens > 0 || outTokens > 0)) {
+    desired.push({ className: 'ssl-vrule', textContent: '' });
+    desired.push({
+      className: 'ssl-io seg',
+      textContent: `${formatTokens(cost.totalInputTokens)} in / ${formatTokens(outTokens)} out`,
+    });
+  }
+
+  const existing = Array.from(el.children) as HTMLElement[];
+  const next: HTMLElement[] = [];
+  desired.forEach((d, i) => {
+    const node = existing[i];
+    if (node && node.className === d.className) {
+      if (node.textContent !== d.textContent) node.textContent = d.textContent;
+      next.push(node);
+    } else {
+      const fresh = document.createElement('span');
+      fresh.className = d.className;
+      fresh.textContent = d.textContent;
+      next.push(fresh);
+    }
+  });
+  el.replaceChildren(...next);
+
+  if (cost && (cost.totalInputTokens > 0 || outTokens > 0)) {
     const durationSec = (cost.totalDurationMs / 1000).toFixed(1);
     const apiDurationSec = (cost.totalApiDurationMs / 1000).toFixed(1);
     el.title = `Cache read: ${formatTokens(cost.cacheReadTokens)} · Cache create: ${formatTokens(cost.cacheCreationTokens)} · Duration: ${durationSec}s · API: ${apiDurationSec}s`;

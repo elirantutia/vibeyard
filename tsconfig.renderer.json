@@ -10,8 +10,9 @@
     "skipLibCheck": true,
     "declaration": true,
     "composite": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "resolveJsonModule": true
   },
-  "include": ["src/renderer/**/*.ts", "src/shared/**/*.ts"],
+  "include": ["src/renderer/**/*.ts", "src/shared/**/*.ts", "src/renderer/locales/*.json"],
   "exclude": ["src/renderer/**/*.test.ts"]
 }

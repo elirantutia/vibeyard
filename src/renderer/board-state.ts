@@ -1,12 +1,12 @@
 import { appState } from './state.js';
 import type { BoardTask, BoardColumn, BoardData, ColumnBehavior, TagDefinition } from '../shared/types.js';
 
-export function getBoard(): BoardData | undefined {
-  return appState.activeProject?.board;
+export function getBoard(projectId?: string): BoardData | undefined {
+  return (projectId ? appState.projects.find(p => p.id === projectId) : appState.activeProject)?.board;
 }
 
-export function getColumnByBehavior(behavior: ColumnBehavior): BoardColumn | undefined {
-  const board = getBoard();
+export function getColumnByBehavior(behavior: ColumnBehavior, projectId?: string): BoardColumn | undefined {
+  const board = getBoard(projectId);
   if (!board) return undefined;
   return board.columns.find(c => c.behavior === behavior);
 }
@@ -19,8 +19,8 @@ export function getTasksForColumn(columnId: string): BoardTask[] {
     .sort((a, b) => a.order - b.order);
 }
 
-export function getTaskBySessionId(sessionId: string): BoardTask | undefined {
-  const board = getBoard();
+export function getTaskBySessionId(sessionId: string, projectId?: string): BoardTask | undefined {
+  const board = getBoard(projectId);
   if (!board) return undefined;
   return board.tasks.find(t => t.sessionId === sessionId);
 }
@@ -55,6 +55,7 @@ export function addTask(partial: Partial<BoardTask>): BoardTask | undefined {
     ...(partial.tags && partial.tags.length > 0 ? { tags: partial.tags } : {}),
     ...(partial.providerId ? { providerId: partial.providerId } : {}),
     ...(partial.profileId ? { profileId: partial.profileId } : {}),
+    ...(partial.assigneeId && appState.getTeamMemberById(partial.assigneeId) ? { assigneeId: partial.assigneeId } : {}),
     ...(partial.planMode !== undefined ? { planMode: partial.planMode } : {}),
   };
 
@@ -63,14 +64,17 @@ export function addTask(partial: Partial<BoardTask>): BoardTask | undefined {
   return task;
 }
 
-export function updateTask(taskId: string, updates: Partial<BoardTask>): void {
-  const board = getBoard();
+export function updateTask(taskId: string, updates: Partial<BoardTask>, projectId?: string): void {
+  const board = getBoard(projectId);
   if (!board) return;
   const task = board.tasks.find(t => t.id === taskId);
   if (!task) return;
   const safeUpdates = { ...updates };
   if (safeUpdates.columnId && !board.columns.some(c => c.id === safeUpdates.columnId)) {
     delete safeUpdates.columnId;
+  }
+  if (safeUpdates.assigneeId && !appState.getTeamMemberById(safeUpdates.assigneeId)) {
+    delete safeUpdates.assigneeId;
   }
   Object.assign(task, safeUpdates, { updatedAt: Date.now() });
   appState.notifyBoardChanged();
@@ -93,8 +97,8 @@ export function deleteTask(taskId: string): void {
   appState.notifyBoardChanged();
 }
 
-export function moveTask(taskId: string, toColumnId: string, toOrder: number): void {
-  const board = getBoard();
+export function moveTask(taskId: string, toColumnId: string, toOrder: number, projectId?: string): void {
+  const board = getBoard(projectId);
   if (!board) return;
   const task = board.tasks.find(t => t.id === taskId);
   if (!task) return;

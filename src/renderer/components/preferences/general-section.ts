@@ -1,10 +1,35 @@
 import { appState } from '../../state.js';
-import { createCustomSelect, type CustomSelectInstance } from '../custom-select.js';
+import { createCustomSelect, type CustomSelectInstance, type SelectOption } from '../custom-select.js';
 import { loadProviderAvailability, getProviderAvailabilitySnapshot } from '../../provider-availability.js';
 import { t } from '../../i18n.js';
 import type { CliProviderMeta, Locale, ProviderId } from '../../../shared/types.js';
 import type { PreferencesContext, SectionController } from './section.js';
 import { toggleRow } from './shared.js';
+
+/**
+ * Fix the select's value box (trigger) to the width of its longest option
+ * label, so it matches the dropdown (which sizes to the widest item).
+ */
+function fixSelectWidthToLongestOption(select: CustomSelectInstance, options: SelectOption[]): void {
+  const trigger = select.element.querySelector<HTMLElement>('.custom-select-trigger');
+  if (!trigger || options.length === 0) return;
+
+  const style = getComputedStyle(trigger);
+  const sizer = document.createElement('span');
+  sizer.style.cssText = `position:absolute;visibility:hidden;white-space:nowrap;pointer-events:none;` +
+    `font-size:${style.fontSize};font-family:${style.fontFamily};font-weight:${style.fontWeight};`;
+  document.body.appendChild(sizer);
+
+  let maxText = 0;
+  for (const opt of options) {
+    sizer.textContent = opt.label;
+    maxText = Math.max(maxText, sizer.offsetWidth);
+  }
+  sizer.remove();
+
+  // trigger: padding 10px x2, border 1px x2, arrow 4px + 8px left margin
+  trigger.style.width = `${Math.ceil(maxText + 10 + 10 + 2 + 4 + 8)}px`;
+}
 
 export function createGeneralSection(ctx: PreferencesContext): SectionController {
   let providerSelect: CustomSelectInstance | null = null;
@@ -50,13 +75,15 @@ export function createGeneralSection(ctx: PreferencesContext): SectionController
       providerLabel.textContent = t('general.defaultCodingTool');
 
       const currentDefault = appState.preferences.defaultProvider ?? 'claude';
-      const buildProviderOptions = (providers: CliProviderMeta[]) =>
+      const buildProviderOptions = (providers: CliProviderMeta[]): SelectOption[] =>
         providers.map(p => ({ value: p.id, label: p.displayName }));
 
       if (providerSelect) providerSelect.destroy();
       let snapshot = getProviderAvailabilitySnapshot();
       if (snapshot) {
-        providerSelect = createCustomSelect('pref-default-provider', buildProviderOptions(snapshot.providers), currentDefault);
+        const options = buildProviderOptions(snapshot.providers);
+        providerSelect = createCustomSelect('pref-default-provider', options, currentDefault);
+        fixSelectWidthToLongestOption(providerSelect, options);
       } else {
         providerSelect = createCustomSelect('pref-default-provider', [{ value: currentDefault, label: t('general.loading') }], currentDefault);
         loadProviderAvailability().then(() => {
@@ -64,7 +91,9 @@ export function createGeneralSection(ctx: PreferencesContext): SectionController
           snapshot = getProviderAvailabilitySnapshot();
           if (snapshot) {
             if (providerSelect) providerSelect.destroy();
-            providerSelect = createCustomSelect('pref-default-provider', buildProviderOptions(snapshot.providers), currentDefault);
+            const options = buildProviderOptions(snapshot.providers);
+            providerSelect = createCustomSelect('pref-default-provider', options, currentDefault);
+            fixSelectWidthToLongestOption(providerSelect, options);
             providerRow.querySelector('.custom-select')?.remove();
             providerRow.appendChild(providerSelect.element);
           }

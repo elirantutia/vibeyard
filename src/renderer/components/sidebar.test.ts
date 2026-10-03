@@ -30,7 +30,27 @@ function stubDom() {
   vi.stubGlobal('window', { vibeyard: {} });
 }
 
-describe('projectProfileLabel', () => {
+// Capability table matching the real provider registry: claude, pi and omp
+// are profile-capable, the rest are not.
+vi.mock('../provider-availability.js', () => ({
+  loadProviderMetas: vi.fn(async () => {}),
+  loadProviderAvailability: vi.fn(async () => {}),
+  hasMultipleAvailableProviders: vi.fn(() => false),
+  getProviderAvailabilitySnapshot: vi.fn(() => null),
+  getCachedProviderMetas: vi.fn(() => []),
+  getAvailableProviderMetas: vi.fn(() => []),
+  getTeamChatProviderMetas: vi.fn(() => []),
+  getTeamCapableProviderIds: vi.fn(() => new Set()),
+  getProviderCapabilities: vi.fn((id: string) => ({
+    profiles: id === 'claude' || id === 'pi' || id === 'omp',
+  })),
+  getProviderDisplayName: vi.fn((id: string) => {
+    const names: Record<string, string> = { claude: 'Claude Code', pi: 'Pi', omp: 'Oh my Pi' };
+    return names[id] ?? id;
+  }),
+}));
+
+describe('projectProfileBadge', () => {
   beforeEach(() => {
     vi.resetModules();
     stubDom();
@@ -41,49 +61,144 @@ describe('projectProfileLabel', () => {
   }
 
   async function load() {
-    const sidebar = await import('./sidebar.js');
+    const { projectProfileBadge } = await import('../profile-utils.js');
     const { appState } = await import('../state.js');
-    return { projectProfileLabel: sidebar.projectProfileLabel, appState };
+    return { projectProfileBadge, appState };
   }
 
-  it('returns undefined when zero or one claude profile exists', async () => {
-    const { projectProfileLabel, appState } = await load();
-    expect(projectProfileLabel({ defaultProfileId: undefined } as any)).toBeUndefined();
+  function seedTwoTools(appState: any) {
+    appState.preferences.defaultProvider = 'claude';
+    appState.profiles.push(
+      makeProfile('work', 'Work', 'claude') as any,
+      makeProfile('alt', 'Alt', 'claude') as any,
+      makeProfile('home', 'Home', 'pi') as any,
+    );
+  }
+
+  function makeProject(overrides: Record<string, unknown> = {}) {
+    return { sessions: [], activeSessionId: null, ...overrides } as any;
+  }
+
+  it('hides the badge until more than one profile-capable profile exists', async () => {
+    const { projectProfileBadge, appState } = await load();
+    expect(projectProfileBadge(makeProject())).toBeUndefined();
     appState.profiles.push(makeProfile('work', 'Work') as any);
-    expect(projectProfileLabel({ defaultProfileId: 'work' } as any)).toBeUndefined();
+    expect(projectProfileBadge(makeProject({ defaultProfileId: 'work' }))).toBeUndefined();
   });
 
-  it('labels a project with no explicit profile as "Default"', async () => {
-    const { projectProfileLabel, appState } = await load();
-    appState.profiles.push(makeProfile('work', 'Work') as any, makeProfile('home', 'Home') as any);
-    appState.preferences.defaultProfileId = undefined;
-    expect(projectProfileLabel({ defaultProfileId: undefined } as any)).toBe('Default');
+  it('hides the badge when the current tool has no profile concept', async () => {
+    const { projectProfileBadge, appState } = await load();
+    seedTwoTools(appState);
+    appState.preferences.defaultProvider = 'gemini';
+    expect(projectProfileBadge(makeProject({ defaultProfileId: 'work' }))).toBeUndefined();
   });
 
-  it('uses the project default profile name when set', async () => {
-    const { projectProfileLabel, appState } = await load();
-    appState.profiles.push(makeProfile('work', 'Work') as any, makeProfile('home', 'Home') as any);
-    expect(projectProfileLabel({ defaultProfileId: 'home' } as any)).toBe('Home');
+  it('pairs the tool with "Default" when nothing pins a profile', async () => {
+    const { projectProfileBadge, appState } = await load();
+    seedTwoTools(appState);
+    appState.preferences.defaultProfiles = undefined;
+    expect(projectProfileBadge(makeProject())).toEqual({ tool: 'Claude Code', profile: 'Default' });
   });
 
-  it('falls back to the preferences default profile when the project has none', async () => {
-    const { projectProfileLabel, appState } = await load();
-    appState.profiles.push(makeProfile('work', 'Work') as any, makeProfile('home', 'Home') as any);
-    appState.preferences.defaultProfileId = 'work';
-    expect(projectProfileLabel({ defaultProfileId: undefined } as any)).toBe('Work');
+  it('applies the current tool\'s global default when the project has no pin', async () => {
+    const { projectProfileBadge, appState } = await load();
+    seedTwoTools(appState);
+    appState.preferences.defaultProfiles = { claude: 'work' };
+    expect(projectProfileBadge(makeProject({ defaultProfileId: undefined }))).toEqual({
+      tool: 'Claude Code',
+      profile: 'Work',
+    });
+  });
+
+  it('outranks the tool default with the project pin', async () => {
+    const { projectProfileBadge, appState } = await load();
+    seedTwoTools(appState);
+    appState.preferences.defaultProfiles = { claude: 'work' };
+    // 'alt' is a Claude profile, so it survives the provider match and wins
+    // over the tool's own default.
+    expect(projectProfileBadge(makeProject({ defaultProfileId: 'alt' }))).toEqual({
+      tool: 'Claude Code',
+      profile: 'Alt',
+    });
+  });
+
+  it('never shows a profile belonging to a different coding tool', async () => {
+    const { projectProfileBadge, appState } = await load();
+    seedTwoTools(appState);
+    appState.preferences.defaultProfiles = {};
+    // 'home' is a Pi profile while the project's tool is Claude: the stale pin
+    // must not label the card "Home".
+    expect(projectProfileBadge(makeProject({ defaultProfileId: 'home' }))).toEqual({
+      tool: 'Claude Code',
+      profile: 'Default',
+    });
+  });
+
+  it('follows the active session\'s tool, not the project pin\'s tool', async () => {
+    const { projectProfileBadge, appState } = await load();
+    seedTwoTools(appState);
+    appState.preferences.defaultProfiles = { pi: 'home' };
+    const project = makeProject({
+      sessions: [{ id: 's1', providerId: 'pi' }],
+      activeSessionId: 's1',
+      defaultProfileId: 'work',
+    });
+    expect(projectProfileBadge(project)).toEqual({ tool: 'Pi', profile: 'Default' });
   });
 
   it('labels an unknown profile id as "Default"', async () => {
-    const { projectProfileLabel, appState } = await load();
-    appState.profiles.push(makeProfile('work', 'Work') as any, makeProfile('home', 'Home') as any);
-    expect(projectProfileLabel({ defaultProfileId: 'ghost' } as any)).toBe('Default');
+    const { projectProfileBadge, appState } = await load();
+    seedTwoTools(appState);
+    expect(projectProfileBadge(makeProject({ defaultProfileId: 'ghost' }))).toEqual({
+      tool: 'Claude Code',
+      profile: 'Default',
+    });
+  });
+});
+
+describe('profile-utils', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    stubDom();
   });
 
-  it('ignores non-claude profiles when counting', async () => {
-    const { projectProfileLabel, appState } = await load();
-    // Two profiles total, but only one targets claude — gate stays closed.
-    appState.profiles.push(makeProfile('work', 'Work', 'claude') as any, makeProfile('gem', 'Gem', 'gemini') as any);
-    expect(projectProfileLabel({ defaultProfileId: 'work' } as any)).toBeUndefined();
+  function makeProfile(id: string, name: string, providerId = 'claude') {
+    return { id, name, providerId, configDir: `/cfg/${id}`, managed: true, createdAt: 0 };
+  }
+
+  it('scopes profile options to a single coding tool with bare names', async () => {
+    const { providerProfileOptions } = await import('../profile-utils.js');
+    const { appState } = await import('../state.js');
+    appState.profiles.push(
+      makeProfile('work', 'Work', 'claude') as any,
+      makeProfile('home', 'Home', 'pi') as any,
+      makeProfile('omp1', 'OMP Work', 'omp') as any,
+      makeProfile('gem', 'Gem', 'gemini') as any,
+    );
+    expect(providerProfileOptions('claude')).toEqual([{ value: 'work', label: 'Work' }]);
+    expect(providerProfileOptions('pi')).toEqual([{ value: 'home', label: 'Home' }]);
+    expect(providerProfileOptions('omp')).toEqual([{ value: 'omp1', label: 'OMP Work' }]);
+    expect(providerProfileOptions('gemini')).toEqual([]);
+  });
+
+  it('resolves the project provider from the active session, else the global default', async () => {
+    const { projectProviderId } = await import('../profile-utils.js');
+    const { appState } = await import('../state.js');
+    appState.preferences.defaultProvider = 'claude';
+    expect(projectProviderId({ sessions: [], activeSessionId: null } as any)).toBe('claude');
+    expect(projectProviderId({ sessions: [{ id: 's1', providerId: 'omp' }], activeSessionId: 's1' } as any)).toBe('omp');
+    expect(projectProviderId({ sessions: [{ id: 's1', providerId: 'omp' }], activeSessionId: 's2' } as any)).toBe('claude');
+  });
+
+  it('returns only profile-capable profiles', async () => {
+    const { profileCapableProfiles } = await import('../profile-utils.js');
+    const { appState } = await import('../state.js');
+    appState.profiles.push(
+      makeProfile('work', 'Work', 'claude') as any,
+      makeProfile('home', 'Home', 'pi') as any,
+      makeProfile('gem', 'Gem', 'gemini') as any,
+    );
+    expect(profileCapableProfiles().map((p) => p.id)).toEqual(['work', 'home']);
   });
 });
 

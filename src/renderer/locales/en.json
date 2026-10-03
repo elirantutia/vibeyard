@@ -31,14 +31,13 @@
     "sessionHistory": "Session History",
     "discussions": "Discussions",
     "activeSessions": "Active Sessions",
-    "activeSessionStatuses": "Active Session Statuses",
     "board": "Board",
     "showMetricsOnCards": "Show metrics on cards"
   },
   "sidebar": {
     "default": "Default",
-    "defaultProfileOption": "Default (~/.claude)",
-    "claudeProfileTooltip": "Claude profile",
+    "defaultProfileOption": "Default",
+    "profileTooltip": "Coding tool and default profile",
     "removeProjectTooltip": "Remove project",
     "overview": "Overview",
     "kanban": "Kanban",
@@ -240,6 +239,8 @@
       "tagsLabel": "Tags",
       "tagInputPlaceholder": "Add tag...",
       "providerLabel": "Provider",
+      "assigneeLabel": "Assignee",
+      "assigneeUnassigned": "Unassigned",
       "planModeUnsupportedTooltip": "Provider does not support plan mode",
       "providerLoading": "Loading…",
       "focusSessionButton": "Focus Session",
@@ -318,7 +319,8 @@
       "chatButton": "Chat",
       "chatUnsupportedTooltip": "No installed CLI supports team personas. Install Claude or Codex.",
       "chatProviderAriaLabel": "Chat with another provider",
-      "chatChevronGlyph": "▼"
+      "chatChevronGlyph": "▼",
+      "backendBadgeTooltip": "Runs on profile: {profile}"
     },
     "memberModal": {
       "nameLabel": "Name",
@@ -330,6 +332,9 @@
       "systemPromptLabel": "System prompt",
       "systemPromptPlaceholder": "You are the Chief Marketing Officer of...",
       "installAsAgentLabel": "Install as agent (invoke via /<slug> in CLI sessions)",
+      "backendLabel": "Backend profile",
+      "backendDefaultOption": "Default (project / global)",
+      "backendNotTeamCapable": "{name} · {provider} (can't run team personas)",
       "titleCreate": "New Team Member",
       "titleEdit": "Edit Team Member",
       "confirmCreate": "Create",
@@ -393,8 +398,11 @@
     "recordingPrompt": "Press keys..."
   },
   "profiles": {
-    "heading": "Claude profiles",
-    "description": "Each profile runs Claude Code against its own config directory (CLAUDE_CONFIG_DIR), isolating login, settings, and history — handy for separate work and personal licenses. After creating a profile, start a session with it and run /login once to sign in.",
+    "heading": "CLI profiles",
+    "description": "Each profile runs a CLI against its own config directory, isolating login, settings, and history — handy for separate work and personal licenses.",
+    "descriptionClaude": "Claude Code: the profile's config dir is injected as CLAUDE_CONFIG_DIR. After creating a profile, start a session with it and run /login once to sign in.",
+    "descriptionPi": "Pi: the profile's config dir is injected as PI_CODING_AGENT_DIR. Set up auth and models in that config directory after creating the profile.",
+    "descriptionOmp": "Oh my Pi: the profile's config dir is injected as PI_CODING_AGENT_DIR (the same omp agent dir mechanism as Pi). Make sure the omp CLI is installed, then set up auth and models in that config directory after creating the profile.",
     "keychainUnsupported": "This version of Claude Code{version} stores every login under a single macOS keychain entry, so profiles can't keep accounts separate. Update Claude Code to create and use profiles.",
     "keychainUnknown": "Vibeyard can't yet confirm this Claude Code build isolates profile logins in the macOS keychain. Sign in to a profile once and isolation will be verified automatically.",
     "defaultLabel": "Default profile",
@@ -410,6 +418,7 @@
     "addModalTitle": "Add Profile",
     "addNameLabel": "Name",
     "addNamePlaceholder": "e.g. Work",
+    "addProviderLabel": "Provider",
     "addPathLabel": "Custom config path (optional)",
     "addPathPlaceholder": "Leave blank for a managed directory",
     "nameRequired": "Name is required",
@@ -516,5 +525,9 @@
     "about": "About",
     "general": "General",
     "appearance": "Appearance"
+  },
+  "session": {
+    "crashedTitle": "Session ended unexpectedly",
+    "crashedBody": "The session crashed: {reason}"
   }
 }

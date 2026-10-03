@@ -40,9 +40,10 @@ an individual is officially representing the community in public spaces.
 
 ## Enforcement
 
-Instances of unacceptable behavior may be reported via
-[GitHub Security Advisories](https://github.com/elirantutia/vibeyard/security/advisories/new)
-or by contacting the project maintainer through GitHub.
+Instances of unacceptable behavior may be reported privately to the project
+maintainer at [elirantutia@gmail.com](mailto:elirantutia@gmail.com).
+Use [GitHub Security Advisories](https://github.com/elirantutia/vibeyard/security/advisories/new)
+for security vulnerabilities.
 
 All complaints will be reviewed and investigated promptly and fairly.
 

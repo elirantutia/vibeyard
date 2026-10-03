@@ -3,7 +3,7 @@
 
 import type { ShareMode, ShareMessage } from '../../shared/sharing-types.js';
 import { ICE_CONFIG, sendMessage, waitForIceGathering, encodeConnectionCode, decodeConnectionCode } from './webrtc-utils.js';
-import { computeChallengeResponse, hexToBytes } from './share-crypto.js';
+import { computeChallengeResponse, hexToBytes, validateShareKey } from './share-crypto.js';
 
 export interface InitData {
   scrollback: string;
@@ -39,6 +39,8 @@ const guestPeers = new Map<string, GuestPeer>();
 let guestIdCounter = 0;
 
 export function joinShare(offer: string, passphrase: string): { guestId: string; handle: JoinHandle } {
+  const keyError = validateShareKey(passphrase);
+  if (keyError) throw new Error(keyError);
   const guestId = `guest-${++guestIdCounter}`;
 
   let initCb: ((data: InitData) => void) | null = null;

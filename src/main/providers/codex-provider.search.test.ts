@@ -2,7 +2,8 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 vi.mock('fs', () => ({
   readdirSync: vi.fn(() => []),
-  promises: { readFile: vi.fn(), readdir: vi.fn() },
+  createReadStream: vi.fn(),
+  promises: { readFile: vi.fn(), readdir: vi.fn(), stat: vi.fn() },
 }));
 vi.mock('os', () => ({ homedir: () => '/mock/home' }));
 
@@ -12,9 +13,15 @@ vi.mock('../codex-hooks', () => ({
   installCodexHooks: () => {}, validateCodexHooks: () => ({}), cleanupCodexHooks: () => {}, SESSION_ID_VAR: 'CODEX_SESSION_ID',
 }));
 vi.mock('../config-watcher', () => ({ startConfigWatcher: () => {}, stopConfigWatcher: () => {} }));
+vi.mock('../codex-session-watcher', () => ({
+  startCodexSessionWatcher: vi.fn(),
+  registerPendingCodexSession: vi.fn(),
+  unregisterCodexSession: vi.fn(),
+}));
 vi.mock('./resolve-binary', () => ({ resolveBinary: () => '', validateBinaryExists: () => true }));
 
 import * as fs from 'fs';
+import { Readable } from 'stream';
 import { CodexProvider } from './codex-provider';
 
 const mockReadFile = vi.mocked(fs.promises.readFile);
@@ -27,6 +34,11 @@ function file(name: string) { return { name, isDirectory: () => false } as fs.Di
 
 function makeJsonl(entries: object[]): string {
   return entries.map(e => JSON.stringify(e)).join('\n');
+}
+
+function mockIndexFile(jsonl: string): void {
+  vi.mocked(fs.promises.stat).mockResolvedValueOnce({ size: Buffer.byteLength(jsonl) } as fs.Stats);
+  vi.mocked(fs.createReadStream).mockReturnValueOnce(Readable.from([jsonl]) as fs.ReadStream);
 }
 
 beforeEach(() => { vi.clearAllMocks(); });
@@ -66,7 +78,7 @@ describe('CodexProvider.indexTranscript()', () => {
         { type: 'output_text', text: 'never indexed' },
       ] } },
     ]);
-    mockReadFile.mockResolvedValueOnce(jsonl as any);
+    mockIndexFile(jsonl);
     const r = await new CodexProvider().indexTranscript('/p');
     expect(r.cwd).toBe('/Users/me/repo');
     expect(r.text).toContain('fix the bug');
@@ -80,7 +92,7 @@ describe('CodexProvider.indexTranscript()', () => {
         { type: 'input_text', text: 'part two' },
       ] } },
     ]);
-    mockReadFile.mockResolvedValueOnce(jsonl as any);
+    mockIndexFile(jsonl);
     const r = await new CodexProvider().indexTranscript('/p');
     expect(r.text).toContain('part one');
     expect(r.text).toContain('part two');

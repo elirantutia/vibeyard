@@ -112,3 +112,45 @@ describe('teamMemberId propagation', () => {
     expect(session.teamMemberId).toBe('member-99');
   });
 });
+
+describe('exitReason', () => {
+  it('keeps process details for a crashed session', () => {
+    const project = makeProject();
+    archiveSession(project, makeSession(), { exitReason: 'unhandled_rejection', exitCode: 1, exitSignal: 9, processId: 2028 });
+    expect(project.sessionHistory?.[0]).toMatchObject({ exitReason: 'unhandled_rejection', exitCode: 1, exitSignal: 9, processId: 2028 });
+  });
+  it('keeps a crash entry even when its transcript is unavailable', () => {
+    const project = makeProject();
+    archiveSession(project, makeSession({ cliSessionId: null }), { exitReason: 'unhandled_rejection', exitCode: 1, processId: 2028, transcriptAvailable: false });
+    expect(project.sessionHistory?.[0]).toMatchObject({ exitReason: 'unhandled_rejection', transcriptAvailable: false, processId: 2028 });
+  });
+  it('archiveSession sets exitReason on the new entry when provided', () => {
+    const project = makeProject();
+    archiveSession(project, makeSession(), { exitReason: 'unhandled_rejection' });
+    expect(project.sessionHistory).toHaveLength(1);
+    expect(project.sessionHistory![0].exitReason).toBe('unhandled_rejection');
+  });
+
+  it('archiveSession leaves exitReason undefined when opts are absent', () => {
+    const project = makeProject();
+    archiveSession(project, makeSession());
+    expect(project.sessionHistory![0].exitReason).toBeUndefined();
+  });
+
+  it('re-archiving with a reason updates the existing entry in place', () => {
+    const project = makeProject();
+    archiveSession(project, makeSession({ cliSessionId: 'cli-crash' }));
+    expect(project.sessionHistory![0].exitReason).toBeUndefined();
+    archiveSession(project, makeSession({ cliSessionId: 'cli-crash' }), { exitReason: 'unhandled_rejection' });
+    expect(project.sessionHistory).toHaveLength(1);
+    expect(project.sessionHistory![0].exitReason).toBe('unhandled_rejection');
+  });
+
+  it('re-archiving without a reason does not clear an existing exitReason', () => {
+    const project = makeProject();
+    archiveSession(project, makeSession({ cliSessionId: 'cli-crash' }), { exitReason: 'unhandled_rejection' });
+    archiveSession(project, makeSession({ cliSessionId: 'cli-crash' }));
+    expect(project.sessionHistory).toHaveLength(1);
+    expect(project.sessionHistory![0].exitReason).toBe('unhandled_rejection');
+  });
+});

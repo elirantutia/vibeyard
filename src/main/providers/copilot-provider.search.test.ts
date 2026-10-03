@@ -2,7 +2,8 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 vi.mock('fs', () => ({
   existsSync: vi.fn(() => true),
-  promises: { readFile: vi.fn(), readdir: vi.fn() },
+  createReadStream: vi.fn(),
+  promises: { readFile: vi.fn(), readdir: vi.fn(), stat: vi.fn() },
 }));
 vi.mock('os', () => ({ homedir: () => '/mock/home' }));
 
@@ -15,6 +16,7 @@ vi.mock('../config-watcher', () => ({ startConfigWatcher: () => {}, stopConfigWa
 vi.mock('./resolve-binary', () => ({ resolveBinary: () => '', validateBinaryExists: () => true }));
 
 import * as fs from 'fs';
+import { Readable } from 'stream';
 import { CopilotProvider } from './copilot-provider';
 
 const mockReadFile = vi.mocked(fs.promises.readFile);
@@ -27,6 +29,11 @@ function file(name: string) { return { name, isDirectory: () => false } as fs.Di
 
 function makeJsonl(entries: object[]): string {
   return entries.map(e => JSON.stringify(e)).join('\n');
+}
+
+function mockIndexFile(jsonl: string): void {
+  vi.mocked(fs.promises.stat).mockResolvedValueOnce({ size: Buffer.byteLength(jsonl) } as fs.Stats);
+  vi.mocked(fs.createReadStream).mockReturnValueOnce(Readable.from([jsonl]) as fs.ReadStream);
 }
 
 beforeEach(() => { vi.clearAllMocks(); });
@@ -68,7 +75,7 @@ describe('CopilotProvider.indexTranscript()', () => {
       { type: 'assistant.message', data: { content: 'never indexed' } },
       { type: 'user.message', data: { content: 'follow-up' } },
     ]);
-    mockReadFile.mockResolvedValueOnce(jsonl as any);
+    mockIndexFile(jsonl);
     const r = await new CopilotProvider().indexTranscript('/p');
     expect(r.text).toContain('first prompt');
     expect(r.text).toContain('follow-up');
@@ -77,7 +84,7 @@ describe('CopilotProvider.indexTranscript()', () => {
 
   it('tolerates malformed lines', async () => {
     const jsonl = '{broken\n' + JSON.stringify({ type: 'user.message', data: { content: 'good prompt' } });
-    mockReadFile.mockResolvedValueOnce(jsonl as any);
+    mockIndexFile(jsonl);
     const r = await new CopilotProvider().indexTranscript('/p');
     expect(r.text).toContain('good prompt');
   });

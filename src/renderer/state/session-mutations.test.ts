@@ -110,13 +110,19 @@ describe('updateSessionCost()', () => {
   };
 
   it('persists cost data on the session record', () => {
-    const project = addProject();
-    const session = appState.addSession(project.id, 'S1')!;
-    mockSave.mockClear();
-    appState.updateSessionCost(session.id, sampleCost);
-    const updated = appState.activeProject!.sessions.find(s => s.id === session.id)!;
-    expect(updated.cost).toEqual(sampleCost);
-    expect(mockSave).toHaveBeenCalled();
+    vi.useFakeTimers();
+    try {
+      const project = addProject();
+      const session = appState.addSession(project.id, 'S1')!;
+      mockSave.mockClear();
+      appState.updateSessionCost(session.id, sampleCost);
+      const updated = appState.activeProject!.sessions.find(s => s.id === session.id)!;
+      expect(updated.cost).toEqual(sampleCost);
+      vi.advanceTimersByTime(1000);
+      expect(mockSave).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('no-op for nonexistent session', () => {
@@ -141,13 +147,19 @@ describe('updateSessionContext()', () => {
   const sampleContext = { totalTokens: 5000, contextWindowSize: 200000, usedPercentage: 2.5 };
 
   it('persists context data on the session record', () => {
-    const project = addProject();
-    const session = appState.addSession(project.id, 'S1')!;
-    mockSave.mockClear();
-    appState.updateSessionContext(session.id, sampleContext);
-    const updated = appState.activeProject!.sessions.find(s => s.id === session.id)!;
-    expect(updated.contextWindow).toEqual(sampleContext);
-    expect(mockSave).toHaveBeenCalled();
+    vi.useFakeTimers();
+    try {
+      const project = addProject();
+      const session = appState.addSession(project.id, 'S1')!;
+      mockSave.mockClear();
+      appState.updateSessionContext(session.id, sampleContext);
+      const updated = appState.activeProject!.sessions.find(s => s.id === session.id)!;
+      expect(updated.contextWindow).toEqual(sampleContext);
+      vi.advanceTimersByTime(1000);
+      expect(mockSave).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('no-op for nonexistent session', () => {

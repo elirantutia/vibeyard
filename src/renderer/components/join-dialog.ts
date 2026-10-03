@@ -2,8 +2,7 @@
 
 import { joinRemoteSession } from '../sharing/share-manager.js';
 import { appState } from '../state.js';
-import { DecryptionError, validatePin } from '../sharing/share-crypto.js';
-import { createPinInput } from '../dom-utils.js';
+import { DecryptionError, validateShareKey } from '../sharing/share-crypto.js';
 import { bindModalDismiss } from './modal-manager.js';
 
 let activeOverlay: HTMLElement | null = null;
@@ -27,16 +26,19 @@ export function showJoinDialog(): void {
   title.textContent = 'Join Remote Session';
   dialog.appendChild(title);
 
-  // Offer input section (PIN + code paste together)
+  // Offer input section (share key + code paste together)
   const offerSection = document.createElement('div');
   offerSection.className = 'share-section';
 
   const pinLabel = document.createElement('div');
   pinLabel.className = 'share-label';
-  pinLabel.textContent = 'Enter the PIN from the host';
+  pinLabel.textContent = 'Enter the share key from the host';
   offerSection.appendChild(pinLabel);
 
-  const pinInput = createPinInput();
+  const pinInput = document.createElement('input');
+  pinInput.className = 'share-pin-input';
+  pinInput.autocomplete = 'off';
+  pinInput.placeholder = '32-character share key';
   offerSection.appendChild(pinInput);
 
   const offerLabel = document.createElement('div');
@@ -109,7 +111,7 @@ export function showJoinDialog(): void {
   // Join flow
   joinBtn.addEventListener('click', async () => {
     const pin = pinInput.value.trim();
-    const pinError = validatePin(pin);
+    const pinError = validateShareKey(pin);
     if (pinError) {
       statusEl.textContent = pinError;
       return;
@@ -136,7 +138,7 @@ export function showJoinDialog(): void {
       closeBtn.textContent = 'Close';
     } catch (err) {
       if (err instanceof DecryptionError) {
-        statusEl.textContent = 'Could not decrypt connection code. Check the PIN and try again.';
+        statusEl.textContent = 'Could not decrypt connection code. Check the share key and try again.';
       } else {
         statusEl.textContent = `Error: ${err instanceof Error ? err.message : 'Invalid code'}`;
       }

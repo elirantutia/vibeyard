@@ -10,16 +10,16 @@ vi.mock('fs', () => ({
   readFileSync: vi.fn(),
   promises: {
     rm: vi.fn(),
+    open: vi.fn(),
   },
 }));
 
 import { execFile } from 'child_process';
-import { readFileSync, promises as fsPromises } from 'fs';
+import { promises as fsPromises } from 'fs';
 import * as path from 'path';
 import { getGitStatus, getGitFiles, getGitDiff, getGitWorktrees, gitDiscardFile } from './git-status';
 
 const mockExecFile = vi.mocked(execFile);
-const mockReadFileSync = vi.mocked(readFileSync);
 const mockRm = vi.mocked(fsPromises.rm);
 
 function simulateExecFile(err: ExecFileException | null, stdout: string) {
@@ -121,39 +121,49 @@ describe('getGitStatus', () => {
 
 describe('getGitFiles', () => {
   it('returns file entries with correct status and area', async () => {
-    simulateExecFile(null, '1 A. N... 100644 100644 100644 abc def added.ts\n');
+    simulateExecFile(null, '1 A. N... 100644 100644 100644 abc def added.ts\0');
     const files = await getGitFiles('/test');
     expect(files).toEqual([{ path: 'added.ts', status: 'added', area: 'staged' }]);
   });
 
   it('creates entries for both staged and working changes', async () => {
-    simulateExecFile(null, '1 MM N... 100644 100644 100644 abc def both.ts\n');
+    simulateExecFile(null, '1 MM N... 100644 100644 100644 abc def both.ts\0');
     const files = await getGitFiles('/test');
     expect(files).toHaveLength(2);
     expect(files[0]).toEqual({ path: 'both.ts', status: 'modified', area: 'staged' });
     expect(files[1]).toEqual({ path: 'both.ts', status: 'modified', area: 'working' });
   });
 
-  it('handles rename entries with tab-delimited paths', async () => {
-    simulateExecFile(null, '2 R. N... 100644 100644 100644 abc def R100\told.ts\tnew.ts\n');
+  it('handles rename entries with NUL-delimited original path', async () => {
+    simulateExecFile(null, '2 R. N... 100644 100644 100644 abc def R100 new.ts\0old.ts\0');
     const files = await getGitFiles('/test');
     expect(files).toEqual([{ path: 'new.ts', status: 'renamed', area: 'staged' }]);
   });
 
+  it('preserves spaces in tracked and conflicted paths', async () => {
+    simulateExecFile(null,
+      '1 M. N... 100644 100644 100644 abc def my notes.txt\0' +
+      'u UU N... 100644 100644 100644 100644 abc def ghi merge conflict.txt\0');
+    expect(await getGitFiles('/test')).toEqual([
+      { path: 'my notes.txt', status: 'modified', area: 'staged' },
+      { path: 'merge conflict.txt', status: 'conflicted', area: 'conflicted' },
+    ]);
+  });
+
   it('handles deleted files', async () => {
-    simulateExecFile(null, '1 D. N... 100644 100644 100644 abc def removed.ts\n');
+    simulateExecFile(null, '1 D. N... 100644 100644 100644 abc def removed.ts\0');
     const files = await getGitFiles('/test');
     expect(files).toEqual([{ path: 'removed.ts', status: 'deleted', area: 'staged' }]);
   });
 
   it('handles unmerged files', async () => {
-    simulateExecFile(null, 'u UU N... 100644 100644 100644 100644 abc def ghi\tconflict.ts\n');
+    simulateExecFile(null, 'u UU N... 100644 100644 100644 100644 abc def ghi conflict.ts\0');
     const files = await getGitFiles('/test');
     expect(files).toEqual([{ path: 'conflict.ts', status: 'conflicted', area: 'conflicted' }]);
   });
 
   it('handles untracked files', async () => {
-    simulateExecFile(null, '? new-file.ts\n');
+    simulateExecFile(null, '? new-file.ts\0');
     const files = await getGitFiles('/test');
     expect(files).toEqual([{ path: 'new-file.ts', status: 'untracked', area: 'untracked' }]);
   });
@@ -167,7 +177,12 @@ describe('getGitFiles', () => {
 
 describe('getGitDiff', () => {
   it('returns formatted diff for untracked files', async () => {
-    mockReadFileSync.mockReturnValueOnce('line1\nline2\n');
+    const data = Buffer.from('line1\nline2\n');
+    vi.mocked(fsPromises.open).mockResolvedValueOnce({
+      stat: async () => ({ size: data.length }),
+      read: async (buffer: Buffer, offset: number, length: number, position: number) => ({ bytesRead: data.copy(buffer, offset, position, position + length) }),
+      close: async () => {},
+    } as any);
     const diff = await getGitDiff('/test', 'new.ts', 'untracked');
     expect(diff).toContain('--- /dev/null');
     expect(diff).toContain('+++ b/new.ts');
@@ -176,7 +191,7 @@ describe('getGitDiff', () => {
   });
 
   it('returns error message when untracked file cannot be read', async () => {
-    mockReadFileSync.mockImplementationOnce(() => { throw new Error('ENOENT'); });
+    vi.mocked(fsPromises.open).mockRejectedValueOnce(new Error('ENOENT'));
     const diff = await getGitDiff('/test', 'missing.ts', 'untracked');
     expect(diff).toBe('(unable to read file)');
   });
@@ -342,4 +357,20 @@ describe('getGitWorktrees', () => {
     expect(worktrees).toHaveLength(1);
     expect(worktrees[0].path).toBe('/repo');
   });
+});
+
+
+it('rejects oversized untracked files before reading and closes the handle', async () => {
+  const read = vi.fn(), close = vi.fn(async () => {});
+  vi.mocked(fsPromises.open).mockResolvedValueOnce({ stat: async () => ({size: 1024 * 1024}), read, close } as any);
+  expect(await getGitDiff('/repo', 'large', 'untracked')).toContain('too large');
+  expect(read).not.toHaveBeenCalled(); expect(close).toHaveBeenCalledOnce();
+});
+
+it('bounds an untracked file that grows after stat', async () => {
+  const close = vi.fn(async () => {});
+  vi.mocked(fsPromises.open).mockResolvedValueOnce({ stat: async () => ({size: 1}),
+    read: async (buffer: Buffer, offset: number, length: number) => { buffer.fill(120, offset, offset + length); return {bytesRead: length}; }, close } as any);
+  expect(await getGitDiff('/repo', 'growing', 'untracked')).toContain('too large');
+  expect(close).toHaveBeenCalledOnce();
 });

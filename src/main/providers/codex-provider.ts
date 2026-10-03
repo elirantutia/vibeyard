@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as readline from 'readline';
 import * as path from 'path';
 import * as os from 'os';
 import type { CliProvider, TranscriptDescriptor } from './provider';
@@ -7,8 +8,9 @@ import { getFullPath } from '../pty-manager';
 import { resolveBinary, validateBinaryExists } from './resolve-binary';
 import { getCodexConfig } from '../codex-config';
 import { installCodexHooks, validateCodexHooks, cleanupCodexHooks, SESSION_ID_VAR } from '../codex-hooks';
+import { startCodexSessionWatcher, registerPendingCodexSession, unregisterCodexSession } from '../codex-session-watcher';
 import { startConfigWatcher as startConfigWatch, stopConfigWatcher as stopConfigWatch } from '../config-watcher';
-import { MAX_INDEX_CHARS_PER_SESSION, TRANSCRIPT_TEXT_SEPARATOR } from './transcript-utils';
+import { MAX_INDEX_BYTES, MAX_INDEX_FILE_BYTES, IndexTextBudget } from './transcript-utils';
 import { writeAgentFile, deleteAgentFile } from './agent-files';
 import type { BrowserWindow } from 'electron';
 
@@ -30,6 +32,9 @@ export class CodexProvider implements CliProvider {
       shiftEnterNewline: false,
       pendingPromptTrigger: 'startup-arg',
       systemPromptInjection: true,
+      profiles: false,
+      selfTitles: false,
+      polledStatus: false,
     },
     defaultContextWindowSize: 200_000,
   };
@@ -49,7 +54,7 @@ export class CodexProvider implements CliProvider {
     return env;
   }
 
-  buildArgs(opts: { cliSessionId: string | null; isResume: boolean; extraArgs: string; initialPrompt?: string; systemPrompt?: string }): string[] {
+  buildArgs(opts: { sessionId: string; cliSessionId: string | null; isResume: boolean; extraArgs: string; initialPrompt?: string; systemPrompt?: string }): string[] {
     const args: string[] = [];
     if (opts.systemPrompt) {
       args.push('-c', `developer_instructions=${opts.systemPrompt}`);
@@ -82,6 +87,17 @@ export class CodexProvider implements CliProvider {
 
   stopConfigWatcher(): void {
     stopConfigWatch();
+  }
+
+  // Codex has no hook to report the session id — discover it by tailing
+  // ~/.codex/history.jsonl (see codex-session-watcher.ts).
+  onSessionStarted(sessionId: string, _cwd: string, win: BrowserWindow): void {
+    startCodexSessionWatcher(win);
+    registerPendingCodexSession(sessionId);
+  }
+
+  onSessionExited(sessionId: string): void {
+    unregisterCodexSession(sessionId);
   }
 
   async getConfig(projectPath: string): Promise<ProviderConfig> {
@@ -136,10 +152,11 @@ export class CodexProvider implements CliProvider {
     }
   }
 
-  async discoverTranscripts(): Promise<TranscriptDescriptor[]> {
+  async discoverTranscripts(signal?: AbortSignal): Promise<TranscriptDescriptor[]> {
     const root = path.join(os.homedir(), '.codex', 'sessions');
     const out: TranscriptDescriptor[] = [];
     const walk = async (dir: string, depth: number): Promise<void> => {
+      if (signal?.aborted) return;
       let entries: fs.Dirent[];
       try {
         entries = await fs.promises.readdir(dir, { withFileTypes: true });
@@ -148,6 +165,7 @@ export class CodexProvider implements CliProvider {
       }
       if (depth === 3) {
         for (const entry of entries) {
+          if (signal?.aborted) return;
           const m = entry.name.match(CODEX_FILE_RE);
           if (!m) continue;
           out.push({ cliSessionId: m[1], transcriptPath: path.join(dir, entry.name) });
@@ -155,6 +173,7 @@ export class CodexProvider implements CliProvider {
         return;
       }
       for (const entry of entries) {
+        if (signal?.aborted) return;
         if (entry.isDirectory()) await walk(path.join(dir, entry.name), depth + 1);
       }
     };
@@ -163,31 +182,44 @@ export class CodexProvider implements CliProvider {
   }
 
   async indexTranscript(transcriptPath: string): Promise<{ text: string; cwd: string }> {
-    const content = await fs.promises.readFile(transcriptPath, 'utf8');
-    const texts: string[] = [];
-    let cwd = '';
-    let totalChars = 0;
-    for (const line of content.split('\n')) {
-      if (!line.trim() || totalChars >= MAX_INDEX_CHARS_PER_SESSION) continue;
-      try {
-        const entry = JSON.parse(line);
-        if (!cwd && entry.type === 'session_meta' && entry.payload?.cwd) cwd = entry.payload.cwd;
-        if (entry.type !== 'response_item') continue;
-        const p = entry.payload;
-        if (!p || p.type !== 'message' || p.role !== 'user' || !Array.isArray(p.content)) continue;
-        let text = '';
-        for (const block of p.content) {
-          if (block && typeof block.text === 'string') text += block.text + '\n';
-        }
-        if (text) {
-          texts.push(text.trim());
-          totalChars += text.length;
-        }
-      } catch {
-        // partial-write tolerance
-      }
+    let size: number;
+    try {
+      size = (await fs.promises.stat(transcriptPath)).size;
+    } catch {
+      return { text: '', cwd: '' };
     }
-    return { text: texts.join(TRANSCRIPT_TEXT_SEPARATOR), cwd };
+    if (size > MAX_INDEX_FILE_BYTES) return { text: '', cwd: '' };
+
+    let cwd = '';
+    const budget = new IndexTextBudget();
+
+    const input = fs.createReadStream(transcriptPath, { end: MAX_INDEX_BYTES - 1 });
+    const lines = readline.createInterface({ input, crlfDelay: Infinity });
+    try {
+      for await (const line of lines) {
+        if (!line.trim() || budget.full) continue;
+        try {
+          const entry = JSON.parse(line);
+          if (!cwd && entry.type === 'session_meta' && entry.payload?.cwd) cwd = entry.payload.cwd;
+          if (entry.type !== 'response_item') continue;
+          const p = entry.payload;
+          if (!p || p.type !== 'message' || p.role !== 'user' || !Array.isArray(p.content)) continue;
+          let text = '';
+          for (const block of p.content) {
+            if (block && typeof block.text === 'string') text += block.text + '\n';
+          }
+          if (text) budget.push(text);
+        } catch {
+          // partial-write tolerance
+        }
+      }
+    } catch {
+      // Best-effort: keep whatever was extracted before the stream failed.
+    } finally {
+      lines.close();
+      input.destroy();
+    }
+    return { text: budget.join(), cwd };
   }
 }
 

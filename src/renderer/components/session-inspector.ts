@@ -131,10 +131,11 @@ export function initSessionInspector(): void {
   appState.on('session-added', (data) => {
     if (!inspectorState.reopenOnNextSession) return;
     const d = data as { session?: { id: string; type?: string } } | undefined;
-    const session = d?.session ? appState.activeProject?.sessions.find(s => s.id === d.session!.id) : undefined;
-    if (session && canInspectSession(session)) {
+    const newSessionId = d?.session?.id;
+    const session = newSessionId ? appState.activeProject?.sessions.find(s => s.id === newSessionId) : undefined;
+    if (session && newSessionId && canInspectSession(session)) {
       inspectorState.reopenOnNextSession = false;
-      requestAnimationFrame(() => openInspector(d.session!.id));
+      requestAnimationFrame(() => openInspector(newSessionId));
     }
   });
 

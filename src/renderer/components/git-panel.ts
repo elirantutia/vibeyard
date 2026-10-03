@@ -381,8 +381,6 @@ export function initGitPanel(): void {
 
   // Refresh when worktree list or active worktree changes
   onWorktreeChange(() => { lastFilesKey = ''; scheduleRefresh(); });
-
-  appState.on('session-changed', () => { scheduleRefresh(); });
 }
 
 // --- Test-only exports ---
