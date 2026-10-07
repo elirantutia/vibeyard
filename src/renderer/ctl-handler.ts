@@ -92,6 +92,8 @@ export function handleCtlCommand(deps: CtlHandlerDeps, callerId: string, command
       if (!found) return ctlError('unknown_session', `no session '${command.sessionId}'`);
       if (!owns(callerId, found.session)) return ctlError('not_owner', 'a tab can only rename itself and tabs it created');
       if (!RENAMEABLE(found.session)) return ctlError('unsupported', `cannot rename a ${found.session.type} tab`);
+      // A rename to the current name is a no-op: calling renameSession would set userRenamed and stop auto-titling.
+      if (command.name === found.session.name) return { ok: true, result: { sessionId: found.session.id, name: found.session.name } };
       deps.renameSession(found.project.id, found.session.id, command.name, true);
       return { ok: true, result: { sessionId: found.session.id, name: found.session.name } };
     }

@@ -105,6 +105,23 @@ describe('rename', () => {
     expect(deps.renameSession).not.toHaveBeenCalled();
   });
 
+  it('treats a rename to the tab\'s current name as a no-op (does not set userRenamed)', () => {
+    const current = projects[0].sessions[1].name;
+    expect(handleCtlCommand(deps, 'tl', { action: 'rename', sessionId: 'w1', name: current })).toEqual({ ok: true, result: { sessionId: 'w1', name: current } });
+    expect(deps.renameSession).not.toHaveBeenCalled();
+  });
+
+  it('still enforces ownership on a same-name rename', () => {
+    const current = projects[0].sessions[2].name;
+    expect(handleCtlCommand(deps, 'tl', { action: 'rename', sessionId: 'mine-human', name: current })).toMatchObject({ ok: false, error: { code: 'not_owner' } });
+    expect(deps.renameSession).not.toHaveBeenCalled();
+  });
+
+  it('calls renameSession with userRenamed=true when the name differs', () => {
+    handleCtlCommand(deps, 'tl', { action: 'rename', sessionId: 'w1', name: 'w1 v2' });
+    expect(deps.renameSession).toHaveBeenCalledWith('p1', 'w1', 'w1 v2', true);
+  });
+
   it('returns unknown_session and unsupported where appropriate', () => {
     expect(handleCtlCommand(deps, 'tl', { action: 'rename', sessionId: 'nope', name: 'x' })).toMatchObject({ ok: false, error: { code: 'unknown_session' } });
     projects[1].sessions[1].createdBy = 'tl';
