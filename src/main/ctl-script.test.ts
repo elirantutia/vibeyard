@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { spawnSync, spawn } from 'child_process';
+import { pythonBin } from './platform';
 import { buildCtlPython } from './ctl-script';
 
 let root: string;
@@ -13,12 +14,12 @@ let errFile: string;
 
 let pythonAvailable: boolean | undefined;
 function hasPython(): boolean {
-  if (pythonAvailable === undefined) pythonAvailable = spawnSync('python3', ['--version']).status === 0;
+  if (pythonAvailable === undefined) pythonAvailable = spawnSync(pythonBin, ['--version']).status === 0;
   return pythonAvailable;
 }
 
 function run(args: string[], env: Record<string, string> = { VIBEYARD_CTL_TOKEN: 'tok' }, timeoutEnv = '2') {
-  return spawnSync('python3', [pyFile, ...args], {
+  return spawnSync(pythonBin, [pyFile, ...args], {
     env: { ...process.env, PYTHONIOENCODING: 'utf-8', VIBEYARD_CTL_TIMEOUT: timeoutEnv, ...env },
     encoding: 'utf-8',
   });
@@ -90,7 +91,7 @@ describe.skipIf(!hasPython())('vibeyard-ctl client', () => {
     fs.writeFileSync(path.join(dir, '.enabled'), '1');
     const stop = startResponder();
     const r = await new Promise<{ status: number | null; stdout: string; stderr: string }>((resolve) => {
-      const child = spawn('python3', [pyFile, 'list'], { env: { ...process.env, VIBEYARD_CTL_TOKEN: 'tok', VIBEYARD_CTL_TIMEOUT: 'soon' } });
+      const child = spawn(pythonBin, [pyFile, 'list'], { env: { ...process.env, VIBEYARD_CTL_TOKEN: 'tok', VIBEYARD_CTL_TIMEOUT: 'soon' } });
       let out = '';
       let err = '';
       child.stdout.on('data', (d) => (out += d));
@@ -134,7 +135,7 @@ describe.skipIf(!hasPython())('vibeyard-ctl client', () => {
     const prompt = 'line1\n"quoted" $(rm -rf /) `x` ünï\n';
     fs.writeFileSync(promptFile, prompt);
     const r = await new Promise<{ status: number | null; stdout: string }>((resolve) => {
-      const child = spawn('python3', [pyFile, 'new-session', '--name', 'DR-1 bug "x"', '--prompt-file', promptFile, '--args', '--model sonnet', '--focus'], {
+      const child = spawn(pythonBin, [pyFile, 'new-session', '--name', 'DR-1 bug "x"', '--prompt-file', promptFile, '--args', '--model sonnet', '--focus'], {
         env: { ...process.env, PYTHONIOENCODING: 'utf-8', VIBEYARD_CTL_TOKEN: 'tok' },
       });
       let out = '';
@@ -161,7 +162,7 @@ describe.skipIf(!hasPython())('vibeyard-ctl client', () => {
     fs.writeFileSync(path.join(dir, '.enabled'), '1');
     const stop = startResponder();
     const call = (args: string[]) => new Promise<unknown>((resolve) => {
-      const child = spawn('python3', [pyFile, ...args], { env: { ...process.env, VIBEYARD_CTL_TOKEN: 'tok' } });
+      const child = spawn(pythonBin, [pyFile, ...args], { env: { ...process.env, VIBEYARD_CTL_TOKEN: 'tok' } });
       let out = '';
       child.stdout.on('data', (d) => (out += d));
       child.on('close', () => resolve(JSON.parse(out).result.command));
@@ -178,7 +179,7 @@ describe.skipIf(!hasPython())('vibeyard-ctl client', () => {
     const name = 'ünï 日本 🚀';
     const env: Record<string, string | undefined> = { ...process.env, VIBEYARD_CTL_TOKEN: 'tok', PYTHONIOENCODING: 'ascii' };
     const r = await new Promise<{ status: number | null; stdout: string; stderr: string }>((resolve) => {
-      const child = spawn('python3', [pyFile, 'rename', 's1', name], { env: env as NodeJS.ProcessEnv });
+      const child = spawn(pythonBin, [pyFile, 'rename', 's1', name], { env: env as NodeJS.ProcessEnv });
       let out = '';
       let err = '';
       child.stdout.on('data', (d) => (out += d));
