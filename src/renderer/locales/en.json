@@ -18,6 +18,7 @@
     "showInsightAlerts": "Show insight alerts",
     "autoNameSessions": "Auto-name sessions from the CLI's session title (Claude only)",
     "confirmClosingActiveSession": "Confirm closing an active session",
+    "allowExternalControl": "Allow tabs to control tabs (vibeyard-ctl)",
     "copyOnSelect": "Copy on select"
   },
   "appearance": {

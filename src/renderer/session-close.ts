@@ -11,6 +11,11 @@ function isActive(sessionId: string): boolean {
   return status === 'working' || status === 'input';
 }
 
+/** True when closing this session would show the "still active" dialog. */
+export function needsCloseConfirmation(sessionId: string): boolean {
+  return appState.preferences.confirmCloseWorkingSession && isActive(sessionId);
+}
+
 function confirmAndClose(
   sessions: SessionRecord[],
   targetIds: string[],

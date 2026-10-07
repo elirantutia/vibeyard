@@ -118,6 +118,8 @@ export interface SessionRecord {
   browserIsolated?: boolean;
   /** Persisted: identifies which TeamMember spawned this session, if any. */
   teamMemberId?: string;
+  /** Persisted: id of the tab that created this session via external control (vibeyard-ctl). Grants that tab rename/close rights. */
+  createdBy?: string;
   /** Persisted, sticky: which Profile backs this session's CLI config dir. Resume must reuse it. */
   profileId?: string;
   /** Transient: initial prompt to inject on first spawn. Not persisted. */
@@ -350,6 +352,8 @@ export interface Preferences {
   insightsEnabled: boolean;
   autoTitleEnabled: boolean;
   confirmCloseWorkingSession: boolean;
+  /** Allow tabs to control tabs via vibeyard-ctl. Off by default. */
+  externalControlEnabled: boolean;
   zoomFactor?: number;
   defaultProvider?: ProviderId;
   /** UI language tag. See `Locale` for the supported set. */

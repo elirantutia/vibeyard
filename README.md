@@ -55,6 +55,10 @@ Running AI coding agents in a bare terminal gets messy fast. Vibeyard gives you 
 
 > Supports Claude Code, OpenAI Codex CLI, and Gemini CLI. More AI CLI providers coming soon.
 
+## Controlling tabs from an agent
+
+Every agent tab has `$VIBEYARD_CTL` and `$VIBEYARD_CTL_TOKEN` set. Turn on Preferences → General → "Allow tabs to control tabs (vibeyard-ctl)" to start the command server; until then the client answers `disabled`. Once on, any agent running inside a Vibeyard tab can spawn, rename, close, and list tabs through `$VIBEYARD_CTL` (also on `PATH` as `vibeyard-ctl`, or `vibeyard ctl …` from the npm launcher). Every call returns one JSON object, and a tab can only rename or close itself and tabs it created. The per-tab token keeps out callers outside Vibeyard; it is not a security boundary, since every process a tab starts inherits it. Set `VIBEYARD_CTL_TIMEOUT` (seconds, default 10) to change how long the client waits; after a `timeout`, run `list` before retrying. On Windows the client runs through cmd.exe, which mangles `%`, `^`, `!` and newlines: pass such prompts with `--prompt-file` and keep names simple. See the "External control (vibeyard-ctl)" section of [CLAUDE.md](CLAUDE.md) for commands, error codes, and exit codes.
+
 ## Install
 
 Requires at least one supported CLI installed and authenticated: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [OpenAI Codex CLI](https://github.com/openai/codex), or [Gemini CLI](https://github.com/google-gemini/gemini-cli).

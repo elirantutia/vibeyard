@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron';
 import type { CostData, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, ToolFailureData, SettingsWarningData, SettingsValidationResult, StatusLineConflictData, InspectorEvent, ProviderConfig, ReadFileResult, FileStatResult, TopFilesResult, FsChange, DeepSearchResult, GithubFetchResult, GithubRepo, ChromeProfile, ChromeImportOptions, ChromeImportProgress, ChromeImportResult, ClipboardSource } from '../shared/types';
 import { ZOOM_MIN, ZOOM_MAX } from '../shared/types';
+import type { CtlCommand, CtlResult } from '../shared/ctl-protocol';
 
 export type { CostData } from '../shared/types';
 
@@ -29,6 +30,12 @@ export interface VibeyardApi {
     resyncStatus(): void;
     onToolFailure(callback: (sessionId: string, data: ToolFailureData) => void): () => void;
     onInspectorEvents(callback: (sessionId: string, events: InspectorEvent[]) => void): () => void;
+  };
+  ctl: {
+    onCommand(callback: (reqId: string, callerId: string, command: CtlCommand) => void): () => void;
+    reply(reqId: string, result: CtlResult): void;
+    setEnabled(enabled: boolean): void;
+    rendererReady(): void;
   };
   fs: {
     isDirectory(path: string): Promise<boolean>;
@@ -222,6 +229,14 @@ const api: VibeyardApi = {
     onInspectorEvents: (callback) =>
       onChannel('session:inspectorEvents', (sessionId, events) =>
         callback(sessionId as string, events as InspectorEvent[])),
+  },
+  ctl: {
+    onCommand: (callback) =>
+      onChannel('ctl:command', (reqId, callerId, command) =>
+        callback(reqId as string, callerId as string, command as CtlCommand)),
+    reply: (reqId, result) => ipcRenderer.send('ctl:reply', reqId, result),
+    setEnabled: (enabled) => ipcRenderer.send('ctl:setEnabled', enabled === true),
+    rendererReady: () => ipcRenderer.send('ctl:rendererReady'),
   },
   fs: {
     isDirectory: (path) => ipcRenderer.invoke('fs:isDirectory', path),

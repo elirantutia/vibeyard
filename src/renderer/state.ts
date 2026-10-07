@@ -70,6 +70,17 @@ export type { SessionRecord, ProjectRecord, Preferences, PersistedState, Archive
 export const MAX_SESSION_NAME_LENGTH = 60;
 export const MAX_PROJECT_NAME_LENGTH = 80;
 
+export interface ExternalSessionOpts {
+  name: string;
+  args?: string;
+  envVars?: string;
+  providerId?: ProviderId;
+  profileId?: string;
+  initialPrompt?: string;
+  createdBy: string;
+  focus: boolean;
+}
+
 declare global {
   interface Window {
     vibeyard: VibeyardApi;
@@ -108,6 +119,7 @@ const defaultPreferences: Preferences = {
   insightsEnabled: true,
   autoTitleEnabled: true,
   confirmCloseWorkingSession: true,
+  externalControlEnabled: false,
   copyOnSelect: false,
   zoomFactor: 1.0,
   readinessExcludedProviders: [],
@@ -385,6 +397,43 @@ class AppState {
     return session;
   }
 
+  /**
+   * Session created by external control (vibeyard-ctl). Same resolution as
+   * addSession (provider, sticky profile, project default args/env), plus:
+   * the name is sticky (userRenamed), ownership is recorded, the initial prompt
+   * rides on pendingInitialPrompt (read synchronously by split-layout inside
+   * the session-added emit), and the active tab is kept unless focus is set.
+   * The project need not be the active one; focus also switches to it.
+   */
+  addExternalSession(projectId: string, opts: ExternalSessionOpts): SessionRecord | undefined {
+    const project = this.state.projects.find((p) => p.id === projectId);
+    if (!project) return undefined;
+    const previousActive = project.activeSessionId;
+    const cliProviderId = resolveCliProvider(this.state.preferences, opts.providerId);
+    const pinnedProfileId = resolveProfile({ profileId: opts.profileId }, project, this.state.preferences, cliProviderId, this.profiles)?.id;
+    const session: SessionRecord = {
+      ...buildCliSession({
+        name: opts.name.slice(0, MAX_SESSION_NAME_LENGTH),
+        providerId: cliProviderId,
+        args: opts.args ?? project.defaultArgs,
+        profileId: pinnedProfileId,
+        envVars: opts.envVars ?? project.defaultEnv,
+      }),
+      userRenamed: true,
+      createdBy: opts.createdBy,
+      ...(opts.initialPrompt ? { pendingInitialPrompt: opts.initialPrompt } : {}),
+    };
+    attachSessionToProject(project, session, { addToSwarm: true });
+    if (!opts.focus && previousActive) project.activeSessionId = previousActive;
+    // A background session isn't the active tab, so it must not touch nav history
+    // (a push would truncate forward history and make the first Back a no-op).
+    this.commitNewSession(projectId, session, { pushNav: project.activeSessionId === session.id });
+    // --focus into another project brings that project forward too; switching
+    // after the commit keeps session-added keyed to its own (then background) project.
+    if (opts.focus && this.state.activeProjectId !== projectId) this.setActiveProject(projectId);
+    return session;
+  }
+
   private activateExistingSession(project: ProjectRecord, existing: SessionRecord): SessionRecord {
     if (project.activeSessionId !== existing.id) {
       project.activeSessionId = existing.id;
@@ -395,8 +444,8 @@ class AppState {
     return existing;
   }
 
-  private commitNewSession(projectId: string, session: SessionRecord): void {
-    this.pushNav(session.id);
+  private commitNewSession(projectId: string, session: SessionRecord, opts: { pushNav?: boolean } = {}): void {
+    if (opts.pushNav !== false) this.pushNav(session.id);
     this.persist();
     this.emit('session-added', { projectId, session });
     this.emit('session-changed');

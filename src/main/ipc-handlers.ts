@@ -15,6 +15,10 @@ import { watchDir, unwatchDir, setFileWatcherWindow } from './file-watcher';
 import { registerMcpHandlers } from './mcp-ipc-handlers';
 import { checkForUpdates, quitAndInstall } from './auto-updater';
 import { createAppMenu } from './menu';
+import { createCtlServer, type CtlServer } from './ctl-server';
+import { resolveCtlToken } from './ctl-tokens';
+import { CTL_COMMANDS_DIR, CTL_START_ERROR_PATH } from './ctl-paths';
+import type { CtlResult } from '../shared/ctl-protocol';
 import { getProvider, getProviderMeta, getAllProviderMetas, getAllProviders } from './providers/registry';
 import { buildHandoffPrompt } from './providers/resume-handoff';
 import { searchSessions } from './session-deep-search';
@@ -134,6 +138,9 @@ function enumerateProjectFiles(resolvedCwd: string): string[] {
     return files;
   }
 }
+
+let ctlServer: CtlServer | null = null;
+export function getCtlServer(): CtlServer | null { return ctlServer; }
 
 let hookWatcherStarted = false;
 
@@ -874,4 +881,19 @@ export function registerIpcHandlers(): void {
   });
 
   registerMcpHandlers();
+
+  ctlServer = createCtlServer({
+    commandsDir: CTL_COMMANDS_DIR,
+    startErrorPath: CTL_START_ERROR_PATH,
+    resolveToken: resolveCtlToken,
+    dispatch: (reqId, callerId, command) => {
+      const w = BrowserWindow.getAllWindows()[0];
+      if (w && !w.isDestroyed()) w.webContents.send('ctl:command', reqId, callerId, command);
+    },
+  });
+  ipcMain.on('ctl:setEnabled', (_event, enabled: boolean) => {
+    if (enabled) ctlServer?.start(); else ctlServer?.stop();
+  });
+  ipcMain.on('ctl:rendererReady', () => ctlServer?.onRendererReady());
+  ipcMain.on('ctl:reply', (_event, reqId: string, result: CtlResult) => ctlServer?.reply(reqId, result));
 }

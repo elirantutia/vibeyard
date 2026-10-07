@@ -38,7 +38,7 @@ Three renderer modules (`session-cost.ts`, `session-activity.ts`, `session-conte
 Three-process Electron architecture with strict context isolation:
 
 - **Main process** (`src/main/`) — Node.js side: window creation, PTY lifecycle via `node-pty`, filesystem access, persistent state (`~/.vibeyard/state.json`). IPC handlers in `ipc-handlers.ts` dispatch to `pty-manager.ts` and `store.ts`. CLI tool behavior is abstracted via the provider system (`src/main/providers/`).
-- **Preload** (`src/preload/preload.ts`) — Secure bridge exposing `window.vibeyard` API via `contextBridge` with namespaces: `pty`, `session`, `store`, `profiles`, `fs`, `provider`, `menu`.
+- **Preload** (`src/preload/preload.ts`) — Secure bridge exposing `window.vibeyard` API via `contextBridge` with namespaces: `pty`, `session`, `store`, `profiles`, `fs`, `provider`, `menu`, `ctl`.
 - **Renderer** (`src/renderer/`) — Vanilla TypeScript DOM UI (no framework). `AppState` singleton in `state.ts` uses an event emitter pattern; components in `components/` subscribe to state changes.
 
 ### Data Flow
@@ -126,6 +126,17 @@ Scope is **lazy**: only expanded tree folders and the parent dirs of open reader
 ### State Persistence
 
 App state (projects, sessions, layout) persists to `~/.vibeyard/state.json` via the main process store. Saves are debounced and flushed on quit. Sessions track `cliSessionId` for CLI session resume capability.
+
+## External control (vibeyard-ctl)
+
+Every agent PTY always gets `VIBEYARD_CTL` (absolute path to the client) and `VIBEYARD_CTL_TOKEN` (per-process secret, regenerated on every spawn), and has the client folder (`~/.vibeyard/run/bin`) prepended to `PATH`, all injected by `applyCtlEnv` regardless of the preference. The main process deletes any inherited `VIBEYARD_CTL`/`VIBEYARD_CTL_TOKEN` from its own environment at startup (`stripInheritedCtlEnv`), so a Vibeyard launched from a Vibeyard tab never passes the parent tab's identity on. The preference (Preferences → General → "Allow tabs to control tabs (vibeyard-ctl)", off by default) only controls whether the command server runs; while it is off the client returns `disabled`. If the server cannot start (the `~/.vibeyard/commands` folder is a symlink, or has the wrong mode or owner), the main process writes the reason to `~/.vibeyard/run/bin/ctl-start-error` (removed on a successful start and on stop) and the client reports `disabled` with "external control could not start: <reason>". The token is a guard against callers outside Vibeyard, not a security boundary: every child process of an agent inherits it, so anything a tab runs can act as that tab.
+
+    $VIBEYARD_CTL new-session --name "DR-1 bug" --prompt-file task.md [--project <id|path>] [--args "…"] [--env "K=V"] [--provider claude] [--profile <id>] [--focus]
+    $VIBEYARD_CTL rename <sessionId> "<name>"      # sticky, like a UI rename
+    $VIBEYARD_CTL close <sessionId>                # shows the usual "still active" dialog → {"state":"awaiting_confirmation"}
+    $VIBEYARD_CTL list [--mine] [--project <id|path>]
+
+Pass a single dash-prefixed value with `=`, e.g. `--args=--verbose`. Output: one JSON object. Exit 0 ok, 1 error (`disabled`, `unauthorized`, `not_owner`, `unknown_session`, `unknown_project`, `invalid_request`, `unsupported`), 2 Vibeyard unreachable (`timeout`). An explicit `--profile` that matches no profile (for `--provider`, when given) is `invalid_request` "unknown profile '<id>'" rather than a silent fallback to the default account. The client waits `VIBEYARD_CTL_TIMEOUT` seconds (default 10; a non-numeric value falls back to 10); the server drops requests held while the renderer is not ready after 8 s, so a held request never runs after its client has given up — but a request the renderer was already handling may still complete, so **after a `timeout`, run `list` before retrying** to avoid a duplicate tab. A tab may rename/close only itself and tabs it created. Match workers by `sessionId`, not by name: an external name is sticky against auto-titling, but Claude's `/clear` starts a new CLI session and resets the tab name, while ownership (`createdBy`) survives. `new-session` may target any project, not just the active one; the background pane is created and spawned immediately (hidden until its project is shown), and `--focus` also switches the active project. **Windows:** the `vibeyard-ctl.cmd` wrapper runs through cmd.exe, which expands `%VAR%`, drops `^` and `!`, and cuts arguments at newlines — pass any prompt containing newlines, `%`, `^` or `!` via `--prompt-file`, and keep names simple. The npm launcher forwards `vibeyard ctl …` to the installed client (`bin/ctl-forward.js`). IPC namespace `ctl` (`ctl:command`, `ctl:reply`, `ctl:setEnabled`, `ctl:rendererReady`). Code: `src/main/ctl-*.ts`, `src/renderer/ctl-*.ts`, `src/shared/ctl-protocol.ts`.
 
 ## UI Development
 

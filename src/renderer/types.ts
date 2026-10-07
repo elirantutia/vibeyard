@@ -1,5 +1,6 @@
 export type { McpServer, Agent, Skill, Command, ProviderConfig, ClaudeConfig, GitWorktree, GitFileEntry, CostData, McpResult, ProviderId, CliProviderMeta, CliProviderCapabilities, StatsCache, ReadinessResult, ReadinessCategory, ReadinessCheck, ReadinessCheckStatus, ChromeProfile, ChromeImportOptions, ChromeImportProgress, ChromeImportResult, ClipboardSource } from '../shared/types.js';
 import type { CostData, ProviderConfig, GitWorktree, McpResult, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, TopFilesResult, FsChange, ChromeProfile, ChromeImportOptions, ChromeImportProgress, ChromeImportResult, ClipboardSource } from '../shared/types.js';
+import type { CtlCommand, CtlResult } from '../shared/ctl-protocol.js';
 
 export interface VibeyardApi {
   pty: {
@@ -22,6 +23,12 @@ export interface VibeyardApi {
     onCostData(callback: (sessionId: string, costData: CostData) => void): () => void;
     onSessionName(callback: (sessionId: string, name: string, cliSessionId: string) => void): () => void;
     resyncStatus(): void;
+  };
+  ctl: {
+    onCommand(callback: (reqId: string, callerId: string, command: CtlCommand) => void): () => void;
+    reply(reqId: string, result: CtlResult): void;
+    setEnabled(enabled: boolean): void;
+    rendererReady(): void;
   };
   fs: {
     isDirectory(path: string): Promise<boolean>;

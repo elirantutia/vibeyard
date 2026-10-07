@@ -1,7 +1,9 @@
 import { app, BrowserWindow, dialog, powerMonitor, shell } from 'electron';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
-import { registerIpcHandlers, resetHookWatcher } from './ipc-handlers';
+import { registerIpcHandlers, resetHookWatcher, getCtlServer } from './ipc-handlers';
+import { installCtlScript } from './ctl-script';
+import { stripInheritedCtlEnv } from './ctl-tokens';
 import { killAllPtys } from './pty-manager';
 import { flushState, loadState } from './store';
 import { createAppMenu } from './menu';
@@ -14,6 +16,9 @@ import { checkPythonAvailable } from './prerequisites';
 import { isMac } from './platform';
 import { isCloseConfirmed, setCloseConfirmed } from './close-state';
 import { isHttpUrl } from '../shared/url';
+
+// Before anything spawns: never pass a parent Vibeyard tab's ctl identity on.
+stripInheritedCtlEnv();
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -86,6 +91,7 @@ function createWindow(): void {
   });
 
   mainWindow.on('closed', () => {
+    getCtlServer()?.onRendererGone();
     killAllPtys();
     resetHookWatcher();
     stopAllFileWatchers();
@@ -135,6 +141,7 @@ app.whenReady().then(async () => {
       provider.installStatusScripts();
     }
   }
+  try { installCtlScript(); } catch (err) { console.warn('Failed to install vibeyard-ctl:', err); }
 
   initAutoUpdater();
 
@@ -169,6 +176,7 @@ app.on('before-quit', (event) => {
     win.webContents.send('app:quitting');
   }
   killAllPtys();
+  getCtlServer()?.stop();
   stopGitWatcher();
   stopAllFileWatchers();
   // Cleanup all providers
