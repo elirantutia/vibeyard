@@ -411,9 +411,10 @@ class AppState {
     const previousActive = project.activeSessionId;
     const cliProviderId = resolveCliProvider(this.state.preferences, opts.providerId);
     const pinnedProfileId = resolveProfile({ profileId: opts.profileId }, project, this.state.preferences, cliProviderId, this.profiles)?.id;
+    const name = opts.name.slice(0, MAX_SESSION_NAME_LENGTH);
     const session: SessionRecord = {
       ...buildCliSession({
-        name: opts.name.slice(0, MAX_SESSION_NAME_LENGTH),
+        name,
         providerId: cliProviderId,
         args: opts.args ?? project.defaultArgs,
         profileId: pinnedProfileId,
@@ -421,6 +422,9 @@ class AppState {
       }),
       userRenamed: true,
       createdBy: opts.createdBy,
+      // Claude also takes the tab name as its own session name (claude --name), so
+      // ListAgents/SendMessage address the worker by it. Other providers ignore it.
+      pendingCliName: name,
       ...(opts.initialPrompt ? { pendingInitialPrompt: opts.initialPrompt } : {}),
     };
     attachSessionToProject(project, session, { addToSwarm: true });
@@ -681,6 +685,15 @@ class AppState {
     const prompt = session.pendingSystemPrompt;
     delete session.pendingSystemPrompt;
     return prompt;
+  }
+
+  consumePendingCliName(projectId: string, sessionId: string): string | undefined {
+    const project = this.state.projects.find((p) => p.id === projectId);
+    const session = project?.sessions.find((s) => s.id === sessionId);
+    if (!session?.pendingCliName) return undefined;
+    const name = session.pendingCliName;
+    delete session.pendingCliName;
+    return name;
   }
 
   addFileReaderSession(projectId: string, filePath: string, lineNumber?: number): SessionRecord | undefined {

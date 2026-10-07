@@ -190,7 +190,8 @@ export async function spawnPty(
   envVars: string,
   onData: (data: string) => void,
   onExit: (exitCode: number, signal?: number) => void,
-  configDir?: string
+  configDir?: string,
+  cliName?: string
 ): Promise<void> {
   if (ptys.has(sessionId)) {
     // Silence the old PTY's exit event so it doesn't remove the new session
@@ -253,7 +254,7 @@ export async function spawnPty(
   // including provider-set vars like PATH (see plan: "user vars win").
   Object.assign(env, parseEnvVars(envVars));
   applyCtlEnv(env as Record<string, string>, sessionId);
-  const args = provider.buildArgs({ cliSessionId, isResume, extraArgs, initialPrompt, systemPrompt });
+  const args = provider.buildArgs({ cliSessionId, isResume, extraArgs, initialPrompt, systemPrompt, cliName });
   const resolvedShell = provider.resolveBinaryPath();
   const { shell, args: spawnArgs } = resolveWindowsShell(resolvedShell, args);
 

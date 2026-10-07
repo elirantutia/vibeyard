@@ -219,6 +219,22 @@ describe('buildArgs', () => {
     });
     expect(args).toEqual(['--session-id', 'sid-1', '--append-system-prompt', 'be concise', 'hello', '--verbose']);
   });
+
+  it('passes cliName as a --name argv pair (external new-session name)', () => {
+    const args = provider.buildArgs({ cliSessionId: null, isResume: false, extraArgs: '', cliName: 'DR-1 bug "x"' });
+    expect(args).toEqual(['--name', 'DR-1 bug "x"']);
+  });
+
+  it('leaves the args unchanged when no cliName is given', () => {
+    const args = provider.buildArgs({ cliSessionId: 'sid-1', isResume: false, extraArgs: '--verbose', initialPrompt: 'hello' });
+    expect(args).toEqual(['--session-id', 'sid-1', 'hello', '--verbose']);
+  });
+
+  it('never splits cliName, even with spaces, quotes, unicode and $', () => {
+    const name = 'DR-1  bug $HOME \'q\' שלום';
+    const args = provider.buildArgs({ cliSessionId: null, isResume: false, extraArgs: '--verbose', initialPrompt: 'go', cliName: name });
+    expect(args).toEqual(['--name', name, 'go', '--verbose']);
+  });
 });
 
 describe('getShiftEnterSequence', () => {

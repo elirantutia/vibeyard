@@ -126,6 +126,8 @@ export interface SessionRecord {
   pendingInitialPrompt?: string;
   /** Transient: system prompt to attach on first spawn. Not persisted (resume must not re-inject). */
   pendingSystemPrompt?: string;
+  /** Transient: name passed as `claude --name` on first spawn (external new-session). Not persisted (resume keeps Claude's stored name). */
+  pendingCliName?: string;
 }
 
 // --- Team ---

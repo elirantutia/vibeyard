@@ -167,6 +167,20 @@ describe('spawnPty', () => {
     }
   });
 
+  it('passes cliName to the provider as a single --name argv element', () => {
+    const proc = createMockPtyProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    spawnPty('s1', '/project', null, false, '--verbose', 'claude', undefined, undefined, '', vi.fn(), vi.fn(), undefined, 'DR-1 bug "x"');
+
+    const expected = ['--name', 'DR-1 bug "x"', '--verbose'];
+    if (isWin) {
+      expect(mockSpawn).toHaveBeenCalledWith('cmd.exe', ['/c', 'claude', ...expected], expect.any(Object));
+    } else {
+      expect(mockSpawn).toHaveBeenCalledWith('claude', expected, expect.any(Object));
+    }
+  });
+
   it('forwards PTY data to callback', () => {
     const proc = createMockPtyProcess();
     mockSpawn.mockReturnValue(proc);

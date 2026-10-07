@@ -53,6 +53,31 @@ describe('addExternalSession', () => {
     expect(seen).toBe('line1\n"q"');
   });
 
+  it('hands the tab name to session-added listeners as the pending CLI name, then consumes it', () => {
+    const { project, tl } = setup();
+    let seen: string | undefined;
+    let again: string | undefined;
+    appState.on('session-added', (d) => {
+      const { session } = d as { session: { id: string } };
+      seen = appState.consumePendingCliName(project.id, session.id);
+      again = appState.consumePendingCliName(project.id, session.id);
+    });
+    appState.addExternalSession(project.id, { name: 'DR-1 bug "x" $y', createdBy: tl.id, focus: false });
+    expect(seen).toBe('DR-1 bug "x" $y');
+    expect(again).toBeUndefined();
+  });
+
+  it('uses the same (truncated) name for the CLI as for the tab', () => {
+    const { project, tl } = setup();
+    const s = appState.addExternalSession(project.id, { name: 'x'.repeat(200), createdBy: tl.id, focus: false })!;
+    expect(s.pendingCliName).toBe(s.name);
+  });
+
+  it('does not set a pending CLI name for a UI-created session', () => {
+    const { tl } = setup();
+    expect(tl.pendingCliName).toBeUndefined();
+  });
+
   it('falls back to project default args/env when none are given, uses explicit ones otherwise', () => {
     const { project, tl } = setup();
     project.defaultArgs = '--model opus';
@@ -85,6 +110,7 @@ describe('addExternalSession', () => {
     const restored = saved.projects[0].sessions.find((s: { id: string }) => s.id === w.id);
     expect(restored).toMatchObject({ name: 'DR-9 worker', userRenamed: true, createdBy: tl.id });
     expect(restored.pendingInitialPrompt).toBeUndefined(); // the prompt must not replay on restart
+    expect(restored.pendingCliName).toBeUndefined(); // resume keeps Claude's stored name; never re-passed
   });
 
   describe('into a project that is not the active one', () => {

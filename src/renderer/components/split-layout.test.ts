@@ -14,6 +14,7 @@ const fakeState = {
   setActiveSession: vi.fn(),
   consumePendingInitialPrompt: vi.fn(),
   consumePendingSystemPrompt: vi.fn(),
+  consumePendingCliName: vi.fn(),
 };
 vi.mock('../state.js', () => ({ appState: fakeState }));
 vi.mock('../session-unread.js', () => ({ isUnread: vi.fn(() => false), onChange: vi.fn() }));
@@ -28,6 +29,7 @@ const terminal = {
   spawnTerminal: vi.fn(),
   setPendingPrompt: vi.fn(),
   setPendingSystemPrompt: vi.fn(),
+  setPendingCliName: vi.fn(),
   destroyTerminal: vi.fn(),
   getTerminalInstance: vi.fn(),
 };
@@ -121,6 +123,7 @@ describe('onSessionAdded', () => {
     fakeState.activeProject = active;
     fakeState.consumePendingInitialPrompt.mockImplementation((pid: string, sid: string) =>
       pid === other.id && sid === 'w1' ? 'do the task' : undefined);
+    fakeState.consumePendingCliName.mockImplementation(() => undefined);
   });
 
   it('creates a CLI pane for a non-active project with that project\'s cwd and id, and hands it the prompt', () => {
@@ -137,6 +140,27 @@ describe('onSessionAdded', () => {
     expect(fakeState.consumePendingInitialPrompt).toHaveBeenCalledWith('p-other', 'w1');
     expect(fakeState.consumePendingSystemPrompt).toHaveBeenCalledWith('p-other', 'w1');
     expect(terminal.setPendingPrompt).toHaveBeenCalledWith('w1', 'do the task');
+  });
+
+  it('hands a pending CLI name to the pane before it spawns', () => {
+    fakeState.consumePendingCliName.mockImplementation((pid: string, sid: string) =>
+      pid === other.id && sid === 'w1' ? 'DR-1 bug' : undefined);
+    const session = { id: 'w1', cliSessionId: null, providerId: 'claude' };
+    other.sessions.push(session);
+
+    handlers['session-added']({ projectId: other.id, session });
+    expect(fakeState.consumePendingCliName).toHaveBeenCalledWith('p-other', 'w1');
+    expect(terminal.setPendingCliName).toHaveBeenCalledWith('w1', 'DR-1 bug');
+    expect(terminal.spawnTerminal).not.toHaveBeenCalled();
+    flushRaf();
+    expect(terminal.spawnTerminal).toHaveBeenCalledWith('w1');
+  });
+
+  it('does not set a CLI name when none is pending', () => {
+    const session = { id: 'w1', cliSessionId: null, providerId: 'claude' };
+    other.sessions.push(session);
+    handlers['session-added']({ projectId: other.id, session });
+    expect(terminal.setPendingCliName).not.toHaveBeenCalled();
   });
 
   it('spawns the non-active project\'s pane without re-laying out the active project', () => {

@@ -17,6 +17,7 @@ import {
   spawnTerminal,
   setPendingPrompt,
   setPendingSystemPrompt,
+  setPendingCliName,
   destroyTerminal,
   getTerminalInstance,
 } from './terminal-pane.js';
@@ -237,6 +238,10 @@ function onSessionAdded(data: unknown): void {
     const pendingSys = appState.consumePendingSystemPrompt(project.id, session.id);
     if (pendingSys) {
       setPendingSystemPrompt(session.id, pendingSys);
+    }
+    const pendingCliName = appState.consumePendingCliName(project.id, session.id);
+    if (pendingCliName) {
+      setPendingCliName(session.id, pendingCliName);
     }
     relayout();
 

@@ -38,6 +38,13 @@ describe('serializeForSave', () => {
     expect(s.pendingSystemPrompt).toBeUndefined();
   });
 
+  it('strips the transient pending CLI name (resume keeps the name Claude stored)', () => {
+    const out = serializeForSave(baseState({ name: 'DR-1 bug', pendingCliName: 'DR-1 bug' }));
+    const s = out.projects[0].sessions[0];
+    expect(s.name).toBe('DR-1 bug');
+    expect(s.pendingCliName).toBeUndefined();
+  });
+
   it('passes the top-level profiles array through unchanged', () => {
     const state = baseState({});
     state.profiles = [{ id: 'work', name: 'Work', providerId: 'claude', configDir: '/cfg/work', managed: true, createdAt: 0 }];
