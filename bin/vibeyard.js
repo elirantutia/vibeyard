@@ -157,6 +157,20 @@ function launch(args) {
 async function main() {
   const args = process.argv.slice(2);
 
+  if (args[0] === 'ctl') {
+    const { ctlInvocation, forwardResult } = require('./ctl-forward');
+    const { command, script } = ctlInvocation();
+    if (!fs.existsSync(script)) {
+      console.log(JSON.stringify({ ok: false, error: { code: 'timeout', message: 'vibeyard-ctl is not installed; open Vibeyard (a version with external control) first' } }));
+      process.exit(2);
+    }
+    const { spawnSync } = require('child_process');
+    const r = spawnSync(command, [script, ...args.slice(1)], { stdio: 'inherit' });
+    const out = forwardResult(r, command);
+    if (out.output) console.log(out.output);
+    process.exit(out.code);
+  }
+
   if (args.includes('--help') || args.includes('-h')) {
     console.log(`Vibeyard v${version} — Terminal-centric IDE for AI-powered CLI tools
 
@@ -166,6 +180,7 @@ Options:
   --update    Force re-download of the latest app build
   --version   Print version and exit
   --help      Show this help message
+  ctl <command>  Control Vibeyard tabs from inside a Vibeyard tab (see vibeyard-ctl --help)
 
 Any other arguments are forwarded to the Vibeyard app.`);
     return;
