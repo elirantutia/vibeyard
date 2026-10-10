@@ -280,6 +280,8 @@ export interface ProjectRecord {
   readinessHistory?: ReadinessSnapshot[];
   overviewLayout?: OverviewLayout;
   githubLastSeen?: Record<string, string>;
+  /** Epoch ms of the most recent session activity; drives optional activity-sorted sidebar order. */
+  lastActivityAt?: number;
 }
 
 // --- Overview Widgets ---
@@ -384,6 +386,8 @@ export interface Preferences {
     completed: boolean;
   };
   boardCardMetrics?: boolean;
+  /** When true, the sidebar orders projects by most recent session activity instead of manual drag order. */
+  sortProjectsByActivity?: boolean;
   chromeImport?: ChromeImportSummary;
 }
 

@@ -135,6 +135,7 @@ interface RenderOpts {
   fileTreeEnabled: boolean;
   historyEnabled: boolean;
   gitEnabled: boolean;
+  sortByActivity: boolean;
 }
 
 function render(): void {
@@ -148,26 +149,33 @@ function render(): void {
       (appState.preferences.sidebarViews?.sessionHistory ?? true) &&
       appState.preferences.sessionHistoryEnabled,
     gitEnabled: appState.preferences.sidebarViews?.gitPanel ?? true,
+    sortByActivity: appState.preferences.sortProjectsByActivity ?? false,
   };
 
-  // Projects keep their user-controlled order (drag-and-drop reorderable); the
-  // active one is marked as a card in place rather than pinned to the top.
-  for (const { project, isActive } of projectRenderOrder(appState.projects, appState.activeProjectId)) {
+  // Projects keep their user-controlled order (drag-and-drop reorderable) unless
+  // activity-sort is enabled; the active one is marked as a card in place rather
+  // than pinned to the top.
+  for (const { project, isActive } of projectRenderOrder(appState.projects, appState.activeProjectId, opts.sortByActivity)) {
     projectListEl.appendChild(buildProjectRow(project, isActive, opts));
   }
 }
 
 /**
- * Render plan for the project list: every project in its stored
- * (user-reorderable) order, each flagged `isActive` when it is the current
- * project. The active project is marked **in place** — it is never pinned to
- * the top, so selecting a project does not reorder the list.
+ * Render plan for the project list. By default every project keeps its stored
+ * (user-reorderable) order; when `sortByActivity` is set the list is ordered by
+ * most recent activity (`lastActivityAt`, newest first), with ties preserving
+ * stored order via the engine's stable sort. Each project is flagged `isActive`
+ * when it is the current project — marked **in place**, never pinned to the top.
  */
 export function projectRenderOrder(
   projects: ProjectRecord[],
   activeProjectId: string | null,
+  sortByActivity = false,
 ): Array<{ project: ProjectRecord; isActive: boolean }> {
-  return projects.map((project) => ({ project, isActive: project.id === activeProjectId }));
+  const ordered = sortByActivity
+    ? [...projects].sort((a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0))
+    : projects;
+  return ordered.map((project) => ({ project, isActive: project.id === activeProjectId }));
 }
 
 /**
@@ -186,7 +194,7 @@ export function projectProfileLabel(project: ProjectRecord): string | undefined 
 }
 
 function buildProjectRow(project: ProjectRecord, isActive: boolean, opts: RenderOpts): HTMLElement {
-  const { fileTreeEnabled, historyEnabled, gitEnabled } = opts;
+  const { fileTreeEnabled, historyEnabled, gitEnabled, sortByActivity } = opts;
 
   const wrapper = document.createElement('div');
   // The wrapper carries `.active` so CSS can style the whole row (header + tabs
@@ -196,7 +204,9 @@ function buildProjectRow(project: ProjectRecord, isActive: boolean, opts: Render
   const el = document.createElement('div');
   el.className = 'project-item' + (isActive ? ' active' : '');
   el.dataset.projectId = project.id;
-  el.draggable = true;
+  // Manual drag-to-reorder is meaningless under activity-sort (any activity would
+  // override the placement), so it is disabled while that mode is on.
+  el.draggable = !sortByActivity;
   // Leading glyph: the active project shows an avatar initial; others show a
   // status dot reflecting their aggregate session activity.
   const lead = isActive

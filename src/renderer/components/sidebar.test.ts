@@ -98,8 +98,8 @@ describe('projectRenderOrder', () => {
     return sidebar.projectRenderOrder;
   }
 
-  function proj(id: string) {
-    return { id } as any;
+  function proj(id: string, lastActivityAt?: number) {
+    return { id, lastActivityAt } as any;
   }
 
   it('preserves project order — the active project is not pinned to the top', async () => {
@@ -127,5 +127,36 @@ describe('projectRenderOrder', () => {
   it('returns an empty plan for no projects', async () => {
     const projectRenderOrder = await load();
     expect(projectRenderOrder([], null)).toEqual([]);
+  });
+
+  it('keeps stored order when sortByActivity is false', async () => {
+    const projectRenderOrder = await load();
+    const projects = [proj('a', 1), proj('b', 3), proj('c', 2)];
+    const plan = projectRenderOrder(projects, null, false);
+    expect(plan.map((e) => e.project.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('orders by lastActivityAt descending when sortByActivity is true', async () => {
+    const projectRenderOrder = await load();
+    const projects = [proj('a', 1), proj('b', 3), proj('c', 2)];
+    const plan = projectRenderOrder(projects, 'a', true);
+    expect(plan.map((e) => e.project.id)).toEqual(['b', 'c', 'a']);
+    // active flag still tracks the right project after reordering
+    expect(plan.find((e) => e.isActive)?.project.id).toBe('a');
+  });
+
+  it('treats a missing lastActivityAt as oldest and preserves stored order for ties', async () => {
+    const projectRenderOrder = await load();
+    // a & c tie (both undefined → 0); stable sort keeps their stored order.
+    const projects = [proj('a'), proj('b', 5), proj('c')];
+    const plan = projectRenderOrder(projects, null, true);
+    expect(plan.map((e) => e.project.id)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('does not mutate the input array when sorting', async () => {
+    const projectRenderOrder = await load();
+    const projects = [proj('a', 1), proj('b', 3)];
+    projectRenderOrder(projects, null, true);
+    expect(projects.map((p) => p.id)).toEqual(['a', 'b']);
   });
 });
