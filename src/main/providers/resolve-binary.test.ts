@@ -122,6 +122,23 @@ describe('resolveBinary (Windows)', () => {
     expect(result).toBe('claude');
   });
 
+  it('walks the augmented PATH instead of shelling out to `where`', () => {
+    // `where` prints a localized (GBK) "not found" message to the console on
+    // zh-CN Windows that Node's utf-8 decode turns into mojibake. Resolution
+    // must be pure file-existence checks, never a `where` subprocess.
+    const onPath = path.join('C:\\Users\\test', 'AppData', 'Roaming', 'npm', 'claude.cmd');
+    mockStatSync.mockImplementation((p) => {
+      if (String(p) === onPath) return fileStat;
+      throw new Error('ENOENT');
+    });
+    mockExecSync.mockImplementation(() => { throw new Error('not found'); });
+
+    // getFullPath is mocked to include C:\Users\test\AppData\Roaming\npm,
+    // so the PATH walk finds claude.cmd there without ever calling `where`.
+    expect(validateBinaryExists('claude')).toBe(true);
+    expect(mockExecSync).not.toHaveBeenCalledWith(expect.stringContaining('where'));
+  });
+
   it('uses cached path on subsequent calls', () => {
     const cache = { path: 'C:\\cached\\claude.cmd' };
     const result = resolveBinary('claude', cache);
