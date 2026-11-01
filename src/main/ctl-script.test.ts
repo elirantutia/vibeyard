@@ -18,7 +18,11 @@ function hasPython(): boolean {
   return pythonAvailable;
 }
 
-function run(args: string[], env: Record<string, string> = { VIBEYARD_CTL_TOKEN: 'tok' }, timeoutEnv = '2') {
+function ctlEnv(extra: Record<string, string> = {}): Record<string, string> {
+  return { VIBEYARD_CTL_TOKEN: 'tok', VIBEYARD_CTL_DIR: dir, ...extra };
+}
+
+function run(args: string[], env: Record<string, string> = ctlEnv(), timeoutEnv = '2') {
   return spawnSync(pythonBin, [pyFile, ...args], {
     env: { ...process.env, PYTHONIOENCODING: 'utf-8', VIBEYARD_CTL_TIMEOUT: timeoutEnv, ...env },
     encoding: 'utf-8',
@@ -42,11 +46,11 @@ function startResponder(): () => void {
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'vy-ctlpy-'));
-  dir = path.join(root, 'commands');
-  fs.mkdirSync(dir, { mode: 0o700 });
+  dir = path.join(root, 'commands', '4242-0a0b0c0d');
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   pyFile = path.join(root, 'ctl.py');
-  errFile = path.join(root, 'ctl-start-error');
-  fs.writeFileSync(pyFile, buildCtlPython(dir, errFile));
+  errFile = `${dir}.error`;
+  fs.writeFileSync(pyFile, buildCtlPython());
 });
 
 afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -54,9 +58,35 @@ afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 describe.skipIf(!hasPython())('vibeyard-ctl client', () => {
   it('exits 1 with unauthorized when no token is in the environment', () => {
     fs.writeFileSync(path.join(dir, '.enabled'), '1');
-    const r = run(['list'], { VIBEYARD_CTL_TOKEN: '' });
+    const r = run(['list'], ctlEnv({ VIBEYARD_CTL_TOKEN: '' }));
     expect(r.status).toBe(1);
     expect(JSON.parse(r.stdout).error.code).toBe('unauthorized');
+  });
+
+  it('exits 1 with unauthorized when no commands folder is in the environment', () => {
+    fs.writeFileSync(path.join(dir, '.enabled'), '1');
+    const r = run(['list'], ctlEnv({ VIBEYARD_CTL_DIR: '' }));
+    expect(r.status).toBe(1);
+    expect(JSON.parse(r.stdout).error).toEqual({
+      code: 'unauthorized',
+      message: 'vibeyard-ctl only works inside a Vibeyard tab (VIBEYARD_CTL_TOKEN/VIBEYARD_CTL_DIR not set)',
+    });
+  });
+
+  it('answers disabled when its instance folder is gone (that Vibeyard quit or turned control off)', () => {
+    const r = run(['list'], ctlEnv({ VIBEYARD_CTL_DIR: path.join(root, 'commands', '4243-0a0b0c0d') }));
+    expect(r.status).toBe(1);
+    expect(JSON.parse(r.stdout).error.code).toBe('disabled');
+  });
+
+  it('sends requests to the folder named by VIBEYARD_CTL_DIR only', () => {
+    const other = path.join(root, 'commands', '4244-0a0b0c0d');
+    fs.mkdirSync(other, { mode: 0o700 });
+    fs.writeFileSync(path.join(other, '.enabled'), '1');
+    fs.writeFileSync(path.join(dir, '.enabled'), '1');
+    const r = run(['list'], undefined, '0.3');
+    expect(JSON.parse(r.stdout).error.code).toBe('timeout');
+    expect(fs.readdirSync(other)).toEqual(['.enabled']);
   });
 
   it('exits 1 with disabled when the app has external control off', () => {
@@ -71,6 +101,7 @@ describe.skipIf(!hasPython())('vibeyard-ctl client', () => {
   });
 
   it('reports why external control could not start when the app left a start-error file', () => {
+    fs.rmSync(dir, { recursive: true });
     fs.writeFileSync(errFile, '/home/u/.vibeyard/commands is not a real directory');
     const r = run(['list']);
     expect(r.status).toBe(1);
@@ -91,7 +122,7 @@ describe.skipIf(!hasPython())('vibeyard-ctl client', () => {
     fs.writeFileSync(path.join(dir, '.enabled'), '1');
     const stop = startResponder();
     const r = await new Promise<{ status: number | null; stdout: string; stderr: string }>((resolve) => {
-      const child = spawn(pythonBin, [pyFile, 'list'], { env: { ...process.env, VIBEYARD_CTL_TOKEN: 'tok', VIBEYARD_CTL_TIMEOUT: 'soon' } });
+      const child = spawn(pythonBin, [pyFile, 'list'], { env: { ...process.env, ...ctlEnv({ VIBEYARD_CTL_TIMEOUT: 'soon' }) } });
       let out = '';
       let err = '';
       child.stdout.on('data', (d) => (out += d));
@@ -136,7 +167,7 @@ describe.skipIf(!hasPython())('vibeyard-ctl client', () => {
     fs.writeFileSync(promptFile, prompt);
     const r = await new Promise<{ status: number | null; stdout: string }>((resolve) => {
       const child = spawn(pythonBin, [pyFile, 'new-session', '--name', 'DR-1 bug "x"', '--prompt-file', promptFile, '--args', '--model sonnet', '--focus'], {
-        env: { ...process.env, PYTHONIOENCODING: 'utf-8', VIBEYARD_CTL_TOKEN: 'tok' },
+        env: { ...process.env, PYTHONIOENCODING: 'utf-8', ...ctlEnv() },
       });
       let out = '';
       child.stdout.on('data', (d) => (out += d));
@@ -162,7 +193,7 @@ describe.skipIf(!hasPython())('vibeyard-ctl client', () => {
     fs.writeFileSync(path.join(dir, '.enabled'), '1');
     const stop = startResponder();
     const call = (args: string[]) => new Promise<unknown>((resolve) => {
-      const child = spawn(pythonBin, [pyFile, ...args], { env: { ...process.env, VIBEYARD_CTL_TOKEN: 'tok' } });
+      const child = spawn(pythonBin, [pyFile, ...args], { env: { ...process.env, ...ctlEnv() } });
       let out = '';
       child.stdout.on('data', (d) => (out += d));
       child.on('close', () => resolve(JSON.parse(out).result.command));
@@ -177,7 +208,7 @@ describe.skipIf(!hasPython())('vibeyard-ctl client', () => {
     fs.writeFileSync(path.join(dir, '.enabled'), '1');
     const stop = startResponder();
     const name = 'ünï 日本 🚀';
-    const env: Record<string, string | undefined> = { ...process.env, VIBEYARD_CTL_TOKEN: 'tok', PYTHONIOENCODING: 'ascii' };
+    const env: Record<string, string | undefined> = { ...process.env, ...ctlEnv(), PYTHONIOENCODING: 'ascii' };
     const r = await new Promise<{ status: number | null; stdout: string; stderr: string }>((resolve) => {
       const child = spawn(pythonBin, [pyFile, 'rename', 's1', name], { env: env as NodeJS.ProcessEnv });
       let out = '';

@@ -9,6 +9,8 @@ export const CTL_MAX_ARGS_CHARS = 4096;
 export const CTL_MAX_ENV_CHARS = 16 * 1024;
 export const CTL_MAX_NAME_CHARS = 200;
 export const CTL_REQ_ID_RE = /^[A-Za-z0-9-]{8,64}$/;
+/** Name of one Vibeyard instance's folder under ~/.vibeyard/commands: `<pid>-<8 hex>`. */
+export const CTL_INSTANCE_RE = /^(\d+)-[0-9a-f]{8}$/;
 
 export type CtlErrorCode =
   | 'disabled' | 'unauthorized' | 'not_owner' | 'unknown_session'

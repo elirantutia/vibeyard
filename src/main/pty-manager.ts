@@ -11,7 +11,7 @@ import { getKeychainIsolationStatus } from './claude-keychain';
 import { isWin, pathSep, utf8LocaleEnv } from './platform';
 import { nvmDefaultNodeBinDir } from './providers/nvm';
 import { issueCtlToken, revokeCtlToken } from './ctl-tokens';
-import { CTL_BIN_DIR, CTL_COMMAND_PATH } from './ctl-paths';
+import { CTL_BIN_DIR, CTL_COMMAND_PATH, CTL_COMMANDS_DIR } from './ctl-paths';
 
 interface PtyInstance {
   process: pty.IPty;
@@ -353,12 +353,14 @@ export function resizePty(sessionId: string, cols: number, rows: number): void {
 
 /**
  * External-control env for an agent PTY. Applied after the user's env vars on
- * purpose: a project env line must not be able to set (spoof) the token, and
- * a user PATH override still gets the client folder in front of it.
+ * purpose: a project env line must not be able to set (spoof) the token or the
+ * commands folder, and a user PATH override still gets the client folder in
+ * front of it.
  */
 export function applyCtlEnv(env: Record<string, string>, sessionId: string): void {
   env.VIBEYARD_CTL_TOKEN = issueCtlToken(sessionId);
   env.VIBEYARD_CTL = CTL_COMMAND_PATH;
+  env.VIBEYARD_CTL_DIR = CTL_COMMANDS_DIR; // this instance's request folder; the client has no other way to find it
   const pathKey = Object.keys(env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH';
   env[pathKey] = env[pathKey] ? `${CTL_BIN_DIR}${path.delimiter}${env[pathKey]}` : CTL_BIN_DIR;
 }

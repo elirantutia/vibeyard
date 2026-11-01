@@ -3,11 +3,13 @@
 // a private directory watched with fs.watch plus a polling fallback. Requests
 // arrive as <reqId>.json (written to .tmp then renamed by the client), are
 // validated here, and are relayed to the renderer, which owns live state.
+// Each running Vibeyard owns its own `<pid>-<hex>` folder under a shared root,
+// so two instances never read, clear or answer each other's requests.
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomBytes } from 'crypto';
 import { isWin } from './platform';
-import { parseCtlRequest, ctlError, CTL_MAX_REQUEST_BYTES, CTL_REQ_ID_RE, type CtlCommand, type CtlResult } from '../shared/ctl-protocol';
+import { parseCtlRequest, ctlError, CTL_MAX_REQUEST_BYTES, CTL_REQ_ID_RE, CTL_INSTANCE_RE, type CtlCommand, type CtlResult } from '../shared/ctl-protocol';
 
 // Below the client's 10 s default wait, so a held request can never execute after
 // its client has already reported `timeout` (and possibly been retried).
@@ -16,13 +18,26 @@ const RESULT_TTL_MS = 60_000;
 const ENABLED_MARKER = '.enabled';
 
 export interface CtlServerDeps {
+  /** Shared parent folder (~/.vibeyard/commands). */
+  commandsRoot: string;
+  /** This instance's folder, a direct child of commandsRoot. Its start-error file is `<commandsDir>.error`. */
   commandsDir: string;
   resolveToken(token: string): string | undefined;
   dispatch(reqId: string, callerId: string, command: CtlCommand): void;
   now?: () => number;
   pollMs?: number;
-  /** Status file the client reads to explain a failed start (absent = no failure to report). */
-  startErrorPath?: string;
+  /** Whether the Vibeyard that owns a sibling folder is still running. */
+  isAlive?: (pid: number) => boolean;
+}
+
+/** Signal 0 probes without signalling: ESRCH = gone, EPERM = exists but not ours. */
+export function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === 'EPERM';
+  }
 }
 
 export interface CtlServer {
@@ -38,7 +53,11 @@ export interface CtlServer {
 
 export function createCtlServer(deps: CtlServerDeps): CtlServer {
   const now = deps.now ?? Date.now;
+  const root = deps.commandsRoot;
   const dir = deps.commandsDir;
+  const ownId = path.basename(dir);
+  const startErrorPath = `${dir}.error`;
+  const isAlive = deps.isAlive ?? isPidAlive;
   let running = false;
   let rendererReady = false;
   let watcher: fs.FSWatcher | null = null;
@@ -47,57 +66,84 @@ export function createCtlServer(deps: CtlServerDeps): CtlServer {
   const pending = new Set<string>();   // dispatched, awaiting reply
   const held: Array<{ reqId: string; callerId: string; command: CtlCommand; at: number }> = [];
 
-  /** Safety problems with the folder as it exists now, without creating anything. */
-  function inspectDir(opts: { modeAndOwner: boolean }): string | null {
-    const st = fs.lstatSync(dir);
-    if (st.isSymbolicLink() || !st.isDirectory()) return `${dir} is not a real directory`;
+  /** Safety problems with a folder as it exists now, without creating anything. */
+  function inspectDir(p: string, opts: { modeAndOwner: boolean }): string | null {
+    const st = fs.lstatSync(p);
+    if (st.isSymbolicLink() || !st.isDirectory()) return `${p} is not a real directory`;
     if (!isWin && opts.modeAndOwner) {
-      if ((st.mode & 0o077) !== 0) return `${dir} must not be accessible by group/others (mode ${(st.mode & 0o777).toString(8)})`;
-      if (typeof process.getuid === 'function' && st.uid !== process.getuid()) return `${dir} is not owned by the current user`;
+      if ((st.mode & 0o077) !== 0) return `${p} must not be accessible by group/others (mode ${(st.mode & 0o777).toString(8)})`;
+      if (typeof process.getuid === 'function' && st.uid !== process.getuid()) return `${p} is not owned by the current user`;
     }
     return null;
   }
 
+  /** Root first: the instance folder is only created once its parent is known to be ours. */
   function checkDir(): string | null {
-    try {
-      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-      return inspectDir({ modeAndOwner: true });
-    } catch (e) {
-      return `cannot prepare ${dir}: ${(e as Error).message}`;
+    for (const p of [root, dir]) {
+      try {
+        fs.mkdirSync(p, { recursive: true, mode: 0o700 });
+        const problem = inspectDir(p, { modeAndOwner: true });
+        if (problem) return problem;
+      } catch (e) {
+        return `cannot prepare ${p}: ${(e as Error).message}`;
+      }
     }
+    return null;
   }
 
   /**
    * stop() runs on every launch with the preference off, so it must never clean
-   * through a folder it has not validated (a symlink into a user folder, say).
-   * A folder the server was running in only needs to still be a real directory.
+   * through a root it has not validated (a symlink into a user folder, say).
+   * A root the server was running in only needs to still be a real directory.
    */
-  function safeToClean(wasRunning: boolean): boolean {
+  function rootSafeToClean(strict: boolean): boolean {
     try {
-      return inspectDir({ modeAndOwner: !wasRunning }) === null;
+      return inspectDir(root, { modeAndOwner: strict }) === null;
     } catch {
       return false; // missing or unreadable: nothing of ours to clean
     }
   }
 
-  function writeStartError(reason: string): void {
-    const file = deps.startErrorPath;
-    if (!file) return;
-    const tmp = `${file}.${randomBytes(6).toString('hex')}.tmp`;
+  /** Remove `p` only if it is a real file/folder of the expected kind, never through a symlink. */
+  function removeEntry(p: string, kind: 'dir' | 'file'): void {
     try {
-      fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+      const st = fs.lstatSync(p);
+      if (st.isSymbolicLink() || (kind === 'dir' ? !st.isDirectory() : !st.isFile())) return;
+      fs.rmSync(p, { recursive: true, force: true });
+    } catch { /* gone or unreadable */ }
+  }
+
+  /** Folders and .error files left behind by Vibeyard instances that are no longer running. */
+  function cleanupStaleInstances(): void {
+    let names: string[];
+    try { names = fs.readdirSync(root); } catch { return; }
+    for (const name of names) {
+      const isError = name.endsWith('.error');
+      const id = isError ? name.slice(0, -'.error'.length) : name;
+      const m = CTL_INSTANCE_RE.exec(id);
+      if (!m || id === ownId) continue;
+      const pid = Number(m[1]);
+      // pid 0 / huge values would make kill(pid, 0) probe a process group or throw.
+      if (!Number.isSafeInteger(pid) || pid <= 0 || isAlive(pid)) continue;
+      removeEntry(path.join(root, name), isError ? 'file' : 'dir');
+    }
+  }
+
+  function writeStartError(reason: string): void {
+    // Only into a real root: never leave files in whatever folder a symlinked root points at.
+    try {
+      const st = fs.lstatSync(root);
+      if (st.isSymbolicLink() || !st.isDirectory()) return;
+    } catch { return; }
+    const tmp = `${startErrorPath}.${randomBytes(6).toString('hex')}.tmp`;
+    try {
       const fd = fs.openSync(tmp, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY | (fs.constants.O_NOFOLLOW ?? 0), 0o600);
       try { fs.writeFileSync(fd, reason); } finally { fs.closeSync(fd); }
-      fs.renameSync(tmp, file);
+      fs.renameSync(tmp, startErrorPath);
     } catch (e) {
       try { fs.rmSync(tmp, { force: true }); } catch { /* best effort */ }
       console.warn(`[ctl] failed to record start error: ${(e as Error).message}`);
     }
-  }
-
-  function clearStartError(): void {
-    if (!deps.startErrorPath) return;
-    try { fs.rmSync(deps.startErrorPath, { force: true }); } catch { /* best effort */ }
   }
 
   function clearRequestFiles(): void {
@@ -173,7 +219,8 @@ export function createCtlServer(deps: CtlServerDeps): CtlServer {
         writeStartError(problem);
         return { ok: false, reason: problem };
       }
-      clearStartError();
+      removeEntry(startErrorPath, 'file');
+      cleanupStaleInstances();
       clearRequestFiles();
       fs.writeFileSync(path.join(dir, ENABLED_MARKER), String(process.pid), { mode: 0o600 });
       running = true;
@@ -191,10 +238,10 @@ export function createCtlServer(deps: CtlServerDeps): CtlServer {
       watcher?.close(); watcher = null;
       if (poll) clearInterval(poll); poll = null;
       held.length = 0; pending.clear();
-      clearStartError();
-      if (!safeToClean(wasRunning)) return;
-      try { fs.rmSync(path.join(dir, ENABLED_MARKER), { force: true }); } catch { /* best effort */ }
-      clearRequestFiles();
+      if (!rootSafeToClean(!wasRunning)) return;
+      removeEntry(startErrorPath, 'file');
+      removeEntry(dir, 'dir'); // .enabled and any request/result files go with it
+      cleanupStaleInstances();
     },
     isRunning: () => running,
     onRendererReady() {

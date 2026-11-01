@@ -17,7 +17,7 @@ import { checkForUpdates, quitAndInstall } from './auto-updater';
 import { createAppMenu } from './menu';
 import { createCtlServer, type CtlServer } from './ctl-server';
 import { resolveCtlToken } from './ctl-tokens';
-import { CTL_COMMANDS_DIR, CTL_START_ERROR_PATH } from './ctl-paths';
+import { CTL_COMMANDS_DIR, CTL_COMMANDS_ROOT } from './ctl-paths';
 import type { CtlResult } from '../shared/ctl-protocol';
 import { getProvider, getProviderMeta, getAllProviderMetas, getAllProviders } from './providers/registry';
 import { buildHandoffPrompt } from './providers/resume-handoff';
@@ -884,8 +884,8 @@ export function registerIpcHandlers(): void {
   registerMcpHandlers();
 
   ctlServer = createCtlServer({
+    commandsRoot: CTL_COMMANDS_ROOT,
     commandsDir: CTL_COMMANDS_DIR,
-    startErrorPath: CTL_START_ERROR_PATH,
     resolveToken: resolveCtlToken,
     dispatch: (reqId, callerId, command) => {
       const w = BrowserWindow.getAllWindows()[0];

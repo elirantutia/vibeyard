@@ -44,6 +44,7 @@ import * as fs from 'fs';
 import * as child_process from 'child_process';
 import { spawnPty, writePty, resizePty, killPty, getPtyCwd, getRegistryPath, getFullPath, resetPathCache, resolveWindowsShell, withUtf8Locale, applyCtlEnv } from './pty-manager';
 import { resolveCtlToken, _resetCtlTokensForTesting } from './ctl-tokens';
+import { CTL_COMMANDS_DIR, CTL_INSTANCE_RE } from './ctl-paths';
 import { initProviders } from './providers/registry';
 
 const mockExistsSync = vi.mocked(fs.existsSync);
@@ -751,12 +752,15 @@ describe('withUtf8Locale (issues #157, #160)', () => {
 
 describe('applyCtlEnv', () => {
   it('injects token, client path and PATH prefix after user env', () => {
-    const env: Record<string, string> = { PATH: '/usr/bin', VIBEYARD_CTL_TOKEN: 'spoofed', CLAUDE_IDE_SESSION_ID: 'sess-1' };
+    const env: Record<string, string> = { PATH: '/usr/bin', VIBEYARD_CTL_TOKEN: 'spoofed', VIBEYARD_CTL_DIR: '/spoofed', CLAUDE_IDE_SESSION_ID: 'sess-1' };
     applyCtlEnv(env, 'sess-1');
     expect(env.CLAUDE_IDE_SESSION_ID).toBe('sess-1'); // the TL matches workers on this; never clobbered
     expect(env.VIBEYARD_CTL_TOKEN).not.toBe('spoofed');
     expect(env.VIBEYARD_CTL_TOKEN).toMatch(/^[0-9a-f]{64}$/);
     expect(env.VIBEYARD_CTL).toMatch(/vibeyard-ctl(\.cmd)?$/);
+    expect(env.VIBEYARD_CTL_DIR).toBe(CTL_COMMANDS_DIR);
+    expect(path.basename(env.VIBEYARD_CTL_DIR)).toMatch(CTL_INSTANCE_RE);
+    expect(path.dirname(env.VIBEYARD_CTL_DIR)).toBe(path.join('/mock/home', '.vibeyard', 'commands'));
     expect(env.PATH.split(path.delimiter)[0]).toMatch(/[\\/]\.vibeyard[\\/]run[\\/]bin$/);
     expect(env.PATH.endsWith('/usr/bin')).toBe(true);
   });

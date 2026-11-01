@@ -32,8 +32,8 @@ describe('ctl tokens', () => {
 });
 
 describe('stripInheritedCtlEnv', () => {
-  it('removes a parent tab\'s VIBEYARD_CTL and VIBEYARD_CTL_TOKEN, leaving everything else', () => {
-    const env: NodeJS.ProcessEnv = { VIBEYARD_CTL: '/x/vibeyard-ctl', VIBEYARD_CTL_TOKEN: 'parent', VIBEYARD_CTL_TIMEOUT: '5', PATH: '/bin' };
+  it('removes a parent tab\'s VIBEYARD_CTL, VIBEYARD_CTL_TOKEN and VIBEYARD_CTL_DIR, leaving everything else', () => {
+    const env: NodeJS.ProcessEnv = { VIBEYARD_CTL: '/x/vibeyard-ctl', VIBEYARD_CTL_TOKEN: 'parent', VIBEYARD_CTL_DIR: '/h/.vibeyard/commands/1-aaaaaaaa', VIBEYARD_CTL_TIMEOUT: '5', PATH: '/bin' };
     stripInheritedCtlEnv(env);
     expect(env).toEqual({ VIBEYARD_CTL_TIMEOUT: '5', PATH: '/bin' });
   });

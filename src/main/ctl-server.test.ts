@@ -12,24 +12,45 @@ import { isWin } from './platform';
 import type { CtlCommand } from '../shared/ctl-protocol';
 
 let root: string;
-let dir: string;
+let cmdRoot: string;   // ~/.vibeyard/commands
+let dir: string;       // this instance's folder inside it
 let server: CtlServer | null;
 let dispatched: Array<{ reqId: string; callerId: string; command: CtlCommand }>;
 let clock: number;
 let errFile: string;
+let alive: Set<number>;
 
+const OWN_ID = `${process.pid}-0a0b0c0d`;
+const DEAD_PID = 999_991;
+const LIVE_PID = 999_992;
 const tokens: Record<string, string> = { 'good-token': 'caller-1' };
 
 function make() {
   server = createCtlServer({
+    commandsRoot: cmdRoot,
     commandsDir: dir,
     resolveToken: (t) => tokens[t],
     dispatch: (reqId, callerId, command) => dispatched.push({ reqId, callerId, command }),
     now: () => clock,
     pollMs: 60_000, // tests drive scan() directly
-    startErrorPath: errFile,
+    isAlive: (pid) => alive.has(pid),
   });
   return server;
+}
+
+function mkRoot(mode = 0o700) {
+  fs.mkdirSync(cmdRoot, { recursive: true, mode });
+  fs.chmodSync(cmdRoot, mode);
+}
+
+/** A sibling instance folder (another Vibeyard, live or dead) with a pending request in it. */
+function sibling(pid: number): string {
+  const d = path.join(cmdRoot, `${pid}-deadbeef`);
+  fs.mkdirSync(d, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(d, '.enabled'), String(pid));
+  fs.writeFileSync(path.join(d, 'req-00000099.json'), '{}');
+  fs.writeFileSync(path.join(d, 'req-00000098.json.tmp'), '{}');
+  return d;
 }
 
 function drop(reqId: string, body: unknown) {
@@ -42,8 +63,10 @@ function readResult(reqId: string) {
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'vy-ctl-'));
-  dir = path.join(root, 'commands');
-  errFile = path.join(root, 'bin', 'ctl-start-error');
+  cmdRoot = path.join(root, 'commands');
+  dir = path.join(cmdRoot, OWN_ID);
+  errFile = `${dir}.error`;
+  alive = new Set([process.pid, LIVE_PID]);
   dispatched = [];
   clock = 1_000_000;
   server = null;
@@ -57,30 +80,48 @@ afterEach(() => {
 const listReq = { v: 1, token: 'good-token', command: { action: 'list' } };
 
 describe('ctl server', () => {
-  it('creates the folder 0700 and writes the .enabled marker on start; removes it on stop', () => {
+  it('creates the root and instance folders 0700 and writes the .enabled marker (our pid) on start; removes the instance folder on stop', () => {
     const s = make();
     expect(s.start()).toEqual({ ok: true });
-    expect(fs.existsSync(path.join(dir, '.enabled'))).toBe(true);
+    expect(fs.readFileSync(path.join(dir, '.enabled'), 'utf-8')).toBe(String(process.pid));
+    if (!isWin) expect(fs.statSync(cmdRoot).mode & 0o777).toBe(0o700);
     if (!isWin) expect(fs.statSync(dir).mode & 0o777).toBe(0o700);
     s.stop();
-    expect(fs.existsSync(path.join(dir, '.enabled'))).toBe(false);
+    expect(fs.existsSync(dir)).toBe(false);
+    expect(fs.existsSync(cmdRoot)).toBe(true);
   });
 
-  it.skipIf(isWin)('refuses to start when the folder is a symlink', () => {
+  it.skipIf(isWin)('refuses to start when the instance folder is a symlink', () => {
+    mkRoot();
     const real = path.join(root, 'real');
     fs.mkdirSync(real, { mode: 0o700 });
     fs.symlinkSync(real, dir);
     expect(make().start()).toMatchObject({ ok: false });
   });
 
-  it.skipIf(isWin)('refuses to start when the folder is group/world accessible', () => {
+  it.skipIf(isWin)('refuses to start when the commands root is a symlink, creating nothing through it', () => {
+    const real = path.join(root, 'real');
+    fs.mkdirSync(real, { mode: 0o700 });
+    fs.symlinkSync(real, cmdRoot);
+    expect(make().start()).toMatchObject({ ok: false });
+    expect(fs.readdirSync(real)).toEqual([]);
+  });
+
+  it.skipIf(isWin)('refuses to start when the commands root is group/world accessible', () => {
+    mkRoot(0o755);
+    expect(make().start()).toMatchObject({ ok: false });
+    expect(fs.existsSync(dir)).toBe(false);
+  });
+
+  it.skipIf(isWin)('refuses to start when the instance folder is group/world accessible', () => {
+    mkRoot();
     fs.mkdirSync(dir, { mode: 0o755 });
     fs.chmodSync(dir, 0o755);
     expect(make().start()).toMatchObject({ ok: false });
   });
 
   it('clears leftover requests and results on start', () => {
-    fs.mkdirSync(dir, { mode: 0o700 });
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     drop('stale-req-1', listReq);
     fs.writeFileSync(path.join(dir, 'stale-req-2.result.json'), '{}');
     make().start();
@@ -181,12 +222,12 @@ describe('ctl server', () => {
     s.stop();
     s.onRendererReady();
     expect(dispatched).toHaveLength(0);
-    expect(fs.readdirSync(dir).filter((f) => f.endsWith('.json'))).toEqual([]);
+    expect(fs.existsSync(dir)).toBe(false);
   });
 
   it('a stopped server does nothing on scan', () => {
     const s = make();
-    fs.mkdirSync(dir, { mode: 0o700 });
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     drop('req-00000013', listReq);
     s.scan();
     expect(dispatched).toHaveLength(0);
@@ -241,7 +282,8 @@ describe('ctl server', () => {
   });
 
   describe('start-error status file', () => {
-    it.skipIf(isWin)('writes the start failure reason (mode 0600) and clears it on a later successful start', () => {
+    it.skipIf(isWin)('writes the start failure reason to <root>/<instance>.error (mode 0600) and clears it on a later successful start', () => {
+      mkRoot();
       const real = path.join(root, 'real');
       fs.mkdirSync(real, { mode: 0o700 });
       fs.symlinkSync(real, dir);
@@ -250,51 +292,133 @@ describe('ctl server', () => {
       expect(r).toMatchObject({ ok: false });
       expect(fs.readFileSync(errFile, 'utf-8')).toBe((r as { reason: string }).reason);
       expect(fs.statSync(errFile).mode & 0o777).toBe(0o600);
-      expect(fs.readdirSync(path.dirname(errFile))).toEqual(['ctl-start-error']); // no temp file left behind
+      expect(fs.readdirSync(cmdRoot).sort()).toEqual([OWN_ID, `${OWN_ID}.error`]); // no temp file left behind
       fs.unlinkSync(dir); // drop the symlink; start() then creates a real folder
       expect(s.start()).toEqual({ ok: true });
       expect(fs.existsSync(errFile)).toBe(false);
     });
 
-    it('removes a leftover start-error file on stop', () => {
-      fs.mkdirSync(path.dirname(errFile), { recursive: true });
+    it.skipIf(isWin)('does not write the start-error file through a symlinked commands root', () => {
+      const real = path.join(root, 'real');
+      fs.mkdirSync(real, { mode: 0o700 });
+      fs.symlinkSync(real, cmdRoot);
+      expect(make().start()).toMatchObject({ ok: false });
+      expect(fs.readdirSync(real)).toEqual([]);
+    });
+
+    it('removes our own leftover start-error file on stop', () => {
+      mkRoot();
       fs.writeFileSync(errFile, 'old reason');
       make().stop();
       expect(fs.existsSync(errFile)).toBe(false);
     });
   });
 
+  describe('other instances sharing the commands root', () => {
+    it('start() removes a dead instance folder and a stale .error file, and never touches a live one', () => {
+      mkRoot();
+      const dead = sibling(DEAD_PID);
+      const live = sibling(LIVE_PID);
+      fs.writeFileSync(path.join(cmdRoot, `${DEAD_PID}-cafef00d.error`), 'old');
+      fs.writeFileSync(path.join(cmdRoot, `${LIVE_PID}-cafef00d.error`), 'current');
+      expect(make().start()).toEqual({ ok: true });
+      expect(fs.existsSync(dead)).toBe(false);
+      expect(fs.existsSync(path.join(cmdRoot, `${DEAD_PID}-cafef00d.error`))).toBe(false);
+      expect(fs.readdirSync(live).sort()).toEqual(['.enabled', 'req-00000098.json.tmp', 'req-00000099.json']);
+      expect(fs.existsSync(path.join(cmdRoot, `${LIVE_PID}-cafef00d.error`))).toBe(true);
+    });
+
+    it('stop() removes a dead instance folder, also on a launch that never started', () => {
+      mkRoot();
+      const dead = sibling(DEAD_PID);
+      const live = sibling(LIVE_PID);
+      make().stop();
+      expect(fs.existsSync(dead)).toBe(false);
+      expect(fs.existsSync(live)).toBe(true);
+    });
+
+    it('start() does not touch another instance\'s request files', () => {
+      mkRoot();
+      const live = sibling(LIVE_PID);
+      const s = make(); s.start(); s.onRendererReady();
+      s.scan();
+      expect(dispatched).toHaveLength(0);
+      expect(fs.readFileSync(path.join(live, 'req-00000099.json'), 'utf-8')).toBe('{}');
+      expect(fs.existsSync(path.join(live, 'req-00000098.json.tmp'))).toBe(true);
+    });
+
+    it('cleanup never removes our own folder, even if our pid looked dead', () => {
+      alive.clear();
+      const s = make();
+      expect(s.start()).toEqual({ ok: true });
+      s.stop(); s.start(); // stop + start runs cleanup twice
+      expect(fs.existsSync(path.join(dir, '.enabled'))).toBe(true);
+    });
+
+    it('leaves entries that do not look like instance folders alone', () => {
+      mkRoot();
+      fs.mkdirSync(path.join(cmdRoot, 'notes'));
+      fs.writeFileSync(path.join(cmdRoot, `0-deadbeef.error`), 'pid 0 is never probed');
+      fs.writeFileSync(path.join(cmdRoot, `${DEAD_PID}-deadbeef`), 'a file, not a folder');
+      make().start();
+      expect(fs.readdirSync(cmdRoot).sort()).toEqual([`${DEAD_PID}-deadbeef`, '0-deadbeef.error', OWN_ID, 'notes'].sort());
+    });
+
+    it.skipIf(isWin)('does not follow or remove a symlink named like a dead instance', () => {
+      mkRoot();
+      const target = path.join(root, 'user-folder');
+      fs.mkdirSync(target);
+      fs.writeFileSync(path.join(target, 'keep.txt'), 'keep');
+      fs.symlinkSync(target, path.join(cmdRoot, `${DEAD_PID}-deadbeef`));
+      make().start();
+      expect(fs.lstatSync(path.join(cmdRoot, `${DEAD_PID}-deadbeef`)).isSymbolicLink()).toBe(true);
+      expect(fs.readFileSync(path.join(target, 'keep.txt'), 'utf-8')).toBe('keep');
+    });
+  });
+
   describe('stop() on a folder it never validated', () => {
-    it.skipIf(isWin)('does not clean files or the marker through a symlinked commands folder', () => {
+    it.skipIf(isWin)('does not clean anything through a symlinked commands root', () => {
       const userDir = path.join(root, 'user-folder');
       fs.mkdirSync(userDir);
-      fs.writeFileSync(path.join(userDir, 'notes.json'), 'keep me');
-      fs.writeFileSync(path.join(userDir, 'draft.tmp'), 'keep me too');
-      fs.writeFileSync(path.join(userDir, '.enabled'), 'not ours');
+      fs.mkdirSync(path.join(userDir, `${DEAD_PID}-deadbeef`));
+      fs.writeFileSync(path.join(userDir, `${OWN_ID}.error`), 'keep me');
+      fs.mkdirSync(path.join(userDir, OWN_ID));
+      fs.writeFileSync(path.join(userDir, OWN_ID, 'notes.json'), 'keep me too');
+      fs.symlinkSync(userDir, cmdRoot);
+      make().stop();
+      expect(fs.readdirSync(userDir).sort()).toEqual([`${DEAD_PID}-deadbeef`, OWN_ID, `${OWN_ID}.error`].sort());
+      expect(fs.readdirSync(path.join(userDir, OWN_ID))).toEqual(['notes.json']);
+    });
+
+    it.skipIf(isWin)('does not clean a group/world-accessible root it never ran in', () => {
+      mkRoot(0o755);
+      const dead = sibling(DEAD_PID);
+      make().stop();
+      expect(fs.existsSync(dead)).toBe(true);
+    });
+
+    it.skipIf(isWin)('does not remove our instance path when it is a symlink', () => {
+      mkRoot();
+      const userDir = path.join(root, 'user-folder');
+      fs.mkdirSync(userDir);
+      fs.writeFileSync(path.join(userDir, 'data.json'), 'keep');
       fs.symlinkSync(userDir, dir);
       make().stop();
-      expect(fs.readdirSync(userDir).sort()).toEqual(['.enabled', 'draft.tmp', 'notes.json']);
+      expect(fs.lstatSync(dir).isSymbolicLink()).toBe(true);
+      expect(fs.existsSync(path.join(userDir, 'data.json'))).toBe(true);
     });
 
-    it.skipIf(isWin)('does not clean a group/world-accessible folder it never ran in', () => {
-      fs.mkdirSync(dir, { mode: 0o755 });
-      fs.chmodSync(dir, 0o755);
-      fs.writeFileSync(path.join(dir, 'data.json'), 'keep');
+    it('does not create the folders', () => {
       make().stop();
-      expect(fs.existsSync(path.join(dir, 'data.json'))).toBe(true);
-    });
-
-    it('does not create the folder', () => {
-      make().stop();
-      expect(fs.existsSync(dir)).toBe(false);
+      expect(fs.existsSync(cmdRoot)).toBe(false);
     });
 
     it('still cleans a safe folder, e.g. leftovers from a crash', () => {
-      fs.mkdirSync(dir, { mode: 0o700 });
+      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
       fs.writeFileSync(path.join(dir, '.enabled'), '123');
       drop('req-00000031', listReq);
       make().stop();
-      expect(fs.readdirSync(dir)).toEqual([]);
+      expect(fs.existsSync(dir)).toBe(false);
     });
   });
 });

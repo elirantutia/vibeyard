@@ -32,10 +32,12 @@ export function _resetCtlTokensForTesting(): void {
 
 /**
  * A Vibeyard launched from inside a Vibeyard tab (e.g. a dev build) inherits that
- * tab's VIBEYARD_CTL/VIBEYARD_CTL_TOKEN. Strip them at startup so the parent tab's
- * identity never leaks into this instance's own shells; agent PTYs get fresh ones.
+ * tab's VIBEYARD_CTL/VIBEYARD_CTL_TOKEN/VIBEYARD_CTL_DIR. Strip them at startup so
+ * the parent tab's identity and the parent instance's commands folder never leak
+ * into this instance's own shells; agent PTYs get fresh ones.
  */
 export function stripInheritedCtlEnv(env: NodeJS.ProcessEnv = process.env): void {
   delete env.VIBEYARD_CTL_TOKEN;
   delete env.VIBEYARD_CTL;
+  delete env.VIBEYARD_CTL_DIR;
 }
