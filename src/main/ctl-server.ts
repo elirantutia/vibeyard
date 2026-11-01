@@ -45,7 +45,10 @@ export interface CtlServer {
   stop(): void;
   isRunning(): boolean;
   onRendererReady(): void;
+  /** The page is going away (or may be): hold new requests; in-flight ones stay answerable. */
   onRendererGone(): void;
+  /** The page that was handling in-flight requests is gone for good: answer them all with `timeout`. */
+  failPending(): void;
   reply(reqId: string, result: CtlResult): void;
   scan(): void;
   sweep(): void;
@@ -254,7 +257,13 @@ export function createCtlServer(deps: CtlServerDeps): CtlServer {
         deps.dispatch(h.reqId, h.callerId, h.command);
       }
     },
-    onRendererGone() { rendererReady = false; pending.clear(); },
+    onRendererGone() { rendererReady = false; },
+    failPending() {
+      const ids = [...pending];
+      pending.clear();
+      if (!running) return;
+      for (const reqId of ids) writeResult(reqId, ctlError('timeout', 'Vibeyard reloaded while handling the request; run list before retrying'));
+    },
     reply(reqId, result) {
       if (!running || !pending.delete(reqId)) return;
       writeResult(reqId, result);

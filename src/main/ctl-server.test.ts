@@ -281,6 +281,49 @@ describe('ctl server', () => {
     } finally { spy.mockRestore(); syncBuiltinESMExports(); }
   });
 
+  describe('renderer reload or crash', () => {
+    it('failPending answers every in-flight request with timeout and ignores late replies', () => {
+      const s = make(); s.start(); s.onRendererReady();
+      drop('req-00000040', listReq);
+      drop('req-00000041', listReq);
+      s.scan();
+      expect(dispatched).toHaveLength(2);
+      s.failPending();
+      for (const id of ['req-00000040', 'req-00000041']) {
+        expect(readResult(id)).toEqual({
+          ok: false,
+          error: { code: 'timeout', message: 'Vibeyard reloaded while handling the request; run list before retrying' },
+        });
+      }
+      s.reply('req-00000040', { ok: true, result: 'late' });
+      expect(readResult('req-00000040').ok).toBe(false);
+    });
+
+    it('holds requests that arrive while the renderer is gone and dispatches them on the next onRendererReady', () => {
+      const s = make(); s.start(); s.onRendererReady();
+      s.onRendererGone();
+      drop('req-00000042', listReq);
+      s.scan();
+      expect(dispatched).toHaveLength(0);
+      s.onRendererReady();
+      expect(dispatched.map((d) => d.reqId)).toEqual(['req-00000042']);
+    });
+
+    it('gone then ready without failPending releases held requests and keeps in-flight ones answerable', () => {
+      const s = make(); s.start(); s.onRendererReady();
+      drop('req-00000043', listReq);
+      s.scan();                // in flight
+      s.onRendererGone();      // e.g. a navigation the will-navigate guard then blocked
+      drop('req-00000044', listReq);
+      s.scan();                // held
+      s.onRendererReady();
+      expect(dispatched.map((d) => d.reqId)).toEqual(['req-00000043', 'req-00000044']);
+      expect(fs.existsSync(path.join(dir, 'req-00000043.result.json'))).toBe(false);
+      s.reply('req-00000043', { ok: true, result: [] });
+      expect(readResult('req-00000043')).toEqual({ ok: true, result: [] });
+    });
+  });
+
   describe('start-error status file', () => {
     it.skipIf(isWin)('writes the start failure reason to <root>/<instance>.error (mode 0600) and clears it on a later successful start', () => {
       mkRoot();
