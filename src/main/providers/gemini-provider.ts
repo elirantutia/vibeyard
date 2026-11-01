@@ -48,7 +48,7 @@ export class GeminiProvider implements CliProvider {
     return env;
   }
 
-  buildArgs(opts: { cliSessionId: string | null; isResume: boolean; extraArgs: string; initialPrompt?: string; systemPrompt?: string }): string[] {
+  buildArgs(opts: { cliSessionId: string | null; isResume: boolean; extraArgs: string; initialPrompt?: string; systemPrompt?: string; cliName?: string }): string[] {
     const args: string[] = [];
     if (opts.isResume && opts.cliSessionId) {
       args.push('-r', opts.cliSessionId);

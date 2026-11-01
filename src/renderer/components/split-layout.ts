@@ -17,6 +17,7 @@ import {
   spawnTerminal,
   setPendingPrompt,
   setPendingSystemPrompt,
+  setPendingCliName,
   destroyTerminal,
   getTerminalInstance,
 } from './terminal-pane.js';
@@ -191,33 +192,40 @@ export function initSplitLayout(): void {
 
 function onSessionAdded(data: unknown): void {
   const { projectId, session } = data as { projectId: string; session: { id: string; type?: string; cliSessionId: string | null; providerId?: string; args?: string; envVars?: string; profileId?: string; cwd?: string; diffFilePath?: string; diffArea?: string; worktreePath?: string; fileReaderPath?: string; fileReaderLine?: number; browserTabUrl?: string } };
-  const project = appState.activeProject;
+  // Resolve the session's own project, not the active one: external control
+  // (vibeyard-ctl new-session) adds sessions to projects that are not in focus,
+  // and the pane must get that project's cwd/id and its pending prompt.
+  const project = appState.projects.find((p) => p.id === projectId);
   if (!project) return;
+  // Only the active project is laid out. A pane for a background project is
+  // created hidden and detached; renderLayout attaches it when the project is shown.
+  const isActive = appState.activeProject?.id === project.id;
+  const relayout = (): void => { if (isActive) renderLayout(); };
 
   if (session.type === 'file-reader') {
     createFileReaderPane(session.id, session.fileReaderPath || '', session.fileReaderLine);
-    renderLayout();
+    relayout();
   } else if (session.type === 'diff-viewer') {
     createFileViewerPane(session.id, session.diffFilePath || '', session.diffArea || '', session.worktreePath);
-    renderLayout();
+    relayout();
   } else if (session.type === 'mcp-inspector') {
     createInspectorPane(session.id);
-    renderLayout();
+    relayout();
   } else if (session.type === 'remote-terminal') {
     // Remote terminal pane is created by share-manager before session-added fires
-    renderLayout();
+    relayout();
   } else if (session.type === 'browser-tab') {
     createBrowserTabPane(session.id, session.browserTabUrl);
-    renderLayout();
+    relayout();
   } else if (session.type === 'project-tab') {
     createProjectTabPane(session.id, projectId);
-    renderLayout();
+    relayout();
   } else if (session.type === 'kanban') {
     createKanbanPane(session.id, projectId);
-    renderLayout();
+    relayout();
   } else if (session.type === 'team') {
     createTeamPane(session.id, projectId);
-    renderLayout();
+    relayout();
   } else {
     // Create and spawn immediately
     const cliProviderId = (session.providerId as ProviderId) || 'claude';
@@ -231,12 +239,18 @@ function onSessionAdded(data: unknown): void {
     if (pendingSys) {
       setPendingSystemPrompt(session.id, pendingSys);
     }
-    renderLayout();
+    const pendingCliName = appState.consumePendingCliName(project.id, session.id);
+    if (pendingCliName) {
+      setPendingCliName(session.id, pendingCliName);
+    }
+    relayout();
 
-    // Spawn after layout is rendered so terminal has dimensions
+    // Spawn after layout is rendered so terminal has dimensions. A background
+    // project's pane spawns too (the prompt is a startup arg, so the agent
+    // starts working now); it is fitted when its project is first shown.
     requestAnimationFrame(() => {
       spawnTerminal(session.id);
-      fitAllVisible();
+      if (isActive) fitAllVisible();
     });
   }
 }

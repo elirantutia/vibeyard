@@ -42,7 +42,9 @@ vi.mock('./providers/nvm', () => ({
 
 import * as fs from 'fs';
 import * as child_process from 'child_process';
-import { spawnPty, writePty, resizePty, killPty, getPtyCwd, getRegistryPath, getFullPath, resetPathCache, resolveWindowsShell, withUtf8Locale } from './pty-manager';
+import { spawnPty, writePty, resizePty, killPty, getPtyCwd, getRegistryPath, getFullPath, resetPathCache, resolveWindowsShell, withUtf8Locale, applyCtlEnv } from './pty-manager';
+import { resolveCtlToken, _resetCtlTokensForTesting } from './ctl-tokens';
+import { CTL_BIN_DIR, CTL_COMMANDS_DIR, CTL_INSTANCE_RE } from './ctl-paths';
 import { initProviders } from './providers/registry';
 
 const mockExistsSync = vi.mocked(fs.existsSync);
@@ -166,6 +168,20 @@ describe('spawnPty', () => {
     }
   });
 
+  it('passes cliName to the provider as a single --name argv element', () => {
+    const proc = createMockPtyProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    spawnPty('s1', '/project', null, false, '--verbose', 'claude', undefined, undefined, '', vi.fn(), vi.fn(), undefined, 'DR-1 bug "x"');
+
+    const expected = ['--name', 'DR-1 bug "x"', '--verbose'];
+    if (isWin) {
+      expect(mockSpawn).toHaveBeenCalledWith('cmd.exe', ['/c', 'claude', ...expected], expect.any(Object));
+    } else {
+      expect(mockSpawn).toHaveBeenCalledWith('claude', expected, expect.any(Object));
+    }
+  });
+
   it('forwards PTY data to callback', () => {
     const proc = createMockPtyProcess();
     mockSpawn.mockReturnValue(proc);
@@ -253,7 +269,9 @@ describe('spawnPty', () => {
     spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, 'PATH=/custom/bin', vi.fn(), vi.fn());
 
     const env = mockSpawn.mock.calls[0][2].env;
-    expect(env.PATH).toBe('/custom/bin');
+    // user PATH wins; only the ctl client folder is prepended in front of it
+    expect(env.PATH.endsWith(`${path.delimiter}/custom/bin`)).toBe(true);
+    expect(env.PATH).not.toContain('/usr/bin');
   });
 
   it('augments PATH with extra directories', () => {
@@ -729,5 +747,100 @@ describe('withUtf8Locale (issues #157, #160)', () => {
     withUtf8Locale(env);
 
     expect(env).toEqual({ PATH: '/usr/bin' });
+  });
+});
+
+describe('applyCtlEnv', () => {
+  it('injects token, client path and PATH prefix after user env', () => {
+    const env: Record<string, string> = { PATH: '/usr/bin', VIBEYARD_CTL_TOKEN: 'spoofed', VIBEYARD_CTL_DIR: '/spoofed', CLAUDE_IDE_SESSION_ID: 'sess-1' };
+    applyCtlEnv(env, 'sess-1');
+    expect(env.CLAUDE_IDE_SESSION_ID).toBe('sess-1'); // the TL matches workers on this; never clobbered
+    expect(env.VIBEYARD_CTL_TOKEN).not.toBe('spoofed');
+    expect(env.VIBEYARD_CTL_TOKEN).toMatch(/^[0-9a-f]{64}$/);
+    expect(env.VIBEYARD_CTL).toMatch(/vibeyard-ctl(\.cmd)?$/);
+    expect(env.VIBEYARD_CTL_DIR).toBe(CTL_COMMANDS_DIR);
+    expect(path.basename(env.VIBEYARD_CTL_DIR)).toMatch(CTL_INSTANCE_RE);
+    expect(path.dirname(env.VIBEYARD_CTL_DIR)).toBe(path.join('/mock/home', '.vibeyard', 'commands'));
+    expect(env.PATH.split(path.delimiter)[0]).toMatch(/[\\/]\.vibeyard[\\/]run[\\/]bin$/);
+    expect(env.PATH.endsWith('/usr/bin')).toBe(true);
+  });
+
+  it('on Windows keeps only PATH, built from the augmented PATH, when both Path and PATH are present', () => {
+    // Path is the inherited process value; PATH was written later by the provider's buildEnv.
+    const env: Record<string, string> = { Path: 'C:\\stale', PATH: 'C:\\augmented' };
+    applyCtlEnv(env, 'sess-2', true);
+    expect(env.Path).toBeUndefined();
+    expect(Object.keys(env).filter((k) => k.toUpperCase() === 'PATH')).toEqual(['PATH']);
+    expect(env.PATH).toBe(`${CTL_BIN_DIR};C:\\augmented`);
+  });
+
+  it('on Windows normalises a Path-only env to PATH', () => {
+    const env: Record<string, string> = { Path: 'C:\\Windows' };
+    applyCtlEnv(env, 'sess-3', true);
+    expect(env.Path).toBeUndefined();
+    expect(env.PATH).toBe(`${CTL_BIN_DIR};C:\\Windows`);
+  });
+
+  it('on Windows with no PATH variant at all sets PATH to the client folder', () => {
+    const env: Record<string, string> = {};
+    applyCtlEnv(env, 'sess-4', true);
+    expect(env.PATH).toBe(CTL_BIN_DIR);
+  });
+});
+
+describe('ctl token lifecycle in spawnPty', () => {
+  const spawnedToken = (call = 0): string => mockSpawn.mock.calls[call][2].env.VIBEYARD_CTL_TOKEN;
+  const exitedError = () => { throw new Error('Cannot write to a pty that has already exited'); };
+
+  beforeEach(() => _resetCtlTokensForTesting());
+
+  it('passes a resolvable token to pty.spawn and killPty revokes it', () => {
+    mockSpawn.mockReturnValue(createMockPtyProcess());
+    spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, '', vi.fn(), vi.fn());
+    const token = spawnedToken();
+    expect(token).toMatch(/^[0-9a-f]{64}$/);
+    expect(resolveCtlToken(token)).toBe('s1');
+
+    killPty('s1');
+    expect(resolveCtlToken(token)).toBeUndefined();
+  });
+
+  it.each(['write', 'resize'] as const)('revokes the token when %s hits an already-exited pty, then onExit fires', (op) => {
+    const proc = createMockPtyProcess();
+    mockSpawn.mockReturnValue(proc);
+    spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, '', vi.fn(), vi.fn());
+    const token = spawnedToken();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    (op === 'write' ? mockWrite : mockResize).mockImplementationOnce(exitedError);
+
+    if (op === 'write') writePty('s1', 'x'); else resizePty('s1', 80, 24);
+    expect(resolveCtlToken(token)).toBeUndefined();
+
+    proc._emitExit(0);
+    expect(resolveCtlToken(token)).toBeUndefined();
+  });
+
+  it('does not revoke the new token when the OLD process exits after a respawn', () => {
+    const oldProc = createMockPtyProcess();
+    const newProc = createMockPtyProcess();
+    mockSpawn.mockReturnValueOnce(oldProc).mockReturnValueOnce(newProc);
+    spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, '', vi.fn(), vi.fn());
+    spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, '', vi.fn(), vi.fn());
+    const oldToken = spawnedToken(0);
+    const newToken = spawnedToken(1);
+    expect(resolveCtlToken(oldToken)).toBeUndefined();
+
+    oldProc._emitExit(0);
+    expect(resolveCtlToken(newToken)).toBe('s1');
+  });
+
+  it('revokes the token and rethrows when pty.spawn throws', async () => {
+    mockSpawn.mockImplementationOnce(() => { throw new Error('spawn ENOENT'); });
+    await expect(
+      spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, '', vi.fn(), vi.fn()),
+    ).rejects.toThrow('spawn ENOENT');
+    const token = mockSpawn.mock.calls[0][2].env.VIBEYARD_CTL_TOKEN;
+    expect(token).toMatch(/^[0-9a-f]{64}$/);
+    expect(resolveCtlToken(token)).toBeUndefined();
   });
 });

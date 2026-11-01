@@ -83,7 +83,7 @@ export class ClaudeProvider implements CliProvider {
     return env;
   }
 
-  buildArgs(opts: { cliSessionId: string | null; isResume: boolean; extraArgs: string; initialPrompt?: string; systemPrompt?: string }): string[] {
+  buildArgs(opts: { cliSessionId: string | null; isResume: boolean; extraArgs: string; initialPrompt?: string; systemPrompt?: string; cliName?: string }): string[] {
     const args: string[] = [];
     if (opts.cliSessionId) {
       if (opts.isResume) {
@@ -91,6 +91,12 @@ export class ClaudeProvider implements CliProvider {
       } else {
         args.push('--session-id', opts.cliSessionId);
       }
+    }
+    if (opts.cliName) {
+      // One argv element (never via extraArgs, which is whitespace-split), so
+      // names with spaces/quotes/$ reach Claude intact. Sets the name that
+      // ListAgents/SendMessage address this session by.
+      args.push('--name', opts.cliName);
     }
     if (opts.systemPrompt) {
       args.push('--append-system-prompt', opts.systemPrompt);

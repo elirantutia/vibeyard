@@ -44,6 +44,7 @@ import {
   closeSessionsFromRightWithConfirm,
   closeSessionsFromLeftWithConfirm,
   confirmAppClose,
+  needsCloseConfirmation,
 } from './session-close';
 
 beforeEach(() => {
@@ -454,5 +455,31 @@ describe('closeSessionsFromLeftWithConfirm', () => {
     expect(mockShowConfirmDialog).toHaveBeenCalledTimes(1);
     confirmDialog();
     expect(project.sessions.map((s) => s.id)).toEqual([sessions[1].id, sessions[2].id]);
+  });
+});
+
+describe('needsCloseConfirmation', () => {
+  it('is true for working and input sessions when the preference is on', () => {
+    const { sessions } = seedProject(2);
+    appState.setPreference('confirmCloseWorkingSession', true);
+    mockGetStatus.mockImplementation((id: string) => (id === sessions[0].id ? 'working' : 'input'));
+    expect(needsCloseConfirmation(sessions[0].id)).toBe(true);
+    expect(needsCloseConfirmation(sessions[1].id)).toBe(true);
+  });
+
+  it('is false for waiting and never-started sessions', () => {
+    const { sessions } = seedProject(1);
+    appState.setPreference('confirmCloseWorkingSession', true);
+    mockGetStatus.mockReturnValue('waiting');
+    expect(needsCloseConfirmation(sessions[0].id)).toBe(false);
+    mockGetStatus.mockReturnValue('idle');
+    expect(needsCloseConfirmation('never-started')).toBe(false);
+  });
+
+  it('is false for everything when the preference is off', () => {
+    const { sessions } = seedProject(1);
+    appState.setPreference('confirmCloseWorkingSession', false);
+    mockGetStatus.mockReturnValue('working');
+    expect(needsCloseConfirmation(sessions[0].id)).toBe(false);
   });
 });

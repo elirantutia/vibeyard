@@ -15,6 +15,7 @@ export function createGeneralSection(ctx: PreferencesContext): SectionController
   let insightsCheckbox: HTMLInputElement | null = null;
   let autoTitleCheckbox: HTMLInputElement | null = null;
   let confirmCloseCheckbox: HTMLInputElement | null = null;
+  let externalControlCheckbox: HTMLInputElement | null = null;
   let copyOnSelectCheckbox: HTMLInputElement | null = null;
 
   return {
@@ -99,6 +100,10 @@ export function createGeneralSection(ctx: PreferencesContext): SectionController
       confirmCloseCheckbox = confirmClose.checkbox;
       container.appendChild(confirmClose.row);
 
+      const externalControl = toggleRow('pref-external-control', t('general.allowExternalControl'), appState.preferences.externalControlEnabled ?? false);
+      externalControlCheckbox = externalControl.checkbox;
+      container.appendChild(externalControl.row);
+
       const copyOnSelect = toggleRow('pref-copy-on-select', t('general.copyOnSelect'), appState.preferences.copyOnSelect ?? false);
       copyOnSelectCheckbox = copyOnSelect.checkbox;
       container.appendChild(copyOnSelect.row);
@@ -111,6 +116,7 @@ export function createGeneralSection(ctx: PreferencesContext): SectionController
       if (insightsCheckbox) appState.setPreference('insightsEnabled', insightsCheckbox.checked);
       if (autoTitleCheckbox) appState.setPreference('autoTitleEnabled', autoTitleCheckbox.checked);
       if (confirmCloseCheckbox) appState.setPreference('confirmCloseWorkingSession', confirmCloseCheckbox.checked);
+      if (externalControlCheckbox) appState.setPreference('externalControlEnabled', externalControlCheckbox.checked);
       if (copyOnSelectCheckbox) appState.setPreference('copyOnSelect', copyOnSelectCheckbox.checked);
       if (providerSelect) appState.setPreference('defaultProvider', providerSelect.getValue() as ProviderId);
     },

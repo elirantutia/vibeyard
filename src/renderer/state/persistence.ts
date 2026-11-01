@@ -62,7 +62,7 @@ export function serializeForSave(state: PersistedState): PersistedState {
     ...state,
     projects: state.projects.map((p: ProjectRecord) => ({
       ...p,
-      sessions: p.sessions.map(({ pendingInitialPrompt, pendingSystemPrompt, ...rest }: SessionRecord) => rest as SessionRecord),
+      sessions: p.sessions.map(({ pendingInitialPrompt, pendingSystemPrompt, pendingCliName, ...rest }: SessionRecord) => rest as SessionRecord),
     })),
   };
 }

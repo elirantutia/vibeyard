@@ -22,6 +22,7 @@ import { initUpdateBanner } from './components/update-banner.js';
 import { initSessionHistory } from './components/session-history.js';
 import { captureInitialContext } from './session-insights.js';
 import { initInsightAlert } from './components/insight-alert.js';
+import { initCtlBridge } from './ctl-bridge.js';
 import { initToolDetector } from './tools/missing-tool-detector.js';
 import { initToolAlert } from './components/tool-alert.js';
 import { initLargeFileDetector } from './tools/large-file-detector.js';
@@ -231,6 +232,7 @@ async function main(): Promise<void> {
   // Persisted choice wins; otherwise fall back to the OS language and persist
   // it so future launches start in the same locale.
   initI18n();
+  initCtlBridge();
 
   // Apply theme from loaded preferences
   const initialTheme = appState.preferences.theme ?? 'dark';

@@ -1,7 +1,9 @@
 import { app, BrowserWindow, dialog, powerMonitor, shell } from 'electron';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
-import { registerIpcHandlers, resetHookWatcher } from './ipc-handlers';
+import { registerIpcHandlers, resetHookWatcher, getCtlServer } from './ipc-handlers';
+import { installCtlScript } from './ctl-script';
+import { stripInheritedCtlEnv } from './ctl-tokens';
 import { killAllPtys } from './pty-manager';
 import { flushState, loadState } from './store';
 import { createAppMenu } from './menu';
@@ -14,6 +16,9 @@ import { checkPythonAvailable } from './prerequisites';
 import { isMac } from './platform';
 import { isCloseConfirmed, setCloseConfirmed } from './close-state';
 import { isHttpUrl } from '../shared/url';
+
+// Before anything spawns: never pass a parent Vibeyard tab's ctl identity on.
+stripInheritedCtlEnv();
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -76,6 +81,32 @@ function createWindow(): void {
     if (isHttpUrl(url)) shell.openExternal(url);
   });
 
+  // vibeyard-ctl requests are relayed to the page, so the server must know when
+  // that page goes away. A load start may still be cancelled (the will-navigate
+  // guard above blocks most navigations), so it only holds new requests. Once a
+  // new document commits or the renderer dies, the old page can never answer,
+  // so in-flight requests are failed at once instead of waiting out the
+  // client's timeout. A load that stops without committing left the old page in
+  // place, so held requests are released to it; a real reload re-runs
+  // initCtlBridge, which sends ctl:rendererReady itself.
+  let navigatedSinceLoadStart = false;
+  mainWindow.webContents.on('did-start-loading', () => {
+    navigatedSinceLoadStart = false;
+    getCtlServer()?.onRendererGone();
+  });
+  mainWindow.webContents.on('did-navigate', () => {
+    navigatedSinceLoadStart = true;
+    getCtlServer()?.failPending();
+    getCtlServer()?.onRendererGone();
+  });
+  mainWindow.webContents.on('render-process-gone', () => {
+    getCtlServer()?.failPending();
+    getCtlServer()?.onRendererGone();
+  });
+  mainWindow.webContents.on('did-stop-loading', () => {
+    if (!navigatedSinceLoadStart) getCtlServer()?.onRendererReady();
+  });
+
   mainWindow.on('close', (event) => {
     if (!isCloseConfirmed()) {
       event.preventDefault();
@@ -86,6 +117,8 @@ function createWindow(): void {
   });
 
   mainWindow.on('closed', () => {
+    getCtlServer()?.failPending();
+    getCtlServer()?.onRendererGone();
     killAllPtys();
     resetHookWatcher();
     stopAllFileWatchers();
@@ -135,6 +168,7 @@ app.whenReady().then(async () => {
       provider.installStatusScripts();
     }
   }
+  try { installCtlScript(); } catch (err) { console.warn('Failed to install vibeyard-ctl:', err); }
 
   initAutoUpdater();
 
@@ -169,6 +203,7 @@ app.on('before-quit', (event) => {
     win.webContents.send('app:quitting');
   }
   killAllPtys();
+  getCtlServer()?.stop();
   stopGitWatcher();
   stopAllFileWatchers();
   // Cleanup all providers

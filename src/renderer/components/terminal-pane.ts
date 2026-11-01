@@ -34,6 +34,8 @@ interface TerminalInstance {
   exited: boolean;
   pendingPrompt: string | null;
   pendingSystemPrompt: string | null;
+  /** Transient: `claude --name` for the first spawn only (external new-session). */
+  pendingCliName: string | null;
   pendingPromptTimer: ReturnType<typeof setTimeout> | null;
   /** `cols`x`rows` last sent to the PTY, so a no-op fit doesn't make the CLI redraw. */
   lastSize: string | null;
@@ -144,6 +146,7 @@ export function createTerminalPane(
     exited: false,
     pendingPrompt: null,
     pendingSystemPrompt: null,
+    pendingCliName: null,
     pendingPromptTimer: null,
     lastSize: null,
     peakOutputTokens: 0,
@@ -255,6 +258,13 @@ export function setPendingSystemPrompt(sessionId: string, prompt: string): void 
   }
 }
 
+export function setPendingCliName(sessionId: string, name: string): void {
+  const instance = instances.get(sessionId);
+  if (instance) {
+    instance.pendingCliName = name;
+  }
+}
+
 function collectDroppedPaths(dt: DataTransfer | null): string[] {
   if (!dt) return [];
   const internal = dt.getData(FILE_PATH_DRAG_TYPE);
@@ -313,7 +323,9 @@ export async function spawnTerminal(sessionId: string): Promise<void> {
     systemPrompt = instance.pendingSystemPrompt;
     instance.pendingSystemPrompt = null;
   }
-  await window.vibeyard.pty.create(sessionId, instance.projectPath, instance.cliSessionId, instance.isResume, instance.args, instance.providerId, initialPrompt, systemPrompt, instance.envVars, instance.configDir);
+  const cliName = instance.pendingCliName ?? undefined;
+  instance.pendingCliName = null;
+  await window.vibeyard.pty.create(sessionId, instance.projectPath, instance.cliSessionId, instance.isResume, instance.args, instance.providerId, initialPrompt, systemPrompt, instance.envVars, instance.configDir, cliName);
   instance.isResume = true; // subsequent spawns (e.g. Restart Session) should resume
 
   // Callers fire this un-awaited and fit the pane immediately after, so that fit

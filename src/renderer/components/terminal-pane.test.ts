@@ -266,7 +266,7 @@ describe('terminal pending prompt injection', () => {
     setPendingPrompt('claude-1', 'fix the bug');
     await spawnTerminal('claude-1');
 
-    expect(mockPtyCreate).toHaveBeenCalledWith('claude-1', '/project', null, false, '', 'claude', 'fix the bug', undefined, '', undefined);
+    expect(mockPtyCreate).toHaveBeenCalledWith('claude-1', '/project', null, false, '', 'claude', 'fix the bug', undefined, '', undefined, undefined);
     expect(mockPtyWrite).not.toHaveBeenCalled();
   });
 
@@ -278,7 +278,7 @@ describe('terminal pending prompt injection', () => {
     setPendingPrompt('codex-1', 'fix the bug');
     await spawnTerminal('codex-1');
 
-    expect(mockPtyCreate).toHaveBeenCalledWith('codex-1', '/project', null, false, '', 'codex', 'fix the bug', undefined, '', undefined);
+    expect(mockPtyCreate).toHaveBeenCalledWith('codex-1', '/project', null, false, '', 'codex', 'fix the bug', undefined, '', undefined, undefined);
     expect(mockPtyWrite).not.toHaveBeenCalled();
   });
 
@@ -289,7 +289,7 @@ describe('terminal pending prompt injection', () => {
     createTerminalPane('claude-2', '/project', null, false, '', 'claude');
     await spawnTerminal('claude-2');
 
-    expect(mockPtyCreate).toHaveBeenCalledWith('claude-2', '/project', null, false, '', 'claude', undefined, undefined, '', undefined);
+    expect(mockPtyCreate).toHaveBeenCalledWith('claude-2', '/project', null, false, '', 'claude', undefined, undefined, '', undefined, undefined);
   });
 
   it('does not inject pending prompt from PTY output', async () => {
@@ -302,6 +302,22 @@ describe('terminal pending prompt injection', () => {
     handlePtyData('codex-2', 'some output');
     await vi.runAllTimersAsync();
     expect(mockPtyWrite).not.toHaveBeenCalled();
+  });
+
+  it('passes a pending CLI name to pty.create on the first spawn only', async () => {
+    const { createTerminalPane, setPendingCliName, spawnTerminal, getTerminalInstance } = await import('./terminal-pane.js');
+    const mockPtyCreate = (window as any).vibeyard.pty.create;
+
+    createTerminalPane('claude-n', '/project', null, false, '', 'claude');
+    setPendingCliName('claude-n', 'DR-1 bug "x"');
+    await spawnTerminal('claude-n');
+    expect(mockPtyCreate).toHaveBeenLastCalledWith('claude-n', '/project', null, false, '', 'claude', undefined, undefined, '', undefined, 'DR-1 bug "x"');
+
+    // A later spawn of the same pane (e.g. a respawn) resumes and must not re-pass the name.
+    getTerminalInstance('claude-n')!.spawned = false;
+    await spawnTerminal('claude-n');
+    expect(mockPtyCreate).toHaveBeenCalledTimes(2);
+    expect(mockPtyCreate).toHaveBeenLastCalledWith('claude-n', '/project', null, true, '', 'claude', undefined, undefined, '', undefined, undefined);
   });
 });
 

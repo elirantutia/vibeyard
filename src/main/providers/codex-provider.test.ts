@@ -254,3 +254,11 @@ describe('other methods', () => {
     expect(mockStartConfigWatcher).toHaveBeenCalledWith(win, '/project', 'codex');
   });
 });
+
+describe('buildArgs cliName', () => {
+  it('ignores cliName (only Claude has a --name flag)', () => {
+    const base = provider.buildArgs({ cliSessionId: null, isResume: false, extraArgs: '' });
+    const named = provider.buildArgs({ cliSessionId: null, isResume: false, extraArgs: '', cliName: 'DR-1 bug' });
+    expect(named).toEqual(base);
+  });
+});

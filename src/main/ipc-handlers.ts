@@ -15,6 +15,10 @@ import { watchDir, unwatchDir, setFileWatcherWindow } from './file-watcher';
 import { registerMcpHandlers } from './mcp-ipc-handlers';
 import { checkForUpdates, quitAndInstall } from './auto-updater';
 import { createAppMenu } from './menu';
+import { createCtlServer, type CtlServer } from './ctl-server';
+import { resolveCtlToken } from './ctl-tokens';
+import { CTL_COMMANDS_DIR, CTL_COMMANDS_ROOT } from './ctl-paths';
+import type { CtlResult } from '../shared/ctl-protocol';
 import { getProvider, getProviderMeta, getAllProviderMetas, getAllProviders } from './providers/registry';
 import { buildHandoffPrompt } from './providers/resume-handoff';
 import { searchSessions } from './session-deep-search';
@@ -135,6 +139,9 @@ function enumerateProjectFiles(resolvedCwd: string): string[] {
   }
 }
 
+let ctlServer: CtlServer | null = null;
+export function getCtlServer(): CtlServer | null { return ctlServer; }
+
 let hookWatcherStarted = false;
 
 export function resetHookWatcher(): void {
@@ -142,7 +149,7 @@ export function resetHookWatcher(): void {
 }
 
 export function registerIpcHandlers(): void {
-  ipcMain.handle('pty:create', async (_event, sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs: string, providerId: ProviderId = 'claude', initialPrompt?: string, systemPrompt?: string, envVars: string = '', configDir?: string) => {
+  ipcMain.handle('pty:create', async (_event, sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs: string, providerId: ProviderId = 'claude', initialPrompt?: string, systemPrompt?: string, envVars: string = '', configDir?: string, cliName?: string) => {
     const win = BrowserWindow.getAllWindows()[0];
     if (!win) return;
 
@@ -185,7 +192,8 @@ export function registerIpcHandlers(): void {
           w.webContents.send('pty:exit', sessionId, exitCode, signal);
         }
       },
-      configDir
+      configDir,
+      cliName
     );
 
     // Validate after spawnPty — Copilot installs per-project hooks there, so
@@ -874,4 +882,19 @@ export function registerIpcHandlers(): void {
   });
 
   registerMcpHandlers();
+
+  ctlServer = createCtlServer({
+    commandsRoot: CTL_COMMANDS_ROOT,
+    commandsDir: CTL_COMMANDS_DIR,
+    resolveToken: resolveCtlToken,
+    dispatch: (reqId, callerId, command) => {
+      const w = BrowserWindow.getAllWindows()[0];
+      if (w && !w.isDestroyed()) w.webContents.send('ctl:command', reqId, callerId, command);
+    },
+  });
+  ipcMain.on('ctl:setEnabled', (_event, enabled: boolean) => {
+    if (enabled) ctlServer?.start(); else ctlServer?.stop();
+  });
+  ipcMain.on('ctl:rendererReady', () => ctlServer?.onRendererReady());
+  ipcMain.on('ctl:reply', (_event, reqId: string, result: CtlResult) => ctlServer?.reply(reqId, result));
 }

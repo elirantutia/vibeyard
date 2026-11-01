@@ -10,6 +10,8 @@ import { installHooksOnly, installStatusLine } from './claude-cli';
 import { getKeychainIsolationStatus } from './claude-keychain';
 import { isWin, pathSep, utf8LocaleEnv } from './platform';
 import { nvmDefaultNodeBinDir } from './providers/nvm';
+import { issueCtlToken, revokeCtlToken } from './ctl-tokens';
+import { CTL_BIN_DIR, CTL_COMMAND_PATH, CTL_COMMANDS_DIR } from './ctl-paths';
 
 interface PtyInstance {
   process: pty.IPty;
@@ -188,7 +190,8 @@ export async function spawnPty(
   envVars: string,
   onData: (data: string) => void,
   onExit: (exitCode: number, signal?: number) => void,
-  configDir?: string
+  configDir?: string,
+  cliName?: string
 ): Promise<void> {
   if (ptys.has(sessionId)) {
     // Silence the old PTY's exit event so it doesn't remove the new session
@@ -250,17 +253,25 @@ export async function spawnPty(
   // User-provided env vars are merged last so they can override anything,
   // including provider-set vars like PATH (see plan: "user vars win").
   Object.assign(env, parseEnvVars(envVars));
-  const args = provider.buildArgs({ cliSessionId, isResume, extraArgs, initialPrompt, systemPrompt });
+  applyCtlEnv(env as Record<string, string>, sessionId);
+  const args = provider.buildArgs({ cliSessionId, isResume, extraArgs, initialPrompt, systemPrompt, cliName });
   const resolvedShell = provider.resolveBinaryPath();
   const { shell, args: spawnArgs } = resolveWindowsShell(resolvedShell, args);
 
-  const ptyProcess = pty.spawn(shell, spawnArgs, {
-    name: 'xterm-256color',
-    cols: 120,
-    rows: 30,
-    cwd,
-    env,
-  });
+  let ptyProcess: pty.IPty;
+  try {
+    ptyProcess = pty.spawn(shell, spawnArgs, {
+      name: 'xterm-256color',
+      cols: 120,
+      rows: 30,
+      cwd,
+      env,
+    });
+  } catch (err) {
+    // No PTY will ever exist for this token; don't leave it registered.
+    revokeCtlToken(sessionId);
+    throw err;
+  }
 
   ptyProcess.onData((data) => onData(data));
   ptyProcess.onExit(({ exitCode, signal }) => {
@@ -268,6 +279,11 @@ export async function spawnPty(
     const current = ptys.get(sessionId);
     if (current?.process === ptyProcess) {
       ptys.delete(sessionId);
+      revokeCtlToken(sessionId);
+    } else if (!current) {
+      // Already pruned (write/resize saw "already exited"); a newer PTY would
+      // be in the map and owns the current token, which must survive.
+      revokeCtlToken(sessionId);
     }
     onExit(exitCode, signal);
   });
@@ -315,6 +331,7 @@ export function writePty(sessionId: string, data: string): void {
     console.warn(`[pty-manager] writePty(${formatSessionIdForLog(sessionId)}) failed: ${message}`);
     if (isPtyExitedError(err)) {
       ptys.delete(sessionId);
+      revokeCtlToken(sessionId);
     }
   }
 }
@@ -329,8 +346,37 @@ export function resizePty(sessionId: string, cols: number, rows: number): void {
     console.warn(`[pty-manager] resizePty(${formatSessionIdForLog(sessionId)}) failed: ${message}`);
     if (isPtyExitedError(err)) {
       ptys.delete(sessionId);
+      revokeCtlToken(sessionId);
     }
   }
+}
+
+/**
+ * External-control env for an agent PTY. Applied after the user's env vars on
+ * purpose: a project env line must not be able to set (spoof) the token or the
+ * commands folder, and a user PATH override still gets the client folder in
+ * front of it.
+ */
+export function applyCtlEnv(env: Record<string, string>, sessionId: string, win = isWin): void {
+  env.VIBEYARD_CTL_TOKEN = issueCtlToken(sessionId);
+  env.VIBEYARD_CTL = CTL_COMMAND_PATH;
+  env.VIBEYARD_CTL_DIR = CTL_COMMANDS_DIR; // this instance's request folder; the client has no other way to find it
+  if (!win) {
+    const pathKey = Object.keys(env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH';
+    env[pathKey] = env[pathKey] ? `${CTL_BIN_DIR}${path.delimiter}${env[pathKey]}` : CTL_BIN_DIR;
+    return;
+  }
+  // Windows env names are case-insensitive, but this object can hold both the
+  // inherited `Path` and the provider's augmented `PATH`, and which one the
+  // child sees is unspecified. The merge lives here because applyCtlEnv is the
+  // last writer, after the user's env override: keep exactly one PATH, taking
+  // the exact `PATH` key (written last) when present, else the first variant.
+  // The variants are not concatenated: the augmented value already contains
+  // the inherited one.
+  const keys = Object.keys(env).filter((k) => k.toUpperCase() === 'PATH');
+  const current = keys.includes('PATH') ? env.PATH : keys.length ? env[keys[0]] : '';
+  for (const k of keys) delete env[k];
+  env.PATH = current ? `${CTL_BIN_DIR};${current}` : CTL_BIN_DIR;
 }
 
 export function killPty(sessionId: string): void {
@@ -343,6 +389,7 @@ export function killPty(sessionId: string): void {
   } finally {
     // kill is an intentional teardown — always drop the handle, even on throw.
     ptys.delete(sessionId);
+    revokeCtlToken(sessionId);
   }
 }
 

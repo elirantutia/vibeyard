@@ -1,12 +1,13 @@
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron';
 import type { CostData, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, ToolFailureData, SettingsWarningData, SettingsValidationResult, StatusLineConflictData, InspectorEvent, ProviderConfig, ReadFileResult, FileStatResult, TopFilesResult, FsChange, DeepSearchResult, GithubFetchResult, GithubRepo, ChromeProfile, ChromeImportOptions, ChromeImportProgress, ChromeImportResult, ClipboardSource } from '../shared/types';
 import { ZOOM_MIN, ZOOM_MAX } from '../shared/types';
+import type { CtlCommand, CtlResult } from '../shared/ctl-protocol';
 
 export type { CostData } from '../shared/types';
 
 export interface VibeyardApi {
   pty: {
-    create(sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs?: string, providerId?: ProviderId, initialPrompt?: string, systemPrompt?: string, envVars?: string, configDir?: string): Promise<void>;
+    create(sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs?: string, providerId?: ProviderId, initialPrompt?: string, systemPrompt?: string, envVars?: string, configDir?: string, cliName?: string): Promise<void>;
     createShell(sessionId: string, cwd: string): Promise<void>;
     write(sessionId: string, data: string): void;
     resize(sessionId: string, cols: number, rows: number): void;
@@ -29,6 +30,12 @@ export interface VibeyardApi {
     resyncStatus(): void;
     onToolFailure(callback: (sessionId: string, data: ToolFailureData) => void): () => void;
     onInspectorEvents(callback: (sessionId: string, events: InspectorEvent[]) => void): () => void;
+  };
+  ctl: {
+    onCommand(callback: (reqId: string, callerId: string, command: CtlCommand) => void): () => void;
+    reply(reqId: string, result: CtlResult): void;
+    setEnabled(enabled: boolean): void;
+    rendererReady(): void;
   };
   fs: {
     isDirectory(path: string): Promise<boolean>;
@@ -173,8 +180,8 @@ function onChannel(channel: string, callback: (...args: unknown[]) => void): () 
 
 const api: VibeyardApi = {
   pty: {
-    create: (sessionId, cwd, cliSessionId, isResume, extraArgs, providerId, initialPrompt, systemPrompt, envVars, configDir) =>
-      ipcRenderer.invoke('pty:create', sessionId, cwd, cliSessionId, isResume, extraArgs || '', providerId || 'claude', initialPrompt, systemPrompt, envVars || '', configDir),
+    create: (sessionId, cwd, cliSessionId, isResume, extraArgs, providerId, initialPrompt, systemPrompt, envVars, configDir, cliName) =>
+      ipcRenderer.invoke('pty:create', sessionId, cwd, cliSessionId, isResume, extraArgs || '', providerId || 'claude', initialPrompt, systemPrompt, envVars || '', configDir, cliName),
     createShell: (sessionId, cwd) =>
       ipcRenderer.invoke('pty:createShell', sessionId, cwd),
     write: (sessionId, data) =>
@@ -222,6 +229,14 @@ const api: VibeyardApi = {
     onInspectorEvents: (callback) =>
       onChannel('session:inspectorEvents', (sessionId, events) =>
         callback(sessionId as string, events as InspectorEvent[])),
+  },
+  ctl: {
+    onCommand: (callback) =>
+      onChannel('ctl:command', (reqId, callerId, command) =>
+        callback(reqId as string, callerId as string, command as CtlCommand)),
+    reply: (reqId, result) => ipcRenderer.send('ctl:reply', reqId, result),
+    setEnabled: (enabled) => ipcRenderer.send('ctl:setEnabled', enabled === true),
+    rendererReady: () => ipcRenderer.send('ctl:rendererReady'),
   },
   fs: {
     isDirectory: (path) => ipcRenderer.invoke('fs:isDirectory', path),
