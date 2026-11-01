@@ -44,7 +44,7 @@ import * as fs from 'fs';
 import * as child_process from 'child_process';
 import { spawnPty, writePty, resizePty, killPty, getPtyCwd, getRegistryPath, getFullPath, resetPathCache, resolveWindowsShell, withUtf8Locale, applyCtlEnv } from './pty-manager';
 import { resolveCtlToken, _resetCtlTokensForTesting } from './ctl-tokens';
-import { CTL_COMMANDS_DIR, CTL_INSTANCE_RE } from './ctl-paths';
+import { CTL_BIN_DIR, CTL_COMMANDS_DIR, CTL_INSTANCE_RE } from './ctl-paths';
 import { initProviders } from './providers/registry';
 
 const mockExistsSync = vi.mocked(fs.existsSync);
@@ -765,11 +765,26 @@ describe('applyCtlEnv', () => {
     expect(env.PATH.endsWith('/usr/bin')).toBe(true);
   });
 
-  it('prepends to a Windows-style Path key instead of adding a second PATH', () => {
+  it('on Windows keeps only PATH, built from the augmented PATH, when both Path and PATH are present', () => {
+    // Path is the inherited process value; PATH was written later by the provider's buildEnv.
+    const env: Record<string, string> = { Path: 'C:\\stale', PATH: 'C:\\augmented' };
+    applyCtlEnv(env, 'sess-2', true);
+    expect(env.Path).toBeUndefined();
+    expect(Object.keys(env).filter((k) => k.toUpperCase() === 'PATH')).toEqual(['PATH']);
+    expect(env.PATH).toBe(`${CTL_BIN_DIR};C:\\augmented`);
+  });
+
+  it('on Windows normalises a Path-only env to PATH', () => {
     const env: Record<string, string> = { Path: 'C:\\Windows' };
-    applyCtlEnv(env, 'sess-2');
-    expect(env.PATH).toBeUndefined();
-    expect(env.Path.endsWith('C:\\Windows')).toBe(true);
+    applyCtlEnv(env, 'sess-3', true);
+    expect(env.Path).toBeUndefined();
+    expect(env.PATH).toBe(`${CTL_BIN_DIR};C:\\Windows`);
+  });
+
+  it('on Windows with no PATH variant at all sets PATH to the client folder', () => {
+    const env: Record<string, string> = {};
+    applyCtlEnv(env, 'sess-4', true);
+    expect(env.PATH).toBe(CTL_BIN_DIR);
   });
 });
 
