@@ -46,8 +46,6 @@ def build_parser():
     g = n.add_mutually_exclusive_group()
     g.add_argument("--prompt")
     g.add_argument("--prompt-file", help="read the prompt from this UTF-8 file (use it on Windows for special characters)")
-    n.add_argument("--args")
-    n.add_argument("--env")
     n.add_argument("--provider")
     n.add_argument("--profile")
     n.add_argument("--focus", action="store_true")
@@ -75,7 +73,7 @@ def to_command(a):
             if len(prompt) > MAX_PROMPT:
                 fail("invalid_request", "prompt is longer than %d characters" % MAX_PROMPT)
             cmd["prompt"] = prompt
-        for key in ("project", "args", "env", "provider", "profile"):
+        for key in ("project", "provider", "profile"):
             v = getattr(a, key)
             if v is not None:
                 cmd[key] = v

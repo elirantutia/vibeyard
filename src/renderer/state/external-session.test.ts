@@ -78,13 +78,13 @@ describe('addExternalSession', () => {
     expect(tl.pendingCliName).toBeUndefined();
   });
 
-  it('falls back to project default args/env when none are given, uses explicit ones otherwise', () => {
+  it("always uses the project's saved default args and env (callers cannot pass their own)", () => {
     const { project, tl } = setup();
     project.defaultArgs = '--model opus';
+    project.defaultEnv = 'A=1';
     const a = appState.addExternalSession(project.id, { name: 'a', createdBy: tl.id, focus: false })!;
-    const b = appState.addExternalSession(project.id, { name: 'b', createdBy: tl.id, focus: false, args: '--model sonnet' })!;
     expect(a.args).toBe('--model opus');
-    expect(b.args).toBe('--model sonnet');
+    expect(a.envVars).toBe('A=1');
   });
 
   it('truncates the name to the shared cap and returns undefined for an unknown project', () => {

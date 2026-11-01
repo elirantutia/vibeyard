@@ -34,17 +34,16 @@ beforeEach(() => {
     hookStatus: (id) => hook[id] ?? 'idle',
     terminalState: (id) => term[id],
     isKnownProvider: (id) => ['claude', 'codex', 'copilot', 'gemini'].includes(id),
-    invalidEnvLines: (env) => env.split('\n').filter((l) => l && !l.includes('=')),
     effectiveProvider: (requested) => requested ?? 'claude',
     profileProvider: (id) => ({ work: 'claude', cx: 'codex' } as Record<string, string>)[id],
   };
 });
 
 describe('new-session', () => {
-  it("defaults to the caller's project and passes options through verbatim", () => {
-    const r = handleCtlCommand(deps, 'tl', { action: 'new-session', name: 'DR-1 "x"', prompt: 'a\nb', args: '--model sonnet', focus: true });
+  it("defaults to the caller's project and passes options through verbatim, with no args or env of its own", () => {
+    const r = handleCtlCommand(deps, 'tl', { action: 'new-session', name: 'DR-1 "x"', prompt: 'a\nb', focus: true });
     expect(r).toEqual({ ok: true, result: { sessionId: 'new-1', projectId: 'p1', name: 'DR-1 "x"' } });
-    expect(deps.addExternalSession).toHaveBeenCalledWith('p1', { name: 'DR-1 "x"', initialPrompt: 'a\nb', args: '--model sonnet', envVars: undefined, providerId: undefined, profileId: undefined, createdBy: 'tl', focus: true });
+    expect(deps.addExternalSession).toHaveBeenCalledWith('p1', { name: 'DR-1 "x"', initialPrompt: 'a\nb', providerId: undefined, profileId: undefined, createdBy: 'tl', focus: true });
   });
 
   it('resolves --project by id or by path (trailing slash tolerated)', () => {
@@ -53,10 +52,9 @@ describe('new-session', () => {
     expect(vi.mocked(deps.addExternalSession).mock.calls.map((c) => c[0])).toEqual(['p2', 'p2']);
   });
 
-  it('returns unknown_project for an unknown project and invalid_request for a bad provider or env', () => {
+  it('returns unknown_project for an unknown project and invalid_request for a bad provider', () => {
     expect(handleCtlCommand(deps, 'tl', { action: 'new-session', name: 'n', project: '/nope' })).toMatchObject({ ok: false, error: { code: 'unknown_project' } });
     expect(handleCtlCommand(deps, 'tl', { action: 'new-session', name: 'n', provider: 'gpt' })).toMatchObject({ ok: false, error: { code: 'invalid_request' } });
-    expect(handleCtlCommand(deps, 'tl', { action: 'new-session', name: 'n', env: 'NOEQUALS' })).toMatchObject({ ok: false, error: { code: 'invalid_request' } });
   });
 
   it("returns invalid_request \"unknown profile '<id>'\" for a profile that does not exist, and creates nothing", () => {

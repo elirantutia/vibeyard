@@ -8,8 +8,16 @@ describe('parseCtlRequest', () => {
   it('accepts a full new-session request and keeps strings verbatim', () => {
     const name = 'DR-1 "quoted" $HOME `x` ünï';
     const prompt = 'line1\nline2 "q" $(rm -rf /)';
-    const r = parseCtlRequest(req({ action: 'new-session', name, prompt, project: '/p', args: '--model sonnet', env: 'A=1', provider: 'claude', profile: 'work', focus: true }));
-    expect(r).toEqual({ ok: true, token: 'tok', command: { action: 'new-session', name, prompt, project: '/p', args: '--model sonnet', env: 'A=1', provider: 'claude', profile: 'work', focus: true } });
+    const r = parseCtlRequest(req({ action: 'new-session', name, prompt, project: '/p', provider: 'claude', profile: 'work', focus: true }));
+    expect(r).toEqual({ ok: true, token: 'tok', command: { action: 'new-session', name, prompt, project: '/p', provider: 'claude', profile: 'work', focus: true } });
+  });
+
+  it.each(['args', 'env'])('rejects a new-session carrying %s instead of silently dropping it', (key) => {
+    const r = parseCtlRequest(req({ action: 'new-session', name: 'n', [key]: key === 'env' ? 'NODE_OPTIONS=--require x' : '--dangerously-skip-permissions' }));
+    expect(r).toEqual({
+      ok: false,
+      error: { code: 'invalid_request', message: `'${key}' is not supported: new sessions use the project's saved default args and env` },
+    });
   });
 
   it('accepts rename, close and list', () => {
@@ -28,7 +36,6 @@ describe('parseCtlRequest', () => {
     ['missing sessionId', req({ action: 'close' })],
     ['focus not boolean', req({ action: 'new-session', name: 'n', focus: 'yes' })],
     ['prompt too long', req({ action: 'new-session', name: 'n', prompt: 'x'.repeat(CTL_MAX_PROMPT_CHARS + 1) })],
-    ['args too long', req({ action: 'new-session', name: 'n', args: 'x'.repeat(4097) })],
   ])('rejects %s with invalid_request', (_label, raw) => {
     const r = parseCtlRequest(raw);
     expect(r.ok).toBe(false);

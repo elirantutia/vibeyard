@@ -70,10 +70,9 @@ export type { SessionRecord, ProjectRecord, Preferences, PersistedState, Archive
 export const MAX_SESSION_NAME_LENGTH = 60;
 export const MAX_PROJECT_NAME_LENGTH = 80;
 
+/** No args/env on purpose: an external worker always runs with the project's saved defaults. */
 export interface ExternalSessionOpts {
   name: string;
-  args?: string;
-  envVars?: string;
   providerId?: ProviderId;
   profileId?: string;
   initialPrompt?: string;
@@ -416,9 +415,9 @@ class AppState {
       ...buildCliSession({
         name,
         providerId: cliProviderId,
-        args: opts.args ?? project.defaultArgs,
+        args: project.defaultArgs,
         profileId: pinnedProfileId,
-        envVars: opts.envVars ?? project.defaultEnv,
+        envVars: project.defaultEnv,
       }),
       userRenamed: true,
       createdBy: opts.createdBy,

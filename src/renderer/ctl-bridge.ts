@@ -4,7 +4,6 @@ import { getStatus } from './session-activity.js';
 import { getTerminalInstance } from './components/terminal-pane.js';
 import { resolveCliProvider } from './state/specialized-sessions.js';
 import { getProviderCapabilities } from './provider-availability.js';
-import { findInvalidEnvLines } from '../shared/env-vars.js';
 import { handleCtlCommand, type CtlHandlerDeps } from './ctl-handler.js';
 import { ctlError, type CtlResult } from '../shared/ctl-protocol.js';
 import type { ProviderId } from '../shared/types.js';
@@ -21,7 +20,6 @@ const deps: CtlHandlerDeps = {
     return t ? { spawned: t.spawned, exited: t.exited } : undefined;
   },
   isKnownProvider: (id) => getProviderCapabilities(id as ProviderId) !== null,
-  invalidEnvLines: (env) => findInvalidEnvLines(env),
   effectiveProvider: (requested) => resolveCliProvider(appState.preferences, requested as ProviderId | undefined),
   profileProvider: (profileId) => appState.profiles.find((p) => p.id === profileId)?.providerId,
 };

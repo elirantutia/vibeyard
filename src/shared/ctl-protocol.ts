@@ -1,12 +1,12 @@
 // Wire format for external control (vibeyard-ctl). Requests are untrusted
 // input from a local process, so every field is type- and size-checked and
-// unknown fields are dropped.
+// unknown fields are dropped. new-session deliberately has no args/env: a
+// worker always runs with its project's saved defaults, so an agent cannot add
+// CLI flags (e.g. --dangerously-skip-permissions) or env (NODE_OPTIONS, PATH).
 
 export const CTL_PROTOCOL_VERSION = 1;
 export const CTL_MAX_REQUEST_BYTES = 128 * 1024;
 export const CTL_MAX_PROMPT_CHARS = 64 * 1024;
-export const CTL_MAX_ARGS_CHARS = 4096;
-export const CTL_MAX_ENV_CHARS = 16 * 1024;
 export const CTL_MAX_NAME_CHARS = 200;
 export const CTL_REQ_ID_RE = /^[A-Za-z0-9-]{8,64}$/;
 /** Name of one Vibeyard instance's folder under ~/.vibeyard/commands: `<pid>-<8 hex>`. */
@@ -17,7 +17,7 @@ export type CtlErrorCode =
   | 'unknown_project' | 'invalid_request' | 'unsupported' | 'timeout';
 
 export type CtlCommand =
-  | { action: 'new-session'; name: string; project?: string; prompt?: string; args?: string; env?: string; provider?: string; profile?: string; focus?: boolean }
+  | { action: 'new-session'; name: string; project?: string; prompt?: string; provider?: string; profile?: string; focus?: boolean }
   | { action: 'rename'; sessionId: string; name: string }
   | { action: 'close'; sessionId: string }
   | { action: 'list'; project?: string; mine?: boolean };
@@ -75,13 +75,15 @@ function defined<T extends object>(obj: T): T {
 function parseCommand(c: Record<string, unknown>): CtlCommand {
   switch (c.action) {
     case 'new-session':
+      // Rejected rather than dropped, so a caller never believes its flags or env were applied.
+      for (const key of ['args', 'env']) {
+        if (c[key] !== undefined) throw new Invalid(`'${key}' is not supported: new sessions use the project's saved default args and env`);
+      }
       return defined({
         action: 'new-session' as const,
         name: str(c, 'name', { required: true, max: CTL_MAX_NAME_CHARS, nonBlank: true })!,
         project: str(c, 'project', { max: 4096 }),
         prompt: str(c, 'prompt', { max: CTL_MAX_PROMPT_CHARS }),
-        args: str(c, 'args', { max: CTL_MAX_ARGS_CHARS }),
-        env: str(c, 'env', { max: CTL_MAX_ENV_CHARS }),
         provider: str(c, 'provider', { max: 64 }),
         profile: str(c, 'profile', { max: 256 }),
         focus: bool(c, 'focus'),

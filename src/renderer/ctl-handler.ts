@@ -15,7 +15,6 @@ export interface CtlHandlerDeps {
   hookStatus(sessionId: string): string;
   terminalState(sessionId: string): { spawned: boolean; exited: boolean } | undefined;
   isKnownProvider(providerId: string): boolean;
-  invalidEnvLines(env: string): string[];
   /** The provider a new session will actually run on: the requested one, else the default. */
   effectiveProvider(requested?: string): string;
   /** The provider a profile belongs to, or undefined when no such profile exists. */
@@ -70,15 +69,9 @@ export function handleCtlCommand(deps: CtlHandlerDeps, callerId: string, command
         const effective = deps.effectiveProvider(command.provider);
         if (owner !== effective) return ctlError('invalid_request', `profile '${command.profile}' is for provider '${owner}', not '${effective}'; pass --provider ${owner}`);
       }
-      if (command.env !== undefined) {
-        const bad = deps.invalidEnvLines(command.env);
-        if (bad.length > 0) return ctlError('invalid_request', `invalid env line: ${bad[0]}`);
-      }
       const session = deps.addExternalSession(project.id, {
         name: command.name,
         initialPrompt: command.prompt,
-        args: command.args,
-        envVars: command.env,
         providerId: command.provider as ProviderId | undefined,
         profileId: command.profile,
         createdBy: callerId,

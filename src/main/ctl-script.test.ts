@@ -166,7 +166,7 @@ describe.skipIf(!hasPython())('vibeyard-ctl client', () => {
     const prompt = 'line1\n"quoted" $(rm -rf /) `x` ünï\n';
     fs.writeFileSync(promptFile, prompt);
     const r = await new Promise<{ status: number | null; stdout: string }>((resolve) => {
-      const child = spawn(pythonBin, [pyFile, 'new-session', '--name', 'DR-1 bug "x"', '--prompt-file', promptFile, '--args', '--model sonnet', '--focus'], {
+      const child = spawn(pythonBin, [pyFile, 'new-session', '--name', 'DR-1 bug "x"', '--prompt-file', promptFile, '--focus'], {
         env: { ...process.env, PYTHONIOENCODING: 'utf-8', ...ctlEnv() },
       });
       let out = '';
@@ -176,7 +176,15 @@ describe.skipIf(!hasPython())('vibeyard-ctl client', () => {
     stop();
     expect(r.status).toBe(0);
     const echoed = JSON.parse(r.stdout).result;
-    expect(echoed).toEqual({ v: 1, token: 'tok', command: { action: 'new-session', name: 'DR-1 bug "x"', prompt, args: '--model sonnet', focus: true } });
+    expect(echoed).toEqual({ v: 1, token: 'tok', command: { action: 'new-session', name: 'DR-1 bug "x"', prompt, focus: true } });
+  });
+
+  it.each([['--args', '--dangerously-skip-permissions'], ['--env', 'NODE_OPTIONS=--require x']])('has no %s option: invalid_request, nothing sent', (flag, value) => {
+    fs.writeFileSync(path.join(dir, '.enabled'), '1');
+    const r = run(['new-session', '--name', 'n', `${flag}=${value}`]);
+    expect(r.status).toBe(1);
+    expect(JSON.parse(r.stdout).error.code).toBe('invalid_request');
+    expect(fs.readdirSync(dir)).toEqual(['.enabled']);
   });
 
   it('rejects a prompt file over 64 KB before sending', () => {
