@@ -2,6 +2,7 @@ import type { BoardColumn, BoardData, PersistedState, Preferences, ProjectRecord
 import { restoreCost } from '../session-cost.js';
 import { restoreContext } from '../session-context.js';
 import { buildKanbanSession } from './session-factory.js';
+import { sortDetachedLast, tabSessions } from '../session-utils.js';
 
 export function createDefaultBoard(): BoardData {
   const columns: BoardColumn[] = [
@@ -50,6 +51,17 @@ export function ensureProjectDefaults(state: PersistedState): void {
       const kanbanSession = existingKanban ?? buildKanbanSession({ projectName: project.name });
       if (!existingKanban) project.sessions.push(kanbanSession);
       project.activeSessionId = kanbanSession.id;
+    }
+
+    // Detached sessions (tab closed, session kept) live after every tab and are
+    // never the active tab or a split/swarm pane.
+    sortDetachedLast(project);
+    const detachedIds = new Set(project.sessions.filter((s) => s.detached).map((s) => s.id));
+    if (detachedIds.size > 0) {
+      project.layout.splitPanes = project.layout.splitPanes.filter((id) => !detachedIds.has(id));
+      if (project.activeSessionId && detachedIds.has(project.activeSessionId)) {
+        project.activeSessionId = tabSessions(project)[0]?.id ?? null;
+      }
     }
   }
 }

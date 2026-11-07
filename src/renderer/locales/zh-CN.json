@@ -74,7 +74,9 @@
       "kanbanTasksNounPlural": "个"
     },
     "activeSessions": {
-      "title": "活动会话"
+      "title": "活动会话",
+      "detachedTooltip": "标签页已关闭 — 会话仍在运行。点击重新打开。",
+      "closeTooltip": "结束会话"
     },
     "discussions": {
       "tooltip": "Vibeyard 讨论",

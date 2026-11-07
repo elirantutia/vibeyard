@@ -1,5 +1,5 @@
 import type { ProjectRecord } from '../../shared/types.js';
-import { isCliSession } from '../session-utils.js';
+import { isCliSession, tabSessions } from '../session-utils.js';
 
 /** Toggle between 'swarm' and 'tabs' layout modes. When entering swarm, reconcile splitPanes with current CLI sessions. */
 export function toggleSwarmMode(project: ProjectRecord): void {
@@ -7,7 +7,7 @@ export function toggleSwarmMode(project: ProjectRecord): void {
     project.layout.mode = 'tabs';
     return;
   }
-  const cliSessions = project.sessions.filter(isCliSession);
+  const cliSessions = tabSessions(project).filter(isCliSession);
   project.layout.mode = 'swarm';
   project.layout.splitPanes = project.layout.splitPanes.filter(
     (id) => cliSessions.some((s) => s.id === id),
@@ -19,32 +19,33 @@ export function toggleSwarmMode(project: ProjectRecord): void {
 
 /** Compute the next session id to activate when cycling. Returns null if there are no sessions. */
 export function cycleSessionId(project: ProjectRecord, direction: 1 | -1): string | null {
-  if (project.sessions.length === 0) return null;
-  const idx = project.sessions.findIndex((s) => s.id === project.activeSessionId);
-  const next = (idx + direction + project.sessions.length) % project.sessions.length;
-  return project.sessions[next].id;
+  const tabs = tabSessions(project);
+  if (tabs.length === 0) return null;
+  const idx = tabs.findIndex((s) => s.id === project.activeSessionId);
+  const next = (idx + direction + tabs.length) % tabs.length;
+  return tabs[next].id;
 }
 
 /** Pick the session id at a given index, or null if out of range. */
 export function sessionIdAtIndex(project: ProjectRecord, index: number): string | null {
-  if (index >= project.sessions.length) return null;
-  return project.sessions[index]?.id ?? null;
+  return tabSessions(project)[index]?.id ?? null;
 }
 
 export type RemovalMode = 'all' | 'right' | 'left' | 'others';
 
-/** Collect the set of session ids to remove for batch removal operations. */
+/** Collect the set of tab session ids targeted by a batch close (detached sessions are never included). */
 export function collectRemovalIds(project: ProjectRecord, mode: RemovalMode, anchorSessionId?: string): string[] {
-  if (mode === 'all') return project.sessions.map((s) => s.id);
+  const tabs = tabSessions(project);
+  if (mode === 'all') return tabs.map((s) => s.id);
   if (mode === 'others' && anchorSessionId) {
-    return project.sessions.filter((s) => s.id !== anchorSessionId).map((s) => s.id);
+    return tabs.filter((s) => s.id !== anchorSessionId).map((s) => s.id);
   }
   if ((mode === 'right' || mode === 'left') && anchorSessionId) {
-    const idx = project.sessions.findIndex((s) => s.id === anchorSessionId);
+    const idx = tabs.findIndex((s) => s.id === anchorSessionId);
     if (idx === -1) return [];
     return mode === 'right'
-      ? project.sessions.slice(idx + 1).map((s) => s.id)
-      : project.sessions.slice(0, idx).map((s) => s.id);
+      ? tabs.slice(idx + 1).map((s) => s.id)
+      : tabs.slice(0, idx).map((s) => s.id);
   }
   return [];
 }
@@ -52,7 +53,10 @@ export function collectRemovalIds(project: ProjectRecord, mode: RemovalMode, anc
 /** Move a session within project.sessions and keep splitPanes order in sync. @returns true if reordered */
 export function reorderSessionInProject(project: ProjectRecord, sessionId: string, toIndex: number): boolean {
   const fromIndex = project.sessions.findIndex((s) => s.id === sessionId);
-  if (fromIndex === -1 || fromIndex === toIndex) return false;
+  if (fromIndex === -1 || project.sessions[fromIndex].detached) return false;
+  // Detached sessions sit after every tab; a tab may never move among them.
+  toIndex = Math.min(toIndex, tabSessions(project).length - 1);
+  if (fromIndex === toIndex) return false;
   const [session] = project.sessions.splice(fromIndex, 1);
   project.sessions.splice(toIndex, 0, session);
   if (project.layout.splitPanes.length > 0) {

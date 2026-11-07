@@ -10,15 +10,9 @@ import { endShare } from '../../sharing/share-manager.js';
 import { openInspector, isInspectorOpen, getInspectedSessionId, closeInspector } from '../session-inspector.js';
 import { hasMultipleAvailableProviders, getProviderCapabilities } from '../../provider-availability.js';
 import { buildResumeWithProviderItems } from '../resume-with-provider-menu.js';
-import { isCliSession } from '../../session-utils.js';
+import { isCliSession, tabSessions } from '../../session-utils.js';
 import { esc } from '../../dom-utils.js';
-import {
-  closeSessionWithConfirm,
-  closeAllSessionsWithConfirm,
-  closeOtherSessionsWithConfirm,
-  closeSessionsFromRightWithConfirm,
-  closeSessionsFromLeftWithConfirm,
-} from '../../session-close.js';
+import { closeTab, closeTabsByMode } from '../../session-close.js';
 import { hideTabContextMenu, setActiveContextMenu, positionMenu } from './menu.js';
 import { tabListEl } from './dom.js';
 import { scrollDelta, bankScroll, planScroll, commitScroll } from './tab-scroll.js';
@@ -95,11 +89,13 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
   closeItem.addEventListener('click', (e) => {
     e.stopPropagation();
     hideTabContextMenu();
-    closeSessionWithConfirm(project.id, session.id);
+    closeTab(project.id, session.id);
   });
 
-  const sessionIdx = project.sessions.findIndex((s) => s.id === session.id);
-  const totalSessions = project.sessions.length;
+  // Tab indices: detached sessions sit after every tab in project.sessions.
+  const tabs = tabSessions(project);
+  const sessionIdx = tabs.findIndex((s) => s.id === session.id);
+  const totalSessions = tabs.length;
 
   const separator = document.createElement('div');
   separator.className = 'tab-context-menu-separator';
@@ -110,7 +106,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
   closeAllItem.addEventListener('click', (e) => {
     e.stopPropagation();
     hideTabContextMenu();
-    closeAllSessionsWithConfirm(project.id);
+    closeTabsByMode(project.id, 'all');
   });
 
   const closeOthersItem = document.createElement('div');
@@ -120,7 +116,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
     closeOthersItem.addEventListener('click', (e) => {
       e.stopPropagation();
       hideTabContextMenu();
-      closeOtherSessionsWithConfirm(project.id, session.id);
+      closeTabsByMode(project.id, 'others', session.id);
     });
   }
 
@@ -131,7 +127,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
     closeRightItem.addEventListener('click', (e) => {
       e.stopPropagation();
       hideTabContextMenu();
-      closeSessionsFromRightWithConfirm(project.id, session.id);
+      closeTabsByMode(project.id, 'right', session.id);
     });
   }
 
@@ -142,7 +138,7 @@ function showTabContextMenu(x: number, y: number, project: ProjectRecord, sessio
     closeLeftItem.addEventListener('click', (e) => {
       e.stopPropagation();
       hideTabContextMenu();
-      closeSessionsFromLeftWithConfirm(project.id, session.id);
+      closeTabsByMode(project.id, 'left', session.id);
     });
   }
 
@@ -303,7 +299,7 @@ export function render(): void {
   if (!project) return;
 
   let activeTab: HTMLElement | null = null;
-  for (const session of project.sessions) {
+  for (const session of tabSessions(project)) {
     const tab = document.createElement('div');
     const isActive = session.id === project.activeSessionId;
     const isMcp = session.type === 'mcp-inspector';
@@ -347,7 +343,7 @@ export function render(): void {
     tab.addEventListener('auxclick', (e) => {
       if (e.button === 1) {
         e.preventDefault();
-        closeSessionWithConfirm(project.id, session.id);
+        closeTab(project.id, session.id);
       }
     });
 
@@ -362,7 +358,7 @@ export function render(): void {
 
     // Close button
     tab.querySelector('.tab-close')!.addEventListener('click', () => {
-      closeSessionWithConfirm(project.id, session.id);
+      closeTab(project.id, session.id);
     });
 
     tab.addEventListener('dragstart', (e) => {

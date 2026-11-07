@@ -1,6 +1,7 @@
 import { appState, type SessionRecord } from './state.js';
 import { getStatus } from './session-activity.js';
 import { showConfirmDialog } from './components/modal.js';
+import { collectRemovalIds, type RemovalMode } from './state/layout-state.js';
 
 function projectSessions(projectId: string): SessionRecord[] {
   return appState.projects.find((p) => p.id === projectId)?.sessions ?? [];
@@ -65,44 +66,25 @@ export async function closeSessionIfFileMissing(sessionId: string, fullPath: str
   return true;
 }
 
-export function closeAllSessionsWithConfirm(projectId: string): void {
-  const sessions = projectSessions(projectId);
-  confirmAndClose(
-    sessions,
-    sessions.map((s) => s.id),
-    () => appState.removeAllSessions(projectId),
-  );
+// --- Tab close (tab bar, keyboard shortcut) ---
+//
+// Closing a *tab* never ends a live CLI session: the session is detached (PTY
+// kept, listed in the sidebar Active Sessions panel, where the full close lives).
+// Non-CLI tabs (files, browser, kanban, ...) hold no process and are removed.
+// A CLI whose process exits is already removed by the pty.onExit handler.
+// Ending a session for good goes through closeSessionWithConfirm (Active
+// Sessions panel, vibeyard-ctl).
+
+/** Close one tab: detach a CLI session, remove anything else. */
+export function closeTab(projectId: string, sessionId: string): void {
+  appState.closeTabs(projectId, [sessionId]);
 }
 
-export function closeOtherSessionsWithConfirm(projectId: string, sessionId: string): void {
-  const sessions = projectSessions(projectId);
-  confirmAndClose(
-    sessions,
-    sessions.filter((s) => s.id !== sessionId).map((s) => s.id),
-    () => appState.removeOtherSessions(projectId, sessionId),
-  );
-}
-
-export function closeSessionsFromRightWithConfirm(projectId: string, sessionId: string): void {
-  const sessions = projectSessions(projectId);
-  const idx = sessions.findIndex((s) => s.id === sessionId);
-  if (idx === -1) return;
-  confirmAndClose(
-    sessions,
-    sessions.slice(idx + 1).map((s) => s.id),
-    () => appState.removeSessionsFromRight(projectId, sessionId),
-  );
-}
-
-export function closeSessionsFromLeftWithConfirm(projectId: string, sessionId: string): void {
-  const sessions = projectSessions(projectId);
-  const idx = sessions.findIndex((s) => s.id === sessionId);
-  if (idx === -1) return;
-  confirmAndClose(
-    sessions,
-    sessions.slice(0, idx).map((s) => s.id),
-    () => appState.removeSessionsFromLeft(projectId, sessionId),
-  );
+/** Close a group of tabs relative to an anchor (tab context menu), same rules as closeTab. */
+export function closeTabsByMode(projectId: string, mode: RemovalMode, anchorSessionId?: string): void {
+  const project = appState.projects.find((p) => p.id === projectId);
+  if (!project) return;
+  appState.closeTabs(projectId, collectRemovalIds(project, mode, anchorSessionId));
 }
 
 function countActiveSessions(): number {

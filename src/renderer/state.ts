@@ -2,7 +2,7 @@ import type { VibeyardApi } from './types.js';
 import type { SessionRecord, ProjectRecord, Preferences, PersistedState, ArchivedSession, ProviderId, CostInfo, ContextWindowInfo, InitialContextSnapshot, ReadinessResult, ReadinessSnapshot, TeamMember, TeamData, Profile, OverviewLayout } from '../shared/types.js';
 import { getProviderCapabilities, getProviderAvailabilitySnapshot } from './provider-availability.js';
 import { basename } from '../shared/platform.js';
-import { isCliSession } from './session-utils.js';
+import { isCliSession, sortDetachedLast, tabSessions } from './session-utils.js';
 import { archiveSession as archiveSessionPure } from './state/session-archive.js';
 import {
   buildResumedSession,
@@ -58,7 +58,6 @@ import {
   setProjectReadiness as setProjectReadinessPure,
 } from './state/insights-state.js';
 import {
-  collectRemovalIds,
   cycleSessionId,
   reorderSessionInProject,
   sessionIdAtIndex,
@@ -438,7 +437,8 @@ class AppState {
   }
 
   private activateExistingSession(project: ProjectRecord, existing: SessionRecord): SessionRecord {
-    if (project.activeSessionId !== existing.id) {
+    if (project.activeSessionId !== existing.id || existing.detached) {
+      this.reattach(project, existing.id);
       project.activeSessionId = existing.id;
       this.pushNav(existing.id);
       this.persist();
@@ -747,19 +747,70 @@ class AppState {
       }
     }
 
-    const closingIndex = project.sessions.findIndex((s) => s.id === sessionId);
+    this.dropFromTabs(project, sessionId);
     project.sessions = project.sessions.filter((s) => s.id !== sessionId);
-    this.pruneNav(sessionId);
-    if (project.activeSessionId === sessionId) {
-      const newIndex = closingIndex > 0 ? closingIndex - 1 : 0;
-      project.activeSessionId = project.sessions[newIndex]?.id ?? null;
-      if (project.activeSessionId) this.pushNav(project.activeSessionId);
-    }
-    // Also remove from split/swarm panes
-    project.layout.splitPanes = project.layout.splitPanes.filter((id) => id !== sessionId);
     this.persist();
     this.emit('session-removed', { projectId, sessionId });
     this.emit('session-changed');
+  }
+
+  /**
+   * Close tabs. A CLI session is detached, not ended: its PTY is kept, it is
+   * hidden from the tab bar and layout and stays listed in the sidebar Active
+   * Sessions panel, and activating it again (setActiveSession) gives it a tab
+   * back. Any other tab (file, browser, kanban, ...) holds no process and is
+   * removed. One persist and one re-render for the whole batch.
+   */
+  closeTabs(projectId: string, sessionIds: string[]): void {
+    const project = this.state.projects.find((p) => p.id === projectId);
+    if (!project) return;
+    const removed: string[] = [];
+    for (const id of sessionIds) {
+      const session = project.sessions.find((s) => s.id === id);
+      if (!session || session.detached) continue;
+      this.dropFromTabs(project, id);
+      // Leave the tab set right away so a later drop never activates this one.
+      if (isCliSession(session)) {
+        session.detached = true;
+      } else {
+        project.sessions = project.sessions.filter((s) => s.id !== id);
+        removed.push(id);
+      }
+    }
+    sortDetachedLast(project);
+    this.persist();
+    for (const sessionId of removed) this.emit('session-removed', { projectId, sessionId });
+    this.emit('session-changed');
+  }
+
+  /**
+   * Remove a session from everything tab-related (active tab, nav history,
+   * split/swarm panes), activating the left tab neighbour when it was active.
+   * Does not persist or emit.
+   */
+  private dropFromTabs(project: ProjectRecord, sessionId: string): void {
+    const tabs = tabSessions(project);
+    const closingIndex = tabs.findIndex((s) => s.id === sessionId);
+    this.pruneNav(sessionId);
+    if (project.activeSessionId === sessionId) {
+      const remaining = tabs.filter((s) => s.id !== sessionId);
+      const newIndex = closingIndex > 0 ? closingIndex - 1 : 0;
+      project.activeSessionId = remaining[newIndex]?.id ?? null;
+      if (project.activeSessionId) this.pushNav(project.activeSessionId);
+    }
+    project.layout.splitPanes = project.layout.splitPanes.filter((id) => id !== sessionId);
+  }
+
+  /** Give a detached session its tab back (after the last tab). Does not persist or emit. */
+  private reattach(project: ProjectRecord, sessionId: string): void {
+    const session = project.sessions.find((s) => s.id === sessionId);
+    if (!session?.detached) return;
+    delete session.detached;
+    // It sat among the detached sessions, i.e. after every tab: it becomes the last tab.
+    sortDetachedLast(project);
+    if (project.layout.mode === 'swarm' && !project.layout.splitPanes.includes(sessionId)) {
+      project.layout.splitPanes.push(sessionId);
+    }
   }
 
   /** Resolve the config dir backing a provider profile (for transcript lookup). */
@@ -931,6 +982,7 @@ class AppState {
   setActiveSession(projectId: string, sessionId: string): void {
     const project = this.state.projects.find((p) => p.id === projectId);
     if (!project) return;
+    this.reattach(project, sessionId);
     project.activeSessionId = sessionId;
     this.pushNav(sessionId);
     this.persist();
@@ -1064,27 +1116,11 @@ class AppState {
     this.emit('session-changed');
   }
 
+  /** End every session of a project for good, detached ones included (project menu "Close All Sessions"). */
   removeAllSessions(projectId: string): void {
-    this.batchRemoveSessions(projectId, 'all');
-  }
-
-  removeSessionsFromRight(projectId: string, sessionId: string): void {
-    this.batchRemoveSessions(projectId, 'right', sessionId);
-  }
-
-  removeSessionsFromLeft(projectId: string, sessionId: string): void {
-    this.batchRemoveSessions(projectId, 'left', sessionId);
-  }
-
-  removeOtherSessions(projectId: string, sessionId: string): void {
-    this.batchRemoveSessions(projectId, 'others', sessionId);
-  }
-
-  private batchRemoveSessions(projectId: string, mode: 'all' | 'right' | 'left' | 'others', anchorSessionId?: string): void {
     const project = this.state.projects.find((p) => p.id === projectId);
     if (!project) return;
-    const ids = collectRemovalIds(project, mode, anchorSessionId);
-    for (const id of ids) this.removeSession(projectId, id);
+    for (const { id } of [...project.sessions]) this.removeSession(projectId, id);
   }
 
   addInsightSnapshot(projectId: string, snapshot: InitialContextSnapshot): void {

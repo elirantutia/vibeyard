@@ -302,6 +302,34 @@
   text-overflow: ellipsis;
 }
 
+/* Tab closed, session kept: the row is its only entry point. */
+.active-session-row.detached .active-session-name {
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+/* Ends the session for good (the tab-bar X only closes the tab). */
+.active-session-close {
+  flex-shrink: 0;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.active-session-row:hover .active-session-close,
+.active-session-close:focus-visible {
+  opacity: 1;
+}
+
+.active-session-close:hover {
+  color: var(--accent);
+}
+
 /* Discussions card. */
 #sidebar-discussions {
   margin: 4px 12px 8px;

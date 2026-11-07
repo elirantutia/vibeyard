@@ -1,4 +1,5 @@
 import type { ProjectRecord, ProviderId, SessionRecord } from '../../shared/types.js';
+import { sortDetachedLast } from '../session-utils.js';
 
 interface BaseOpts {
   id?: string;
@@ -126,6 +127,7 @@ export function attachSessionToProject(
   opts: { addToSwarm?: boolean } = {},
 ): SessionRecord {
   project.sessions.push(session);
+  sortDetachedLast(project);
   project.activeSessionId = session.id;
   if (opts.addToSwarm && project.layout.mode === 'swarm') {
     project.layout.splitPanes.push(session.id);

@@ -5,6 +5,7 @@ import { STATUS_PRIORITY } from '../project-status.js';
 import { isCliSession } from '../session-utils.js';
 import { esc } from '../dom-utils.js';
 import { t } from '../i18n.js';
+import { closeSessionWithConfirm } from '../session-close.js';
 
 export interface ActiveSessionRow {
   projectId: string;
@@ -12,6 +13,8 @@ export interface ActiveSessionRow {
   sessionId: string;
   sessionName: string;
   status: SessionStatus;
+  /** Tab closed, session kept: only reachable from this panel. */
+  detached: boolean;
 }
 
 type ActiveStatusConfig = NonNullable<Preferences['activeSessionStatuses']>;
@@ -34,25 +37,32 @@ export function resolveActiveStatuses(prefs: Preferences): Set<SessionStatus> {
 /**
  * Pure selector: gather every open CLI session across all projects whose live
  * status is in `activeStatuses`, ordered by urgency (`STATUS_PRIORITY`) then
- * project name. DOM-free so it can be unit-tested.
+ * project name. Detached sessions (tab closed, session kept) are always
+ * included whatever their status — this panel is the only place they show up.
+ * `includeTabbed: false` limits the list to detached sessions (used with a
+ * single project, where tabbed rows would just duplicate its tab bar).
+ * DOM-free so it can be unit-tested.
  */
 export function selectActiveSessions(
   projects: ProjectRecord[],
   statusOf: (sessionId: string) => SessionStatus,
   activeStatuses: Set<SessionStatus>,
+  includeTabbed = true,
 ): ActiveSessionRow[] {
   const rows: ActiveSessionRow[] = [];
   for (const project of projects) {
     for (const session of project.sessions) {
       if (!isCliSession(session)) continue;
       const status = statusOf(session.id);
-      if (!activeStatuses.has(status)) continue;
+      const detached = !!session.detached;
+      if (!detached && (!includeTabbed || !activeStatuses.has(status))) continue;
       rows.push({
         projectId: project.id,
         projectName: project.name,
         sessionId: session.id,
         sessionName: session.name,
         status,
+        detached,
       });
     }
   }
@@ -77,12 +87,17 @@ export function renderActiveSessions(): void {
     return;
   }
 
-  // Only meaningful across multiple projects — with a single project the rows
-  // just duplicate that project's own tab bar, so the section stays hidden.
-  const enabled =
-    (appState.preferences.sidebarViews?.activeSessions ?? true) && appState.projects.length > 1;
+  // Tabbed rows are only meaningful across multiple projects — with a single
+  // project they just duplicate its own tab bar. Detached sessions have no tab,
+  // so they are listed regardless.
+  const enabled = appState.preferences.sidebarViews?.activeSessions ?? true;
   const rows = enabled
-    ? selectActiveSessions(appState.projects, getStatus, resolveActiveStatuses(appState.preferences))
+    ? selectActiveSessions(
+        appState.projects,
+        getStatus,
+        resolveActiveStatuses(appState.preferences),
+        appState.projects.length > 1,
+      )
     : [];
 
   if (rows.length === 0) {
@@ -104,11 +119,15 @@ export function renderActiveSessions(): void {
 }
 
 function rowHtml(row: ActiveSessionRow): string {
+  const title = row.detached
+    ? `${row.projectName} · ${t('sidebar.activeSessions.detachedTooltip')}`
+    : row.projectName;
   return `
-    <div class="active-session-row" data-project-id="${esc(row.projectId)}" data-session-id="${esc(row.sessionId)}" title="${esc(row.projectName)}">
+    <div class="active-session-row${row.detached ? ' detached' : ''}" data-project-id="${esc(row.projectId)}" data-session-id="${esc(row.sessionId)}" title="${esc(title)}">
       <span class="project-status ${row.status}" aria-hidden="true"></span>
       <span class="active-session-name">${esc(row.sessionName)}</span>
       <span class="active-session-project">${esc(row.projectName)}</span>
+      <button type="button" class="active-session-close" title="${esc(t('sidebar.activeSessions.closeTooltip'))}" aria-label="${esc(t('sidebar.activeSessions.closeTooltip'))}">&times;</button>
     </div>
   `;
 }
@@ -133,10 +152,17 @@ export function initActiveSessions(): void {
 
   // One delegated click listener survives every innerHTML rebuild.
   containerEl.addEventListener('click', (e) => {
-    const row = (e.target as HTMLElement).closest<HTMLElement>('.active-session-row');
+    const target = e.target as HTMLElement;
+    const row = target.closest<HTMLElement>('.active-session-row');
     const projectId = row?.dataset.projectId;
     const sessionId = row?.dataset.sessionId;
     if (!projectId || !sessionId) return;
+    // The X ends the session for good (the tab-bar X only closes the tab).
+    if (target.closest('.active-session-close')) {
+      closeSessionWithConfirm(projectId, sessionId);
+      return;
+    }
+    // Activating a detached session gives it its tab back (setActiveSession).
     appState.setActiveProject(projectId);
     appState.setActiveSession(projectId, sessionId);
   });

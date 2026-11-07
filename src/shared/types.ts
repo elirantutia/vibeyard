@@ -122,6 +122,13 @@ export interface SessionRecord {
   createdBy?: string;
   /** Persisted, sticky: which Profile backs this session's CLI config dir. Resume must reuse it. */
   profileId?: string;
+  /**
+   * Persisted: the tab was closed but the session itself was kept (PTY alive,
+   * resumable). Detached sessions are hidden from the tab bar / layout and listed
+   * in the sidebar Active Sessions panel, which is where they are fully closed.
+   * Detached sessions are kept at the end of `project.sessions`.
+   */
+  detached?: boolean;
   /** Transient: initial prompt to inject on first spawn. Not persisted. */
   pendingInitialPrompt?: string;
   /** Transient: system prompt to attach on first spawn. Not persisted (resume must not re-inject). */

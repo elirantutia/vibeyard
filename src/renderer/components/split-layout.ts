@@ -283,7 +283,8 @@ function onSessionRemoved(data: unknown): void {
 export function renderLayout(): void {
   const project = appState.activeProject;
 
-  if (!project || project.sessions.length === 0) {
+  // Detached sessions (tab closed, session kept) are never laid out.
+  if (!project || !project.sessions.some((s) => !s.detached)) {
     hideAllPanes();
     hideAllInspectorPanes();
     hideAllFileViewerPanes();

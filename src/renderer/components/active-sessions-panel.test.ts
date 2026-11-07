@@ -1,14 +1,17 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// The panel's close button calls into session-close, whose modal touches the DOM at import.
+vi.mock('../session-close.js', () => ({ closeSessionWithConfirm: vi.fn() }));
 import { selectActiveSessions, resolveActiveStatuses } from './active-sessions-panel.js';
 import type { SessionStatus } from '../session-activity.js';
 import type { ProjectRecord, Preferences } from '../../shared/types.js';
 
 // Minimal project/session factory — only the fields the selector reads.
-const project = (id: string, name: string, sessions: Array<{ id: string; name?: string; type?: string }>): ProjectRecord =>
+const project = (id: string, name: string, sessions: Array<{ id: string; name?: string; type?: string; detached?: boolean }>): ProjectRecord =>
   ({
     id,
     name,
-    sessions: sessions.map((s) => ({ id: s.id, name: s.name ?? s.id, type: s.type })),
+    sessions: sessions.map((s) => ({ id: s.id, name: s.name ?? s.id, type: s.type, detached: s.detached })),
   } as unknown as ProjectRecord);
 
 const statusMap = (m: Record<string, SessionStatus>) => (id: string): SessionStatus => m[id] ?? 'idle';
@@ -72,6 +75,35 @@ describe('selectActiveSessions', () => {
   it('returns empty when the active set is empty', () => {
     const projects = [project('p1', 'Alpha', [{ id: 'a' }])];
     expect(selectActiveSessions(projects, statusMap({ a: 'working' }), new Set())).toEqual([]);
+  });
+});
+
+describe('selectActiveSessions with detached sessions', () => {
+  it('always includes detached sessions, whatever their status', () => {
+    const projects = [project('p1', 'Alpha', [
+      { id: 'a', detached: true }, { id: 'b' },
+    ])];
+    const rows = selectActiveSessions(projects, statusMap({ a: 'idle', b: 'idle' }), new Set<SessionStatus>(['working']));
+    expect(rows.map((r) => [r.sessionId, r.detached])).toEqual([['a', true]]);
+  });
+
+  it('includeTabbed=false keeps only detached sessions', () => {
+    const projects = [project('p1', 'Alpha', [
+      { id: 'a', detached: true }, { id: 'b' },
+    ])];
+    const rows = selectActiveSessions(
+      projects,
+      statusMap({ a: 'waiting', b: 'working' }),
+      new Set<SessionStatus>(['working']),
+      false,
+    );
+    expect(rows.map((r) => r.sessionId)).toEqual(['a']);
+  });
+
+  it('flags tabbed rows as not detached', () => {
+    const projects = [project('p1', 'Alpha', [{ id: 'a' }])];
+    const rows = selectActiveSessions(projects, statusMap({ a: 'working' }), new Set<SessionStatus>(['working']));
+    expect(rows[0].detached).toBe(false);
   });
 });
 

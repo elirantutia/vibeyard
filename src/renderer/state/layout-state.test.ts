@@ -178,27 +178,6 @@ describe('batch removals', () => {
     appState.removeAllSessions(project.id);
     expect(appState.activeProject!.sessions).toHaveLength(0);
   });
-
-  it('removeSessionsFromRight removes sessions after given', () => {
-    const { project, sessions } = addProjectWithSessions(4);
-    appState.removeSessionsFromRight(project.id, sessions[1].id);
-    expect(appState.activeProject!.sessions).toHaveLength(2);
-    expect(appState.activeProject!.sessions.map((s) => s.id)).toEqual([sessions[0].id, sessions[1].id]);
-  });
-
-  it('removeSessionsFromLeft removes sessions before given', () => {
-    const { project, sessions } = addProjectWithSessions(4);
-    appState.removeSessionsFromLeft(project.id, sessions[2].id);
-    expect(appState.activeProject!.sessions).toHaveLength(2);
-    expect(appState.activeProject!.sessions.map((s) => s.id)).toEqual([sessions[2].id, sessions[3].id]);
-  });
-
-  it('removeOtherSessions removes all except given', () => {
-    const { project, sessions } = addProjectWithSessions(4);
-    appState.removeOtherSessions(project.id, sessions[1].id);
-    expect(appState.activeProject!.sessions).toHaveLength(1);
-    expect(appState.activeProject!.sessions[0].id).toBe(sessions[1].id);
-  });
 });
 
 describe('reorderSession()', () => {
