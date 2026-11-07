@@ -349,6 +349,40 @@ describe('removeProject()', () => {
   });
 });
 
+describe('setProjectColor()', () => {
+  it('stores a normalized #rrggbb color and emits project-changed', () => {
+    const p = addProject('P');
+    const changedCb = vi.fn();
+    appState.on('project-changed', changedCb);
+    appState.setProjectColor(p.id, '#AABBCC');
+    expect(appState.projects[0].color).toBe('#aabbcc');
+    expect(changedCb).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the color with undefined', () => {
+    const p = addProject('P');
+    appState.setProjectColor(p.id, '#112233');
+    appState.setProjectColor(p.id, undefined);
+    expect('color' in appState.projects[0]).toBe(false);
+  });
+
+  it('treats an invalid value as clearing', () => {
+    const p = addProject('P');
+    appState.setProjectColor(p.id, '#112233');
+    appState.setProjectColor(p.id, 'not-a-color');
+    expect(appState.projects[0].color).toBeUndefined();
+  });
+
+  it('is a no-op when unchanged', () => {
+    const p = addProject('P');
+    appState.setProjectColor(p.id, '#112233');
+    const changedCb = vi.fn();
+    appState.on('project-changed', changedCb);
+    appState.setProjectColor(p.id, '#112233');
+    expect(changedCb).not.toHaveBeenCalled();
+  });
+});
+
 describe('renameProject()', () => {
   it('renames an existing project', () => {
     const p = addProject('Old', '/path');

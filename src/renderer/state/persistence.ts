@@ -3,6 +3,7 @@ import { restoreCost } from '../session-cost.js';
 import { restoreContext } from '../session-context.js';
 import { buildKanbanSession } from './session-factory.js';
 import { sortDetachedLast, tabSessions } from '../session-utils.js';
+import { normalizeProjectColor } from '../project-colors.js';
 
 export function createDefaultBoard(): BoardData {
   const columns: BoardColumn[] = [
@@ -42,6 +43,10 @@ export function hydrateLoadedState(state: PersistedState, defaultPreferences: Pr
 export function ensureProjectDefaults(state: PersistedState): void {
   for (const project of state.projects) {
     if (!project.board) project.board = createDefaultBoard();
+    // Renderers trust project.color to be canonical #rrggbb; drop anything else.
+    const color = normalizeProjectColor(project.color);
+    if (color) project.color = color;
+    else delete project.color;
     for (const task of project.board.tasks) task.sessionId = undefined;
 
     const legacyMode = (project.layout as { mode: string }).mode;

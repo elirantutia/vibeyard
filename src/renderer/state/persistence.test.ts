@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('../session-cost.js', () => ({ restoreCost: vi.fn() }));
 vi.mock('../session-context.js', () => ({ restoreContext: vi.fn() }));
 
-import { serializeForSave } from './persistence.js';
+import { ensureProjectDefaults, serializeForSave } from './persistence.js';
 import type { PersistedState, SessionRecord } from '../../shared/types.js';
 
 function baseState(session: Partial<SessionRecord>): PersistedState {
@@ -50,5 +50,15 @@ describe('serializeForSave', () => {
     state.profiles = [{ id: 'work', name: 'Work', providerId: 'claude', configDir: '/cfg/work', managed: true, createdAt: 0 }];
     const out = serializeForSave(state);
     expect(out.profiles).toEqual(state.profiles);
+  });
+});
+
+describe("ensureProjectDefaults: project color", () => {
+  it.each([['#AABBCC', '#aabbcc'], ['nope', undefined], [undefined, undefined]])('normalizes %j to %j', (input, expected) => {
+    const state = baseState({});
+    if (input !== undefined) state.projects[0].color = input;
+    ensureProjectDefaults(state);
+    expect(state.projects[0].color).toBe(expected);
+    if (expected === undefined) expect('color' in state.projects[0]).toBe(false);
   });
 });

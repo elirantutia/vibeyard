@@ -19,6 +19,7 @@ import { mountGitPanel, closeGitPanel } from './git-panel.js';
 import { gitChangeCount, onChange as onGitStatusChange } from '../git-status.js';
 import { ICON_KANBAN, ICON_TEAM, ICON_OVERVIEW, ICON_SESSIONS, ICON_FILES, ICON_GIT } from '../icons.js';
 import { t } from '../i18n.js';
+import { PROJECT_COLOR_PALETTE } from '../project-colors.js';
 
 type ProjectPanel = 'history' | 'files' | 'git' | null;
 const projectPanelOpen = new Map<string, ProjectPanel>();
@@ -192,6 +193,13 @@ function buildProjectRow(project: ProjectRecord, isActive: boolean, opts: Render
   // The wrapper carries `.active` so CSS can style the whole row (header + tabs
   // + panel) as one card without a `:has()` selector.
   wrapper.className = 'project-row' + (isActive ? ' active' : '');
+  // Canonical #rrggbb: normalized by setProjectColor and on load (ensureProjectDefaults).
+  const color = project.color;
+  if (color) {
+    // The tint itself is CSS (`.project-row.has-color`), mixed from this one variable.
+    wrapper.classList.add('has-color');
+    wrapper.style.setProperty('--project-color', color);
+  }
 
   const el = document.createElement('div');
   el.className = 'project-item' + (isActive ? ' active' : '');
@@ -725,6 +733,8 @@ function showProjectContextMenu(x: number, y: number, project: ProjectRecord): v
     });
   }
 
+  const colorRow = buildProjectColorRow(project);
+
   const removeItem = document.createElement('div');
   removeItem.className = 'tab-context-menu-item';
   removeItem.textContent = t('contextMenu.project.removeProject');
@@ -737,6 +747,7 @@ function showProjectContextMenu(x: number, y: number, project: ProjectRecord): v
   menu.appendChild(renameItem);
   menu.appendChild(closeAllItem);
   if (settingsItem) menu.appendChild(settingsItem);
+  menu.appendChild(colorRow);
   menu.appendChild(separator);
   menu.appendChild(removeItem);
   document.body.appendChild(menu);
@@ -745,6 +756,64 @@ function showProjectContextMenu(x: number, y: number, project: ProjectRecord): v
   const rect = menu.getBoundingClientRect();
   if (rect.right > window.innerWidth) menu.style.left = `${window.innerWidth - rect.width - 4}px`;
   if (rect.bottom > window.innerHeight) menu.style.top = `${window.innerHeight - rect.height - 4}px`;
+}
+
+/**
+ * Context-menu row of color swatches for the project card: "no color", the
+ * preset palette, and a custom color (native color picker). Picking one applies
+ * it and closes the menu.
+ */
+function buildProjectColorRow(project: ProjectRecord): HTMLElement {
+  const current = project.color;
+
+  const row = document.createElement('div');
+  row.className = 'project-color-row';
+
+  const label = document.createElement('div');
+  label.className = 'project-color-label';
+  label.textContent = t('contextMenu.project.color');
+
+  const swatches = document.createElement('div');
+  swatches.className = 'project-color-swatches';
+
+  const apply = (color: string | undefined): void => {
+    hideProjectContextMenu();
+    appState.setProjectColor(project.id, color);
+  };
+
+  const addSwatch = (color: string | undefined, title: string): void => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'project-color-swatch' + (color ? '' : ' none') + (color === current ? ' selected' : '');
+    btn.title = title;
+    btn.setAttribute('aria-label', title);
+    if (color) btn.style.setProperty('--swatch-color', color);
+    btn.addEventListener('click', () => apply(color));
+    swatches.appendChild(btn);
+  };
+
+  addSwatch(undefined, t('contextMenu.project.colorNone'));
+  for (const color of PROJECT_COLOR_PALETTE) addSwatch(color, color);
+
+  // Custom: a native color input styled as a swatch. It shows the current color
+  // when that is not a preset, and applies on `change` (picker closed / confirmed).
+  const isCustom = !!current && !PROJECT_COLOR_PALETTE.includes(current);
+  const custom = document.createElement('label');
+  custom.className = 'project-color-swatch custom' + (isCustom ? ' selected' : '');
+  custom.title = t('contextMenu.project.colorCustom');
+  if (isCustom) custom.style.setProperty('--swatch-color', current);
+  const input = document.createElement('input');
+  input.type = 'color';
+  input.value = current ?? PROJECT_COLOR_PALETTE[0];
+  input.setAttribute('aria-label', t('contextMenu.project.colorCustom'));
+  input.addEventListener('change', () => apply(input.value));
+  custom.appendChild(input);
+  swatches.appendChild(custom);
+
+  row.append(label, swatches);
+  // Clicks between swatches must not fall through to the menu's dismiss handler.
+  row.addEventListener('click', (e) => e.stopPropagation());
+  return row;
 }
 
 function hideProjectContextMenu(): void {

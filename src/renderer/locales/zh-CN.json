@@ -143,7 +143,10 @@
       "rename": "重命名",
       "closeAllSessions": "关闭所有会话",
       "settings": "项目设置…",
-      "removeProject": "移除项目"
+      "removeProject": "移除项目",
+      "color": "颜色",
+      "colorNone": "无颜色",
+      "colorCustom": "自定义颜色…"
     },
     "tab": {
       "rename": "重命名",

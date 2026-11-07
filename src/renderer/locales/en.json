@@ -143,7 +143,10 @@
       "rename": "Rename",
       "closeAllSessions": "Close All Sessions",
       "settings": "Project Settings…",
-      "removeProject": "Remove Project"
+      "removeProject": "Remove Project",
+      "color": "Color",
+      "colorNone": "No color",
+      "colorCustom": "Custom color…"
     },
     "tab": {
       "rename": "Rename",

@@ -291,6 +291,8 @@ export interface ProjectRecord {
   readinessHistory?: ReadinessSnapshot[];
   overviewLayout?: OverviewLayout;
   githubLastSeen?: Record<string, string>;
+  /** Persisted: user-chosen tint for the project's sidebar card, as lowercase `#rrggbb`. Unset = theme default. */
+  color?: string;
 }
 
 // --- Overview Widgets ---

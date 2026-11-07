@@ -435,6 +435,92 @@
   background: transparent;
 }
 
+/* User-chosen project color (ProjectRecord.color → --project-color on the row).
+   Mixed into the theme surface rather than used raw, so any hue keeps the text
+   readable on both the dark and light themes. */
+.project-row.has-color:not(.active) .project-item {
+  background: color-mix(in srgb, var(--project-color) 12%, transparent);
+  box-shadow: inset 3px 0 0 0 var(--project-color);
+}
+
+.project-row.has-color:not(.active) .project-item:hover {
+  background: color-mix(in srgb, var(--project-color) 20%, transparent);
+}
+
+.project-row.has-color.active {
+  background: color-mix(in srgb, var(--project-color) 16%, var(--bg-tertiary));
+  border-color: color-mix(in srgb, var(--project-color) 45%, var(--border));
+}
+
+/* Collapsed sidebar shows only the active project's avatar: tint the tile. */
+#sidebar.collapsed .project-row.has-color .project-avatar {
+  background: linear-gradient(160deg, var(--project-color), color-mix(in srgb, var(--project-color) 70%, #000));
+}
+
+/* Project context menu: color swatches. */
+.project-color-row {
+  padding: 6px 14px 8px;
+  cursor: default;
+}
+
+.project-color-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.project-color-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 168px;
+}
+
+.project-color-swatch {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--swatch-color, var(--bg-tertiary));
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.project-color-swatch:hover {
+  transform: scale(1.15);
+}
+
+.project-color-swatch.selected {
+  box-shadow: 0 0 0 2px var(--bg-secondary), 0 0 0 3px var(--text-primary);
+}
+
+/* "No color": a diagonal slash. */
+.project-color-swatch.none::after {
+  content: '';
+  position: absolute;
+  inset: 7px 1px;
+  background: var(--text-muted);
+  transform: rotate(-45deg);
+}
+
+/* Custom: rainbow ring until a custom color is set; the native input sits on top, invisible. */
+.project-color-swatch.custom:not(.selected) {
+  background: conic-gradient(#e94560, #f4b400, #34a853, #14b8a6, #4285f4, #8b5cf6, #ec4899, #e94560);
+}
+
+.project-color-swatch.custom input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+}
+
 /* Avatar initial for the active project. */
 .project-avatar {
   flex-shrink: 0;

@@ -3,6 +3,7 @@ import type { SessionRecord, ProjectRecord, Preferences, PersistedState, Archive
 import { getProviderCapabilities, getProviderAvailabilitySnapshot } from './provider-availability.js';
 import { basename } from '../shared/platform.js';
 import { isCliSession, sortDetachedLast, tabSessions } from './session-utils.js';
+import { normalizeProjectColor } from './project-colors.js';
 import { archiveSession as archiveSessionPure } from './state/session-archive.js';
 import {
   buildResumedSession,
@@ -356,6 +357,18 @@ class AppState {
     const trimmed = name.trim();
     if (!trimmed || trimmed === project.name) return;
     project.name = trimmed.slice(0, MAX_PROJECT_NAME_LENGTH);
+    this.persist();
+    this.emit('project-changed');
+  }
+
+  /** Tint the project's sidebar card. `undefined` (or anything that is not `#rrggbb`) clears it. */
+  setProjectColor(id: string, color: string | undefined): void {
+    const project = this.state.projects.find((p) => p.id === id);
+    if (!project) return;
+    const next = normalizeProjectColor(color);
+    if (next === project.color) return;
+    if (next) project.color = next;
+    else delete project.color;
     this.persist();
     this.emit('project-changed');
   }
