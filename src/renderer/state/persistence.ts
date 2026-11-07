@@ -42,6 +42,8 @@ export function hydrateLoadedState(state: PersistedState, defaultPreferences: Pr
  */
 export function ensureProjectDefaults(state: PersistedState): void {
   for (const project of state.projects) {
+    // Temporary sessions are ephemeral; drop any history an older build kept.
+    if (project.temporary) delete project.sessionHistory;
     if (!project.board) project.board = createDefaultBoard();
     // Renderers trust project.color to be canonical #rrggbb; drop anything else.
     const color = normalizeProjectColor(project.color);

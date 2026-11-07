@@ -4,7 +4,7 @@ import type { CtlCommand, CtlResult } from '../shared/ctl-protocol.js';
 
 export interface VibeyardApi {
   pty: {
-    create(sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs?: string, providerId?: ProviderId, initialPrompt?: string, systemPrompt?: string, envVars?: string, configDir?: string, cliName?: string): Promise<void>;
+    create(sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs?: string, providerId?: ProviderId, initialPrompt?: string, systemPrompt?: string, envVars?: string, configDir?: string, cliName?: string, remoteHost?: string): Promise<void>;
     createShell(sessionId: string, cwd: string): Promise<void>;
     write(sessionId: string, data: string): void;
     resize(sessionId: string, cols: number, rows: number): void;
@@ -12,6 +12,14 @@ export interface VibeyardApi {
     getCwd(sessionId: string): Promise<string | null>;
     onData(callback: (sessionId: string, data: string) => void): () => void;
     onExit(callback: (sessionId: string, exitCode: number, signal?: number) => void): () => void;
+  };
+  remote: {
+    /** Verify a directory on an SSH host and return its absolute path. */
+    resolveDir(host: string, remotePath: string): Promise<{ ok: true; path: string } | { ok: false; error: string }>;
+    /** Host aliases from ~/.ssh/config (wildcards and `User git` entries skipped). */
+    listHosts(): Promise<Array<{ alias: string; hostName?: string; user?: string; port?: string }>>;
+    /** Subdirectory names of `remoteDir` on `host` ([] on failure). */
+    listDirs(host: string, remoteDir: string): Promise<string[]>;
   };
   session: {
     transcriptExists(providerId: ProviderId, cliSessionId: string | null, projectPath: string, configDir?: string): Promise<boolean>;

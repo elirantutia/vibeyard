@@ -1,5 +1,6 @@
 import type { ArchivedSession, ProjectRecord, ProviderId, SessionRecord } from '../../shared/types.js';
 import { getCost } from '../session-cost.js';
+import { locationFields } from '../session-utils.js';
 
 const HISTORY_CAP = 500;
 
@@ -19,6 +20,7 @@ export function archiveSession(project: ProjectRecord, session: SessionRecord): 
     closedAt: new Date().toISOString(),
     teamMemberId: session.teamMemberId,
     profileId: session.profileId,
+    ...locationFields(session),
     cost: costInfo ? {
       totalCostUsd: costInfo.totalCostUsd,
       totalInputTokens: costInfo.totalInputTokens,
@@ -67,6 +69,7 @@ export function buildResumedSession(archived: ArchivedSession): SessionRecord {
     createdAt: new Date().toISOString(),
     teamMemberId: archived.teamMemberId,
     profileId: archived.profileId,
+    ...locationFields(archived),
   };
 }
 

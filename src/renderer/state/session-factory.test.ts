@@ -37,3 +37,23 @@ describe('buildCliSession', () => {
     expect('envVars' in session).toBe(false);
   });
 });
+
+describe('buildCliSession location', () => {
+  it('stores an ad-hoc SSH location on the session', () => {
+    const session = buildCliSession({ name: 'S1', providerId: 'claude', location: { host: 'box', path: '/tmp/x' } });
+    expect(session.sshHost).toBe('box');
+    expect(session.runPath).toBe('/tmp/x');
+  });
+
+  it('stores a local location without a host', () => {
+    const session = buildCliSession({ name: 'S1', providerId: 'claude', location: { path: '/tmp/x' } });
+    expect(session.runPath).toBe('/tmp/x');
+    expect('sshHost' in session).toBe(false);
+  });
+
+  it('omits the location fields for a regular session', () => {
+    const session = buildCliSession({ name: 'S1', providerId: 'claude' });
+    expect('sshHost' in session).toBe(false);
+    expect('runPath' in session).toBe(false);
+  });
+});

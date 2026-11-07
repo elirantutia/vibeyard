@@ -129,6 +129,15 @@ export interface SessionRecord {
    * Detached sessions are kept at the end of `project.sessions`.
    */
   detached?: boolean;
+  /**
+   * Persisted: ad-hoc location. When `runPath` is set this CLI session runs in
+   * that directory instead of the project's own path — on the SSH host
+   * `sshHost` (ssh_config alias or user@host) when set, else locally. Used by
+   * the Temporary project's sessions, which have no project folder.
+   */
+  runPath?: string;
+  /** Persisted: SSH host `runPath` lives on; unset = this computer. Only meaningful with `runPath`. */
+  sshHost?: string;
   /** Transient: initial prompt to inject on first spawn. Not persisted. */
   pendingInitialPrompt?: string;
   /** Transient: system prompt to attach on first spawn. Not persisted (resume must not re-inject). */
@@ -191,6 +200,9 @@ export interface ArchivedSession {
   teamMemberId?: string;
   /** Preserved so a resumed session reuses the same profile config dir (CLAUDE_CONFIG_DIR). */
   profileId?: string;
+  /** Preserved so an ad-hoc-location session resumes in the same directory (and SSH host). */
+  sshHost?: string;
+  runPath?: string;
   cost: {
     totalCostUsd: number;
     totalInputTokens: number;
@@ -293,6 +305,20 @@ export interface ProjectRecord {
   githubLastSeen?: Record<string, string>;
   /** Persisted: user-chosen tint for the project's sidebar card, as lowercase `#rrggbb`. Unset = theme default. */
   color?: string;
+  /**
+   * SSH destination (ssh_config alias or user@host). When set, `path` is a
+   * directory on that host and every CLI session runs there via `ssh -t`
+   * (see src/main/remote-ssh.ts). Local-filesystem features are disabled.
+   */
+  remoteHost?: string;
+  /**
+   * Persisted: the built-in Temporary project (id `vibeyard-temporary`). It has
+   * no folder (`path` is ''); each of its sessions carries its own location
+   * (`SessionRecord.runPath`/`sshHost`). Hidden while it has no CLI session,
+   * always listed last, and project-folder features (git, files, kanban,
+   * overview, team, project terminal) are off for it.
+   */
+  temporary?: boolean;
 }
 
 // --- Overview Widgets ---

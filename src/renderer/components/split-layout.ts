@@ -88,7 +88,7 @@ import {
   getTeamInstance,
 } from './team/pane.js';
 import { quickNewSession } from './tab-bar.js';
-import { isCliSession } from '../session-utils.js';
+import { isCliSession, sessionLocation } from '../session-utils.js';
 import { isInRelativeOrder } from './pane-order.js';
 import { shouldFocusPane, type PaneFocusMemo } from './pane-focus.js';
 
@@ -191,7 +191,7 @@ export function initSplitLayout(): void {
 }
 
 function onSessionAdded(data: unknown): void {
-  const { projectId, session } = data as { projectId: string; session: { id: string; type?: string; cliSessionId: string | null; providerId?: string; args?: string; envVars?: string; profileId?: string; cwd?: string; diffFilePath?: string; diffArea?: string; worktreePath?: string; fileReaderPath?: string; fileReaderLine?: number; browserTabUrl?: string } };
+  const { projectId, session } = data as { projectId: string; session: { id: string; type?: string; cliSessionId: string | null; providerId?: string; args?: string; envVars?: string; profileId?: string; cwd?: string; diffFilePath?: string; diffArea?: string; worktreePath?: string; fileReaderPath?: string; fileReaderLine?: number; browserTabUrl?: string; sshHost?: string; runPath?: string } };
   // Resolve the session's own project, not the active one: external control
   // (vibeyard-ctl new-session) adds sessions to projects that are not in focus,
   // and the pane must get that project's cwd/id and its pending prompt.
@@ -230,7 +230,8 @@ function onSessionAdded(data: unknown): void {
     // Create and spawn immediately
     const cliProviderId = (session.providerId as ProviderId) || 'claude';
     const configDir = sessionConfigDir(session, cliProviderId);
-    createTerminalPane(session.id, project.path, session.cliSessionId, !!session.cliSessionId, session.args || '', cliProviderId, project.id, session.envVars || '', configDir);
+    const loc = sessionLocation(project, session);
+    createTerminalPane(session.id, loc.cwd, session.cliSessionId, !!session.cliSessionId, session.args || '', cliProviderId, project.id, session.envVars || '', configDir, loc.host);
     const pending = appState.consumePendingInitialPrompt(project.id, session.id);
     if (pending) {
       setPendingPrompt(session.id, pending);
@@ -341,7 +342,8 @@ export function renderLayout(): void {
       if (!getTerminalInstance(session.id)) {
         const cliProviderId = session.providerId || 'claude';
         const configDir = sessionConfigDir(session, cliProviderId);
-        createTerminalPane(session.id, project.path, session.cliSessionId, !!session.cliSessionId, session.args || '', cliProviderId, project.id, session.envVars || '', configDir);
+        const loc = sessionLocation(project, session);
+        createTerminalPane(session.id, loc.cwd, session.cliSessionId, !!session.cliSessionId, session.args || '', cliProviderId, project.id, session.envVars || '', configDir, loc.host);
       }
     }
   }

@@ -55,7 +55,11 @@
       "pathPlaceholder": "/path/to/project",
       "browseButton": "浏览",
       "defaultProfileLabel": "默认配置文件",
-      "directoryNotExist": "目录不存在"
+      "directoryNotExist": "目录不存在",
+      "remoteHostLabel": "运行位置（~/.ssh/config 中的 SSH 主机）",
+      "remoteHostInvalid": "无效的 SSH 主机",
+      "remoteCheckFailed": "远程目录检查失败：{error}",
+      "remoteHostLocal": "本机"
     },
     "projectSettings": {
       "title": "项目设置",
@@ -82,7 +86,9 @@
       "tooltip": "Vibeyard 讨论",
       "title": "Vibeyard 讨论",
       "description": "加入关于 AI 编程的讨论"
-    }
+    },
+    "temporaryProject": "临时",
+    "temporaryProjectHint": "在任何项目之外启动的会话"
   },
   "tab": {
     "tooltip": {
@@ -127,7 +133,15 @@
       "providerNotInstalled": "{name}（未安装）",
       "profileLabel": "配置文件",
       "title": "新建会话",
-      "envError": "请使用 KEY=VALUE 格式——非法行：{line}"
+      "envError": "请使用 KEY=VALUE 格式——非法行：{line}",
+      "runOnLabel": "运行位置",
+      "runOnProjectLocal": "此项目",
+      "runOnProjectRemote": "此项目（在 {host} 上）",
+      "remotePathPlaceholder": "~/path/to/folder",
+      "remoteClaudeOnly": "SSH 会话目前仅支持 Claude Code",
+      "runOnLocalFolder": "本机上的其他文件夹（临时）",
+      "folderLabel": "文件夹",
+      "localPathPlaceholder": "/path/to/folder"
     },
     "newMcpInspector": {
       "defaultName": "检查器 {num}"

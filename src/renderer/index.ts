@@ -271,8 +271,9 @@ async function main(): Promise<void> {
   const savedZoom = getZoomFactor();
   if (savedZoom !== 1.0) window.vibeyard.zoom.set(savedZoom);
 
-  // Auto-open new project modal when no projects exist
-  if (appState.projects.length === 0) {
+  // Auto-open new project modal when no projects exist (the built-in
+  // Temporary project, hidden or not, is not one of the user's projects)
+  if (!appState.projects.some((p) => !p.temporary)) {
     promptNewProject();
   }
 

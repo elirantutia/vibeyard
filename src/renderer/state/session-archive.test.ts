@@ -112,3 +112,32 @@ describe('teamMemberId propagation', () => {
     expect(session.teamMemberId).toBe('member-99');
   });
 });
+
+describe('ad-hoc SSH session propagation', () => {
+  it('archives and resumes on the same host and directory', () => {
+    const project = makeProject();
+    archiveSession(project, makeSession({ sshHost: 'box', runPath: '/home/u/scratch' }));
+    const archived = project.sessionHistory![0];
+    expect(archived.sshHost).toBe('box');
+    expect(archived.runPath).toBe('/home/u/scratch');
+    const resumed = buildResumedSession(archived);
+    expect(resumed.sshHost).toBe('box');
+    expect(resumed.runPath).toBe('/home/u/scratch');
+  });
+
+  it('archives and resumes a local ad-hoc folder', () => {
+    const project = makeProject();
+    archiveSession(project, makeSession({ runPath: '/tmp/scratch' }));
+    const resumed = buildResumedSession(project.sessionHistory![0]);
+    expect(resumed.runPath).toBe('/tmp/scratch');
+    expect(resumed.sshHost).toBeUndefined();
+  });
+
+  it('leaves the location fields off a regular session', () => {
+    const project = makeProject();
+    archiveSession(project, makeSession());
+    const resumed = buildResumedSession(project.sessionHistory![0]);
+    expect(resumed.sshHost).toBeUndefined();
+    expect(resumed.runPath).toBeUndefined();
+  });
+});

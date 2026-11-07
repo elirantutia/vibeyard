@@ -38,13 +38,13 @@ describe('FilePathLinkProvider', () => {
 
     // The check is what keeps a dead path from spawning a tab that is torn down
     // a moment later, dropping the user on an unrelated tab.
-    expect(openFileReaderChecked).toHaveBeenCalledWith('p1', 'src/foo/bar.ts', 42);
+    expect(openFileReaderChecked).toHaveBeenCalledWith('p1', '/repo/src/foo/bar.ts', 42);
   });
 
   it('passes no line number when the path carries none', () => {
     const [link] = linksFor('edited src/foo/bar.ts');
     link.activate(cmdClick, link.text);
-    expect(openFileReaderChecked).toHaveBeenCalledWith('p1', 'src/foo/bar.ts', undefined);
+    expect(openFileReaderChecked).toHaveBeenCalledWith('p1', '/repo/src/foo/bar.ts', undefined);
   });
 
   it('ignores a plain click', () => {

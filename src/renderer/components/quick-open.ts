@@ -1,4 +1,5 @@
 import { appState } from '../state.js';
+import { localProjectFolder } from '../../shared/project-folder.js';
 import { openFileReaderChecked } from '../open-file-reader.js';
 
 let overlay: HTMLElement | null = null;
@@ -58,10 +59,13 @@ function onInput(): void {
 async function searchFiles(): Promise<void> {
   const project = appState.activeProject;
   if (!project || !input) return;
+  // No local folder to list (remote project, or the Temporary project whose sessions each have their own).
+  const folder = localProjectFolder(project);
+  if (!folder) { results = []; renderResults(); return; }
 
   const { fileQuery } = parseQuery(input.value);
   try {
-    results = await window.vibeyard.fs.listFiles(project.path, fileQuery);
+    results = await window.vibeyard.fs.listFiles(folder, fileQuery);
   } catch {
     results = [];
   }

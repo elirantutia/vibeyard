@@ -28,6 +28,8 @@ interface TerminalInstance {
   envVars: string;
   /** Resolved profile config dir (CLAUDE_CONFIG_DIR), or undefined for the default ~/.claude. */
   configDir?: string;
+  /** SSH host the CLI runs on (`projectPath` is then a path on that host); undefined = local. */
+  remoteHost?: string;
   isResume: boolean;
   wasResumed: boolean;
   spawned: boolean;
@@ -61,7 +63,8 @@ export function createTerminalPane(
   providerId: ProviderId = 'claude',
   projectId?: string,
   envVars: string = '',
-  configDir?: string
+  configDir?: string,
+  remoteHost?: string
 ): TerminalInstance {
   if (instances.has(sessionId)) {
     return instances.get(sessionId)!;
@@ -140,6 +143,7 @@ export function createTerminalPane(
     args,
     envVars,
     configDir,
+    remoteHost,
     isResume,
     wasResumed: isResume,
     spawned: false,
@@ -166,17 +170,21 @@ export function createTerminalPane(
   const restoredContext = getContext(sessionId);
   if (restoredContext) updateContextDisplay(sessionId, restoredContext);
 
-  // Register file path link provider for Cmd+Click
-  if (projectId) {
-    terminal.registerLinkProvider(new FilePathLinkProvider(projectId, projectPath, terminal));
-  }
-
-  // Register GitHub #123 link provider
-  window.vibeyard.git.getRemoteUrl(projectPath).then((repoUrl) => {
-    if (repoUrl) {
-      terminal.registerLinkProvider(new GithubLinkProvider(repoUrl, terminal));
+  // Both link providers resolve projectPath on the local disk; for an SSH
+  // session it is a path on the remote host, so they would open wrong files.
+  if (!remoteHost) {
+    // Register file path link provider for Cmd+Click
+    if (projectId) {
+      terminal.registerLinkProvider(new FilePathLinkProvider(projectId, projectPath, terminal));
     }
-  });
+
+    // Register GitHub #123 link provider
+    window.vibeyard.git.getRemoteUrl(projectPath).then((repoUrl) => {
+      if (repoUrl) {
+        terminal.registerLinkProvider(new GithubLinkProvider(repoUrl, terminal));
+      }
+    });
+  }
 
   // Handle user input → PTY
   terminal.onData((data) => {
@@ -325,7 +333,7 @@ export async function spawnTerminal(sessionId: string): Promise<void> {
   }
   const cliName = instance.pendingCliName ?? undefined;
   instance.pendingCliName = null;
-  await window.vibeyard.pty.create(sessionId, instance.projectPath, instance.cliSessionId, instance.isResume, instance.args, instance.providerId, initialPrompt, systemPrompt, instance.envVars, instance.configDir, cliName);
+  await window.vibeyard.pty.create(sessionId, instance.projectPath, instance.cliSessionId, instance.isResume, instance.args, instance.providerId, initialPrompt, systemPrompt, instance.envVars, instance.configDir, cliName, instance.remoteHost);
   instance.isResume = true; // subsequent spawns (e.g. Restart Session) should resume
 
   // Callers fire this un-awaited and fit the pane immediately after, so that fit

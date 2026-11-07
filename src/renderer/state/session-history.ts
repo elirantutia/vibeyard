@@ -1,5 +1,6 @@
 import type { ArchivedSession, ProjectRecord, ProviderId, SessionRecord } from '../../shared/types.js';
 import { buildResumedSession, buildResumedSessionFromCliId } from './session-archive.js';
+import { locationFields } from '../session-utils.js';
 
 export function getSessionHistory(project: ProjectRecord | undefined): ArchivedSession[] {
   return project?.sessionHistory ?? [];
@@ -37,6 +38,9 @@ export interface ResumeSourceData {
   name: string;
   /** Source session's profile, so its transcript can be located in the right config dir. */
   profileId?: string;
+  /** Set for an ad-hoc SSH session: its transcript lives on that host, not locally. */
+  sshHost?: string;
+  runPath?: string;
 }
 
 /** Resolve a resume source from either an archived entry id or a live session id. */
@@ -47,12 +51,12 @@ export function resolveResumeSource(
   if (source.archivedSessionId) {
     const archived = project.sessionHistory?.find((a) => a.id === source.archivedSessionId);
     if (!archived || !archived.providerId) return undefined;
-    return { providerId: archived.providerId, cliSessionId: archived.cliSessionId, name: archived.name, profileId: archived.profileId };
+    return { providerId: archived.providerId, cliSessionId: archived.cliSessionId, name: archived.name, profileId: archived.profileId, ...locationFields(archived) };
   }
   if (source.sessionId) {
     const existing = project.sessions.find((s) => s.id === source.sessionId);
     if (!existing || !existing.providerId) return undefined;
-    return { providerId: existing.providerId, cliSessionId: existing.cliSessionId, name: existing.name, profileId: existing.profileId };
+    return { providerId: existing.providerId, cliSessionId: existing.cliSessionId, name: existing.name, profileId: existing.profileId, ...locationFields(existing) };
   }
   return undefined;
 }

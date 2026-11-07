@@ -7,10 +7,16 @@ import { loadProviderAvailability, getProviderAvailabilitySnapshot } from '../..
 import { hideTabContextMenu, setActiveContextMenu, positionMenu } from './menu.js';
 import { t } from '../../i18n.js';
 import { defaultSessionName, nextNumberFor, nextSessionNumber, MCP_INSPECTOR_NAME_KEY } from '../../state/session-naming.js';
+import { attachPathAutocomplete } from '../path-autocomplete.js';
+import { sshHostOptions } from '../../../shared/ssh-host.js';
+import { resolveRunLocation } from '../../run-location.js';
+import { basename } from '../../../shared/platform.js';
 
 export function quickNewSession(): void {
   const project = appState.activeProject;
   if (!project) return;
+  // The Temporary project has no folder of its own: every session needs one picked.
+  if (project.temporary) { void promptNewSession(); return; }
   (document.activeElement as HTMLElement)?.blur?.();
   appState.addSession(project.id, defaultSessionName(project));
 }
@@ -57,12 +63,19 @@ export function showMoreMenu(x: number, y: number): void {
   positionMenu(menu);
 }
 
+/** "Run on" value for "this project" (an SSH alias never contains brackets). '' = this computer, else an SSH host. */
+const RUN_ON_PROJECT = '[project]';
+
 export async function promptNewSession(onCreated?: (session: SessionRecord) => void): Promise<void> {
-  const project = appState.activeProject;
-  if (!project) return;
+  // "This project" is offered only for a real project; the Temporary project
+  // (or no project at all) only takes sessions with their own folder.
+  const active = appState.activeProject;
+  const project = active && !active.temporary ? active : undefined;
 
-  const sessionNum = nextSessionNumber(project);
+  const sessionNum = active ? nextSessionNumber(active) : 1;
 
+  // Independent lookups: fetch the SSH hosts while provider availability loads.
+  const sshHostsPending = window.vibeyard.remote.listHosts().catch(() => []);
   let providerSnapshot = getProviderAvailabilitySnapshot();
   if (!providerSnapshot) {
     await loadProviderAvailability();
@@ -70,34 +83,99 @@ export async function promptNewSession(onCreated?: (session: SessionRecord) => v
   }
   const providers = providerSnapshot?.providers ?? [];
   const availabilityMap = providerSnapshot?.availability ?? new Map();
+  const sshHosts = await sshHostsPending;
+
+  // "Run on": RUN_ON_PROJECT = this project; '' (this computer) / an SSH
+  // alias = a temporary session in a folder of that machine, outside every project.
+  let runOn = project ? RUN_ON_PROJECT : '';
+  const isProject = (value: string) => value === RUN_ON_PROJECT;
+  const hostOf = (value: string) => (isProject(value) ? '' : value);
+  let refreshPathSuggestions: () => void = () => {};
+  const pathInput = () => document.getElementById('modal-run-path') as HTMLInputElement | null;
+  const defaultName = t('tab.newSessionModal.namePlaceholder', { num: sessionNum });
+
+  const preferred = appState.preferences.defaultProvider ?? 'claude';
+  const effectiveProvider = (availabilityMap.get(preferred) ? preferred : providers.find(p => availabilityMap.get(p.id))?.id) ?? 'claude';
+  let selectedProvider: string = effectiveProvider;
+  const claudeProfiles = appState.profiles.filter(p => p.providerId === 'claude');
+  // Profiles only apply to Claude, and only locally: they relocate the *local*
+  // CLAUDE_CONFIG_DIR, while a remote session uses the host's own login.
+  const syncProfileField = () => {
+    if (claudeProfiles.length > 0) setFieldVisible('profile', selectedProvider === 'claude' && !hostOf(runOn));
+  };
+  // Folder only for a temporary session; "keep for future sessions" only for a project.
+  const syncRunOnFields = () => {
+    setFieldVisible('run-path', !isProject(runOn));
+    setFieldVisible('keep-args', isProject(runOn));
+    setFieldVisible('keep-env', isProject(runOn));
+    syncProfileField();
+  };
 
   const fields: FieldDef[] = [
-    { label: t('tab.newSessionModal.nameLabel'), id: 'session-name', placeholder: t('tab.newSessionModal.namePlaceholder', { num: sessionNum }), defaultValue: t('tab.newSessionModal.namePlaceholder', { num: sessionNum }) },
-    { label: t('tab.newSessionModal.argumentsLabel'), id: 'session-args', placeholder: t('tab.newSessionModal.argumentsPlaceholder'), defaultValue: project.defaultArgs ?? '' },
+    { label: t('tab.newSessionModal.nameLabel'), id: 'session-name', placeholder: defaultName, defaultValue: defaultName },
+    {
+      label: t('tab.newSessionModal.runOnLabel'),
+      id: 'run-on',
+      type: 'select',
+      defaultValue: runOn,
+      onSelectChange: (value) => {
+        runOn = value;
+        syncRunOnFields();
+        const input = pathInput();
+        if (!input || isProject(value)) return;
+        input.placeholder = hostOf(value) ? t('tab.newSessionModal.remotePathPlaceholder') : t('tab.newSessionModal.localPathPlaceholder');
+        if (hostOf(value) && !input.value.trim()) input.value = '~/';
+        input.focus();
+        refreshPathSuggestions();
+      },
+      options: [
+        ...(project ? [{ value: RUN_ON_PROJECT, label: project.remoteHost ? t('tab.newSessionModal.runOnProjectRemote', { host: project.remoteHost }) : t('tab.newSessionModal.runOnProjectLocal') }] : []),
+        ...sshHostOptions(sshHosts, t('tab.newSessionModal.runOnLocalFolder')),
+      ],
+    },
+    {
+      label: t('tab.newSessionModal.folderLabel'),
+      id: 'run-path',
+      placeholder: t('tab.newSessionModal.localPathPlaceholder'),
+      buttonLabel: t('sidebar.newProject.browseButton'),
+      onButtonClick: async (input) => {
+        if (hostOf(runOn)) {
+          // No native dialog for a remote filesystem: start at ~/ and show its folders.
+          if (!input.value.trim()) input.value = '~/';
+          input.focus();
+          refreshPathSuggestions();
+          return;
+        }
+        const dir = await window.vibeyard.fs.browseDirectory();
+        if (dir) input.value = dir;
+      },
+    },
+    { label: t('tab.newSessionModal.argumentsLabel'), id: 'session-args', placeholder: t('tab.newSessionModal.argumentsPlaceholder'), defaultValue: project?.defaultArgs ?? '' },
     {
       label: t('tab.newSessionModal.keepArgsLabel'),
       id: 'keep-args',
       type: 'checkbox',
-      defaultValue: project.defaultArgs ? 'true' : undefined,
+      defaultValue: project?.defaultArgs ? 'true' : undefined,
     },
-    { label: t('tab.newSessionModal.envLabel'), id: 'session-env', type: 'textarea', placeholder: t('tab.newSessionModal.envPlaceholder'), defaultValue: project.defaultEnv ?? '' },
+    { label: t('tab.newSessionModal.envLabel'), id: 'session-env', type: 'textarea', placeholder: t('tab.newSessionModal.envPlaceholder'), defaultValue: project?.defaultEnv ?? '' },
     {
       label: t('tab.newSessionModal.keepEnvLabel'),
       id: 'keep-env',
       type: 'checkbox',
-      defaultValue: project.defaultEnv ? 'true' : undefined,
+      defaultValue: project?.defaultEnv ? 'true' : undefined,
     },
   ];
 
-  const preferred = appState.preferences.defaultProvider ?? 'claude';
-  const effectiveProvider = (availabilityMap.get(preferred) ? preferred : providers.find(p => availabilityMap.get(p.id))?.id) ?? 'claude';
   if (providers.length > 1) {
     fields.unshift({
       label: t('tab.newSessionModal.providerLabel'),
       id: 'provider',
       type: 'select',
       defaultValue: effectiveProvider,
-      onSelectChange: (value) => setProfileFieldVisible(value === 'claude'),
+      onSelectChange: (value) => {
+        selectedProvider = value;
+        syncProfileField();
+      },
       options: providers.map(p => {
         const available = availabilityMap.get(p.id);
         return { value: p.id, label: available ? p.displayName : t('tab.newSessionModal.providerNotInstalled', { name: p.displayName }), disabled: !available };
@@ -106,13 +184,12 @@ export async function promptNewSession(onCreated?: (session: SessionRecord) => v
   }
 
   // Profile picker (Claude only). Defaults to the project/global default.
-  const claudeProfiles = appState.profiles.filter(p => p.providerId === 'claude');
   if (claudeProfiles.length > 0) {
     fields.push({
       label: t('tab.newSessionModal.profileLabel'),
       id: 'profile',
       type: 'select',
-      defaultValue: project.defaultProfileId ?? appState.preferences.defaultProfileId ?? '',
+      defaultValue: project?.defaultProfileId ?? appState.preferences.defaultProfileId ?? '',
       options: [
         { value: '', label: t('sidebar.defaultProfileOption') },
         ...claudeProfiles.map(p => ({ value: p.id, label: p.name })),
@@ -120,8 +197,8 @@ export async function promptNewSession(onCreated?: (session: SessionRecord) => v
     });
   }
 
-  showModal(t('tab.newSessionModal.title'), fields, (values) => {
-    const name = values['session-name']?.trim();
+  showModal(t('tab.newSessionModal.title'), fields, async (values) => {
+    let name = values['session-name']?.trim();
     if (!name) return;
 
     const envVars = values['session-env']?.trim() || undefined;
@@ -133,28 +210,51 @@ export async function promptNewSession(onCreated?: (session: SessionRecord) => v
       }
     }
 
-    closeModal();
-    const args = values['session-args']?.trim() || undefined;
-    const keepArgs = values['keep-args'] === 'true';
-    project.defaultArgs = keepArgs ? (args || undefined) : undefined;
-    const keepEnv = values['keep-env'] === 'true';
-    project.defaultEnv = keepEnv ? (envVars || undefined) : undefined;
     const providerId = (values['provider'] || 'claude') as ProviderId;
-    // Profiles only apply to Claude; ignore the field for other providers.
-    const profileId = providerId === 'claude' ? (values['profile'] || undefined) : undefined;
-    const session = appState.addSession(project.id, name, args, providerId, profileId, envVars);
+    const runOnValue = values['run-on'] ?? '';
+    const sshHost = hostOf(runOnValue);
+    // Remote spawns support only Claude — whether the host is picked here or is the project's own.
+    if ((sshHost || (isProject(runOnValue) && project?.remoteHost)) && providerId !== 'claude') {
+      setModalError(values['provider'] !== undefined ? 'provider' : 'run-on', t('tab.newSessionModal.remoteClaudeOnly'));
+      return;
+    }
+    const args = values['session-args']?.trim() || undefined;
+    // Profiles only apply to Claude; ignore the field for other providers and remote hosts.
+    const profileId = providerId === 'claude' && !sshHost ? (values['profile'] || undefined) : undefined;
+
+    if (isProject(runOnValue) && project) {
+      closeModal();
+      project.defaultArgs = values['keep-args'] === 'true' ? (args || undefined) : undefined;
+      project.defaultEnv = values['keep-env'] === 'true' ? (envVars || undefined) : undefined;
+      const session = appState.addSession(project.id, name, args, providerId, profileId, envVars);
+      if (session && onCreated) onCreated(session);
+      return;
+    }
+
+    // Temporary session: resolve and verify the folder on the chosen machine.
+    const res = await resolveRunLocation(sshHost, values['run-path']?.trim() || '~');
+    if (!res.ok) {
+      setModalError(res.field === 'host' ? 'run-on' : 'run-path', res.error);
+      return;
+    }
+    const location = { path: res.path, ...(sshHost ? { host: sshHost } : {}) };
+    // Untouched default name: label the tab with where it runs instead.
+    if (name === defaultName) name = `${basename(location.path) || location.path}${sshHost ? ` @ ${sshHost}` : ''}`;
+
+    closeModal();
+    const session = appState.addTemporarySession(name, location, args, providerId, envVars, profileId);
     if (session && onCreated) onCreated(session);
   });
 
-  // Profiles only apply to Claude — hide the field when the dialog opens
-  // defaulted to a non-Claude provider. The provider select's onSelectChange
-  // keeps it in sync as the user switches.
-  if (claudeProfiles.length > 0) setProfileFieldVisible(effectiveProvider === 'claude');
+  syncRunOnFields();
+  // Folder: local or remote autocomplete, following the "Run on" choice.
+  const input = pathInput();
+  if (input) refreshPathSuggestions = attachPathAutocomplete(input, { getHost: () => hostOf(runOn) }).refresh;
 }
 
-/** Toggle the Profile field's wrapper in the open New Session modal. */
-function setProfileFieldVisible(visible: boolean): void {
-  const wrapper = document.getElementById('modal-profile')?.closest('.modal-field') as HTMLElement | null;
+/** Toggle a field's wrapper in the open modal by field id. */
+function setFieldVisible(id: string, visible: boolean): void {
+  const wrapper = document.getElementById(`modal-${id}`)?.closest('.modal-field') as HTMLElement | null;
   if (wrapper) wrapper.style.display = visible ? '' : 'none';
 }
 

@@ -7,7 +7,7 @@ export type { CostData } from '../shared/types';
 
 export interface VibeyardApi {
   pty: {
-    create(sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs?: string, providerId?: ProviderId, initialPrompt?: string, systemPrompt?: string, envVars?: string, configDir?: string, cliName?: string): Promise<void>;
+    create(sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs?: string, providerId?: ProviderId, initialPrompt?: string, systemPrompt?: string, envVars?: string, configDir?: string, cliName?: string, remoteHost?: string): Promise<void>;
     createShell(sessionId: string, cwd: string): Promise<void>;
     write(sessionId: string, data: string): void;
     resize(sessionId: string, cols: number, rows: number): void;
@@ -15,6 +15,13 @@ export interface VibeyardApi {
     getCwd(sessionId: string): Promise<string | null>;
     onData(callback: (sessionId: string, data: string) => void): () => void;
     onExit(callback: (sessionId: string, exitCode: number, signal?: number) => void): () => void;
+  };
+  remote: {
+    resolveDir(host: string, remotePath: string): Promise<{ ok: true; path: string } | { ok: false; error: string }>;
+    /** Host aliases from ~/.ssh/config (wildcards and `User git` entries skipped). */
+    listHosts(): Promise<Array<{ alias: string; hostName?: string; user?: string; port?: string }>>;
+    /** Subdirectory names of `remoteDir` on `host` ([] on failure). */
+    listDirs(host: string, remoteDir: string): Promise<string[]>;
   };
   session: {
     buildResumeWithPrompt(sourceProviderId: ProviderId, sourceCliSessionId: string | null, projectPath: string, sessionName: string, configDir?: string): Promise<string>;
@@ -180,8 +187,8 @@ function onChannel(channel: string, callback: (...args: unknown[]) => void): () 
 
 const api: VibeyardApi = {
   pty: {
-    create: (sessionId, cwd, cliSessionId, isResume, extraArgs, providerId, initialPrompt, systemPrompt, envVars, configDir, cliName) =>
-      ipcRenderer.invoke('pty:create', sessionId, cwd, cliSessionId, isResume, extraArgs || '', providerId || 'claude', initialPrompt, systemPrompt, envVars || '', configDir, cliName),
+    create: (sessionId, cwd, cliSessionId, isResume, extraArgs, providerId, initialPrompt, systemPrompt, envVars, configDir, cliName, remoteHost) =>
+      ipcRenderer.invoke('pty:create', sessionId, cwd, cliSessionId, isResume, extraArgs || '', providerId || 'claude', initialPrompt, systemPrompt, envVars || '', configDir, cliName, remoteHost),
     createShell: (sessionId, cwd) =>
       ipcRenderer.invoke('pty:createShell', sessionId, cwd),
     write: (sessionId, data) =>
@@ -197,6 +204,11 @@ const api: VibeyardApi = {
     onExit: (callback) =>
       onChannel('pty:exit', (sessionId, exitCode, signal) =>
         callback(sessionId as string, exitCode as number, signal as number | undefined)),
+  },
+  remote: {
+    resolveDir: (host, remotePath) => ipcRenderer.invoke('remote:resolveDir', host, remotePath),
+    listHosts: () => ipcRenderer.invoke('remote:listHosts'),
+    listDirs: (host, remoteDir) => ipcRenderer.invoke('remote:listDirs', host, remoteDir),
   },
   session: {
     buildResumeWithPrompt: (sourceProviderId, sourceCliSessionId, projectPath, sessionName, configDir) =>

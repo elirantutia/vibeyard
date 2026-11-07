@@ -1,4 +1,5 @@
 import { appState } from './state.js';
+import { localProjectFolder } from '../shared/project-folder.js';
 import { onChange as onStatusChange } from './session-activity.js';
 import type { GitWorktree } from './types.js';
 
@@ -88,6 +89,8 @@ async function detectSessionWorktree(sessionId: string): Promise<void> {
 
 async function poll(): Promise<void> {
   if (!appState.activeProject) return;
+  // Remote (SSH) projects and the folder-less Temporary project have no local working tree to inspect.
+  if (!localProjectFolder(appState.activeProject)) return;
   // A poll is already running. Flag a re-poll so it picks up the latest active
   // project when it finishes, instead of dropping this request on the floor.
   if (polling) {
@@ -103,7 +106,7 @@ async function poll(): Promise<void> {
       // Re-read each iteration: the active project may have changed while the
       // previous iteration was awaiting (that's why we looped).
       const project = appState.activeProject;
-      if (!project) break;
+      if (!project || !localProjectFolder(project)) break;
 
       // Refresh worktree list every 3rd poll (~30s)
       worktreePollCounter++;
@@ -217,7 +220,8 @@ export function startPolling(): void {
 
   // Start watcher for current project
   if (appState.activeProject) {
-    window.vibeyard.git.watchProject(appState.activeProject.path);
+    const folder = localProjectFolder(appState.activeProject);
+    if (folder) window.vibeyard.git.watchProject(folder);
   }
 
   // Pause/resume when window visibility changes
@@ -239,7 +243,8 @@ export function startPolling(): void {
       stopInterval();
       return;
     }
-    window.vibeyard.git.watchProject(appState.activeProject.path);
+    const folder = localProjectFolder(appState.activeProject);
+    if (folder) window.vibeyard.git.watchProject(folder);
     startInterval(); // ensure the periodic timer is running
     poll(); // immediate refresh — startInterval() no-ops when a timer already exists
   };

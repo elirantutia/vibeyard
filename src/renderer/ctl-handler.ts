@@ -59,6 +59,8 @@ export function handleCtlCommand(deps: CtlHandlerDeps, callerId: string, command
         ? findProject(deps, command.project)
         : findSession(deps, callerId)?.project;
       if (!project) return ctlError('unknown_project', command.project !== undefined ? `no project '${command.project}'` : 'caller tab no longer exists; pass --project');
+      // Its sessions each need a folder picked; ctl has no way to give one.
+      if (project.temporary) return ctlError('unsupported', 'the Temporary project has no folder; pass --project <id|path> of a real project');
       if (command.provider !== undefined && !deps.isKnownProvider(command.provider)) return ctlError('invalid_request', `unknown provider '${command.provider}'`);
       // An explicit profile that doesn't exist, or belongs to another provider
       // than the one that will run, must fail: falling through to the default

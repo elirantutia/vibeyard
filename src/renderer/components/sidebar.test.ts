@@ -124,6 +124,15 @@ describe('projectRenderOrder', () => {
     expect(projectRenderOrder([proj('a'), proj('b')], 'ghost').some((e) => e.isActive)).toBe(false);
   });
 
+  it('lists the Temporary project last, and only while it has a session', async () => {
+    const projectRenderOrder = await load();
+    const temp = (sessions: unknown[]) => ({ id: 't', temporary: true, sessions }) as any;
+    const withSession = projectRenderOrder([temp([{ id: 's' }]), proj('a'), proj('b')], 't');
+    expect(withSession.map((e) => e.project.id)).toEqual(['a', 'b', 't']);
+    expect(withSession.find((e) => e.isActive)?.project.id).toBe('t');
+    expect(projectRenderOrder([temp([]), proj('a')], null).map((e) => e.project.id)).toEqual(['a']);
+  });
+
   it('returns an empty plan for no projects', async () => {
     const projectRenderOrder = await load();
     expect(projectRenderOrder([], null)).toEqual([]);

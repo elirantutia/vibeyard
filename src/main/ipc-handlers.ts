@@ -8,6 +8,7 @@ import { addMcpServer, removeMcpServer } from './claude-cli';
 import type { McpServerConfig } from './claude-cli';
 import { loadState, saveState, PersistedState } from './store';
 import { startWatching, cleanupSessionStatus, resyncAllSessions } from './hook-status';
+import { resolveRemoteDir, listSshHosts, listRemoteDirs } from './remote-ssh';
 import { startCodexSessionWatcher, registerPendingCodexSession, unregisterCodexSession } from './codex-session-watcher';
 import { getGitStatus, getGitFiles, getGitDiff, getGitWorktrees, gitStageFile, gitUnstageFile, gitDiscardFile, getGitRemoteUrl, listGitBranches, checkoutGitBranch, createGitBranch } from './git-status';
 import { startGitWatcher, stopGitWatcher, notifyGitChanged } from './git-watcher';
@@ -35,13 +36,14 @@ import { buildVibeyardignoreMatcher } from './vibeyardignore';
 import { setCloseConfirmed } from './close-state';
 import { provisionProfileDir } from './profiles';
 import { getKeychainIsolationStatus } from './claude-keychain';
+import { knownProjectRoots, isWithinRoots } from './project-roots';
 
 /**
- * Check if a resolved path is within one of the known project directories.
+ * Check if a resolved path is within one of the known project directories
+ * (see knownProjectRoots: never the Temporary project's empty path).
  */
 function isWithinKnownProject(resolvedPath: string): boolean {
-  const state = loadState();
-  return state.projects.some(p => resolvedPath.startsWith(p.path + path.sep) || resolvedPath === p.path);
+  return isWithinRoots(resolvedPath, knownProjectRoots(loadState().projects));
 }
 
 /**
@@ -149,7 +151,7 @@ export function resetHookWatcher(): void {
 }
 
 export function registerIpcHandlers(): void {
-  ipcMain.handle('pty:create', async (_event, sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs: string, providerId: ProviderId = 'claude', initialPrompt?: string, systemPrompt?: string, envVars: string = '', configDir?: string, cliName?: string) => {
+  ipcMain.handle('pty:create', async (_event, sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs: string, providerId: ProviderId = 'claude', initialPrompt?: string, systemPrompt?: string, envVars: string = '', configDir?: string, cliName?: string, remoteHost?: string) => {
     const win = BrowserWindow.getAllWindows()[0];
     if (!win) return;
 
@@ -193,8 +195,13 @@ export function registerIpcHandlers(): void {
         }
       },
       configDir,
-      cliName
+      cliName,
+      remoteHost
     );
+
+    // Remote sessions run with their own --settings file on the host; the
+    // local settings check below does not apply to them.
+    if (remoteHost) return;
 
     // Validate after spawnPty — Copilot installs per-project hooks there, so
     // validating earlier would see an empty config on a project's first spawn.
@@ -217,6 +224,10 @@ export function registerIpcHandlers(): void {
       }
     }
   });
+
+  ipcMain.handle('remote:listHosts', () => listSshHosts());
+  ipcMain.handle('remote:listDirs', (_event, host: string, remoteDir: string) => listRemoteDirs(host, remoteDir));
+  ipcMain.handle('remote:resolveDir', (_event, host: string, remotePath: string) => resolveRemoteDir(host, remotePath));
 
   ipcMain.handle('pty:createShell', (_event, sessionId: string, cwd: string) => {
     const win = BrowserWindow.getAllWindows()[0];

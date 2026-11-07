@@ -12,6 +12,7 @@ import { isWin, pathSep, utf8LocaleEnv } from './platform';
 import { nvmDefaultNodeBinDir } from './providers/nvm';
 import { issueCtlToken, revokeCtlToken } from './ctl-tokens';
 import { CTL_BIN_DIR, CTL_COMMAND_PATH, CTL_COMMANDS_DIR } from './ctl-paths';
+import { ensureRemoteSetup, stageRemoteEnv, buildRemoteClaudeCommand, resolveSshBinary, watchRemoteSession, unwatchRemoteSession, type RemoteInfo } from './remote-ssh';
 
 interface PtyInstance {
   process: pty.IPty;
@@ -191,7 +192,8 @@ export async function spawnPty(
   onData: (data: string) => void,
   onExit: (exitCode: number, signal?: number) => void,
   configDir?: string,
-  cliName?: string
+  cliName?: string,
+  remoteHost?: string
 ): Promise<void> {
   if (ptys.has(sessionId)) {
     // Silence the old PTY's exit event so it doesn't remove the new session
@@ -202,6 +204,11 @@ export async function spawnPty(
   registerSession(sessionId);
 
   const provider = getProvider(providerId);
+
+  if (remoteHost) {
+    await spawnRemotePty(sessionId, cwd, remoteHost, provider, providerId, { cliSessionId, isResume, extraArgs, initialPrompt, systemPrompt, cliName }, parseEnvVars(envVars), onData, onExit);
+    return;
+  }
 
   // Copilot CLI loads hooks from <cwd>/.github/hooks/*.json, so we must
   // install the hook file before spawning the binary. Other providers use
@@ -284,6 +291,84 @@ export async function spawnPty(
       // Already pruned (write/resize saw "already exited"); a newer PTY would
       // be in the map and owns the current token, which must survive.
       revokeCtlToken(sessionId);
+    }
+    onExit(exitCode, signal);
+  });
+
+  ptys.set(sessionId, { process: ptyProcess, sessionId });
+}
+
+/**
+ * Spawn a CLI session on an SSH host (see remote-ssh.ts). The local PTY runs
+ * `ssh -t`; status comes back through the per-host mirror into STATUS_DIR.
+ * Errors are written into the pane (never thrown): the renderer fires
+ * pty.create un-awaited.
+ */
+async function spawnRemotePty(
+  sessionId: string,
+  remotePath: string,
+  remoteHost: string,
+  provider: ReturnType<typeof getProvider>,
+  providerId: ProviderId,
+  argOpts: Parameters<ReturnType<typeof getProvider>['buildArgs']>[0],
+  sessionEnv: Record<string, string>,
+  onData: (data: string) => void,
+  onExit: (exitCode: number, signal?: number) => void,
+): Promise<void> {
+  const fail = (msg: string) => {
+    onData(`\r\n\x1b[31m${msg}\x1b[0m\r\n`);
+    onExit(1);
+  };
+  if (providerId !== 'claude') {
+    fail(`Remote (SSH) sessions currently support only Claude Code, not '${providerId}'.`);
+    return;
+  }
+
+  onData(`\x1b[2mConnecting to ${remoteHost}…\x1b[0m\r\n`);
+  let info: RemoteInfo;
+  let envFile: string | undefined;
+  try {
+    info = await ensureRemoteSetup(remoteHost);
+    envFile = await stageRemoteEnv(info, sessionId, sessionEnv);
+  } catch (err) {
+    fail(`Remote setup on ${remoteHost} failed: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+
+  const remoteCmd = buildRemoteClaudeCommand({
+    sessionId,
+    remotePath,
+    settingsPath: info.settingsPath,
+    claudeArgs: provider.buildArgs(argOpts),
+    envFile,
+  });
+  const env = { ...process.env, TERM: 'xterm-256color' } as Record<string, string>;
+  delete env.CLAUDE_CODE;
+
+  watchRemoteSession(info, sessionId);
+
+  let ptyProcess: pty.IPty;
+  try {
+    ptyProcess = pty.spawn(resolveSshBinary(), ['-t', '-o', 'ServerAliveInterval=30', remoteHost, remoteCmd], {
+      name: 'xterm-256color',
+      cols: 120,
+      rows: 30,
+      cwd: os.homedir(),
+      env,
+    });
+  } catch (err) {
+    unwatchRemoteSession(sessionId);
+    throw err;
+  }
+
+  ptyProcess.onData((data) => onData(data));
+  ptyProcess.onExit(({ exitCode, signal }) => {
+    const current = ptys.get(sessionId);
+    if (current?.process === ptyProcess) {
+      ptys.delete(sessionId);
+      unwatchRemoteSession(sessionId);
+    } else if (!current) {
+      unwatchRemoteSession(sessionId);
     }
     onExit(exitCode, signal);
   });

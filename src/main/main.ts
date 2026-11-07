@@ -5,6 +5,7 @@ import { registerIpcHandlers, resetHookWatcher, getCtlServer } from './ipc-handl
 import { installCtlScript } from './ctl-script';
 import { stripInheritedCtlEnv } from './ctl-tokens';
 import { killAllPtys } from './pty-manager';
+import { stopAllRemoteMirrors } from './remote-ssh';
 import { flushState, loadState } from './store';
 import { createAppMenu } from './menu';
 import { restartAndResync } from './hook-status';
@@ -120,6 +121,7 @@ function createWindow(): void {
     getCtlServer()?.failPending();
     getCtlServer()?.onRendererGone();
     killAllPtys();
+    stopAllRemoteMirrors();
     resetHookWatcher();
     stopAllFileWatchers();
     mainWindow = null;
@@ -203,6 +205,7 @@ app.on('before-quit', (event) => {
     win.webContents.send('app:quitting');
   }
   killAllPtys();
+  stopAllRemoteMirrors();
   getCtlServer()?.stop();
   stopGitWatcher();
   stopAllFileWatchers();

@@ -2,7 +2,9 @@ import { Terminal } from '@xterm/xterm';
 import { getTerminalTheme } from '../terminal-theme.js';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
-import { appState } from '../state.js';
+import { appState, type ProjectRecord } from '../state.js';
+import { sessionLocation } from '../session-utils.js';
+import { localProjectFolder } from '../../shared/project-folder.js';
 import { fitAllVisible } from './terminal-pane.js';
 import { destroySearchBar, hideSearchBar } from './search-bar.js';
 import { shortcutManager, displayKeys } from '../shortcuts.js';
@@ -106,14 +108,25 @@ function createShell(projectId: string): ShellTerminalInstance {
   return instance;
 }
 
-async function spawnShell(instance: ShellTerminalInstance, projectPath: string): Promise<void> {
+/**
+ * Where a project's shell starts: its local folder; else (Temporary or remote
+ * project) the active session's folder when that is local, else home.
+ */
+async function shellCwd(project: ProjectRecord): Promise<string> {
+  const folder = localProjectFolder(project);
+  if (folder) return folder;
+  const loc = sessionLocation(project, project.sessions.find((s) => s.id === project.activeSessionId));
+  return loc.cwd && !loc.host ? loc.cwd : window.vibeyard.fs.expandPath('~');
+}
+
+async function spawnShell(instance: ShellTerminalInstance, project: ProjectRecord): Promise<void> {
   if (instance.spawned) return;
   instance.spawned = true;
 
   const overlay = instance.element.querySelector('.terminal-exit-overlay');
   if (overlay) overlay.remove();
 
-  await window.vibeyard.pty.createShell(instance.sessionId, projectPath);
+  await window.vibeyard.pty.createShell(instance.sessionId, await shellCwd(project));
 }
 
 function activateShellInstance(instance: ShellTerminalInstance): void {
@@ -138,7 +151,7 @@ function activateShellInstance(instance: ShellTerminalInstance): void {
 
   if (!instance.spawned) {
     const project = appState.projects.find(p => p.id === instance.projectId);
-    if (project) spawnShell(instance, project.path);
+    if (project) spawnShell(instance, project);
   }
 }
 
@@ -322,7 +335,7 @@ export function handleShellPtyExit(sessionId: string, exitCode: number): void {
     overlay.remove();
     const project = appState.projects.find(p => p.id === instance.projectId);
     if (project) {
-      spawnShell(instance, project.path);
+      spawnShell(instance, project);
     }
   });
   instance.element.appendChild(overlay);

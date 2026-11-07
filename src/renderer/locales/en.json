@@ -55,7 +55,11 @@
       "pathPlaceholder": "/path/to/project",
       "browseButton": "Browse",
       "defaultProfileLabel": "Default profile",
-      "directoryNotExist": "Directory does not exist"
+      "directoryNotExist": "Directory does not exist",
+      "remoteHostLabel": "Run on (SSH host from ~/.ssh/config)",
+      "remoteHostInvalid": "Invalid SSH host",
+      "remoteCheckFailed": "Remote directory check failed: {error}",
+      "remoteHostLocal": "This computer (local)"
     },
     "projectSettings": {
       "title": "Project Settings",
@@ -82,7 +86,9 @@
       "tooltip": "Vibeyard Discussions",
       "title": "Vibeyard Discussions",
       "description": "Join the conversation about coding with AI"
-    }
+    },
+    "temporaryProject": "Temporary",
+    "temporaryProjectHint": "Sessions started outside any project"
   },
   "tab": {
     "tooltip": {
@@ -127,7 +133,15 @@
       "providerNotInstalled": "{name} (not installed)",
       "profileLabel": "Profile",
       "title": "New Session",
-      "envError": "Use KEY=VALUE — invalid line: {line}"
+      "envError": "Use KEY=VALUE — invalid line: {line}",
+      "runOnLabel": "Run on",
+      "runOnProjectLocal": "This project",
+      "runOnProjectRemote": "This project (on {host})",
+      "remotePathPlaceholder": "~/path/to/folder",
+      "remoteClaudeOnly": "SSH sessions currently support only Claude Code",
+      "runOnLocalFolder": "Another folder on this computer (temporary)",
+      "folderLabel": "Folder",
+      "localPathPlaceholder": "/path/to/folder"
     },
     "newMcpInspector": {
       "defaultName": "Inspector {num}"

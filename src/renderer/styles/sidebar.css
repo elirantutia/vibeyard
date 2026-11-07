@@ -485,6 +485,27 @@
   background: linear-gradient(160deg, var(--project-color), color-mix(in srgb, var(--project-color) 70%, #000));
 }
 
+/* Built-in Temporary project (sessions started outside any project): a neutral
+   light-grey card, always listed last. Mixed from theme tokens so it reads on
+   both themes. */
+.project-row.temporary-project:not(.active) .project-item {
+  background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+  box-shadow: inset 3px 0 0 0 color-mix(in srgb, var(--text-primary) 35%, transparent);
+}
+
+.project-row.temporary-project:not(.active) .project-item:hover {
+  background: color-mix(in srgb, var(--text-primary) 10%, transparent);
+}
+
+.project-row.temporary-project.active {
+  background: color-mix(in srgb, var(--text-primary) 8%, var(--bg-tertiary));
+  border-color: color-mix(in srgb, var(--text-primary) 30%, var(--border));
+}
+
+.project-row.temporary-project .project-path {
+  font-style: italic;
+}
+
 /* Project context menu: color swatches. */
 .project-color-row {
   padding: 6px 14px 8px;

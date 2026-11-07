@@ -784,3 +784,65 @@ function mockCostData() {
   });
 }
 
+describe('Temporary project', () => {
+  it('creates it on the first temporary session, runs the session in its own folder and switches to it', () => {
+    const project = addProject();
+    const session = appState.addTemporarySession('scratch @ box', { path: '/home/u/scratch', host: 'box' })!;
+    const temp = appState.projects.find((p) => p.temporary)!;
+    expect(temp).toBeDefined();
+    expect(temp.path).toBe('');
+    expect(temp.sessions.map((s) => s.id)).toEqual([session.id]);
+    expect(session.runPath).toBe('/home/u/scratch');
+    expect(session.sshHost).toBe('box');
+    expect(appState.activeProjectId).toBe(temp.id);
+    expect(project.sessions).toHaveLength(0);
+  });
+
+  it('reuses the same Temporary project for later sessions', () => {
+    addProject();
+    appState.addTemporarySession('a', { path: '/a' });
+    appState.addTemporarySession('b', { path: '/b' });
+    expect(appState.projects.filter((p) => p.temporary)).toHaveLength(1);
+    expect(appState.projects.find((p) => p.temporary)!.sessions).toHaveLength(2);
+  });
+
+  it('leaves the Temporary project when its last session ends, keeping the record', () => {
+    const project = addProject();
+    const session = appState.addTemporarySession('a', { path: '/a' })!;
+    const temp = appState.projects.find((p) => p.temporary)!;
+    appState.removeSession(temp.id, session.id);
+    expect(appState.activeProjectId).toBe(project.id);
+    expect(appState.projects.some((p) => p.temporary)).toBe(true);
+  });
+});
+
+describe('Temporary project guards', () => {
+  it('is ephemeral: closing a prompted temporary session leaves no history', () => {
+    addProject();
+    const session = appState.addTemporarySession('t', { path: '/t', host: 'box' })!;
+    session.cliSessionId = 'cli-1';
+    const temp = appState.projects.find((p) => p.temporary)!;
+    appState.removeSession(temp.id, session.id);
+    expect(temp.sessionHistory ?? []).toHaveLength(0);
+  });
+
+  it('runs a folder-less session aimed at it in the active session folder', () => {
+    addProject();
+    const first = appState.addTemporarySession('a', { path: '/home/u/x', host: 'box' })!;
+    const temp = appState.projects.find((p) => p.temporary)!;
+    const plan = appState.addSession(temp.id, 'Fix')!;
+    expect(plan.runPath).toBe(first.runPath);
+    expect(plan.sshHost).toBe('box');
+    expect(plan.profileId).toBeUndefined();
+  });
+
+  it('never falls back onto the hidden Temporary project when a project is removed', () => {
+    const a = addProject('A', '/a');
+    const s = appState.addTemporarySession('t', { path: '/t' })!;
+    const temp = appState.projects.find((p) => p.temporary)!;
+    appState.removeSession(temp.id, s.id);
+    appState.setActiveProject(a.id);
+    appState.removeProject(a.id);
+    expect(appState.activeProjectId).toBeNull();
+  });
+});

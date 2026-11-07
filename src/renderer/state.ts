@@ -2,7 +2,7 @@ import type { VibeyardApi } from './types.js';
 import type { SessionRecord, ProjectRecord, Preferences, PersistedState, ArchivedSession, ProviderId, CostInfo, ContextWindowInfo, InitialContextSnapshot, ReadinessResult, ReadinessSnapshot, TeamMember, TeamData, Profile, OverviewLayout } from '../shared/types.js';
 import { getProviderCapabilities, getProviderAvailabilitySnapshot } from './provider-availability.js';
 import { basename } from '../shared/platform.js';
-import { isCliSession, sortDetachedLast, tabSessions } from './session-utils.js';
+import { isCliSession, isProjectVisible, sessionLocation, locationFields, sortDetachedLast, tabSessions, TEMPORARY_PROJECT_ID } from './session-utils.js';
 import { normalizeProjectColor } from './project-colors.js';
 import { archiveSession as archiveSessionPure } from './state/session-archive.js';
 import {
@@ -316,7 +316,7 @@ class AppState {
     this.emit('project-changed');
   }
 
-  addProject(name: string, path: string, defaultProfileId?: string): ProjectRecord {
+  addProject(name: string, path: string, defaultProfileId?: string, remoteHost?: string): ProjectRecord {
     const project: ProjectRecord = {
       id: crypto.randomUUID(),
       name,
@@ -326,6 +326,7 @@ class AppState {
       layout: { mode: 'tabs', splitPanes: [], splitDirection: 'horizontal' },
       board: createDefaultBoard(),
       defaultProfileId,
+      ...(remoteHost ? { remoteHost } : {}),
     };
     this.state.projects.push(project);
     this.state.activeProjectId = project.id;
@@ -335,13 +336,56 @@ class AppState {
     return project;
   }
 
+  /** The built-in Temporary project, created on first use. Does not persist or emit. */
+  private ensureTemporaryProject(): ProjectRecord {
+    let project = this.state.projects.find((p) => p.id === TEMPORARY_PROJECT_ID);
+    if (!project) {
+      project = {
+        id: TEMPORARY_PROJECT_ID,
+        name: 'Temporary',
+        path: '',
+        temporary: true,
+        sessions: [],
+        activeSessionId: null,
+        layout: { mode: 'tabs', splitPanes: [], splitDirection: 'horizontal' },
+        board: createDefaultBoard(),
+      };
+      this.state.projects.push(project);
+    }
+    return project;
+  }
+
+  /**
+   * Start a CLI session outside every project: it goes into the Temporary
+   * project (shown while it holds a session) and runs in `location.path`,
+   * locally or on `location.host`. Switches to the Temporary project.
+   */
+  addTemporarySession(name: string, location: { path: string; host?: string }, args?: string, providerId?: ProviderId, envVars?: string, profileId?: string): SessionRecord | undefined {
+    const project = this.ensureTemporaryProject();
+    this.state.activeProjectId = project.id;
+    const session = this.addSession(project.id, name, args, providerId, profileId, envVars, location);
+    this.emit('project-changed');
+    return session;
+  }
+
+  /** After the Temporary project's last session ends, leave it so the hidden project is never the active one. */
+  private leaveTemporaryProjectIfEmpty(project: ProjectRecord): void {
+    if (!project.temporary || isProjectVisible(project) || this.state.activeProjectId !== project.id) return;
+    this.setActiveProject(this.firstVisibleProjectId());
+  }
+
+  private firstVisibleProjectId(): string | null {
+    return this.state.projects.find(isProjectVisible)?.id ?? null;
+  }
+
   removeProject(id: string): void {
     const project = this.state.projects.find((p) => p.id === id);
     const sessions = project?.sessions ?? [];
 
     this.state.projects = this.state.projects.filter((p) => p.id !== id);
     if (this.state.activeProjectId === id) {
-      this.state.activeProjectId = this.state.projects[0]?.id ?? null;
+      // Never fall back onto the hidden (empty) Temporary project.
+      this.state.activeProjectId = this.firstVisibleProjectId();
     }
     this.persist();
     for (const session of sessions) {
@@ -387,21 +431,34 @@ class AppState {
     return this.addSession(projectId, name, args, providerId, profileId);
   }
 
-  addSession(projectId: string, name: string, args?: string, providerId?: ProviderId, profileId?: string, envVars?: string): SessionRecord | undefined {
+  addSession(projectId: string, name: string, args?: string, providerId?: ProviderId, profileId?: string, envVars?: string, location?: { path: string; host?: string }): SessionRecord | undefined {
     const project = this.state.projects.find((p) => p.id === projectId);
     if (!project) return undefined;
+    // The Temporary project has no folder: a session there without its own
+    // location (plan/fix/split actions aimed at the active project) runs in
+    // the active session's folder, or is not created at all.
+    if (project.temporary && !location) {
+      const active = project.sessions.find((s) => s.id === project.activeSessionId);
+      if (!active?.runPath) return undefined;
+      const loc = sessionLocation(project, active);
+      location = { path: loc.cwd, host: loc.host };
+    }
 
     const cliProviderId = resolveCliProvider(this.state.preferences, providerId);
     // Pin the effective profile (explicit > project default > global default,
     // provider-matched) onto the session at creation so it stays sticky — resume
-    // must reuse the same config dir even if a default changes later.
-    const pinnedProfileId = resolveProfile({ profileId }, project, this.state.preferences, cliProviderId, this.profiles)?.id;
+    // must reuse the same config dir even if a default changes later. A remote
+    // session never gets one: profiles relocate the *local* CLAUDE_CONFIG_DIR.
+    const pinnedProfileId = location?.host
+      ? undefined
+      : resolveProfile({ profileId }, project, this.state.preferences, cliProviderId, this.profiles)?.id;
     const session = buildCliSession({
       name,
       providerId: cliProviderId,
       args: args ?? project.defaultArgs,
       profileId: pinnedProfileId,
       envVars: envVars ?? project.defaultEnv,
+      location,
     });
     attachSessionToProject(project, session, { addToSwarm: true });
     this.commitNewSession(projectId, session);
@@ -765,6 +822,7 @@ class AppState {
     this.persist();
     this.emit('session-removed', { projectId, sessionId });
     this.emit('session-changed');
+    this.leaveTemporaryProjectIfEmpty(project);
   }
 
   /**
@@ -839,12 +897,15 @@ class AppState {
    * that was never prompted has an id but no transcript and would fail to resume.
    */
   private isArchivable(session: SessionRecord, project: ProjectRecord): boolean {
-    if (!session.cliSessionId) return false;
+    // Temporary sessions are ephemeral: closing one leaves no history behind.
+    if (project.temporary || !session.cliSessionId) return false;
+    const loc = sessionLocation(project, session);
+    if (loc.host) return true; // transcript lives on the SSH host
     const providerId = session.providerId ?? 'claude';
     return window.vibeyard.session.transcriptExistsSync(
       providerId,
       session.cliSessionId,
-      project.path,
+      loc.cwd,
       this.profileConfigDir(providerId, session.profileId),
     );
   }
@@ -910,11 +971,13 @@ class AppState {
 
     const archived = project.sessionHistory?.find((a) => a.id === archivedSessionId);
     if (!archived || !archived.cliSessionId) return undefined;
+    const loc = sessionLocation(project, archived);
+    if (loc.host) return this.resumeFromHistory(projectId, archivedSessionId);
 
     const exists = await window.vibeyard.session.transcriptExists(
       archived.providerId,
       archived.cliSessionId,
-      project.path,
+      loc.cwd,
       this.profileConfigDir(archived.providerId, archived.profileId),
     );
     if (!exists) {
@@ -959,6 +1022,10 @@ class AppState {
 
     const resolved = resolveResumeSource(project, source);
     if (!resolved) return undefined;
+    // The handoff reads the source transcript from the local disk and the new
+    // session runs locally; neither holds for a session that ran over SSH.
+    const loc = sessionLocation(project, resolved);
+    if (loc.host) return undefined;
 
     // The source transcript lives under its profile's config dir (if any), so
     // pass it through to locate the right .jsonl when building the handoff.
@@ -966,13 +1033,14 @@ class AppState {
     const initialPrompt = await window.vibeyard.session.buildResumeWithPrompt(
       resolved.providerId,
       resolved.cliSessionId ?? null,
-      project.path,
+      loc.cwd,
       resolved.name,
       sourceProfile?.configDir,
     );
 
     const session: SessionRecord = {
       ...buildCliSession({ name: `${resolved.name} (↪ ${targetProviderId})`, providerId: targetProviderId }),
+      ...locationFields(resolved), // keep running in the source's own folder
       pendingInitialPrompt: initialPrompt,
     };
     attachSessionToProject(project, session, { addToSwarm: true });

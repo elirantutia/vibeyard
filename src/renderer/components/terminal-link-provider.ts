@@ -1,5 +1,6 @@
 import type { ILinkProvider, ILink, IBufferRange, Terminal } from '@xterm/xterm';
 import { openFileReaderChecked } from '../open-file-reader.js';
+import { isAbsolutePath, resolveRelativePath } from '../../shared/platform.js';
 
 // Matches GitHub issue/PR references like #123
 const GITHUB_REF_RE = /#(\d+)/g;
@@ -83,7 +84,10 @@ export class FilePathLinkProvider implements ILinkProvider {
           // Paths scraped from terminal output go stale constantly (deleted
           // files, a different cwd), so validate before opening — see
           // openFileReaderChecked for why opening first is not recoverable.
-          void openFileReaderChecked(this.projectId, filePath, lineNumber);
+          // Relative paths are relative to the session's own folder (a
+          // Temporary-project session has no project folder to fall back on).
+          const target = isAbsolutePath(filePath) ? filePath : resolveRelativePath(this.projectPath, filePath);
+          void openFileReaderChecked(this.projectId, target, lineNumber);
         },
       });
     }

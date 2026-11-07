@@ -5,7 +5,10 @@ import { hasUnreadInProject, onChange as onUnreadChange } from '../session-unrea
 import { onChange as onActivityChange } from '../session-activity.js';
 import { getProjectStatus, projectInitial } from '../project-status.js';
 import { init as initDiscussionsBadge, getNewCount as getDiscussionsNewCount, markSeen as markDiscussionsSeen, onChange as onDiscussionsChange, DISCUSSIONS_URL } from '../discussions-badge.js';
-import { basename, lastSeparatorIndex } from '../../shared/platform.js';
+import { attachPathAutocomplete } from './path-autocomplete.js';
+import { sshHostOptions } from '../../shared/ssh-host.js';
+import { resolveRunLocation } from '../run-location.js';
+import { isProjectVisible } from '../session-utils.js';
 import { deriveProjectName } from '../../shared/project-name.js';
 import { esc } from '../dom-utils.js';
 import { renderFileTree, clearProjectState as clearFileTreeState, closeFileTree } from './file-tree.js';
@@ -162,13 +165,15 @@ function render(): void {
  * Render plan for the project list: every project in its stored
  * (user-reorderable) order, each flagged `isActive` when it is the current
  * project. The active project is marked **in place** — it is never pinned to
- * the top, so selecting a project does not reorder the list.
+ * the top, so selecting a project does not reorder the list. The Temporary
+ * project always comes last, and only while it holds a session.
  */
 export function projectRenderOrder(
   projects: ProjectRecord[],
   activeProjectId: string | null,
 ): Array<{ project: ProjectRecord; isActive: boolean }> {
-  return projects.map((project) => ({ project, isActive: project.id === activeProjectId }));
+  const ordered = [...projects.filter((p) => !p.temporary), ...projects.filter((p) => p.temporary && isProjectVisible(p))];
+  return ordered.map((project) => ({ project, isActive: project.id === activeProjectId }));
 }
 
 /**
@@ -192,7 +197,7 @@ function buildProjectRow(project: ProjectRecord, isActive: boolean, opts: Render
   const wrapper = document.createElement('div');
   // The wrapper carries `.active` so CSS can style the whole row (header + tabs
   // + panel) as one card without a `:has()` selector.
-  wrapper.className = 'project-row' + (isActive ? ' active' : '');
+  wrapper.className = 'project-row' + (isActive ? ' active' : '') + (project.temporary ? ' temporary-project' : '');
   // Canonical #rrggbb: normalized by setProjectColor and on load (ensureProjectDefaults).
   const color = project.color;
   if (color) {
@@ -204,11 +209,13 @@ function buildProjectRow(project: ProjectRecord, isActive: boolean, opts: Render
   const el = document.createElement('div');
   el.className = 'project-item' + (isActive ? ' active' : '');
   el.dataset.projectId = project.id;
-  el.draggable = true;
+  // The Temporary project is pinned last: not draggable, and not a drop target.
+  el.draggable = !project.temporary;
+  const displayName = project.temporary ? t('sidebar.temporaryProject') : project.name;
   // Leading glyph: the active project shows an avatar initial; others show a
   // status dot reflecting their aggregate session activity.
   const lead = isActive
-    ? `<div class="project-avatar" aria-hidden="true">${esc(projectInitial(project.name))}</div>`
+    ? `<div class="project-avatar" aria-hidden="true">${esc(projectInitial(displayName))}</div>`
     : `<span class="project-status ${getProjectStatus(project)}" aria-hidden="true"></span>`;
   const countPill = project.sessions.length
     ? `<span class="project-session-count">${project.sessions.length}</span>`
@@ -223,12 +230,12 @@ function buildProjectRow(project: ProjectRecord, isActive: boolean, opts: Render
   el.innerHTML = `
     ${lead}
     <div class="project-main">
-      <div class="project-name${hasUnreadInProject(project.id) ? ' unread' : ''}">${esc(project.name)}</div>
-      <div class="project-path">${esc(project.path)}</div>
+      <div class="project-name${hasUnreadInProject(project.id) ? ' unread' : ''}">${esc(displayName)}</div>
+      <div class="project-path">${esc(project.temporary ? t('sidebar.temporaryProjectHint') : project.path)}</div>
     </div>
     ${profileBadge}
     ${countPill}
-    <span class="project-delete" title="${esc(t('sidebar.removeProjectTooltip'))}">&times;</span>
+    ${project.temporary ? '' : `<span class="project-delete" title="${esc(t('sidebar.removeProjectTooltip'))}">&times;</span>`}
   `;
 
   el.addEventListener('click', (e) => {
@@ -238,12 +245,14 @@ function buildProjectRow(project: ProjectRecord, isActive: boolean, opts: Render
     appState.setActiveProject(project.id);
   });
 
-  el.querySelector('.project-delete')!.addEventListener('click', () => {
+  el.querySelector('.project-delete')?.addEventListener('click', () => {
     confirmRemoveProject(project);
   });
 
   el.addEventListener('contextmenu', (e) => {
     e.preventDefault();
+    // Rename/color/settings/remove do not apply to the built-in Temporary project.
+    if (project.temporary) return;
     showProjectContextMenu(e.clientX, e.clientY, project);
   });
 
@@ -258,7 +267,7 @@ function buildProjectRow(project: ProjectRecord, isActive: boolean, opts: Render
   });
 
   el.addEventListener('dragover', (e) => {
-    if (el.classList.contains('dragging')) return;
+    if (el.classList.contains('dragging') || project.temporary) return;
     e.preventDefault();
     e.dataTransfer!.dropEffect = 'move';
     const rect = el.getBoundingClientRect();
@@ -302,7 +311,8 @@ function buildProjectRow(project: ProjectRecord, isActive: boolean, opts: Render
 
   wrapper.appendChild(el);
 
-  if (isActive) {
+  // The Temporary project has no folder and keeps no history: no actions, no panels.
+  if (isActive && !project.temporary) {
     // A 'git' panel only stays open while the git view is enabled in prefs.
     let openPanel = projectPanelOpen.get(project.id) ?? null;
     if (openPanel === 'git' && !gitEnabled) openPanel = null;
@@ -433,7 +443,12 @@ export function toggleGitPanel(): void {
   setProjectPanel(project.id, current === 'git' ? null : 'git');
 }
 
-export function promptNewProject(): void {
+export async function promptNewProject(): Promise<void> {
+  const sshHosts = await window.vibeyard.remote.listHosts().catch(() => []);
+  // Set from the "Run on" select; switches Browse + autocomplete to the SSH host.
+  let selectedHost = '';
+  let refreshSuggestions: () => void = () => {};
+  const pathEl = () => document.getElementById('modal-project-path') as HTMLInputElement | null;
   const claudeProfiles = appState.profiles.filter((p) => p.providerId === 'claude');
   const fields: FieldDef[] = [
     { label: t('sidebar.newProject.nameLabel'), id: 'project-name', placeholder: t('sidebar.newProject.namePlaceholder') },
@@ -441,6 +456,13 @@ export function promptNewProject(): void {
       label: t('sidebar.newProject.pathLabel'), id: 'project-path', placeholder: t('sidebar.newProject.pathPlaceholder'),
       buttonLabel: t('sidebar.newProject.browseButton'),
       onButtonClick: async (input) => {
+        if (selectedHost) {
+          // No native dialog for a remote filesystem: start at ~/ and show its folders.
+          if (!input.value.trim()) input.value = '~/';
+          input.focus();
+          refreshSuggestions();
+          return;
+        }
         const dir = await window.vibeyard.fs.browseDirectory();
         if (!dir) return;
         input.value = dir;
@@ -448,6 +470,24 @@ export function promptNewProject(): void {
       },
     },
   ];
+  if (sshHosts.length > 0) {
+    fields.push({
+      label: t('sidebar.newProject.remoteHostLabel'),
+      id: 'remote-host',
+      type: 'select',
+      defaultValue: '',
+      onSelectChange: (value) => {
+        selectedHost = value;
+        const input = pathEl();
+        if (!input) return;
+        input.placeholder = value ? t('sidebar.newProject.remotePathPlaceholder') : t('sidebar.newProject.pathPlaceholder');
+        if (value && !input.value.trim()) input.value = '~/';
+        input.focus();
+        refreshSuggestions();
+      },
+      options: sshHostOptions(sshHosts, t('sidebar.newProject.remoteHostLocal')),
+    });
+  }
   if (claudeProfiles.length > 0) {
     fields.push({
       label: t('sidebar.newProject.defaultProfileLabel'),
@@ -465,15 +505,15 @@ export function promptNewProject(): void {
     const rawPath = values['project-path']?.trim();
     if (!name || !rawPath) return;
 
-    const projectPath = await window.vibeyard.fs.expandPath(rawPath);
-    const isDir = await window.vibeyard.fs.isDirectory(projectPath);
-    if (!isDir) {
-      setModalError('project-path', t('sidebar.newProject.directoryNotExist'));
+    const remoteHost = values['remote-host']?.trim() || '';
+    const res = await resolveRunLocation(remoteHost, rawPath);
+    if (!res.ok) {
+      setModalError(res.field === 'host' ? 'remote-host' : 'project-path', res.error);
       return;
     }
 
     closeModal();
-    appState.addProject(name, projectPath, values['profile'] || undefined);
+    appState.addProject(name, res.path, values['profile'] || undefined, remoteHost || undefined);
   });
 
   const nameInput = document.getElementById('modal-project-name') as HTMLInputElement | null;
@@ -486,88 +526,10 @@ export function promptNewProject(): void {
     }
   };
 
-  // Attach path autocomplete to the rendered input
+  // Attach path autocomplete to the rendered input (local or the selected SSH host)
   const pathInput = document.getElementById('modal-project-path') as HTMLInputElement | null;
   if (pathInput) {
-    const fieldRow = pathInput.parentElement!;
-    fieldRow.style.position = 'relative';
-    fieldRow.style.flexWrap = 'wrap';
-
-    const dropdown = document.createElement('div');
-    dropdown.className = 'path-autocomplete-dropdown';
-    fieldRow.appendChild(dropdown);
-
-    let activeIndex = -1;
-
-    const hideDropdown = () => {
-      dropdown.innerHTML = '';
-      dropdown.classList.remove('visible');
-      activeIndex = -1;
-    };
-
-    const showSuggestions = (dirs: string[], dirPart: string) => {
-      dropdown.innerHTML = '';
-      activeIndex = -1;
-      if (dirs.length === 0) { hideDropdown(); return; }
-      for (const dir of dirs) {
-        const item = document.createElement('div');
-        item.className = 'path-autocomplete-item';
-        item.textContent = dirPart + basename(dir);
-        item.addEventListener('mousedown', (e) => {
-          e.preventDefault();
-          pathInput.value = item.textContent!;
-          hideDropdown();
-          autoFillName(pathInput.value);
-        });
-        dropdown.appendChild(item);
-      }
-      dropdown.classList.add('visible');
-    };
-
-    pathInput.addEventListener('input', async () => {
-      const value = pathInput.value;
-      autoFillName(value);
-      const lastSlash = lastSeparatorIndex(value);
-      if (lastSlash === -1) { hideDropdown(); return; }
-
-      const dirPart = value.substring(0, lastSlash + 1);
-      const namePart = value.substring(lastSlash + 1).toLowerCase();
-
-      const dirs = await window.vibeyard.fs.listDirs(dirPart, namePart || undefined);
-      showSuggestions(dirs, dirPart);
-    });
-
-    pathInput.addEventListener('keydown', (e) => {
-      const items = dropdown.querySelectorAll<HTMLElement>('.path-autocomplete-item');
-      if (!items.length) return;
-
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        items[activeIndex]?.classList.remove('active');
-        activeIndex = Math.min(activeIndex + 1, items.length - 1);
-        items[activeIndex].classList.add('active');
-        items[activeIndex].scrollIntoView({ block: 'nearest' });
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        items[activeIndex]?.classList.remove('active');
-        activeIndex = Math.max(activeIndex - 1, 0);
-        items[activeIndex].classList.add('active');
-        items[activeIndex].scrollIntoView({ block: 'nearest' });
-      } else if ((e.key === 'Enter' || e.key === 'Tab') && activeIndex >= 0) {
-        e.preventDefault();
-        e.stopPropagation();
-        pathInput.value = items[activeIndex].textContent!;
-        hideDropdown();
-        autoFillName(pathInput.value);
-      } else if (e.key === 'Escape') {
-        hideDropdown();
-      }
-    });
-
-    pathInput.addEventListener('blur', () => {
-      setTimeout(hideDropdown, 100);
-      autoFillName(pathInput.value);
-    });
+    refreshSuggestions = attachPathAutocomplete(pathInput, { getHost: () => selectedHost, onValueChange: autoFillName }).refresh;
   }
 }
 
