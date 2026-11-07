@@ -107,6 +107,24 @@ describe('selectActiveSessions with detached sessions', () => {
   });
 });
 
+describe('selectActiveSessions attention flag', () => {
+  it('flags unread sessions that stopped (input/completed), not working or seen ones', () => {
+    const projects = [project('p1', 'Alpha', [
+      { id: 'done' }, { id: 'ask' }, { id: 'busy' }, { id: 'seen' },
+    ])];
+    const unread = new Set(['done', 'ask', 'busy']);
+    const rows = selectActiveSessions(
+      projects,
+      statusMap({ done: 'completed', ask: 'input', busy: 'working', seen: 'completed' }),
+      new Set<SessionStatus>(['working', 'input', 'completed']),
+      true,
+      (id) => unread.has(id),
+    );
+    const flag = Object.fromEntries(rows.map((r) => [r.sessionId, r.attention]));
+    expect(flag).toEqual({ done: true, ask: true, busy: false, seen: false });
+  });
+});
+
 describe('resolveActiveStatuses', () => {
   it('falls back to working/input/completed when unset', () => {
     const set = resolveActiveStatuses({} as Preferences);

@@ -308,6 +308,34 @@
   color: var(--text-secondary);
 }
 
+/* Agent stopped and is waiting on the user (finished or asking for input),
+   not yet seen: the row blinks in its status colour until it is focused. */
+.active-session-row.attention {
+  --attention-color: var(--status-completed);
+  box-shadow: inset 3px 0 0 var(--attention-color);
+  animation: active-session-attention 1.2s ease-in-out infinite;
+}
+
+.active-session-row.attention.input {
+  --attention-color: var(--status-input);
+}
+
+.active-session-row.attention .active-session-name {
+  font-weight: 600;
+}
+
+@keyframes active-session-attention {
+  0%, 100% { background: color-mix(in srgb, var(--attention-color) 28%, transparent); }
+  50% { background: transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .active-session-row.attention {
+    animation: none;
+    background: color-mix(in srgb, var(--attention-color) 20%, transparent);
+  }
+}
+
 /* Ends the session for good (the tab-bar X only closes the tab). */
 .active-session-close {
   flex-shrink: 0;

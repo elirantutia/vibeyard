@@ -6,6 +6,7 @@ import { isCliSession } from '../session-utils.js';
 import { esc } from '../dom-utils.js';
 import { t } from '../i18n.js';
 import { closeSessionWithConfirm } from '../session-close.js';
+import { isUnread, onChange as onUnreadChange } from '../session-unread.js';
 
 export interface ActiveSessionRow {
   projectId: string;
@@ -15,7 +16,12 @@ export interface ActiveSessionRow {
   status: SessionStatus;
   /** Tab closed, session kept: only reachable from this panel. */
   detached: boolean;
+  /** Finished (or asking for input) while unfocused and not yet seen: blink. */
+  attention: boolean;
 }
+
+/** Statuses that mean the agent stopped and is waiting on the user. */
+const ATTENTION_STATUSES: ReadonlySet<SessionStatus> = new Set(['input', 'completed']);
 
 type ActiveStatusConfig = NonNullable<Preferences['activeSessionStatuses']>;
 
@@ -48,6 +54,7 @@ export function selectActiveSessions(
   statusOf: (sessionId: string) => SessionStatus,
   activeStatuses: Set<SessionStatus>,
   includeTabbed = true,
+  unreadOf: (sessionId: string) => boolean = () => false,
 ): ActiveSessionRow[] {
   const rows: ActiveSessionRow[] = [];
   for (const project of projects) {
@@ -63,6 +70,7 @@ export function selectActiveSessions(
         sessionName: session.name,
         status,
         detached,
+        attention: ATTENTION_STATUSES.has(status) && unreadOf(session.id),
       });
     }
   }
@@ -97,6 +105,7 @@ export function renderActiveSessions(): void {
         getStatus,
         resolveActiveStatuses(appState.preferences),
         appState.projects.length > 1,
+        isUnread,
       )
     : [];
 
@@ -123,7 +132,7 @@ function rowHtml(row: ActiveSessionRow): string {
     ? `${row.projectName} · ${t('sidebar.activeSessions.detachedTooltip')}`
     : row.projectName;
   return `
-    <div class="active-session-row${row.detached ? ' detached' : ''}" data-project-id="${esc(row.projectId)}" data-session-id="${esc(row.sessionId)}" title="${esc(title)}">
+    <div class="active-session-row ${row.status}${row.detached ? ' detached' : ''}${row.attention ? ' attention' : ''}" data-project-id="${esc(row.projectId)}" data-session-id="${esc(row.sessionId)}" title="${esc(title)}">
       <span class="project-status ${row.status}" aria-hidden="true"></span>
       <span class="active-session-name">${esc(row.sessionName)}</span>
       <span class="active-session-project">${esc(row.projectName)}</span>
@@ -168,6 +177,7 @@ export function initActiveSessions(): void {
   });
 
   onActivityChange(scheduleRender);
+  onUnreadChange(scheduleRender);
   for (const event of [
     'session-added',
     'session-removed',
