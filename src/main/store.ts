@@ -20,6 +20,9 @@ function defaultState(): PersistedState {
 }
 
 export function loadState(): PersistedState {
+  // Saves are debounced, so while one is pending the file is behind what was
+  // last saved; reading the file then would drop that save.
+  if (saveTimer && lastState) return structuredClone(lastState);
   for (const file of [STATE_FILE, STATE_FILE + '.tmp']) {
     try {
       if (!fs.existsSync(file)) continue;
@@ -50,6 +53,20 @@ export function saveState(state: PersistedState): void {
 }
 
 let lastState: PersistedState | null = null;
+
+/**
+ * Save a state sent by the renderer. The statusLine consent preferences are
+ * written only by the main process, but the renderer saves the whole state it
+ * loaded at startup, so they are taken from the current state instead or the
+ * renderer's next save would roll them back to their launch-time values.
+ */
+export function saveRendererState(state: PersistedState): void {
+  const current = (lastState ?? loadState()).preferences;
+  state.preferences.statusLineConsent = current.statusLineConsent;
+  state.preferences.statusLineConsentCommand = current.statusLineConsentCommand;
+  state.preferences.statusLineConsentByDir = current.statusLineConsentByDir;
+  saveState(state);
+}
 
 export function flushState(): void {
   if (lastState) {
