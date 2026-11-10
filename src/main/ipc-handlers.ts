@@ -6,7 +6,7 @@ import { execSync } from 'child_process';
 import { spawnPty, spawnShellPty, writePty, resizePty, killPty, isSilencedExit, getPtyCwd } from './pty-manager';
 import { addMcpServer, removeMcpServer } from './claude-cli';
 import type { McpServerConfig } from './claude-cli';
-import { loadState, saveState, PersistedState } from './store';
+import { loadState, saveState, saveRendererState, PersistedState } from './store';
 import { startWatching, cleanupSessionStatus, resyncAllSessions } from './hook-status';
 import { startCodexSessionWatcher, registerPendingCodexSession, unregisterCodexSession } from './codex-session-watcher';
 import { getGitStatus, getGitFiles, getGitDiff, getGitWorktrees, gitStageFile, gitUnstageFile, gitDiscardFile, getGitRemoteUrl, listGitBranches, checkoutGitBranch, createGitBranch } from './git-status';
@@ -30,7 +30,7 @@ import { expandUserPath, isBinaryBuffer, isLikelyBinaryFile, isMacPackagePath, B
 import { isLinux, isMac, isWin } from './platform';
 import { listProfiles as listChromeProfiles, runImport as runChromeImport, clearImportedCookies, getCookieCount } from './chrome-import/importer';
 import type { ChromeImportOptions, ChromeImportProgress, ClipboardSource } from '../shared/types';
-import { shouldWarnStatusLine } from './settings-guard';
+import { getStatusLineConsent, shouldWarnStatusLine } from './settings-guard';
 import { buildVibeyardignoreMatcher } from './vibeyardignore';
 import { setCloseConfirmed } from './close-state';
 import { provisionProfileDir } from './profiles';
@@ -200,11 +200,11 @@ export function registerIpcHandlers(): void {
     // validating earlier would see an empty config on a project's first spawn.
     if (provider.meta.capabilities.hookStatus) {
       const validation = provider.validateSettings(cwd, configDir);
-      const prefs = loadState().preferences;
+      const { consent, command } = getStatusLineConsent(loadState().preferences, configDir);
       const statusLineIssue = shouldWarnStatusLine(
         validation.statusLine,
-        prefs.statusLineConsent,
-        prefs.statusLineConsentCommand,
+        consent,
+        command,
         validation.foreignStatusLineCommand,
       );
       const hooksIssue = validation.hooks !== 'complete';
@@ -300,7 +300,7 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('store:save', (_event, state: PersistedState) => {
-    saveState(state);
+    saveRendererState(state);
   });
 
   // Provision (create) a profile's config dir. Returns the resolved absolute

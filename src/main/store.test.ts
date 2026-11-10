@@ -12,7 +12,7 @@ vi.mock('os', () => ({
 }));
 
 import * as fs from 'fs';
-import { loadState, saveState, flushState, saveStateSync } from './store';
+import { loadState, saveState, saveRendererState, flushState, saveStateSync } from './store';
 import type { PersistedState } from './store';
 
 const mockExistsSync = vi.mocked(fs.existsSync);
@@ -119,3 +119,44 @@ describe('flushState', () => {
   });
 });
 
+
+describe('pending saves', () => {
+  beforeEach(() => {
+    mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockReturnValue(JSON.stringify(DEFAULT_STATE));
+  });
+
+  it('loadState returns a save that is not written to disk yet', () => {
+    saveState({ ...DEFAULT_STATE, activeProjectId: 'p1' });
+
+    expect(loadState().activeProjectId).toBe('p1');
+    vi.advanceTimersByTime(300);
+  });
+
+  it('loadState returns a copy of the pending state', () => {
+    saveState({ ...DEFAULT_STATE, activeProjectId: 'p1' });
+
+    loadState().activeProjectId = 'changed';
+
+    expect(loadState().activeProjectId).toBe('p1');
+    vi.advanceTimersByTime(300);
+  });
+
+  it('saveRendererState keeps the statusLine consent written by the main process', () => {
+    const byDir = { '/home/u/.claude-work': { consent: 'declined' as const, command: '/bin/other' } };
+    saveState({
+      ...DEFAULT_STATE,
+      preferences: { ...DEFAULT_STATE.preferences, statusLineConsent: 'granted', statusLineConsentCommand: '/bin/x', statusLineConsentByDir: byDir },
+    });
+
+    saveRendererState({ ...DEFAULT_STATE, activeProjectId: 'p2', preferences: { ...DEFAULT_STATE.preferences, debugMode: true } });
+    vi.advanceTimersByTime(300);
+
+    const written = JSON.parse(String(mockWriteFileSync.mock.calls.at(-1)![1]));
+    expect(written.activeProjectId).toBe('p2');
+    expect(written.preferences.debugMode).toBe(true);
+    expect(written.preferences.statusLineConsent).toBe('granted');
+    expect(written.preferences.statusLineConsentCommand).toBe('/bin/x');
+    expect(written.preferences.statusLineConsentByDir).toEqual(byDir);
+  });
+});

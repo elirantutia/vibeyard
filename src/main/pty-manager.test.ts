@@ -2,7 +2,8 @@ import { vi } from 'vitest';
 import * as path from 'path';
 import { isMac, isWin } from './platform';
 
-const { mockSpawn, mockWrite, mockResize, mockKill, mockExecFile, mockNvmDefaultNodeBinDir } = vi.hoisted(() => ({
+const { mockSpawn, mockWrite, mockResize, mockKill, mockExecFile, mockNvmDefaultNodeBinDir, mockGuardedInstall } = vi.hoisted(() => ({
+  mockGuardedInstall: vi.fn(async () => {}),
   mockSpawn: vi.fn(),
   mockWrite: vi.fn(),
   mockResize: vi.fn(),
@@ -33,6 +34,18 @@ vi.mock('fs', () => ({
   writeFileSync: vi.fn(),
   readFileSync: vi.fn(() => { throw new Error('ENOENT'); }),
   readdirSync: vi.fn(() => { throw new Error('ENOENT'); }),
+}));
+
+vi.mock('./settings-guard', () => ({
+  guardedInstall: mockGuardedInstall,
+}));
+
+vi.mock('./claude-keychain', () => ({
+  getKeychainIsolationStatus: () => ({ status: 'supported' }),
+}));
+
+vi.mock('electron', () => ({
+  BrowserWindow: { getAllWindows: () => [] },
 }));
 
 vi.mock('./providers/nvm', () => ({
@@ -102,6 +115,60 @@ describe('spawnPty', () => {
         }),
       );
     }
+  });
+
+  it('runs the guarded install for a profile config dir before spawning', async () => {
+    const proc = createMockPtyProcess();
+    mockSpawn.mockReturnValue(proc);
+    let release!: () => void;
+    mockGuardedInstall.mockImplementationOnce(() => new Promise<void>((resolve) => { release = resolve; }));
+    const configDir = path.join('/mock/home', '.claude-work');
+
+    const spawned = spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, '', vi.fn(), vi.fn(), configDir);
+    await vi.waitFor(() => expect(mockGuardedInstall).toHaveBeenCalledWith(null, configDir));
+    expect(mockSpawn).not.toHaveBeenCalled();
+
+    release();
+    await spawned;
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not spawn when the session is closed while the guarded install waits', async () => {
+    mockSpawn.mockReturnValue(createMockPtyProcess());
+    let release!: () => void;
+    mockGuardedInstall.mockImplementationOnce(() => new Promise<void>((resolve) => { release = resolve; }));
+
+    const spawned = spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, '', vi.fn(), vi.fn(), path.join('/mock/home', '.claude-work'));
+    await vi.waitFor(() => expect(mockGuardedInstall).toHaveBeenCalled());
+    killPty('s1');
+    release();
+    await spawned;
+
+    expect(mockSpawn).not.toHaveBeenCalled();
+  });
+
+  it('spawns only the latest request when a session is respawned during the wait', async () => {
+    mockSpawn.mockReturnValue(createMockPtyProcess());
+    let release!: () => void;
+    mockGuardedInstall.mockImplementationOnce(() => new Promise<void>((resolve) => { release = resolve; }));
+    const configDir = path.join('/mock/home', '.claude-work');
+
+    const first = spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, '', vi.fn(), vi.fn(), configDir);
+    await vi.waitFor(() => expect(mockGuardedInstall).toHaveBeenCalledTimes(1));
+    const second = spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, '', vi.fn(), vi.fn(), configDir);
+    release();
+    await Promise.all([first, second]);
+
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+    killPty('s1');
+  });
+
+  it('does not run the guarded install without a profile', () => {
+    mockSpawn.mockReturnValue(createMockPtyProcess());
+
+    spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, '', vi.fn(), vi.fn());
+
+    expect(mockGuardedInstall).not.toHaveBeenCalled();
   });
 
   it('adds -r flag when resuming with cliSessionId', () => {

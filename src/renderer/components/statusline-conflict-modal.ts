@@ -25,7 +25,7 @@ function getOverlay(): HTMLElement {
   return overlay;
 }
 
-export function showStatusLineConflictModal(foreignCommand: string): Promise<'replace' | 'keep'> {
+export function showStatusLineConflictModal(foreignCommand: string, configDir?: string): Promise<'replace' | 'keep'> {
   // Resolve any previous pending invocation before re-showing
   if (pendingResolve) {
     pendingResolve('keep');
@@ -37,9 +37,12 @@ export function showStatusLineConflictModal(foreignCommand: string): Promise<'re
   const overlay = getOverlay();
   const body = overlay.querySelector('.statusline-conflict-body')!;
 
+  const where = configDir
+    ? ` in the profile config dir <code>${escapeHtml(configDir)}</code>`
+    : '';
   body.innerHTML = `
     <p class="statusline-conflict-text">
-      Claude Code already has a <strong>statusLine</strong> setting configured by another tool.
+      Claude Code already has a <strong>statusLine</strong> setting${where} configured by another tool.
     </p>
     <div class="statusline-conflict-command">
       <div class="statusline-conflict-command-label">Current statusLine</div>
