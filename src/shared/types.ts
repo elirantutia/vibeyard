@@ -367,6 +367,10 @@ export interface Preferences {
   // the consent decision. Used to detect new conflicts (different command)
   // vs the previously-acknowledged one.
   statusLineConsentCommand?: string | null;
+  // Same decision for profile config dirs, keyed by resolved dir path. The
+  // default ~/.claude keeps the two fields above so existing state needs no
+  // migration.
+  statusLineConsentByDir?: Record<string, StatusLineConsentRecord>;
   copyOnSelect?: boolean;
   keybindings?: Record<string, string>;
   theme?: 'dark' | 'light';
@@ -444,8 +448,15 @@ export interface SettingsWarningData {
   hooks: SettingsValidationResult['hooks'];
 }
 
+export interface StatusLineConsentRecord {
+  consent: 'granted' | 'declined';
+  command: string;
+}
+
 export interface StatusLineConflictData {
   foreignCommand: string;
+  /** Set when the conflict is in a profile's config dir rather than ~/.claude. */
+  configDir?: string;
 }
 
 export interface PersistedState {
