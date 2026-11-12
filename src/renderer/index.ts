@@ -13,6 +13,7 @@ import { initNotificationDesktop } from './notification-desktop.js';
 import { init as initSessionUnread } from './session-unread.js';
 import { init as initGithubUnread } from './github-unread.js';
 import { initProjectTerminal, handleShellPtyData, handleShellPtyExit, isShellSessionId, applyThemeToAllShells } from './components/project-terminal.js';
+import { syncTerminalRenderers } from './components/terminal-utils.js';
 import { startPolling as startGitPolling } from './git-status.js';
 import { initDebugPanel, logDebugEvent } from './components/debug-panel.js';
 import { initGitPanel } from './components/git-panel.js';
@@ -250,6 +251,10 @@ async function main(): Promise<void> {
     applyThemeToAllTerminals(theme);
     applyThemeToAllShells(theme);
     applyThemeToAllRemoteTerminals(theme);
+    // One call covers session panes, project shells and remote panes — they all
+    // register with the same renderer registry. Cheap when nothing changed: the
+    // per-terminal sync early-returns on a renderer that already matches.
+    syncTerminalRenderers();
 
     // Titles already on disk produce no new fs event (the hook writes only on
     // change), so re-enabling auto-naming needs an explicit replay.

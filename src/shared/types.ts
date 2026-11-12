@@ -368,6 +368,8 @@ export interface Preferences {
   // vs the previously-acknowledged one.
   statusLineConsentCommand?: string | null;
   copyOnSelect?: boolean;
+  /** Render terminals so RTL runs (Hebrew/Arabic) read in the right direction; see terminal-utils.ts. */
+  bidiTextEnabled?: boolean;
   keybindings?: Record<string, string>;
   theme?: 'dark' | 'light';
   readinessExcludedProviders?: ProviderId[];

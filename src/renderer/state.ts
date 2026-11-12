@@ -120,6 +120,7 @@ const defaultPreferences: Preferences = {
   confirmCloseWorkingSession: true,
   externalControlEnabled: false,
   copyOnSelect: false,
+  bidiTextEnabled: false,
   zoomFactor: 1.0,
   readinessExcludedProviders: [],
   sidebarViews: { gitPanel: true, sessionHistory: true, discussions: true, fileTree: true, activeSessions: true },

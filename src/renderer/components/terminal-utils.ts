@@ -111,12 +111,89 @@ export function attachClipboardCopyHandler(
   });
 }
 
-// Disposing the addon on context loss lets xterm.js fall back to the DOM renderer
-// instead of keeping a dead GPU texture atlas (black-box glyphs).
-export function loadWebglWithFallback(terminal: Terminal): void {
+/** Registry entry for one terminal's renderer. */
+interface RendererEntry {
+  /** The live WebGL addon, or null when the terminal is on xterm's DOM renderer. */
+  addon: WebglAddon | null;
+  /**
+   * Sticky once WebGL has proven unusable here (threw on load, or lost its GPU
+   * context). `loadAddon` registers the addon before `activate()` throws, so a
+   * retry strands a dead one on the terminal, and browsers cap live contexts.
+   */
+  webglUnavailable: boolean;
+}
+
+/**
+ * Every open terminal, so a renderer-affecting preference can be re-applied to
+ * panes that already exist. Entries are removed by `releaseTerminalRenderer`,
+ * which every pane calls before `terminal.dispose()` — xterm's `Terminal`
+ * exposes no disposal event of its own (`onDispose` is on
+ * `IDisposableWithEvent`, i.e. markers and decorations, not the terminal).
+ */
+const managedTerminals = new Map<Terminal, RendererEntry>();
+
+/**
+ * Picks the renderer for one terminal from the current preferences.
+ *
+ * Disposing the addon is how xterm.js falls back to the DOM renderer — the same
+ * mechanism used on GPU context loss, where keeping a dead texture atlas would
+ * render black-box glyphs. We reuse it deliberately for `bidiTextEnabled`: the
+ * WebGL renderer paints each cell independently from a glyph atlas and can
+ * never reorder anything, while the DOM renderer emits one `inline-block` span
+ * per style run, which the browser resolves with the Unicode bidi algorithm. So
+ * the DOM renderer is the only way Hebrew/Arabic reads in the right direction
+ * (xterm.js itself has no bidi support — xtermjs/xterm.js#701).
+ *
+ * Idempotent, so callers can re-sync freely.
+ */
+function syncTerminalRenderer(terminal: Terminal, entry: RendererEntry): void {
+  if (appState.preferences.bidiTextEnabled) {
+    entry.addon?.dispose();
+    entry.addon = null;
+    return;
+  }
+
+  if (entry.addon || entry.webglUnavailable) return;
   try {
     const addon = new WebglAddon();
     terminal.loadAddon(addon);
-    addon.onContextLoss(() => addon.dispose());
-  } catch {}
+    // Context loss stays a one-way fallback: re-creating a WebGL context on a
+    // terminal whose GPU context just died is how you lose the next one too.
+    addon.onContextLoss(() => {
+      addon.dispose();
+      if (entry.addon === addon) entry.addon = null;
+      entry.webglUnavailable = true;
+    });
+    entry.addon = addon;
+  } catch {
+    entry.webglUnavailable = true;
+  }
+}
+
+/** Call after terminal.open(). Registers the terminal and applies the preference. */
+export function initTerminalRenderer(terminal: Terminal): void {
+  const entry = managedTerminals.get(terminal) ?? { addon: null, webglUnavailable: false };
+  managedTerminals.set(terminal, entry);
+  syncTerminalRenderer(terminal, entry);
+}
+
+/** Call before terminal.dispose() so a closed pane doesn't linger in the registry. */
+export function releaseTerminalRenderer(terminal: Terminal): void {
+  managedTerminals.get(terminal)?.addon?.dispose();
+  managedTerminals.delete(terminal);
+}
+
+/**
+ * Re-applies renderer preferences to every open terminal. One call covers
+ * session panes, project shells and remote panes alike, since they share this
+ * registry — and it is cheap when nothing changed, because the per-terminal
+ * sync early-returns on a renderer that already matches.
+ */
+export function syncTerminalRenderers(): void {
+  for (const [terminal, entry] of managedTerminals) syncTerminalRenderer(terminal, entry);
+}
+
+/** @internal Test-only: reset all module state */
+export function _resetForTesting(): void {
+  managedTerminals.clear();
 }

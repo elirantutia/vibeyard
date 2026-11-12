@@ -6,7 +6,7 @@ import { appState } from '../state.js';
 import { fitAllVisible } from './terminal-pane.js';
 import { destroySearchBar, hideSearchBar } from './search-bar.js';
 import { shortcutManager, displayKeys } from '../shortcuts.js';
-import { attachClipboardCopyHandler, attachCopyOnSelect, collapseArmedTextareaOnContextMenu, loadWebglWithFallback } from './terminal-utils.js';
+import { attachClipboardCopyHandler, attachCopyOnSelect, collapseArmedTextareaOnContextMenu, initTerminalRenderer, releaseTerminalRenderer } from './terminal-utils.js';
 import { esc } from '../dom-utils.js';
 
 interface ShellTerminalInstance {
@@ -130,7 +130,7 @@ function activateShellInstance(instance: ShellTerminalInstance): void {
     instance.terminal.open(instance.element);
     attachCopyOnSelect(instance.terminal);
     collapseArmedTextareaOnContextMenu(instance.terminal);
-    loadWebglWithFallback(instance.terminal);
+    initTerminalRenderer(instance.terminal);
   }
   instance.element.style.display = '';
 
@@ -217,6 +217,7 @@ function closeShell(projectId: string, shellId: string): void {
 
   destroySearchBar(instance.sessionId);
   window.vibeyard.pty.kill(instance.sessionId);
+  releaseTerminalRenderer(instance.terminal);
   instance.terminal.dispose();
   instance.element.remove();
   list.splice(idx, 1);
@@ -338,6 +339,7 @@ function destroyAllShells(projectId: string): void {
   for (const instance of list) {
     destroySearchBar(instance.sessionId);
     window.vibeyard.pty.kill(instance.sessionId);
+    releaseTerminalRenderer(instance.terminal);
     instance.terminal.dispose();
     instance.element.remove();
   }

@@ -11,7 +11,7 @@ import type { ProviderId } from '../types.js';
 import { getProviderCapabilities } from '../provider-availability.js';
 import { appState } from '../state.js';
 import { FilePathLinkProvider, GithubLinkProvider } from './terminal-link-provider.js';
-import { attachClipboardCopyHandler, attachCopyOnSelect, collapseArmedTextareaOnContextMenu, loadWebglWithFallback, wrapBracketedPaste } from './terminal-utils.js';
+import { attachClipboardCopyHandler, attachCopyOnSelect, collapseArmedTextareaOnContextMenu, initTerminalRenderer, releaseTerminalRenderer, wrapBracketedPaste } from './terminal-utils.js';
 import { FILE_PATH_DRAG_TYPE, NATIVE_FILES_DRAG_TYPE } from '../drag-types.js';
 import { showTerminalContextMenu } from './terminal-context-menu.js';
 
@@ -360,7 +360,7 @@ export function attachToContainer(sessionId: string, container: HTMLElement): vo
 
     attachCopyOnSelect(instance.terminal);
     collapseArmedTextareaOnContextMenu(instance.terminal);
-    loadWebglWithFallback(instance.terminal);
+    initTerminalRenderer(instance.terminal);
   } else if (instance.element.parentElement !== container) {
     container.appendChild(instance.element);
   }
@@ -465,6 +465,7 @@ export function destroyTerminal(sessionId: string): void {
 
   clearPendingPromptTimer(instance);
   window.vibeyard.pty.kill(sessionId);
+  releaseTerminalRenderer(instance.terminal);
   instance.terminal.dispose();
   instance.element.remove();
   instances.delete(sessionId);

@@ -3,7 +3,7 @@ import { createCustomSelect, type CustomSelectInstance } from '../custom-select.
 import { applyZoom, getZoomFactor, ZOOM_STEPS } from '../../zoom.js';
 import { t } from '../../i18n.js';
 import type { PreferencesContext, SectionController } from './section.js';
-import { toggleRow } from './shared.js';
+import { sectionDesc, subheading, toggleRow } from './shared.js';
 import type { Preferences } from '../../../shared/types.js';
 import { DEFAULT_ACTIVE_SESSION_STATUSES } from '../active-sessions-panel.js';
 
@@ -17,6 +17,7 @@ export function createAppearanceSection(ctx: PreferencesContext): SectionControl
   let sidebarCheckboxes: Record<keyof SidebarViews, HTMLInputElement> | null = null;
   let statusCheckboxes: Record<keyof ActiveStatuses, HTMLInputElement> | null = null;
   let boardCardMetricsCheckbox: HTMLInputElement | null = null;
+  let bidiTextCheckbox: HTMLInputElement | null = null;
 
   function unsubZoom() {
     zoomPrefUnsub?.();
@@ -60,10 +61,15 @@ export function createAppearanceSection(ctx: PreferencesContext): SectionControl
         zoomSelect?.setValue(String(getZoomFactor()));
       });
 
-      const sidebarHeading = document.createElement('div');
-      sidebarHeading.className = 'preferences-subheading';
-      sidebarHeading.textContent = t('appearance.sidebarViews');
-      container.appendChild(sidebarHeading);
+      container.appendChild(subheading(t('appearance.terminal')));
+
+      const bidiText = toggleRow('pref-bidi-text', t('appearance.bidiText'), appState.preferences.bidiTextEnabled ?? false);
+      bidiTextCheckbox = bidiText.checkbox;
+      container.appendChild(bidiText.row);
+
+      container.appendChild(sectionDesc(t('appearance.bidiTextDesc')));
+
+      container.appendChild(subheading(t('appearance.sidebarViews')));
 
       const views = appState.preferences.sidebarViews ?? { gitPanel: true, sessionHistory: true, discussions: true, fileTree: true, activeSessions: true };
       const toggles: { key: keyof SidebarViews; label: string }[] = [
@@ -82,10 +88,7 @@ export function createAppearanceSection(ctx: PreferencesContext): SectionControl
       }
       sidebarCheckboxes = checkboxes;
 
-      const statusHeading = document.createElement('div');
-      statusHeading.className = 'preferences-subheading';
-      statusHeading.textContent = t('appearance.activeSessionStatuses');
-      container.appendChild(statusHeading);
+      container.appendChild(subheading(t('appearance.activeSessionStatuses')));
 
       const statuses = appState.preferences.activeSessionStatuses ?? DEFAULT_ACTIVE_SESSION_STATUSES;
       const statusToggles: { key: keyof ActiveStatuses; label: string }[] = [
@@ -102,10 +105,7 @@ export function createAppearanceSection(ctx: PreferencesContext): SectionControl
       }
       statusCheckboxes = statusBoxes;
 
-      const boardHeading = document.createElement('div');
-      boardHeading.className = 'preferences-subheading';
-      boardHeading.textContent = t('appearance.board');
-      container.appendChild(boardHeading);
+      container.appendChild(subheading(t('appearance.board')));
 
       const boardMetrics = toggleRow('pref-board-card-metrics', t('appearance.showMetricsOnCards'), appState.preferences.boardCardMetrics ?? true);
       boardCardMetricsCheckbox = boardMetrics.checkbox;
@@ -131,6 +131,9 @@ export function createAppearanceSection(ctx: PreferencesContext): SectionControl
           completed: statusCheckboxes.completed.checked,
         });
       }
+      if (bidiTextCheckbox && bidiTextCheckbox.checked !== (appState.preferences.bidiTextEnabled ?? false)) {
+        appState.setPreference('bidiTextEnabled', bidiTextCheckbox.checked);
+      }
       if (boardCardMetricsCheckbox && boardCardMetricsCheckbox.checked !== (appState.preferences.boardCardMetrics ?? true)) {
         appState.setPreference('boardCardMetrics', boardCardMetricsCheckbox.checked);
       }
@@ -146,6 +149,7 @@ export function createAppearanceSection(ctx: PreferencesContext): SectionControl
       if (zoomSelect) zoomSelect.destroy();
       themeSelect = null;
       zoomSelect = null;
+      bidiTextCheckbox = null;
     },
   };
 }

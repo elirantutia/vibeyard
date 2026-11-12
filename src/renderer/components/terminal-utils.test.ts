@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { mockMatchesAnyShortcut, mockPlatform, mockPreferences, webglState } = vi.hoisted(() => ({
   mockMatchesAnyShortcut: vi.fn(() => false),
   mockPlatform: { isMac: false, isWin: false, isLinux: true },
-  mockPreferences: { copyOnSelect: false } as { copyOnSelect: boolean },
+  mockPreferences: { copyOnSelect: false, bidiTextEnabled: false } as { copyOnSelect: boolean; bidiTextEnabled: boolean },
   webglState: {
     shouldThrow: false,
     lastInstance: null as null | { dispose: ReturnType<typeof vi.fn>; fireContextLoss: () => void },
@@ -38,7 +38,7 @@ vi.mock('@xterm/addon-webgl', () => ({
   },
 }));
 
-import { attachClipboardCopyHandler, attachCopyOnSelect, collapseArmedTextareaOnContextMenu, loadWebglWithFallback } from './terminal-utils.js';
+import { _resetForTesting as resetRendererRegistry, attachClipboardCopyHandler, attachCopyOnSelect, collapseArmedTextareaOnContextMenu, initTerminalRenderer, releaseTerminalRenderer, syncTerminalRenderers } from './terminal-utils.js';
 
 const mockClipboardWrite = vi.fn().mockResolvedValue(undefined);
 const mockClipboardRead = vi.fn();
@@ -395,35 +395,98 @@ describe('attachCopyOnSelect', () => {
   });
 });
 
-describe('loadWebglWithFallback', () => {
+describe('initTerminalRenderer', () => {
+  const makeTerminal = () => ({ loadAddon: vi.fn() });
+
   beforeEach(() => {
     webglState.shouldThrow = false;
     webglState.lastInstance = null;
+    mockPreferences.bidiTextEnabled = false;
+    resetRendererRegistry();
   });
 
   it('loads the addon and subscribes to onContextLoss', () => {
-    const terminal = { loadAddon: vi.fn() };
-    loadWebglWithFallback(terminal as any);
+    const terminal = makeTerminal();
+    initTerminalRenderer(terminal as any);
 
     expect(terminal.loadAddon).toHaveBeenCalledTimes(1);
     expect(webglState.lastInstance).not.toBeNull();
   });
 
-  it('disposes the addon when the WebGL context is lost', () => {
-    const terminal = { loadAddon: vi.fn() };
-    loadWebglWithFallback(terminal as any);
+  it('context loss disposes the addon and never re-creates it', () => {
+    const terminal = makeTerminal();
+    initTerminalRenderer(terminal as any);
 
     webglState.lastInstance!.fireContextLoss();
-
     expect(webglState.lastInstance!.dispose).toHaveBeenCalledTimes(1);
+
+    // Re-creating a context on a terminal whose GPU context just died is how
+    // you lose the next one too, so the fallback is one-way.
+    syncTerminalRenderers();
+    expect(terminal.loadAddon).toHaveBeenCalledTimes(1);
   });
 
-  it('falls back silently when WebGL is unavailable', () => {
+  it('falls back silently when WebGL is unavailable, and does not retry', () => {
     webglState.shouldThrow = true;
-    const terminal = { loadAddon: vi.fn() };
+    const terminal = makeTerminal();
 
-    expect(() => loadWebglWithFallback(terminal as any)).not.toThrow();
+    expect(() => initTerminalRenderer(terminal as any)).not.toThrow();
     expect(terminal.loadAddon).not.toHaveBeenCalled();
+
+    webglState.shouldThrow = false;
+    syncTerminalRenderers();
+    expect(terminal.loadAddon).not.toHaveBeenCalled();
+  });
+
+  it('skips WebGL entirely when bidi text is enabled', () => {
+    mockPreferences.bidiTextEnabled = true;
+    const terminal = makeTerminal();
+
+    initTerminalRenderer(terminal as any);
+
+    expect(terminal.loadAddon).not.toHaveBeenCalled();
+    expect(webglState.lastInstance).toBeNull();
+  });
+
+  it('disposes WebGL when bidi text is turned on, and reloads when turned off', () => {
+    const terminal = makeTerminal();
+    initTerminalRenderer(terminal as any);
+    const first = webglState.lastInstance!;
+
+    mockPreferences.bidiTextEnabled = true;
+    syncTerminalRenderers();
+    expect(first.dispose).toHaveBeenCalledTimes(1);
+
+    mockPreferences.bidiTextEnabled = false;
+    syncTerminalRenderers();
+    expect(terminal.loadAddon).toHaveBeenCalledTimes(2);
+    expect(webglState.lastInstance).not.toBe(first);
+  });
+
+  it('re-syncing an unchanged preference is a no-op', () => {
+    const terminal = makeTerminal();
+    initTerminalRenderer(terminal as any);
+
+    syncTerminalRenderers();
+    syncTerminalRenderers();
+
+    expect(terminal.loadAddon).toHaveBeenCalledTimes(1);
+    expect(webglState.lastInstance!.dispose).not.toHaveBeenCalled();
+  });
+
+  it('stops tracking a terminal once its pane releases it', () => {
+    const terminal = makeTerminal();
+    initTerminalRenderer(terminal as any);
+    const addon = webglState.lastInstance!;
+
+    releaseTerminalRenderer(terminal as any);
+    expect(addon.dispose).toHaveBeenCalledTimes(1);
+
+    // Released terminals are gone from the registry, so a later sweep skips them.
+    mockPreferences.bidiTextEnabled = true;
+    syncTerminalRenderers();
+    expect(addon.dispose).toHaveBeenCalledTimes(1);
+    expect(terminal.loadAddon).toHaveBeenCalledTimes(1);
   });
 });
 
