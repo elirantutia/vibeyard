@@ -130,7 +130,10 @@ jobs:
 
   build:
     needs: [prepare]
-    runs-on: macos-latest
+    # Pinned to macOS 15: on the macos-26 image (Darwin 25.6) electron-builder's
+    # temp-keychain `set-key-partition-list` fails with SecKeychainUnlock.
+    # Temporary until signing uses a self-managed keychain (CSC_KEYCHAIN).
+    runs-on: macos-15
 
     steps:
       - uses: actions/checkout@v4
