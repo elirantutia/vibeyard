@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.10] - 2026-11-13
+
+No user-facing changes; this release only fixes the release pipeline.
+
 ## [0.3.9] - 2026-11-13
 
 ### Features
