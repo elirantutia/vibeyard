@@ -49,6 +49,7 @@ class FakeTerminal {
   private selectionListener: (() => void) | null = null;
   private _selection = '';
   modes = { bracketedPasteMode: false };
+  input = vi.fn();
 
   attachCustomKeyEventHandler(handler: (e: KeyboardEvent) => boolean): void {
     this.keyHandler = handler;
@@ -206,6 +207,59 @@ describe('attachClipboardCopyHandler (macOS)', () => {
 
     expect(result).toBe(true);
     expect(writeToPty).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['ArrowLeft', '\x01'],
+    ['ArrowRight', '\x05'],
+  ])('sends line motion for Cmd+%s on keydown', (key, seq) => {
+    const terminal = new FakeTerminal();
+    attachClipboardCopyHandler(terminal as any);
+
+    const preventDefault = vi.fn();
+    const result = terminal.simulateKey({ metaKey: true, key, type: 'keydown', preventDefault });
+
+    expect(result).toBe(false);
+    expect(preventDefault).toHaveBeenCalled();
+    expect(terminal.input).toHaveBeenCalledWith(seq);
+  });
+
+  it('suppresses Cmd+Arrow keyup without sending input', () => {
+    const terminal = new FakeTerminal();
+    attachClipboardCopyHandler(terminal as any);
+
+    const result = terminal.simulateKey({ metaKey: true, key: 'ArrowLeft', type: 'keyup', preventDefault: vi.fn() });
+
+    expect(result).toBe(false);
+    expect(terminal.input).not.toHaveBeenCalled();
+  });
+
+  it('leaves Shift+Cmd+Arrow to xterm', () => {
+    const terminal = new FakeTerminal();
+    attachClipboardCopyHandler(terminal as any);
+
+    const result = terminal.simulateKey({ metaKey: true, shiftKey: true, key: 'ArrowLeft', type: 'keydown' });
+
+    expect(result).toBe(true);
+    expect(terminal.input).not.toHaveBeenCalled();
+  });
+});
+
+describe('attachClipboardCopyHandler (Linux)', () => {
+  beforeEach(() => {
+    stubPlatform('Linux x86_64');
+    mockPlatform.isMac = false;
+    mockPlatform.isWin = false;
+  });
+
+  it('does not remap Meta+Arrow off macOS', () => {
+    const terminal = new FakeTerminal();
+    attachClipboardCopyHandler(terminal as any);
+
+    const result = terminal.simulateKey({ metaKey: true, key: 'ArrowLeft', type: 'keydown' });
+
+    expect(result).toBe(true);
+    expect(terminal.input).not.toHaveBeenCalled();
   });
 });
 

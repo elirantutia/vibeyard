@@ -1,7 +1,7 @@
 import type { Terminal } from '@xterm/xterm';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { shortcutManager } from '../shortcuts.js';
-import { isWin } from '../platform.js';
+import { isMac, isWin } from '../platform.js';
 import { appState } from '../state.js';
 import type { ClipboardSource } from '../../shared/types.js';
 
@@ -61,6 +61,8 @@ export function collapseArmedTextareaOnContextMenu(terminal: Terminal): void {
  * - Ctrl+Shift+C: copies selected text to clipboard
  * - Windows Ctrl+C: copies if selection exists, otherwise passes through as SIGINT
  * - Windows Ctrl+V: pastes clipboard content to PTY (requires writeToPty)
+ * - macOS Cmd+Left/Right: jumps to line start/end (sends Ctrl+A / Ctrl+E,
+ *   like Terminal.app and iTerm2 — xterm's own `\x1b[1;9D` is ignored by CLIs)
  *
  * Pass an optional `extend` handler for terminal-specific key behavior.
  * Return false to suppress the key, undefined to fall through to default.
@@ -106,6 +108,16 @@ export function attachClipboardCopyHandler(
 
     // Let registered app shortcuts bubble to document listener
     if (shortcutManager.matchesAnyShortcut(e)) return false;
+
+    // macOS: Cmd+Left/Right → line start/end (after the shortcut check, so a
+    // user-bound app shortcut wins). terminal.input() fires onData, which
+    // every pane already forwards to its PTY.
+    if (isMac && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey
+        && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      if (e.type === 'keydown') terminal.input(e.key === 'ArrowLeft' ? '\x01' : '\x05');
+      e.preventDefault();
+      return false;
+    }
 
     return extend?.(e) ?? true;
   });
