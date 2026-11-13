@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.9] - 2026-11-13
+
+### Features
+
+- Cmd+Left/Right line start/end navigation in terminals on macOS
+- Bidirectional text support for Hebrew and Arabic in terminals
+- Opt-in external control for agents: `vibeyard-ctl` (closes #168) (#169)
+
 ## [0.3.8] - 2026-09-03
 
 ### Fixes
