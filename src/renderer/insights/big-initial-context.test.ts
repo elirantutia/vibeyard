@@ -31,7 +31,7 @@ describe('bigInitialContext analyzer', () => {
     const results = bigInitialContext.analyze(makeSnapshot(25, 50000));
     expect(results).toHaveLength(1);
     expect(results[0].description).toContain('25%');
-    expect(results[0].description).toContain('50,000');
+    expect(results[0].description).toContain((50000).toLocaleString());
   });
 
   it('returns warning at high percentages', () => {
