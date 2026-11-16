@@ -2,11 +2,12 @@ import * as pty from 'node-pty';
 import { execSync, execFile } from 'child_process';
 import * as os from 'os';
 import * as path from 'path';
+import { BrowserWindow } from 'electron';
 import type { ProviderId } from '../shared/types';
 import { parseEnvVars } from '../shared/env-vars';
 import { getProvider } from './providers/registry';
 import { registerSession } from './hook-status';
-import { installHooksOnly, installStatusLine } from './claude-cli';
+import { guardedInstall } from './settings-guard';
 import { getKeychainIsolationStatus } from './claude-keychain';
 import { isWin, pathSep, utf8LocaleEnv } from './platform';
 import { nvmDefaultNodeBinDir } from './providers/nvm';
@@ -20,6 +21,10 @@ interface PtyInstance {
 
 const ptys = new Map<string, PtyInstance>();
 const silencedExits = new Set<string>();
+// Latest spawn request per session. spawnPty can wait on a consent prompt (or
+// Copilot's hook install) before the PTY exists, so the tab may be closed or
+// respawned meanwhile; only the latest request still in this map may spawn.
+const spawnRequests = new Map<string, object>();
 
 /**
  * Get the full PATH by sourcing the user's login shell.
@@ -198,6 +203,8 @@ export async function spawnPty(
     silencedExits.add(sessionId);
     killPty(sessionId);
   }
+  const request = {};
+  spawnRequests.set(sessionId, request);
 
   registerSession(sessionId);
 
@@ -217,9 +224,10 @@ export async function spawnPty(
   // Profile support: a Claude session bound to a profile uses an isolated
   // config dir, so Vibeyard's hooks + statusLine (boot-installed into ~/.claude)
   // must also be installed there or cost/activity tracking silently breaks.
-  // Fresh profile dirs have no foreign statusLine, so install directly (the
-  // guarded/consent flow stays bound to the shared ~/.claude). Both calls are
-  // idempotent, mirroring the per-spawn Copilot install above.
+  // A custom profile path can be an existing config dir with its own
+  // statusLine, so it goes through the same consent flow as ~/.claude, with
+  // consent stored per dir. The spawn waits for the answer because Claude
+  // reads settings.json at startup. Idempotent, like the Copilot install above.
   // Guardrail: on macOS, older Claude Code builds reuse a single keychain entry
   // ("Claude Code-credentials") for every config dir, so logging into one
   // profile silently overwrites every other profile's token — the accounts
@@ -242,12 +250,14 @@ export async function spawnPty(
 
   if (providerId === 'claude' && configDir) {
     try {
-      installHooksOnly(configDir);
-      installStatusLine(configDir);
+      await guardedInstall(BrowserWindow.getAllWindows()[0] ?? null, configDir);
     } catch (err) {
       console.warn('Failed to install hooks into profile config dir:', configDir, err);
     }
   }
+
+  if (spawnRequests.get(sessionId) !== request) return;
+  spawnRequests.delete(sessionId);
 
   const env = provider.buildEnv(sessionId, withUtf8Locale({ ...process.env }) as Record<string, string>, { configDir });
   // User-provided env vars are merged last so they can override anything,
@@ -380,6 +390,7 @@ export function applyCtlEnv(env: Record<string, string>, sessionId: string, win 
 }
 
 export function killPty(sessionId: string): void {
+  spawnRequests.delete(sessionId);
   const instance = ptys.get(sessionId);
   if (!instance) return;
   try {
