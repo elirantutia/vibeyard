@@ -3,10 +3,7 @@ import { appState, MAX_SESSION_NAME_LENGTH } from './state.js';
 /**
  * Adopt the CLI's own session name as the tab title.
  *
- * The name comes from the `session_name` field of Claude's statusLine payload:
- * the custom name set via `--name` or `/rename` when one exists, otherwise the
- * AI-generated topic title. It is absent until the session has one, so this is
- * only called with a real title.
+ * The name comes from Claude's statusLine payload or Codex's session index.
  *
  * `cliSessionId` is the conversation the title belongs to. It matters because
  * the status file survives a `/clear` until the next statusLine render deletes
@@ -23,9 +20,13 @@ export function applyCliSessionName(sessionId: string, name: string, cliSessionI
   if (!found) return;
   const { project, session } = found;
 
-  // A rename typed in Vibeyard is sticky and always wins.
-  if (session.userRenamed) return;
   if (cliSessionId && session.cliSessionId && session.cliSessionId !== cliSessionId) return;
+  if (session.userRenamed) {
+    // Overwriting a manual label requires an explicit opt-in and an exact
+    // thread match. An unscoped or early title cannot replace that label.
+    if (session.providerId !== 'codex' || appState.preferences.codexTitleOverridesManual !== true ||
+        !cliSessionId || session.cliSessionId !== cliSessionId) return;
+  }
   // Claude re-sends the title on every statusLine render, and resync replays it
   // on window activate. Compare against the stored (already truncated) name so a
   // repeat doesn't cost a persist and a full tab-bar re-render.

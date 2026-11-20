@@ -245,6 +245,7 @@ async function main(): Promise<void> {
   // until a follow-up PR translates them.
   let lastLocale = getLocale();
   let lastAutoTitle = appState.preferences.autoTitleEnabled;
+  let lastCodexTitleOverride = appState.preferences.codexTitleOverridesManual === true;
   appState.on('preferences-changed', () => {
     const theme = appState.preferences.theme ?? 'dark';
     document.documentElement.dataset.theme = theme;
@@ -256,11 +257,15 @@ async function main(): Promise<void> {
     // per-terminal sync early-returns on a renderer that already matches.
     syncTerminalRenderers();
 
-    // Titles already on disk produce no new fs event (the hook writes only on
-    // change), so re-enabling auto-naming needs an explicit replay.
+    // Titles already on disk produce no new fs event, so enabling auto-naming
+    // or allowing a title to replace a manual label needs an explicit replay.
     const autoTitle = appState.preferences.autoTitleEnabled;
-    if (autoTitle && !lastAutoTitle) window.vibeyard.session.resyncStatus();
+    const codexTitleOverride = appState.preferences.codexTitleOverridesManual === true;
+    if (autoTitle && (!lastAutoTitle || (codexTitleOverride && !lastCodexTitleOverride))) {
+      window.vibeyard.session.resyncStatus();
+    }
     lastAutoTitle = autoTitle;
+    lastCodexTitleOverride = codexTitleOverride;
 
     const newLocale = appState.preferences.locale;
     if (newLocale && newLocale !== lastLocale) {

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { ProviderId } from '../shared/types.js';
 
 const mockLoad = vi.fn();
 const mockSave = vi.fn();
@@ -34,10 +35,10 @@ beforeEach(() => {
   uuidCounter = 0;
 });
 
-function addProjectAndSession(sessionName = 'Session 1') {
+function addProjectAndSession(sessionName = 'Session 1', providerId?: ProviderId) {
   appState.addProject('Test', '/test');
   const project = appState.activeProject!;
-  const session = appState.addSession(project.id, sessionName)!;
+  const session = appState.addSession(project.id, sessionName, undefined, providerId)!;
   return { project, session };
 }
 
@@ -73,6 +74,43 @@ describe('applyCliSessionName', () => {
 
     expect(nameOf(project.id, session.id)).toBe('my careful name');
   });
+
+  it('protects a manual Codex name unless the user opts in', () => {
+    const { project, session } = addProjectAndSession('Session 1', 'codex');
+    appState.renameSession(project.id, session.id, 'Manual title', true);
+    appState.updateSessionCliId(project.id, session.id, 'codex-thread');
+
+    applyCliSessionName(session.id, 'Codex title', 'codex-thread');
+    expect(nameOf(project.id, session.id)).toBe('Manual title');
+
+    appState.setPreference('codexTitleOverridesManual', true);
+    applyCliSessionName(session.id, 'Codex title', 'codex-thread');
+    expect(nameOf(project.id, session.id)).toBe('Codex title');
+
+    appState.setPreference('codexTitleOverridesManual', false);
+    applyCliSessionName(session.id, 'Another Codex title', 'codex-thread');
+    expect(nameOf(project.id, session.id)).toBe('Codex title');
+  });
+
+  it.each([
+    { provider: 'codex', incomingId: undefined, storedId: 'codex-thread', autoTitle: true },
+    { provider: 'codex', incomingId: 'old-thread', storedId: 'codex-thread', autoTitle: true },
+    { provider: 'codex', incomingId: 'codex-thread', storedId: undefined, autoTitle: true },
+    { provider: 'codex', incomingId: 'codex-thread', storedId: 'codex-thread', autoTitle: false },
+    { provider: 'claude', incomingId: 'codex-thread', storedId: 'codex-thread', autoTitle: true },
+  ] as const)('protects manual labels with override enabled, provider=$provider incoming=$incomingId stored=$storedId auto=$autoTitle',
+    ({ provider, incomingId, storedId, autoTitle }) => {
+      const { project, session } = addProjectAndSession('Session 1', provider);
+      appState.renameSession(project.id, session.id, 'Manual title', true);
+      if (storedId) appState.updateSessionCliId(project.id, session.id, storedId);
+      appState.setPreference('codexTitleOverridesManual', true);
+      appState.setPreference('autoTitleEnabled', autoTitle);
+
+      applyCliSessionName(session.id, 'Provider title', incomingId);
+
+      expect(nameOf(project.id, session.id)).toBe('Manual title');
+    },
+  );
 
   it('does nothing when auto-titling is disabled', () => {
     const { project, session } = addProjectAndSession();

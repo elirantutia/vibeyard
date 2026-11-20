@@ -8,6 +8,7 @@ const mockState = vi.hoisted(() => ({
     sessionHistoryEnabled: true,
     insightsEnabled: true,
     autoTitleEnabled: true,
+    codexTitleOverridesManual: undefined as boolean | undefined,
     theme: 'dark' as 'dark' | 'light',
     defaultProvider: 'claude',
     sidebarViews: {
@@ -212,7 +213,7 @@ function selectPreferencesSection(section: string): void {
   menu.dispatchEvent({ type: 'click', target: item });
 }
 
-describe('showPreferencesModal theme preference', () => {
+describe('showPreferencesModal', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
@@ -220,6 +221,8 @@ describe('showPreferencesModal theme preference', () => {
     docBody = makeElement('body');
 
     mockState.preferences.theme = 'dark';
+    mockState.preferences.autoTitleEnabled = true;
+    mockState.preferences.codexTitleOverridesManual = undefined;
 
     vi.stubGlobal('document', {
       documentElement: { dataset: {} as Record<string, string> },
@@ -260,6 +263,46 @@ describe('showPreferencesModal theme preference', () => {
     selectPreferencesSection('appearance');
 
     expect(selectState.instances.get('pref-theme')?.getValue()).toBe('light');
+  });
+
+  it('shows the Codex override below auto-naming and saves it on Done', async () => {
+    const { showPreferencesModal } = await import('./preferences-modal.js');
+    showPreferencesModal('general');
+
+    const autoTitle = getElement('pref-auto-title');
+    const codexOverride = getElement('pref-codex-title-overrides-manual');
+    const rows = autoTitle.parentElement.parentElement.children;
+    expect(rows.indexOf(codexOverride.parentElement)).toBe(rows.indexOf(autoTitle.parentElement) + 1);
+    expect(codexOverride.checked).toBe(false);
+    expect(codexOverride.disabled).toBe(false);
+
+    autoTitle.checked = false;
+    autoTitle.dispatchEvent({ type: 'change' });
+    expect(codexOverride.disabled).toBe(true);
+    autoTitle.checked = true;
+    autoTitle.dispatchEvent({ type: 'change' });
+    expect(codexOverride.disabled).toBe(false);
+
+    codexOverride.checked = true;
+    selectPreferencesSection('appearance');
+    selectPreferencesSection('general');
+    expect(getElement('pref-codex-title-overrides-manual').checked).toBe(true);
+    click(getElement('preferences-confirm'));
+
+    expect(mockState.setPreference).toHaveBeenCalledWith('codexTitleOverridesManual', true);
+  });
+
+  it('shows the saved Codex override and discards changes on Cancel', async () => {
+    mockState.preferences.codexTitleOverridesManual = true;
+    const { showPreferencesModal } = await import('./preferences-modal.js');
+    showPreferencesModal('general');
+
+    const codexOverride = getElement('pref-codex-title-overrides-manual');
+    expect(codexOverride.checked).toBe(true);
+    codexOverride.checked = false;
+    click(getElement('preferences-cancel'));
+
+    expect(mockState.setPreference).not.toHaveBeenCalledWith('codexTitleOverridesManual', false);
   });
 
   it('previews and saves the selected theme', async () => {

@@ -16,7 +16,8 @@
     "desktopNotifications": "会话需要关注时显示桌面通知",
     "recordSessionHistory": "会话关闭时记录会话历史",
     "showInsightAlerts": "显示洞察提醒",
-    "autoNameSessions": "根据 CLI 的会话标题自动命名会话（仅限 Claude）",
+    "autoNameSessions": "根据 CLI 的会话标题自动命名会话（Claude 和 Codex）",
+    "allowCodexTitleOverride": "允许 Codex 更新手动标签名",
     "confirmClosingActiveSession": "关闭活动会话前进行确认",
     "allowExternalControl": "允许标签页通过 vibeyard-ctl 控制标签页",
     "copyOnSelect": "选中即复制"

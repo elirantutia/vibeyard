@@ -1,20 +1,32 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { BrowserWindow } from 'electron';
+import type { BrowserWindow } from 'electron';
+import { readFileSafe } from './fs-utils';
 import { STATUS_DIR } from './hook-status';
 
 const HISTORY_PATH = path.join(os.homedir(), '.codex', 'history.jsonl');
 
-/**
- * Codex CLI has no hook system to report session IDs back to the host app.
- * Instead, we tail ~/.codex/history.jsonl for new entries and extract the
- * session_id, then write a .sessionid file so hook-status picks it up.
- */
+// Keep the history fallback for sessions that don't report a CLI ID via
+// hooks. Titles come from Codex's separate session index.
 
 // Maps UI session ID → registration timestamp (for FIFO ordering)
 const pendingSessions = new Map<string, number>();
 const assignedCodexIds = new Set<string>();
+
+interface TitleSession {
+  indexPath: string;
+  resumeId: string | null;
+  lastPayload?: string;
+}
+
+interface TitleIndex {
+  stat: fs.Stats;
+  names: Map<string, string>;
+}
+
+const titleSessions = new Map<string, TitleSession>();
+const titleIndexes = new Map<string, TitleIndex>();
 
 let watcher: fs.FSWatcher | null = null;
 let pollInterval: ReturnType<typeof setInterval> | null = null;
@@ -100,8 +112,77 @@ export function unregisterCodexSession(sessionId: string): void {
   pendingSessions.delete(sessionId);
 }
 
+/** Track the Codex home actually passed to this PTY, including project overrides. */
+export function trackCodexSessionTitle(
+  sessionId: string, resumeId: string | null, cwd: string, codexHome?: string,
+): () => void {
+  const home = codexHome ? path.resolve(cwd, codexHome) : path.dirname(HISTORY_PATH);
+  const session: TitleSession = { indexPath: path.join(home, 'session_index.jsonl'), resumeId };
+  titleSessions.set(sessionId, session);
+  return () => {
+    if (titleSessions.get(sessionId) === session) titleSessions.delete(sessionId);
+  };
+}
+
+function readTitleIndex(indexPath: string): TitleIndex | undefined {
+  try {
+    const stat = fs.statSync(indexPath);
+    if (!stat.isFile()) return undefined;
+    const cached = titleIndexes.get(indexPath);
+    if (cached && stat.ino === cached.stat.ino && stat.size === cached.stat.size &&
+        stat.mtimeMs === cached.stat.mtimeMs && stat.ctimeMs === cached.stat.ctimeMs) return cached;
+
+    const names = new Map<string, string>();
+    // Codex appends a row on rename. Later valid rows supersede earlier names
+    // for the same thread, including when Codex rewrites the index.
+    for (const line of fs.readFileSync(indexPath, 'utf8').split('\n')) {
+      try {
+        const entry = JSON.parse(line);
+        if (typeof entry?.id === 'string' && typeof entry?.thread_name === 'string') {
+          names.set(entry.id, entry.thread_name.trim());
+        }
+      } catch {
+        // Skip blank, malformed or partially written rows.
+      }
+    }
+    const index = { stat, names };
+    titleIndexes.set(indexPath, index);
+    return index;
+  } catch {
+    // Older Codex installs may have no title index. Retry on the next poll.
+    titleIndexes.delete(indexPath);
+    return undefined;
+  }
+}
+
+function syncSessionTitles(): void {
+  const activeIndexes = new Map<string, TitleIndex | undefined>();
+  for (const [sessionId, session] of titleSessions) {
+    if (!activeIndexes.has(session.indexPath)) {
+      activeIndexes.set(session.indexPath, readTitleIndex(session.indexPath));
+    }
+    const index = activeIndexes.get(session.indexPath);
+    if (!index) continue;
+    const cliSessionId = readFileSafe(path.join(STATUS_DIR, `${sessionId}.sessionid`))?.trim() || session.resumeId;
+    const name = cliSessionId && index.names.get(cliSessionId);
+    if (!name) continue;
+
+    const payload = JSON.stringify({ name, session_id: cliSessionId });
+    if (payload === session.lastPayload) continue;
+    try {
+      fs.writeFileSync(path.join(STATUS_DIR, `${sessionId}.name`), payload, { mode: 0o600 });
+      session.lastPayload = payload;
+    } catch {
+      // The status directory may be re-created when the window reopens.
+    }
+  }
+  for (const indexPath of titleIndexes.keys()) {
+    if (!activeIndexes.has(indexPath)) titleIndexes.delete(indexPath);
+  }
+}
+
 export function startCodexSessionWatcher(win: BrowserWindow): void {
-  if (watcher) return;
+  if (pollInterval) return;
 
   const dir = path.dirname(HISTORY_PATH);
   try {
@@ -115,11 +196,12 @@ export function startCodexSessionWatcher(win: BrowserWindow): void {
     // Directory might not exist; fall through to polling
   }
 
-  // Polling fallback — fs.watch can miss events on some systems
+  // Poll for index changes, and fall back to polling for history changes when
+  // fs.watch misses events.
   pollInterval = setInterval(() => {
-    if (pendingSessions.size > 0 && !win.isDestroyed()) {
-      readNewEntries();
-    }
+    if (win.isDestroyed()) return;
+    if (pendingSessions.size > 0) readNewEntries();
+    syncSessionTitles();
   }, 2000);
 }
 
@@ -134,5 +216,7 @@ export function stopCodexSessionWatcher(): void {
   }
   pendingSessions.clear();
   assignedCodexIds.clear();
+  titleSessions.clear();
+  titleIndexes.clear();
   lastSize = 0;
 }

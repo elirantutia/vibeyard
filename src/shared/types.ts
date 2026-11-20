@@ -353,6 +353,8 @@ export interface Preferences {
   sessionHistoryEnabled: boolean;
   insightsEnabled: boolean;
   autoTitleEnabled: boolean;
+  /** Allow a matching Codex thread title to replace a manually named tab. */
+  codexTitleOverridesManual?: boolean;
   confirmCloseWorkingSession: boolean;
   /** Allow tabs to control tabs via vibeyard-ctl. Off by default. */
   externalControlEnabled: boolean;

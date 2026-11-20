@@ -127,10 +127,18 @@ guarantee of eventual completion. Any later hook event cancels it.
 | `.status` | Status-writer hooks | `"<HookEvent>:<status>"` |
 | `.sessionid` | `SessionStart` + `UserPromptSubmit` hooks, and the statusLine | CLI session ID, for resume |
 | `.cost` | `statusline.py` (via the `statusLine` setting) | Cost, tokens, context window, model |
-| `.name` | `statusline.py` | `session_name` for tab auto-titling |
+| `.name` | Claude status line or Codex session index | Tab auto-title and the CLI session ID it belongs to |
 | `.toolfailure` | `PostToolUseFailure`, plus a token-capped `Read` (see below) | `tool_name`, `tool_input`, `error` |
 | `.events` | Every event's capture script | JSONL inspector timeline |
 | `.subagents` | `SubagentStart`/`SubagentStop`/`PostToolUse`/`SessionStart` | `{n, t}` in-flight counter (Stop fallback only; never forwarded to the renderer) |
+
+Codex titles come from the latest matching row in `session_index.jsonl` in the
+CLI's `CODEX_HOME` (default `~/.codex`). Active tabs use their captured CLI
+session ID, or their resume ID before the first hook fires. The renderer uses
+the same Auto-name sessions setting for both providers. The separate
+**Allow Codex to update manually named tabs** preference is off by default
+and allows a Codex title to replace a manual tab label when the thread IDs
+match.
 
 ### The token-capped `Read` case
 

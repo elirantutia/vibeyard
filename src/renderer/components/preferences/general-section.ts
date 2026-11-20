@@ -14,6 +14,7 @@ export function createGeneralSection(ctx: PreferencesContext): SectionController
   let historyCheckbox: HTMLInputElement | null = null;
   let insightsCheckbox: HTMLInputElement | null = null;
   let autoTitleCheckbox: HTMLInputElement | null = null;
+  let codexTitleOverrideCheckbox: HTMLInputElement | null = null;
   let confirmCloseCheckbox: HTMLInputElement | null = null;
   let externalControlCheckbox: HTMLInputElement | null = null;
   let copyOnSelectCheckbox: HTMLInputElement | null = null;
@@ -92,9 +93,19 @@ export function createGeneralSection(ctx: PreferencesContext): SectionController
       insightsCheckbox = insights.checkbox;
       container.appendChild(insights.row);
 
-      const autoTitle = toggleRow('pref-auto-title', t('general.autoNameSessions'), appState.preferences.autoTitleEnabled);
+      const autoTitle = toggleRow('pref-auto-title', t('general.autoNameSessions'),
+        autoTitleCheckbox?.checked ?? appState.preferences.autoTitleEnabled);
       autoTitleCheckbox = autoTitle.checkbox;
       container.appendChild(autoTitle.row);
+
+      const codexTitleOverride = toggleRow('pref-codex-title-overrides-manual', t('general.allowCodexTitleOverride'),
+        codexTitleOverrideCheckbox?.checked ?? appState.preferences.codexTitleOverridesManual ?? false);
+      codexTitleOverrideCheckbox = codexTitleOverride.checkbox;
+      codexTitleOverride.checkbox.disabled = !autoTitle.checkbox.checked;
+      autoTitle.checkbox.addEventListener('change', () => {
+        codexTitleOverride.checkbox.disabled = !autoTitle.checkbox.checked;
+      });
+      container.appendChild(codexTitleOverride.row);
 
       const confirmClose = toggleRow('pref-confirm-close-working', t('general.confirmClosingActiveSession'), appState.preferences.confirmCloseWorkingSession);
       confirmCloseCheckbox = confirmClose.checkbox;
@@ -115,6 +126,7 @@ export function createGeneralSection(ctx: PreferencesContext): SectionController
       if (historyCheckbox) appState.setPreference('sessionHistoryEnabled', historyCheckbox.checked);
       if (insightsCheckbox) appState.setPreference('insightsEnabled', insightsCheckbox.checked);
       if (autoTitleCheckbox) appState.setPreference('autoTitleEnabled', autoTitleCheckbox.checked);
+      if (codexTitleOverrideCheckbox) appState.setPreference('codexTitleOverridesManual', codexTitleOverrideCheckbox.checked);
       if (confirmCloseCheckbox) appState.setPreference('confirmCloseWorkingSession', confirmCloseCheckbox.checked);
       if (externalControlCheckbox) appState.setPreference('externalControlEnabled', externalControlCheckbox.checked);
       if (copyOnSelectCheckbox) appState.setPreference('copyOnSelect', copyOnSelectCheckbox.checked);
