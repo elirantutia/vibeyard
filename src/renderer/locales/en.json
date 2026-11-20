@@ -16,7 +16,8 @@
     "desktopNotifications": "Desktop notifications when sessions need attention",
     "recordSessionHistory": "Record session history when sessions close",
     "showInsightAlerts": "Show insight alerts",
-    "autoNameSessions": "Auto-name sessions from the CLI's session title (Claude only)",
+    "autoNameSessions": "Auto-name sessions from the CLI's session title (Claude and Codex)",
+    "allowCodexTitleOverride": "Allow Codex to update manually named tabs",
     "confirmClosingActiveSession": "Confirm closing an active session",
     "allowExternalControl": "Allow tabs to control tabs (vibeyard-ctl)",
     "copyOnSelect": "Copy on select"

@@ -135,8 +135,10 @@ guarantee of eventual completion. Any later hook event cancels it.
 Codex titles come from the latest matching row in `session_index.jsonl` in the
 CLI's `CODEX_HOME` (default `~/.codex`). Active tabs use their captured CLI
 session ID, or their resume ID before the first hook fires. The renderer uses
-the same Auto-name sessions setting and manual-name precedence for both
-providers.
+the same Auto-name sessions setting for both providers. The separate
+**Allow Codex to update manually named tabs** preference is off by default
+and allows a Codex title to replace a manual tab label when the thread IDs
+match.
 
 ### The token-capped `Read` case
 
