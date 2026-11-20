@@ -279,7 +279,9 @@ function pollForChanges(win: BrowserWindow): void {
         // recreated file can carry a coarser, non-increasing timestamp.
         if (prev !== mtime) {
           lastMtimes.set(filename, mtime);
-          if (prev !== undefined) {
+          // A new title can be the only write for a session. If fs.watch
+          // missed it, there may never be a second mtime to trigger delivery.
+          if (prev !== undefined || filename.endsWith('.name')) {
             handleFileChange(win, filename);
           }
         }

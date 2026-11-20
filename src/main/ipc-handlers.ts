@@ -8,7 +8,7 @@ import { addMcpServer, removeMcpServer } from './claude-cli';
 import type { McpServerConfig } from './claude-cli';
 import { loadState, saveState, PersistedState } from './store';
 import { startWatching, cleanupSessionStatus, resyncAllSessions } from './hook-status';
-import { startCodexSessionWatcher, registerPendingCodexSession, unregisterCodexSession } from './codex-session-watcher';
+import { startCodexSessionWatcher, stopCodexSessionWatcher, registerPendingCodexSession, unregisterCodexSession } from './codex-session-watcher';
 import { getGitStatus, getGitFiles, getGitDiff, getGitWorktrees, gitStageFile, gitUnstageFile, gitDiscardFile, getGitRemoteUrl, listGitBranches, checkoutGitBranch, createGitBranch } from './git-status';
 import { startGitWatcher, stopGitWatcher, notifyGitChanged } from './git-watcher';
 import { watchDir, unwatchDir, setFileWatcherWindow } from './file-watcher';
@@ -146,6 +146,7 @@ let hookWatcherStarted = false;
 
 export function resetHookWatcher(): void {
   hookWatcherStarted = false;
+  stopCodexSessionWatcher();
 }
 
 export function registerIpcHandlers(): void {
@@ -161,10 +162,9 @@ export function registerIpcHandlers(): void {
 
     const provider = getProvider(providerId);
 
-    // For Codex sessions without a cliSessionId, start watching history.jsonl
-    if (providerId === 'codex' && !cliSessionId) {
+    if (providerId === 'codex') {
       startCodexSessionWatcher(win);
-      registerPendingCodexSession(sessionId);
+      if (!cliSessionId) registerPendingCodexSession(sessionId);
     }
 
     await spawnPty(

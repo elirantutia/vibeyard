@@ -568,6 +568,19 @@ sys.stdout.write(json.dumps({'afterRepeat':after_repeat,'total':len(writes),'fin
   });
 
   describe('polling fallback', () => {
+    it('delivers a new title even if fs.watch misses its only write', () => {
+      const win = createMockWin();
+      registerSession('s1');
+      vi.mocked(fs.readdirSync).mockReturnValue(['s1.name'] as any);
+      vi.mocked(fs.statSync).mockReturnValue({ mtimeMs: 1000 } as any);
+      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({ name: 'Codex title', session_id: 'cli-1' }));
+      startWatching(win);
+
+      vi.advanceTimersByTime(4000);
+
+      expect(mockSend).toHaveBeenCalledExactlyOnceWith('session:sessionName', 's1', 'Codex title', 'cli-1');
+    });
+
     it('detects changed files on poll interval', () => {
       const win = createMockWin();
       registerSession('s1');

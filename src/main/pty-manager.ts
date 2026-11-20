@@ -6,6 +6,7 @@ import type { ProviderId } from '../shared/types';
 import { parseEnvVars } from '../shared/env-vars';
 import { getProvider } from './providers/registry';
 import { registerSession } from './hook-status';
+import { trackCodexSessionTitle } from './codex-session-watcher';
 import { installHooksOnly, installStatusLine } from './claude-cli';
 import { getKeychainIsolationStatus } from './claude-keychain';
 import { isWin, pathSep, utf8LocaleEnv } from './platform';
@@ -273,8 +274,13 @@ export async function spawnPty(
     throw err;
   }
 
+  const stopTitleTracking = providerId === 'codex'
+    ? trackCodexSessionTitle(sessionId, isResume ? cliSessionId : null, cwd, env.CODEX_HOME)
+    : undefined;
+
   ptyProcess.onData((data) => onData(data));
   ptyProcess.onExit(({ exitCode, signal }) => {
+    stopTitleTracking?.();
     // Only remove from map if this PTY is still the active one for this session
     const current = ptys.get(sessionId);
     if (current?.process === ptyProcess) {

@@ -4,6 +4,7 @@ vi.mock('fs', () => ({
   statSync: vi.fn(),
   openSync: vi.fn(),
   readSync: vi.fn(),
+  readFileSync: vi.fn(),
   closeSync: vi.fn(),
   writeFileSync: vi.fn(),
   mkdirSync: vi.fn(),
@@ -33,6 +34,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import {
   registerPendingCodexSession,
+  trackCodexSessionTitle,
   unregisterCodexSession,
   startCodexSessionWatcher,
   stopCodexSessionWatcher,
@@ -41,6 +43,7 @@ import {
 const mockStatSync = vi.mocked(fs.statSync);
 const mockOpenSync = vi.mocked(fs.openSync);
 const mockReadSync = vi.mocked(fs.readSync);
+const mockReadFileSync = vi.mocked(fs.readFileSync);
 const mockCloseSync = vi.mocked(fs.closeSync);
 const mockWriteFileSync = vi.mocked(fs.writeFileSync);
 const mockMkdirSync = vi.mocked(fs.mkdirSync);
@@ -280,5 +283,85 @@ describe('stopCodexSessionWatcher', () => {
     stopCodexSessionWatcher();
 
     expect(mockWatcher.close).toHaveBeenCalled();
+  });
+});
+
+describe('Codex session titles', () => {
+  const defaultIndex = path.join('/mock/home', '.codex', 'session_index.jsonl');
+  const titleOptions = { mode: 0o600 };
+
+  function indexStat(size: number, ino = 1): fs.Stats {
+    return { size, ino, mtimeMs: 1, ctimeMs: 1, isFile: () => true } as fs.Stats;
+  }
+
+  function row(id: string, thread_name: string): string {
+    return JSON.stringify({ id, thread_name }) + '\n';
+  }
+
+  it('uses the captured thread ID and latest valid title without repeating unchanged writes', () => {
+    const index = row('thread-1', 'Old title') + row('other-thread', 'Unrelated') +
+      row('thread-1', '  Fix flaky test 🧪  ') + '{"id":';
+    mockStatSync.mockReturnValue(indexStat(index.length));
+    mockReadFileSync.mockImplementation((file) => {
+      if (file === defaultIndex) return index;
+      if (file === path.join(MOCK_STATUS_DIR, 'ui-1.sessionid')) return 'thread-1';
+      throw new Error('ENOENT');
+    });
+    startCodexSessionWatcher(createMockWin());
+    trackCodexSessionTitle('ui-1', null, '/project');
+    trackCodexSessionTitle('unbound', null, '/project');
+
+    vi.advanceTimersByTime(4000);
+
+    expect(mockReadFileSync.mock.calls.filter(([file]) => file === defaultIndex)).toHaveLength(1);
+    expect(mockWriteFileSync).toHaveBeenCalledExactlyOnceWith(
+      path.join(MOCK_STATUS_DIR, 'ui-1.name'),
+      JSON.stringify({ name: 'Fix flaky test 🧪', session_id: 'thread-1' }),
+      titleOptions,
+    );
+  });
+
+  it('uses the resumed thread and picks up changes from a replaced custom index', () => {
+    const customIndex = path.join('/project', 'codex-profile', 'session_index.jsonl');
+    let index = row('thread-1', 'Original');
+    mockStatSync.mockReturnValue(indexStat(index.length));
+    mockReadFileSync.mockImplementation((file) => {
+      if (file === customIndex) return index;
+      throw new Error('ENOENT');
+    });
+    startCodexSessionWatcher(createMockWin());
+    const stop = trackCodexSessionTitle('ui-1', 'thread-1', '/project', 'codex-profile');
+    vi.advanceTimersByTime(2000);
+
+    index = row('thread-1', 'Renamed!');
+    mockStatSync.mockReturnValue(indexStat(index.length, 2));
+    vi.advanceTimersByTime(2000);
+    expect(mockWriteFileSync).toHaveBeenCalledTimes(2);
+    expect(mockWriteFileSync).toHaveBeenLastCalledWith(
+      path.join(MOCK_STATUS_DIR, 'ui-1.name'),
+      JSON.stringify({ name: 'Renamed!', session_id: 'thread-1' }),
+      titleOptions,
+    );
+
+    stop();
+    vi.advanceTimersByTime(2000);
+    expect(mockStatSync).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not publish when the index is missing or contains no title for the active thread', () => {
+    mockStatSync.mockImplementation(() => { throw new Error('ENOENT'); });
+    startCodexSessionWatcher(createMockWin());
+    trackCodexSessionTitle('ui-1', 'thread-1', '/project');
+    vi.advanceTimersByTime(2000);
+    expect(mockWriteFileSync).not.toHaveBeenCalled();
+
+    const index = row('thread-1', 'Old title') + row('thread-1', ' ') + row('thread-2', 'Other');
+    mockStatSync.mockReturnValue(indexStat(index.length));
+    mockReadFileSync.mockImplementation((file) => {
+      if (file === defaultIndex) return index;
+      throw new Error('ENOENT');
+    });
+    vi.advanceTimersByTime(2000);
+    expect(mockWriteFileSync).not.toHaveBeenCalled();
   });
 });
