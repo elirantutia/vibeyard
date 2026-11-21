@@ -354,6 +354,7 @@
   border-radius: 6px;
   font-size: 12px;
   line-height: 1.5;
+  white-space: pre-line;
   color: var(--text-primary);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   z-index: 10000;

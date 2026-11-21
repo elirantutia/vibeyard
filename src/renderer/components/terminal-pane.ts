@@ -15,6 +15,7 @@ import { FilePathLinkProvider, GithubLinkProvider } from './terminal-link-provid
 import { attachClipboardCopyHandler, attachCopyOnSelect, collapseArmedTextareaOnContextMenu, initTerminalRenderer, releaseTerminalRenderer, wrapBracketedPaste } from './terminal-utils.js';
 import { FILE_PATH_DRAG_TYPE, NATIVE_FILES_DRAG_TYPE } from '../drag-types.js';
 import { showTerminalContextMenu } from './terminal-context-menu.js';
+import { attachHoverCard } from './hover-card.js';
 
 interface TerminalInstance {
   terminal: Terminal;
@@ -570,23 +571,21 @@ function spendText(w: LimitWindow, sep: string): string | null {
 }
 
 function usageLimitsTooltip(accountKey: string): string {
-  const lines = getRateLimits(accountKey).map((w) => {
+  return getRateLimits(accountKey).map((w) => {
     const pct = `${Math.round(w.usedPercentage)}%`;
     const spend = spendText(w, ' of ');
     const used = spend ? `${spend} (${pct})` : `${pct} used`;
     const reset = w.resetsAt !== undefined ? ` · resets in ${formatResetIn(w.resetsAt)}` : '';
     return `${LIMIT_LABELS[w.key].long}: ${used}${reset}`;
-  });
-  lines.push('Shared by every tab on this profile');
-  return lines.join('\n');
+  }).join('\n');
 }
 
 /**
  * Plan usage limits segment: `5h ▬ 42% · 7d ▬ 18%` (or `spend ▬ $271 / $500`).
  * Null when the preference is off or Claude sent no live windows for this
  * account (API-key logins, before any tab's first reply), so the segment and
- * its rule disappear. The hover text is computed on hover so its reset
- * countdown is current; the node survives cost ticks (see `limitsSeg`).
+ * its rule disappear. Its hover card text is built when the card opens so the
+ * reset countdown is current; the node survives cost ticks (see `limitsSeg`).
  */
 function buildUsageLimits(accountKey: string): HTMLElement | null {
   if (appState.preferences.showUsageLimits === false) return null;
@@ -608,7 +607,9 @@ function buildUsageLimits(accountKey: string): HTMLElement | null {
     );
     return lim;
   }));
-  seg.addEventListener('mouseenter', () => { seg.title = usageLimitsTooltip(accountKey); });
+  // The app's hover card, not a native `title`, which never showed on this segment.
+  // Text is built when the card opens, so the reset countdown is current.
+  attachHoverCard(seg, () => usageLimitsTooltip(accountKey));
   return seg;
 }
 
@@ -621,14 +622,23 @@ export function updateCostDisplay(sessionId: string, cost: CostInfo | null): voi
 
   // Rebuild the rail's right cluster: [usage limits] | [profile pill] · [model] · [cost] | [in/out].
   // Separators are only inserted between segments that are actually present.
-  el.replaceChildren();
-  const segs: HTMLElement[] = [];
-
+  // The cached limits segment is never detached here: this runs on nearly every
+  // statusLine payload, and re-inserting the node under the pointer would fire
+  // mouseleave/mouseenter and restart (or drop) its hover card.
   if (instance.limitsStale) {
     instance.limitsSeg = buildUsageLimits(accountKeyOf(instance));
     instance.limitsStale = false;
   }
-  if (instance.limitsSeg) el.append(instance.limitsSeg, span('ssl-vrule'));
+  for (const child of Array.from(el.children)) {
+    if (child !== instance.limitsSeg) child.remove();
+  }
+  const segs: HTMLElement[] = [];
+
+  if (instance.limitsSeg) {
+    // Attach only if not already here: re-appending an existing child re-inserts it.
+    if (instance.limitsSeg.parentElement !== el) el.appendChild(instance.limitsSeg);
+    el.appendChild(span('ssl-vrule'));
+  }
 
   const profileName = resolveProfileName(instance.providerId, instance.configDir);
   if (profileName) {

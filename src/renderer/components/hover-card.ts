@@ -1,7 +1,10 @@
 let cardEl: HTMLDivElement | null = null;
 let escHandler: ((e: KeyboardEvent) => void) | null = null;
 let showTimer: ReturnType<typeof setTimeout> | null = null;
+/** Polls whether the card's target left the DOM while shown: a removed node fires no mouseleave. */
+let detachTimer: ReturnType<typeof setInterval> | null = null;
 const HOVER_DELAY_MS = 600;
+const DETACH_POLL_MS = 250;
 
 function ensureCard(): HTMLDivElement {
   if (cardEl) return cardEl;
@@ -14,6 +17,8 @@ function ensureCard(): HTMLDivElement {
 }
 
 function show(target: HTMLElement, content: string): void {
+  // The target may have been removed (tab closed, row re-rendered) during the hover delay.
+  if (!target.isConnected) return;
   const card = ensureCard();
   card.textContent = content;
   card.classList.remove('hidden');
@@ -37,6 +42,10 @@ function show(target: HTMLElement, content: string): void {
   card.style.top = `${Math.max(margin, top)}px`;
   card.style.left = `${left}px`;
 
+  if (!detachTimer) {
+    detachTimer = setInterval(() => { if (!target.isConnected) hide(); }, DETACH_POLL_MS);
+  }
+
   if (!escHandler) {
     escHandler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') hide();
@@ -46,6 +55,10 @@ function show(target: HTMLElement, content: string): void {
 }
 
 function hide(): void {
+  if (detachTimer) {
+    clearInterval(detachTimer);
+    detachTimer = null;
+  }
   if (showTimer) {
     clearTimeout(showTimer);
     showTimer = null;
@@ -57,11 +70,11 @@ function hide(): void {
   }
 }
 
-function scheduleShow(target: HTMLElement, content: string): void {
+function scheduleShow(target: HTMLElement, content: string | (() => string)): void {
   if (showTimer) clearTimeout(showTimer);
   showTimer = setTimeout(() => {
     showTimer = null;
-    show(target, content);
+    show(target, typeof content === 'function' ? content() : content);
   }, HOVER_DELAY_MS);
 }
 
@@ -69,7 +82,12 @@ export function hideHoverCard(): void {
   hide();
 }
 
-export function attachHoverCard(target: HTMLElement, content: string): void {
+/**
+ * `content` is plain text; `\n` breaks lines. It may be a function, evaluated each time
+ * the card opens, for text that goes stale (countdowns). The card closes by itself if
+ * `target` is removed from the DOM, so callers need no cleanup on re-render.
+ */
+export function attachHoverCard(target: HTMLElement, content: string | (() => string)): void {
   target.addEventListener('mouseenter', () => scheduleShow(target, content));
   target.addEventListener('focusin', () => scheduleShow(target, content));
   target.addEventListener('mouseleave', hide);

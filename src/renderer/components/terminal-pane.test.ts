@@ -102,6 +102,10 @@ vi.mock('./terminal-context-menu.js', () => ({
   showTerminalContextMenu: vi.fn(),
 }));
 
+vi.mock('./hover-card.js', () => ({
+  attachHoverCard: vi.fn(),
+}));
+
 class FakeClassList {
   private values = new Set<string>();
 
@@ -816,6 +820,40 @@ describe('profile label in status-line cost string', () => {
     refreshCostDisplays();
     expect(cd().querySelector('.ssl-limits')).toBeNull();
     appState.preferences.showUsageLimits = true;
+  });
+
+  it('keeps the limits segment attached across cost ticks so its hover card can show', async () => {
+    const { setRateLimits } = await import('../account-rate-limits.js');
+    const { attachHoverCard } = await import('./hover-card.js');
+    const { createTerminalPane, refreshCostDisplays, updateCostDisplay } = await import('./terminal-pane.js');
+    const instance = makePane(createTerminalPane, 'pb-lim-hover', 'claude', '/cfg/hover');
+    const cd = () => instance.element.querySelector('.cost-display')!;
+    setRateLimits('claude:/cfg/hover', { five_hour: { used_percentage: 59, resets_at: Math.floor(Date.now() / 1000) + 3600 } });
+    refreshCostDisplays('claude:/cfg/hover');
+
+    const lims = cd().querySelector('.ssl-limits')!;
+    // The hover card's text is built lazily, so the countdown is current when shown.
+    const call = vi.mocked(attachHoverCard).mock.calls.find(([target]) => target === lims)!;
+    expect(typeof call[1]).toBe('function');
+    expect((call[1] as () => string)()).toMatch(/^5-hour limit: 59% used · resets in [0-9hm ]+$/);
+    const removeSpy = vi.spyOn(lims, 'remove');
+    const replaceSpy = vi.spyOn(cd(), 'replaceChildren');
+    const appendSpy = vi.spyOn(cd(), 'appendChild');
+
+    const cost = {
+      totalCostUsd: 1, totalInputTokens: 10, totalOutputTokens: 5,
+      cacheReadTokens: 0, cacheCreationTokens: 0, totalDurationMs: 0, totalApiDurationMs: 0, model: 'Opus',
+    };
+    updateCostDisplay('pb-lim-hover', cost);
+    updateCostDisplay('pb-lim-hover', { ...cost, totalDurationMs: 1000 });
+
+    // Never detached or re-inserted (either would cancel a pending tooltip).
+    expect(removeSpy).not.toHaveBeenCalled();
+    expect(replaceSpy).not.toHaveBeenCalled();
+    expect(appendSpy).not.toHaveBeenCalledWith(lims);
+    expect(cd().children[0]).toBe(lims);
+    expect(cd().children[1].className).toBe('ssl-vrule');
+    expect(cd().querySelector('.ssl-cost')!.textContent).toBe('$1.0000');
   });
 
   it('repaints every tab on the account, and only that account', async () => {
