@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { BrowserWindow } from 'electron';
-import { isWin, pythonBin } from './platform';
+import { isWin } from './platform';
+import { getPythonCmd } from './python-bin';
 
 export const STATUS_DIR = path.join(os.tmpdir(), 'vibeyard');
 export const SCRIPT_DIR = path.join(os.homedir(), '.vibeyard', 'run');
@@ -125,9 +126,10 @@ export function installStatusLineScript(): void {
   // Use forward slashes — backslashes inside double-quoted .cmd strings can
   // interfere with cmd.exe's >> redirection parsing on some Windows versions.
   const logPath = `${STATUS_DIR.replace(/\\/g, '/')}/statusline.log`;
+  const py = getPythonCmd();
   const script = isWin
-    ? `@echo off\r\n${pythonBin} "${pyPath}" 2>>"${logPath}"\r\n`
-    : `#!/bin/sh\n${pythonBin} "${pyPath}" 2>>"${logPath}"\n`;
+    ? `@echo off\r\n${py} "${pyPath}" 2>>"${logPath}"\r\n`
+    : `#!/bin/sh\n${py} "${pyPath}" 2>>"${logPath}"\n`;
 
   fs.writeFileSync(STATUSLINE_SCRIPT, script, { mode: 0o755 });
 }

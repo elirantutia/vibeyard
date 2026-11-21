@@ -14,7 +14,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { STATUS_DIR, SCRIPT_DIR } from './hook-status';
-import { isWin, pythonBin as PY } from './platform';
+import { isWin } from './platform';
+import { getPythonCmd } from './python-bin';
 import { STOP_INFLIGHT_TRUST_MS } from '../shared/constants';
 
 // Python helper scripts are written to STATUS_DIR via installEventScript()
@@ -226,7 +227,7 @@ export function statusCmd(
   if (isWin) {
     const py = path.join(SCRIPT_DIR, 'status_writer.py').replace(/\\/g, '/');
     const dir = STATUS_DIR.replace(/\\/g, '/');
-    return `python "${py}" "${event}" "${status}" "${sessionIdVar}" "${dir}" "${hookMarker}"`;
+    return `${getPythonCmd()} "${py}" "${event}" "${status}" "${sessionIdVar}" "${dir}" "${hookMarker}"`;
   }
   return `sh -c 'mkdir -p ${STATUS_DIR} && echo ${event}:${status} > ${STATUS_DIR}/$${sessionIdVar}.status ${hookMarker}'`;
 }
@@ -234,7 +235,7 @@ export function statusCmd(
 /**
  * Generate the subagent-aware Stop status command. Invokes stop_status_writer.py
  * which writes 'completed' only when no subagents are in flight (else 'working').
- * Mirrors captureSessionIdCmd (no isWin branch — relies on PY + normalized paths).
+ * Mirrors captureSessionIdCmd (no isWin branch — relies on getPythonCmd() + normalized paths).
  */
 export function stopStatusCmd(
   sessionIdVar: string,
@@ -242,7 +243,7 @@ export function stopStatusCmd(
 ): string {
   const py = path.join(SCRIPT_DIR, 'stop_status_writer.py').replace(/\\/g, '/');
   const dir = STATUS_DIR.replace(/\\/g, '/');
-  return `${PY} "${py}" "${sessionIdVar}" "${dir}" "${STOP_STALE_MS}" "${hookMarker}"`;
+  return `${getPythonCmd()} "${py}" "${sessionIdVar}" "${dir}" "${STOP_STALE_MS}" "${hookMarker}"`;
 }
 
 /**
@@ -254,7 +255,7 @@ export function captureSessionIdCmd(
 ): string {
   const py = path.join(SCRIPT_DIR, 'session_id_capture.py').replace(/\\/g, '/');
   const dir = STATUS_DIR.replace(/\\/g, '/');
-  return `${PY} "${py}" "${sessionIdVar}" "${dir}" "${hookMarker}"`;
+  return `${getPythonCmd()} "${py}" "${sessionIdVar}" "${dir}" "${hookMarker}"`;
 }
 
 /**
@@ -266,7 +267,7 @@ export function captureToolFailureCmd(
 ): string {
   const py = path.join(SCRIPT_DIR, 'tool_failure_capture.py').replace(/\\/g, '/');
   const dir = STATUS_DIR.replace(/\\/g, '/');
-  return `${PY} "${py}" "${sessionIdVar}" "${dir}" "${hookMarker}"`;
+  return `${getPythonCmd()} "${py}" "${sessionIdVar}" "${dir}" "${hookMarker}"`;
 }
 
 /**
@@ -299,6 +300,6 @@ export function wrapPythonHookCmd(
   _pipeStdin = true,
 ): string {
   const pyCmd = path.join(SCRIPT_DIR, scriptName).replace(/\\/g, '/');
-  return `${PY} "${pyCmd}" "${hookMarker}"`;
+  return `${getPythonCmd()} "${pyCmd}" "${hookMarker}"`;
 }
 

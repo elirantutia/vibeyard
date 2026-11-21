@@ -91,11 +91,31 @@ CLI-specific behavior is encapsulated behind a `CliProvider` interface (`src/mai
 ### Platform Checks
 
 Platform detection is centralized in `src/main/platform.ts`. Import
-`isWin`/`isMac`/`isLinux` (and derived constants `pathSep`, `whichCmd`,
-`pythonBin`) from there — do **not** inline `process.platform === 'win32'`
+`isWin`/`isMac`/`isLinux` (and derived constants `pathSep`, `whichCmd`)
+from there — do **not** inline `process.platform === 'win32'`
 or redefine `isWin`/`isMac` locally in source or test files. The
 three-way managed-path branch in `claude-cli.ts` is the one intentional
 exception.
+
+The Python interpreter that every generated hook command, the statusLine
+wrapper, the `vibeyard-ctl` wrapper and Copilot hooks invoke comes from
+`getPythonCmd()` in `src/main/python-bin.ts` — never hardcode
+`/usr/bin/python3` or `python`. On POSIX it is the first executable `python3`
+on the login-shell PATH (`getFullPath`), with `/usr/bin/python3` only as the
+fallback. Because the path is baked into `settings.json` hooks that outlive
+the process, the search prefers a stable interpreter: paths are kept
+unresolved (Nix store paths change on upgrade); version-manager `shims` dirs,
+`/nix/store`/`/gnu/store` and an active `VIRTUAL_ENV`/`CONDA_PREFIX` are used
+only if nothing stable exists; and on a Mac without the Command Line Tools
+(`xcode-select -p` fails) the `/usr/bin/python3` stub is skipped outright,
+since running it opens Apple's install dialog. Windows uses bare `python`.
+`isPythonUsable()` backs the startup "Python not found" dialog on every
+platform and never executes the stub. The npm launcher (`bin/ctl-forward.js`)
+runs the installed `vibeyard-ctl` wrapper via `/bin/sh` on POSIX so it uses
+the same resolved interpreter. `getFullPath` lives in
+`src/main/shell-path.ts` (re-exported from `pty-manager.ts`) so `python-bin.ts`
+can use it without the `hook-status → pty-manager → ctl-paths → hook-status`
+import cycle. Tests that build hook/statusLine commands mock `./python-bin`.
 
 ### Cross-platform paths in tests
 

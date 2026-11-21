@@ -4,7 +4,9 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { spawnSync, spawn } from 'child_process';
-import { pythonBin } from './platform';
+import { isWin } from './platform';
+
+const pythonBin = isWin ? 'python' : 'python3';
 import { buildCtlPython } from './ctl-script';
 
 let root: string;

@@ -150,7 +150,7 @@ app.whenReady().then(async () => {
   createAppMenu(state.preferences?.debugMode ?? false);
   createWindow();
 
-  // Warn if Python is missing on Windows (hooks depend on it)
+  // Warn if Python is missing (hooks, statusLine and vibeyard-ctl depend on it)
   const pythonWarning = checkPythonAvailable();
   if (pythonWarning) {
     console.warn(pythonWarning);

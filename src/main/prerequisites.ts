@@ -2,26 +2,26 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execSync } from 'child_process';
-import { isWin, pathSep, whichCmd } from './platform';
+import { isMac, isWin, pathSep, whichCmd } from './platform';
+import { getPythonBin, isPythonUsable } from './python-bin';
 
 /**
- * Check whether Python is available on Windows (needed for hook scripts).
- * Returns null if OK or not on Windows, or a warning message if missing.
+ * Check whether the Python interpreter the hook, statusLine and vibeyard-ctl
+ * scripts run under is usable. Returns null if OK, or a warning message.
  */
 export function checkPythonAvailable(): string | null {
-  if (!isWin) return null;
-  try {
-    execSync('python --version', { encoding: 'utf-8', timeout: 3000, stdio: 'pipe' });
-    return null;
-  } catch {
-    return (
-      'Python not found.\n\n' +
-      'Vibeyard uses Python on Windows for session tracking (cost, status, events).\n' +
-      'These features will not work until Python is installed and available on PATH.\n\n' +
-      'Install Python from https://www.python.org/downloads/ or via:\n' +
-      '  winget install Python.Python.3\n'
-    );
-  }
+  if (isPythonUsable()) return null;
+  const install = isWin
+    ? 'Install Python from https://www.python.org/downloads/ or via:\n  winget install Python.Python.3\n'
+    : isMac
+      ? 'Install Python 3 (e.g. `brew install python`) or the Command Line Tools (`xcode-select --install`), then restart Vibeyard.\n'
+      : 'Install Python 3 with your package manager so `python3` is on your login shell\'s PATH, then restart Vibeyard.\n';
+  return (
+    'Python not found.\n\n' +
+    'Vibeyard uses Python for session tracking (status, cost, context, session names) and vibeyard-ctl.\n' +
+    `These features will not work until Python 3 is installed (looked for: ${getPythonBin()}).\n\n` +
+    install
+  );
 }
 
 export function validatePrerequisites(): { ok: boolean; message: string } {

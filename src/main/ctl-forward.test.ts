@@ -4,9 +4,12 @@ const require = createRequire(import.meta.url);
 const { ctlInvocation, forwardResult } = require('../../bin/ctl-forward.js');
 
 describe('ctlInvocation', () => {
-  it('invokes python on ctl.py directly (no shell)', () => {
-    expect(ctlInvocation('/home/u', false)).toEqual({ command: '/usr/bin/python3', script: '/home/u/.vibeyard/run/bin/ctl.py' });
-    expect(ctlInvocation('C:\\Users\\u', true).command).toBe('python');
+  it('runs the installed wrapper as a /bin/sh script on POSIX (its resolved python, args as "$@")', () => {
+    expect(ctlInvocation('/home/u', false)).toEqual({ command: '/bin/sh', script: '/home/u/.vibeyard/run/bin/vibeyard-ctl' });
+  });
+
+  it('invokes python on ctl.py directly on Windows (no cmd.exe)', () => {
+    expect(ctlInvocation('C:\\Users\\u', true)).toEqual({ command: 'python', script: 'C:\\Users\\u\\.vibeyard\\run\\bin\\ctl.py' });
   });
 });
 

@@ -3,7 +3,7 @@ import * as path from 'path';
 import { STATUS_DIR, SCRIPT_DIR } from './hook-status';
 import { installEventScript, installHookScripts } from './hook-commands';
 import { readFileSafe, readJsonSafe } from './fs-utils';
-import { pythonBin } from './platform';
+import { getPythonCmd } from './python-bin';
 import type { SettingsValidationResult, InspectorEventType } from '../shared/types';
 
 type HookStatus = 'waiting' | 'working' | 'completed';
@@ -151,7 +151,7 @@ function buildHookEntry(event: string): HookEntry {
   // Hook subprocesses spawned by Copilot CLI inherit VIBEYARD_SESSION_ID from
   // the PTY env. The Python script reads argv[4] as the env var *name*.
   const argv = `"${event}" "${type}" "${status}" "${SESSION_ID_VAR}" "${statusDir}"`;
-  const bash = `${pythonBin} "${script}" ${argv} ${COPILOT_HOOK_MARKER}`;
+  const bash = `${getPythonCmd()} "${script}" ${argv} ${COPILOT_HOOK_MARKER}`;
   const powershell = `python "${script}" ${argv} ${COPILOT_HOOK_MARKER}`;
   return { type: 'command', bash, powershell };
 }

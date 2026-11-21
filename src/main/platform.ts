@@ -25,5 +25,3 @@ export const whichCmd = isWin ? 'where' : 'which';
 export const utf8LocaleEnv: Record<string, string> =
   isWin ? {} : isMac ? { LC_CTYPE: 'UTF-8' } : { LANG: 'C.UTF-8' };
 
-/** Python interpreter used by hook scripts. */
-export const pythonBin = isWin ? 'python' : '/usr/bin/python3';

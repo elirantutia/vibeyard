@@ -737,7 +737,7 @@ describe('installHooks', () => {
 const realFs = await vi.importActual<typeof import('node:fs')>('node:fs');
 const realOs = await vi.importActual<typeof import('node:os')>('node:os');
 const { spawnSync } = await vi.importActual<typeof import('node:child_process')>('node:child_process');
-const { pythonBin } = await import('./platform');
+const pythonBin = (await import('./platform')).isWin ? 'python' : 'python3';
 const pythonAvailable = spawnSync(pythonBin, ['-c', 'pass']).status === 0;
 
 describe.runIf(pythonAvailable)('subagent registry scripts', () => {

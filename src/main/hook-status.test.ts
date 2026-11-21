@@ -6,6 +6,10 @@ const STATUS_DIR = path.join('/tmp', 'vibeyard');
 const SCRIPT_DIR = path.join('/home/test', '.vibeyard', 'run');
 const STATUSLINE_SCRIPT = path.join(SCRIPT_DIR, isWin ? 'statusline.cmd' : 'statusline.sh');
 
+vi.mock('./python-bin', () => ({
+  getPythonCmd: () => '/usr/bin/python3',
+}));
+
 vi.mock('fs', () => ({
   mkdirSync: vi.fn(),
   writeFileSync: vi.fn(),

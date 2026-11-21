@@ -6,7 +6,8 @@
 // commands folder comes from VIBEYARD_CTL_DIR, which each instance gives its tabs.
 import * as fs from 'fs';
 import * as path from 'path';
-import { isWin, pythonBin } from './platform';
+import { isWin } from './platform';
+import { getPythonCmd } from './python-bin';
 import { CTL_BIN_DIR, CTL_COMMAND_PATH } from './ctl-paths';
 
 export function buildCtlPython(): string {
@@ -154,8 +155,9 @@ export function installCtlScript(): void {
   fs.mkdirSync(CTL_BIN_DIR, { recursive: true, mode: 0o700 });
   const pyPath = path.join(CTL_BIN_DIR, 'ctl.py');
   fs.writeFileSync(pyPath, buildCtlPython(), { mode: 0o755 });
+  const py = getPythonCmd();
   const wrapper = isWin
-    ? `@echo off\r\n${pythonBin} "${pyPath}" %*\r\n`
-    : `#!/bin/sh\nexec ${pythonBin} "${pyPath}" "$@"\n`;
+    ? `@echo off\r\n${py} "${pyPath}" %*\r\n`
+    : `#!/bin/sh\nexec ${py} "${pyPath}" "$@"\n`;
   fs.writeFileSync(CTL_COMMAND_PATH, wrapper, { mode: 0o755 });
 }

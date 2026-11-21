@@ -20,7 +20,10 @@ vi.mock('./hook-commands', () => ({
 
 vi.mock('./platform', () => ({
   isWin: false,
-  pythonBin: '/usr/bin/python3',
+}));
+
+vi.mock('./python-bin', () => ({
+  getPythonCmd: () => '/usr/bin/python3',
 }));
 
 import * as fs from 'fs';

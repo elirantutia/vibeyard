@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 
+vi.mock('./python-bin', () => ({
+  getPythonCmd: () => '/usr/bin/python3',
+}));
+
 vi.mock('fs', () => ({
   mkdirSync: vi.fn(),
   writeFileSync: vi.fn(),
@@ -10,7 +14,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { stopStatusCmd, installHookScripts, STOP_STALE_MS } from './hook-commands';
-import { pythonBin } from './platform';
+import { isWin } from './platform';
+
+const pythonBin = isWin ? 'python' : 'python3';
 
 // `fs` is mocked module-wide above; the executed-script suite below needs the
 // real thing to stage a temp dir and read back what the hook wrote.
