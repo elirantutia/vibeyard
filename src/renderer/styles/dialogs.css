@@ -37,6 +37,7 @@
 
 .session-palette-input {
   flex: 1;
+  min-width: 0;
   background: none;
   border: none;
   color: var(--text-primary);
@@ -47,6 +48,40 @@
 
 .session-palette-input::placeholder {
   color: var(--text-secondary);
+}
+.session-palette-scope {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.session-palette-scope-btn {
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 3px 9px;
+  border-radius: calc(var(--radius-sm) - 2px);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+.session-palette-scope-btn:hover:not(:disabled):not(.active) {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.session-palette-scope-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.session-palette-scope-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .session-palette-results {

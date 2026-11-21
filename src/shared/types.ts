@@ -213,6 +213,13 @@ export interface DeepSearchResult {
   profileId?: string;
 }
 
+/** Limits a deep search to one project's transcripts. */
+export interface DeepSearchScope {
+  projectPath: string;
+  /** CLI session ids Vibeyard already ties to the project; in scope even if their transcript cwd differs. */
+  cliSessionIds?: string[];
+}
+
 export interface ProjectInsightsData {
   initialContextSnapshots: InitialContextSnapshot[];
   dismissed: string[];

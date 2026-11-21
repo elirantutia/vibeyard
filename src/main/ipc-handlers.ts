@@ -29,7 +29,7 @@ import { isGhAvailable, listPullRequests, listIssues, detectRepo } from './githu
 import { expandUserPath, isBinaryBuffer, isLikelyBinaryFile, isMacPackagePath, BINARY_SNIFF_BYTES } from './fs-utils';
 import { isLinux, isMac, isWin } from './platform';
 import { listProfiles as listChromeProfiles, runImport as runChromeImport, clearImportedCookies, getCookieCount } from './chrome-import/importer';
-import type { ChromeImportOptions, ChromeImportProgress, ClipboardSource } from '../shared/types';
+import type { ChromeImportOptions, ChromeImportProgress, ClipboardSource, DeepSearchScope } from '../shared/types';
 import { shouldWarnStatusLine } from './settings-guard';
 import { buildVibeyardignoreMatcher } from './vibeyardignore';
 import { setCloseConfirmed } from './close-state';
@@ -405,8 +405,8 @@ export function registerIpcHandlers(): void {
     event.returnValue = transcriptExists(providerId, cliSessionId, projectPath, configDir);
   });
 
-  ipcMain.handle('session:deepSearch', (_event, query: string) => {
-    return searchSessions(query);
+  ipcMain.handle('session:deepSearch', (_event, query: string, scope?: DeepSearchScope) => {
+    return searchSessions(query, scope);
   });
 
   ipcMain.handle('provider:checkBinary', (_event, providerId: ProviderId = 'claude') => {

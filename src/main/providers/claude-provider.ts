@@ -10,7 +10,7 @@ import { startConfigWatcher as startConfigWatch, stopConfigWatcher as stopConfig
 import { installHooksOnly, installStatusLine, getClaudeConfig } from '../claude-cli';
 import { guardedInstall, validateSettings, reinstallSettings } from '../settings-guard';
 import { resolveBinary, validateBinaryExists } from './resolve-binary';
-import { MAX_INDEX_CHARS_PER_SESSION, TRANSCRIPT_TEXT_SEPARATOR, UUID_RE } from './transcript-utils';
+import { MAX_INDEX_CHARS_PER_SESSION, TRANSCRIPT_TEXT_SEPARATOR, UUID_RE, claudeProjectSlug } from './transcript-utils';
 import { writeAgentFile, deleteAgentFile } from './agent-files';
 import { loadState } from '../store';
 
@@ -151,8 +151,7 @@ export class ClaudeProvider implements CliProvider {
   }
 
   getTranscriptPath(cliSessionId: string, projectPath: string, configDir?: string): string | null {
-    // Claude encodes the project path by replacing any non-alphanumeric char with '-'
-    const slug = projectPath.replace(/[^a-zA-Z0-9]/g, '-');
+    const slug = claudeProjectSlug(projectPath);
     const root = configDir ?? path.join(os.homedir(), '.claude');
     const filePath = path.join(root, 'projects', slug, `${cliSessionId}.jsonl`);
     return fs.existsSync(filePath) ? filePath : null;

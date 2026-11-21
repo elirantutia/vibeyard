@@ -5,6 +5,7 @@ import type { ProviderId } from '../shared/types';
 vi.mock('fs', () => ({
   promises: {
     stat: vi.fn(),
+    realpath: vi.fn(),
   },
 }));
 
@@ -17,6 +18,7 @@ import * as fs from 'fs';
 import { searchSessions, _resetForTesting } from './session-deep-search';
 
 const mockStat = vi.mocked(fs.promises.stat);
+const mockRealpath = vi.mocked(fs.promises.realpath);
 
 function makeStat(mtime: number): Awaited<ReturnType<typeof fs.promises.stat>> {
   return { mtimeMs: mtime } as Awaited<ReturnType<typeof fs.promises.stat>>;
@@ -42,13 +44,14 @@ function fakeProvider(opts: FakeProviderOpts): CliProvider {
     };
   }
   if (!opts.omitIndex) {
-    provider.indexTranscript = async (p: string) => opts.index?.[p] ?? { text: '', cwd: '' };
+    provider.indexTranscript = vi.fn(async (p: string) => opts.index?.[p] ?? { text: '', cwd: '' });
   }
   return provider as CliProvider;
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockRealpath.mockImplementation((async (p: string) => p) as unknown as typeof fs.promises.realpath);
   _resetForTesting();
   providersForTest.length = 0;
 });
@@ -272,5 +275,109 @@ describe('searchSessions()', () => {
     }));
     mockStat.mockResolvedValue(makeStat(1));
     expect(await searchSessions('asdcv')).toEqual([]);
+  });
+});
+
+describe('searchSessions() with a project scope', () => {
+  beforeEach(() => mockStat.mockResolvedValue(makeStat(1)));
+
+  it('keeps only transcripts in the project root or below it', async () => {
+    providersForTest.push(fakeProvider({
+      id: 'claude',
+      descriptors: [
+        { cliSessionId: 'root', transcriptPath: '/root' },
+        { cliSessionId: 'sub', transcriptPath: '/sub' },
+        { cliSessionId: 'other', transcriptPath: '/other' },
+        { cliSessionId: 'sibling', transcriptPath: '/sibling' },
+      ],
+      index: {
+        '/root': { text: 'find me', cwd: '/dev/app' },
+        '/sub': { text: 'find me', cwd: '/dev/app/src' },
+        '/other': { text: 'find me', cwd: '/dev/website' },
+        '/sibling': { text: 'find me', cwd: '/dev/app-legacy' },
+      },
+    }));
+    const results = await searchSessions('find me', { projectPath: '/dev/app/' });
+    expect(results.map(r => r.cliSessionId).sort()).toEqual(['root', 'sub']);
+  });
+
+  it('never indexes descriptors whose known cwd is outside the project', async () => {
+    const provider = fakeProvider({
+      id: 'codex',
+      descriptors: [
+        { cliSessionId: 'in', transcriptPath: '/in', projectCwd: '/dev/app' },
+        { cliSessionId: 'out', transcriptPath: '/out', projectCwd: '/elsewhere' },
+      ],
+      index: { '/in': { text: 'find me', cwd: '' }, '/out': { text: 'find me', cwd: '' } },
+    });
+    providersForTest.push(provider);
+    const indexTranscript = vi.mocked(provider.indexTranscript!);
+
+    const results = await searchSessions('find me', { projectPath: '/dev/app' });
+    expect(results.map(r => r.cliSessionId)).toEqual(['in']);
+    expect(indexTranscript).toHaveBeenCalledTimes(1);
+    expect(indexTranscript).toHaveBeenCalledWith('/in');
+  });
+
+  it('includes sessions the project already knows about even when their cwd differs', async () => {
+    providersForTest.push(fakeProvider({
+      id: 'codex',
+      descriptors: [{ cliSessionId: 'moved', transcriptPath: '/moved', projectCwd: '/somewhere-else' }],
+      index: { '/moved': { text: 'find me', cwd: '' } },
+    }));
+    const results = await searchSessions('find me', { projectPath: '/dev/app', cliSessionIds: ['moved'] });
+    expect(results.map(r => r.cliSessionId)).toEqual(['moved']);
+  });
+
+  it('matches a Windows-style cwd against the project path regardless of separators', async () => {
+    providersForTest.push(fakeProvider({
+      id: 'claude',
+      descriptors: [{ cliSessionId: 'win', transcriptPath: '/win' }],
+      index: { '/win': { text: 'find me', cwd: 'C:\\dev\\app\\src' } },
+    }));
+    const results = await searchSessions('find me', { projectPath: 'C:/dev/app' });
+    expect(results.map(r => r.cliSessionId)).toEqual(['win']);
+  });
+
+  it('matches transcripts recorded under the realpath of a symlinked project path', async () => {
+    mockRealpath.mockImplementation((async () => '/private/tmp/work') as unknown as typeof fs.promises.realpath);
+    providersForTest.push(fakeProvider({
+      id: 'claude',
+      descriptors: [{ cliSessionId: 'real', transcriptPath: '/real' }],
+      index: { '/real': { text: 'find me', cwd: '/private/tmp/work' } },
+    }));
+    const results = await searchSessions('find me', { projectPath: '/tmp/work' });
+    expect(results.map(r => r.cliSessionId)).toEqual(['real']);
+  });
+
+  it('treats a filesystem-root project as containing every absolute path, not as an empty prefix', async () => {
+    providersForTest.push(fakeProvider({
+      id: 'claude',
+      descriptors: [{ cliSessionId: 'a', transcriptPath: '/a' }, { cliSessionId: 'rel', transcriptPath: '/rel' }],
+      index: { '/a': { text: 'find me', cwd: '/dev/app' }, '/rel': { text: 'find me', cwd: 'relative/dir' } },
+    }));
+    const results = await searchSessions('find me', { projectPath: '/' });
+    expect(results.map(r => r.cliSessionId)).toEqual(['a']);
+  });
+
+  it('skips Claude transcripts whose folder slug rules out the project, without reading them', async () => {
+    const provider = fakeProvider({
+      id: 'claude',
+      descriptors: [
+        { cliSessionId: 'in', transcriptPath: '/in', projectSlug: '-dev-app' },
+        { cliSessionId: 'sub', transcriptPath: '/sub', projectSlug: '-dev-app-src' },
+        { cliSessionId: 'out', transcriptPath: '/out', projectSlug: '-dev-website' },
+      ],
+      index: {
+        '/in': { text: 'find me', cwd: '/dev/app' },
+        '/sub': { text: 'find me', cwd: '/dev/app/src' },
+        '/out': { text: 'find me', cwd: '/dev/website' },
+      },
+    });
+    providersForTest.push(provider);
+
+    const results = await searchSessions('find me', { projectPath: '/dev/app' });
+    expect(results.map(r => r.cliSessionId).sort()).toEqual(['in', 'sub']);
+    expect(vi.mocked(provider.indexTranscript!).mock.calls.map(([p]) => p).sort()).toEqual(['/in', '/sub']);
   });
 });

@@ -1,8 +1,9 @@
 import * as fs from 'fs';
-import type { DeepSearchResult } from '../shared/types';
+import type { DeepSearchResult, DeepSearchScope } from '../shared/types';
+import { isPathUnder } from '../shared/platform';
 import type { CliProvider, TranscriptDescriptor } from './providers/provider';
 import { getAllProviders } from './providers/registry';
-import { TRANSCRIPT_TEXT_SEPARATOR } from './providers/transcript-utils';
+import { TRANSCRIPT_TEXT_SEPARATOR, claudeProjectSlug } from './providers/transcript-utils';
 
 const MAX_DERIVED_NAME_LENGTH = 80;
 
@@ -47,6 +48,31 @@ async function getCachedIndex(provider: CliProvider, transcriptPath: string): Pr
   }
 }
 
+/** Unify separators and drop trailing ones (the filesystem root becomes '', which `isPathUnder` treats as containing every absolute path). */
+function normalizeDir(p: string): string {
+  return p.replace(/\\/g, '/').replace(/\/+$/, '');
+}
+
+/**
+ * The scope's project roots: the path as the user added it plus its realpath. CLIs record
+ * the resolved `process.cwd()`, so a project added through a symlink would otherwise match nothing.
+ */
+async function projectRoots(projectPath: string): Promise<string[]> {
+  const roots = [normalizeDir(projectPath)];
+  try {
+    const real = normalizeDir(await fs.promises.realpath(projectPath));
+    if (real !== roots[0]) roots.push(real);
+  } catch { /* missing or unreadable — the given path is all we have */ }
+  return roots;
+}
+
+/** True when `cwd` is one of the project roots or anywhere beneath one, ignoring separator style. */
+function inProject(cwd: string, roots: string[]): boolean {
+  if (!cwd) return false;
+  const dir = normalizeDir(cwd);
+  return roots.some((root) => isPathUnder(dir, root));
+}
+
 function scoreFuzzy(textLower: string, query: string): number {
   const q = query.toLowerCase().trim();
   if (!q) return 0;
@@ -86,7 +112,14 @@ function extractSnippet(text: string, textLower: string, query: string): string 
   return snippet;
 }
 
-async function searchOneProvider(provider: CliProvider, query: string): Promise<DeepSearchResult[]> {
+interface ResolvedScope {
+  roots: string[];
+  /** `claudeProjectSlug` of each root; '' for the filesystem root, which rules nothing out. */
+  claudeSlugs: string[];
+  cliSessionIds: Set<string>;
+}
+
+async function searchOneProvider(provider: CliProvider, query: string, scope?: ResolvedScope): Promise<DeepSearchResult[]> {
   if (!provider.discoverTranscripts || !provider.indexTranscript) return [];
   let descriptors: TranscriptDescriptor[];
   try {
@@ -94,10 +127,20 @@ async function searchOneProvider(provider: CliProvider, query: string): Promise<
   } catch {
     return [];
   }
-  const indexed = await Promise.all(descriptors.map(async (desc) => {
+  const keep = (id: string, cwd: string): boolean =>
+    !scope || scope.cliSessionIds.has(id) || inProject(cwd, scope.roots);
+  // Narrow before reading any file: a known cwd decides now. Claude descriptors carry
+  // only the folder slug, which is lossy, so it can rule a transcript out but not in.
+  const candidates = descriptors.filter((d) => {
+    if (d.projectCwd) return keep(d.cliSessionId, d.projectCwd);
+    if (!scope || provider.meta.id !== 'claude' || !d.projectSlug) return true;
+    return scope.cliSessionIds.has(d.cliSessionId) || scope.claudeSlugs.some((slug) =>
+      slug === '' || d.projectSlug === slug || d.projectSlug!.startsWith(slug + '-'));
+  });
+  const indexed = (await Promise.all(candidates.map(async (desc) => {
     const entry = await getCachedIndex(provider, desc.transcriptPath);
     return { desc, entry };
-  }));
+  }))).filter(({ desc, entry }) => !!desc.projectCwd || keep(desc.cliSessionId, entry.cwd));
   // Same cliSessionId can appear under multiple project slugs (e.g. Claude
   // resumes that move between cwds); keep the highest-scoring transcript.
   const best = new Map<string, { desc: TranscriptDescriptor; entry: CacheEntry; score: number }>();
@@ -124,8 +167,14 @@ async function searchOneProvider(provider: CliProvider, query: string): Promise<
   return out;
 }
 
-export async function searchSessions(query: string): Promise<DeepSearchResult[]> {
-  const all = await Promise.all(getAllProviders().map((p) => searchOneProvider(p, query)));
+/** Searches every provider's transcripts, or only one project's when `scope` is given. */
+export async function searchSessions(query: string, scope?: DeepSearchScope): Promise<DeepSearchResult[]> {
+  let resolved: ResolvedScope | undefined;
+  if (scope) {
+    const roots = await projectRoots(scope.projectPath);
+    resolved = { roots, claudeSlugs: roots.map(claudeProjectSlug), cliSessionIds: new Set(scope.cliSessionIds) };
+  }
+  const all = await Promise.all(getAllProviders().map((p) => searchOneProvider(p, query, resolved)));
   const results = all.flat();
   results.sort((a, b) => b.score - a.score);
   return results.slice(0, 20);

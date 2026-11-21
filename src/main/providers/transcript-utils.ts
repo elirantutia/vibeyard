@@ -6,3 +6,8 @@ export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 
 /** Joins extracted user-message snippets with a clear separator the snippet extractor can land on. */
 export const TRANSCRIPT_TEXT_SEPARATOR = '\n---\n';
+
+/** Claude's per-project transcript folder name: the cwd with every non-alphanumeric char replaced by '-'. */
+export function claudeProjectSlug(projectPath: string): string {
+  return projectPath.replace(/[^a-zA-Z0-9]/g, '-');
+}

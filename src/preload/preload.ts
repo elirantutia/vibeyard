@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron';
-import type { BackgroundTask, CostData, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, ToolFailureData, SettingsWarningData, SettingsValidationResult, StatusLineConflictData, InspectorEvent, ProviderConfig, ReadFileResult, FileStatResult, TopFilesResult, FsChange, DeepSearchResult, GithubFetchResult, GithubRepo, ChromeProfile, ChromeImportOptions, ChromeImportProgress, ChromeImportResult, ClipboardSource } from '../shared/types';
+import type { BackgroundTask, CostData, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, ToolFailureData, SettingsWarningData, SettingsValidationResult, StatusLineConflictData, InspectorEvent, ProviderConfig, ReadFileResult, FileStatResult, TopFilesResult, FsChange, DeepSearchResult, DeepSearchScope, GithubFetchResult, GithubRepo, ChromeProfile, ChromeImportOptions, ChromeImportProgress, ChromeImportResult, ClipboardSource } from '../shared/types';
 import { ZOOM_MIN, ZOOM_MAX } from '../shared/types';
 import type { CtlCommand, CtlResult } from '../shared/ctl-protocol';
 
@@ -20,7 +20,7 @@ export interface VibeyardApi {
     buildResumeWithPrompt(sourceProviderId: ProviderId, sourceCliSessionId: string | null, projectPath: string, sessionName: string, configDir?: string): Promise<string>;
     transcriptExists(providerId: ProviderId, cliSessionId: string | null, projectPath: string, configDir?: string): Promise<boolean>;
     transcriptExistsSync(providerId: ProviderId, cliSessionId: string | null, projectPath: string, configDir?: string): boolean;
-    deepSearch(query: string): Promise<DeepSearchResult[]>;
+    deepSearch(query: string, scope?: DeepSearchScope): Promise<DeepSearchResult[]>;
     onHookStatus(callback: (sessionId: string, status: 'working' | 'waiting' | 'completed' | 'input', hookName: string) => void): () => void;
     onCliSessionId(callback: (sessionId: string, cliSessionId: string) => void): () => void;
     /** @deprecated Use onCliSessionId instead */
@@ -206,8 +206,8 @@ const api: VibeyardApi = {
       ipcRenderer.invoke('session:transcriptExists', providerId, cliSessionId, projectPath, configDir),
     transcriptExistsSync: (providerId, cliSessionId, projectPath, configDir) =>
       ipcRenderer.sendSync('session:transcriptExistsSync', providerId, cliSessionId, projectPath, configDir),
-    deepSearch: (query) =>
-      ipcRenderer.invoke('session:deepSearch', query),
+    deepSearch: (query, scope) =>
+      ipcRenderer.invoke('session:deepSearch', query, scope),
     onHookStatus: (callback) =>
       onChannel('session:hookStatus', (sessionId, status, hookName) =>
         callback(sessionId as string, status as 'working' | 'waiting' | 'completed' | 'input', (hookName as string) || '')),

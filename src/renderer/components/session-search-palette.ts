@@ -2,7 +2,7 @@ import { appState } from '../state.js';
 import { getProviderDisplayName } from '../provider-availability.js';
 import { escapeHtml, escapeRegExp } from './dom-search-backend.js';
 import { deriveProjectName } from '../../shared/project-name.js';
-import type { DeepSearchResult } from '../../shared/types.js';
+import type { DeepSearchResult, DeepSearchScope, ProjectRecord } from '../../shared/types.js';
 
 interface ResolvedResult extends DeepSearchResult {
   sessionName: string | null;
@@ -36,8 +36,14 @@ export function highlightMatches(text: string, query: string): string {
   return html;
 }
 
+type SearchScope = 'project' | 'all';
+
 let overlay: HTMLElement | null = null;
 let input: HTMLInputElement | null = null;
+let scopeButtons: Record<SearchScope, HTMLButtonElement> | null = null;
+let scope: SearchScope = 'project';
+/** The project "This project" refers to, snapshotted on open so labels and searches can't drift apart. */
+let paletteProject: ProjectRecord | undefined;
 let resultsList: HTMLElement | null = null;
 let activeIndex = 0;
 let resolvedResults: ResolvedResult[] = [];
@@ -95,19 +101,39 @@ function createOverlay(): void {
   input = document.createElement('input');
   input.className = 'session-palette-input';
   input.type = 'text';
-  input.placeholder = 'Search all sessions...';
   input.addEventListener('input', onInput);
   input.addEventListener('keydown', onKeydown);
 
+  const scopeToggle = document.createElement('div');
+  scopeToggle.className = 'session-palette-scope';
+  scopeToggle.setAttribute('role', 'radiogroup');
+  const makeScopeButton = (value: SearchScope, label: string): HTMLButtonElement => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'session-palette-scope-btn';
+    btn.setAttribute('role', 'radio');
+    btn.textContent = label;
+    // mousedown keeps focus in the input; click alone would blur it first.
+    btn.addEventListener('mousedown', (e) => e.preventDefault());
+    btn.addEventListener('click', () => setScope(value));
+    scopeToggle.appendChild(btn);
+    return btn;
+  };
+  scopeButtons = {
+    project: makeScopeButton('project', 'This project'),
+    all: makeScopeButton('all', 'All projects'),
+  };
+
   inputRow.appendChild(icon);
   inputRow.appendChild(input);
+  inputRow.appendChild(scopeToggle);
 
   resultsList = document.createElement('div');
   resultsList.className = 'session-palette-results';
 
   const footer = document.createElement('div');
   footer.className = 'session-palette-footer';
-  for (const [keys, label] of [['↑↓', 'navigate'], ['↵', 'open session'], ['Esc', 'close']] as [string, string][]) {
+  for (const [keys, label] of [['↑↓', 'navigate'], ['↵', 'open session'], ['Tab', 'switch scope'], ['Esc', 'close']] as [string, string][]) {
     const span = document.createElement('span');
     const kbd = document.createElement('kbd');
     kbd.textContent = keys;
@@ -121,6 +147,43 @@ function createOverlay(): void {
   container.appendChild(footer);
   overlay.appendChild(container);
   document.body.appendChild(overlay);
+}
+
+/** The project being searched, or undefined in all-projects scope. */
+function scopedProject(): ProjectRecord | undefined {
+  return scope === 'project' ? paletteProject : undefined;
+}
+
+function updateScopeUi(): void {
+  if (!input || !scopeButtons) return;
+  scopeButtons.project.disabled = !paletteProject;
+  for (const value of ['project', 'all'] as const) {
+    const on = value === scope;
+    scopeButtons[value].classList.toggle('active', on);
+    scopeButtons[value].setAttribute('aria-checked', String(on));
+  }
+  const project = scopedProject();
+  input.placeholder = project ? `Search sessions in ${project.name}\u2026` : 'Search all sessions\u2026';
+}
+
+function setScope(next: SearchScope): void {
+  if (next === 'project' && !paletteProject) return;
+  if (next === scope) return;
+  scope = next;
+  updateScopeUi();
+  input?.focus();
+  if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
+  void searchSessions();
+}
+
+/** The scoped project as a deep-search scope, or undefined to search every project. */
+function currentScope(): DeepSearchScope | undefined {
+  const project = scopedProject();
+  if (!project) return undefined;
+  const cliSessionIds = [...buildSessionMap()]
+    .filter(([, entry]) => entry.projectId === project.id)
+    .map(([id]) => id);
+  return { projectPath: project.path, cliSessionIds };
 }
 
 function onInput(): void {
@@ -146,7 +209,7 @@ async function searchSessions(): Promise<void> {
 
   let raw: DeepSearchResult[] = [];
   try {
-    raw = await window.vibeyard.session.deepSearch(query);
+    raw = await window.vibeyard.session.deepSearch(query, currentScope());
   } catch {
     raw = [];
   }
@@ -177,7 +240,12 @@ function renderResults(): void {
     const empty = document.createElement('div');
     empty.className = 'session-palette-empty';
     const query = input?.value.trim() ?? '';
-    empty.textContent = query.length >= 2 ? 'No sessions found' : 'Type 2+ characters to search all sessions';
+    const project = scopedProject();
+    if (query.length >= 2) {
+      empty.textContent = project ? 'No sessions found in this project' : 'No sessions found';
+    } else {
+      empty.textContent = `Type 2+ characters to search ${project ? `sessions in ${project.name}` : 'all sessions'}`;
+    }
     resultsList.appendChild(empty);
     return;
   }
@@ -210,11 +278,13 @@ function renderResults(): void {
     providerBadge.textContent = getProviderDisplayName(r.providerId);
     nameRow.appendChild(providerBadge);
 
-    const badge = document.createElement('span');
-    badge.className = `session-palette-badge${isCurrentProject ? ' current' : ''}`;
-    const projectName = deriveProjectName(r.projectCwd, r.projectSlug);
-    badge.textContent = isCurrentProject ? 'current project' : projectName;
-    nameRow.appendChild(badge);
+    // Every row in project scope is the current project, so the badge says nothing there.
+    if (!scopedProject()) {
+      const badge = document.createElement('span');
+      badge.className = `session-palette-badge${isCurrentProject ? ' current' : ''}`;
+      badge.textContent = isCurrentProject ? 'current project' : deriveProjectName(r.projectCwd, r.projectSlug);
+      nameRow.appendChild(badge);
+    }
 
     const meta = document.createElement('div');
     meta.className = 'session-palette-item-meta';
@@ -246,8 +316,9 @@ function openResult(r: ResolvedResult): void {
     appState.setActiveProject(r.projectId);
     void appState.resumeFromHistorySafe(r.projectId, r.archivedId);
   } else {
-    // Not in Vibeyard — find or create project by cwd, then open session directly
-    let project = appState.projects.find(p => p.path === r.projectCwd);
+    // Not in Vibeyard — find or create project by cwd, then open session directly.
+    // A project-scoped hit may come from a subfolder, so it opens in the scoped project.
+    let project = scopedProject() ?? appState.projects.find(p => p.path === r.projectCwd);
     if (!project) {
       const name = deriveProjectName(r.projectCwd, r.projectSlug);
       project = appState.addProject(name, r.projectCwd);
@@ -268,6 +339,9 @@ function onKeydown(e: KeyboardEvent): void {
   } else if (e.key === 'Enter') {
     e.preventDefault();
     if (resolvedResults[activeIndex]) openResult(resolvedResults[activeIndex]);
+  } else if (e.key === 'Tab' && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    setScope(scope === 'project' ? 'all' : 'project');
   } else if (e.key === 'Escape') {
     e.preventDefault();
     hidePalette();
@@ -279,6 +353,9 @@ export function showSessionSearchPalette(): void {
   if (!overlay || !input) return;
   overlay.style.display = 'flex';
   input.value = '';
+  paletteProject = appState.activeProject;
+  scope = paletteProject ? 'project' : 'all';
+  updateScopeUi();
   resolvedResults = [];
   activeIndex = 0;
   latestSearchToken++;
