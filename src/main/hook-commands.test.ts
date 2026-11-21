@@ -204,17 +204,28 @@ describe.runIf(pythonAvailable)('stop_status_writer.py behaviour', () => {
     const readBg = () => JSON.parse(realFs.readFileSync(bgPath(), 'utf8'));
     const shell = { id: '1', type: 'shell', status: 'running', description: 'npm run dev' };
 
-    it('lists work that outlives the turn, but not subagents or finished tasks', () => {
+    it('lists shells, monitors and MCP tasks, but not subagents, finished or internal tasks', () => {
       realFs.rmSync(bgPath(), { force: true });
       const bt = [
         shell,
-        { id: '2', type: 'monitor', status: 'running', command: 'tail -f log' },
-        { id: '3', type: 'shell', status: 'completed', description: 'done already' },
+        { id: '2', type: 'monitor', status: 'running', command: 'tail -f build.log' },
+        { id: '3', type: 'monitor', status: 'running', description: 'deploy events', server: 'ci', tool: 'watch' },
+        { id: '4', type: 'MCP task', status: 'running', description: 'index repo' },
+        { id: '5', type: 'shell', status: 'completed', description: 'done already' },
+        // Claude Code's ambient artifact watcher: a monitor with no command or server.
+        { id: '6', type: 'monitor', status: 'running', description: 'live updates for artifact https://claude.ai/artifact/x (re-armed on session resume)' },
+        // Internal or remote work, and a type this writer has never heard of.
+        { id: '7', type: 'cloud session', status: 'running', description: 'remote' },
+        { id: '8', type: 'dream', status: 'running', description: 'memory consolidation' },
+        { id: '9', type: 'auto-mode scan', status: 'running', description: 'scan' },
+        { id: '10', type: 'something new', status: 'running', description: 'future' },
       ];
       expect(run({ ...base, background_tasks: bt })).toBe('Stop:completed');
       expect(readBg()).toEqual({ tasks: [
         { type: 'shell', description: 'npm run dev' },
-        { type: 'monitor', description: 'tail -f log' },
+        { type: 'monitor', description: 'tail -f build.log' },
+        { type: 'monitor', description: 'deploy events' },
+        { type: 'mcp task', description: 'index repo' },
       ] });
 
       // Alongside a subagent the session holds working, and the shell is still listed.

@@ -101,10 +101,17 @@ output in this turn*:
 An entry in a terminal `status` (`completed`, `failed`, `cancelled`, …) is not in
 flight.
 
-**Background work is shown, not held.** The non-holding entries still in flight
-(a `run_in_background` shell, a monitor, …) are written to `<sid>.background` as
-`{"tasks": [{type, description}]}` (`description` falls back to `command`, capped
-at 120 chars). The tab keeps its `completed` status and draws a spinning ring
+**Background work is shown, not held.** Running entries of the types that die
+with the tab, `shell` (a `run_in_background` script), `monitor` and `MCP task`, are
+written to `<sid>.background` as `{"tasks": [{type, description}]}` (`description`
+falls back to `command`, capped at 120 chars). Every other type is ignored,
+mirroring Claude Code's own internal-task filter (verified in the 2.1.330 binary:
+`cloud session`, `dream`, `auto-mode scan`, `memory save`), and so is a type added
+later: a ring that never clears also blocks close and quit. Claude Code's ambient
+artifact watcher ("live updates for artifact …", re-armed on every resume) is
+reported as a `monitor` too; it is told apart by shape, since a user's monitor
+always carries a `command` (a shell monitor) or a `server` (an MCP monitor) and the
+ambient one carries neither. The tab keeps its `completed` status and draws a spinning ring
 around the dot, with the list in its tooltip. The file is rewritten only when the
 list changes, only from a main-agent Stop that carries `background_tasks`, never
 created for an empty list, written atomically (temp file + `os.replace`), and

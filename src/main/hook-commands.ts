@@ -107,9 +107,16 @@ force_working=bool(d.get('agent_id') or d.get('hook_event_name')=='SubagentStop'
 HOLD=('subagent','teammate','workflow')
 DONE=('completed','complete','done','failed','error','cancelled','canceled','killed','stopped','timed_out','timeout')
 inflight=False
-# One pass sorts each live task: HOLD types keep the turn open, every other
-# type is work that outlives it (a run_in_background shell, a monitor, an MCP
-# task...) and goes to the tab's background marker instead.
+# One pass sorts each live task into three groups. HOLD keeps the turn open.
+# SHOW is work that dies with the tab, so the tab marks it: a run_in_background
+# shell, a monitor, an MCP task. Everything else is ignored, mirroring Claude
+# Code's own filter for internal tasks (cloud session, dream, auto-mode scan,
+# memory save) and failing toward no marker for a type added later, since a
+# ring that never clears also blocks close and quit. Claude Code's ambient
+# artifact watcher ("live updates for artifact ...", re-armed on every resume)
+# is also a monitor, but unlike one the user asked for it carries neither a
+# command nor an MCP server, which is how it is told apart.
+SHOW=('shell','monitor','mcp task')
 bg=[]
 bt=d.get('background_tasks')
 if isinstance(bt,list):
@@ -121,9 +128,11 @@ if isinstance(bt,list):
         ty=str(task.get('type','')).strip().lower()
         if ty in HOLD:
             inflight=True
-        else:
-            desc=task.get('description') or task.get('command') or ''
-            bg.append({'type':ty,'description':str(desc)[:120]})
+            continue
+        if ty not in SHOW or (ty=='monitor' and not (task.get('command') or task.get('server'))):
+            continue
+        desc=str(task.get('description') or task.get('command') or '')
+        bg.append({'type':ty,'description':desc[:120]})
 # An empty/absent list is not proof of an idle session — fall back to the registry.
 # The registry is {"ids":{agent_id:last_seen_ms}}; a file from before the
 # registry ({"n":count,"t":ms}) is still honoured so an upgrade mid-orchestration
