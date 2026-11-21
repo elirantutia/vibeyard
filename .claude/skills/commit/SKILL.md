@@ -1,3 +1,8 @@
+---
+name: commit
+description: Create a git commit in this project using its prefix-based commit message convention (the prefixes feed the release notes). Use whenever the user asks to commit changes, or invokes /commit. Runs the test suite first and stages only files relevant to the current task.
+---
+
 Create a git commit for the current staged (or unstaged) changes using a structured commit message convention.
 
 ## Instructions

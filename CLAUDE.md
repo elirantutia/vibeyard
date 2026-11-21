@@ -177,7 +177,7 @@ After completing an implementation task, always:
 
 ## Git Workflow
 
-Always use the `/commit` command when committing changes to this project. Do not create commits manually.
+Always use the `commit` skill (`/commit`) when committing changes to this project. Do not create commits manually.
 
 Never commit, push, or create pull requests unless the user explicitly asks for it.
 
