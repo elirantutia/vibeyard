@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron';
-import type { CostData, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, ToolFailureData, SettingsWarningData, SettingsValidationResult, StatusLineConflictData, InspectorEvent, ProviderConfig, ReadFileResult, FileStatResult, TopFilesResult, FsChange, DeepSearchResult, GithubFetchResult, GithubRepo, ChromeProfile, ChromeImportOptions, ChromeImportProgress, ChromeImportResult, ClipboardSource } from '../shared/types';
+import type { BackgroundTask, CostData, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, ToolFailureData, SettingsWarningData, SettingsValidationResult, StatusLineConflictData, InspectorEvent, ProviderConfig, ReadFileResult, FileStatResult, TopFilesResult, FsChange, DeepSearchResult, GithubFetchResult, GithubRepo, ChromeProfile, ChromeImportOptions, ChromeImportProgress, ChromeImportResult, ClipboardSource } from '../shared/types';
 import { ZOOM_MIN, ZOOM_MAX } from '../shared/types';
 import type { CtlCommand, CtlResult } from '../shared/ctl-protocol';
 
@@ -27,6 +27,7 @@ export interface VibeyardApi {
     onClaudeSessionId(callback: (sessionId: string, claudeSessionId: string) => void): () => void;
     onCostData(callback: (sessionId: string, costData: CostData) => void): () => void;
     onSessionName(callback: (sessionId: string, name: string, cliSessionId: string) => void): () => void;
+    onBackgroundTasks(callback: (sessionId: string, tasks: BackgroundTask[]) => void): () => void;
     resyncStatus(): void;
     onToolFailure(callback: (sessionId: string, data: ToolFailureData) => void): () => void;
     onInspectorEvents(callback: (sessionId: string, events: InspectorEvent[]) => void): () => void;
@@ -222,6 +223,9 @@ const api: VibeyardApi = {
     onSessionName: (callback) =>
       onChannel('session:sessionName', (sessionId, name, cliSessionId) =>
         callback(sessionId as string, name as string, (cliSessionId as string) || '')),
+    onBackgroundTasks: (callback) =>
+      onChannel('session:backgroundTasks', (sessionId, tasks) =>
+        callback(sessionId as string, tasks as BackgroundTask[])),
     resyncStatus: () => ipcRenderer.send('session:resyncStatus'),
     onToolFailure: (callback) =>
       onChannel('session:toolFailure', (sessionId, data) =>

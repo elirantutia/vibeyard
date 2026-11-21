@@ -7,6 +7,7 @@ import { initSession, removeSession } from '../session-activity.js';
 import { markFreshSession } from '../session-insights.js';
 import { removeSession as removeCostSession, formatTokens, getCost, type CostInfo } from '../session-cost.js';
 import { removeSession as removeContextSession, getContext, getContextSeverity, type ContextWindowInfo } from '../session-context.js';
+import { getRateLimits, formatResetIn, type LimitKey, type LimitWindow } from '../account-rate-limits.js';
 import type { ProviderId } from '../types.js';
 import { getProviderCapabilities } from '../provider-availability.js';
 import { appState } from '../state.js';
@@ -47,6 +48,13 @@ interface TerminalInstance {
    * flickering down to a tiny number on every turn boundary.
    */
   peakOutputTokens: number;
+  /**
+   * The usage-limits segment, cached across cost ticks: the cost cluster is
+   * rebuilt on nearly every statusLine payload, while the limits only change
+   * when the account's data or the preference does (see refreshCostDisplays).
+   */
+  limitsSeg: HTMLElement | null;
+  limitsStale: boolean;
 }
 
 const instances = new Map<string, TerminalInstance>();
@@ -150,6 +158,8 @@ export function createTerminalPane(
     pendingPromptTimer: null,
     lastSize: null,
     peakOutputTokens: 0,
+    limitsSeg: null,
+    limitsStale: true,
   };
 
   instances.set(sessionId, instance);
@@ -493,12 +503,113 @@ function resolveProfileName(providerId: ProviderId, configDir?: string): string 
   return profile?.name ?? 'Default';
 }
 
-/** Re-render every open pane's cost line from its last known cost (e.g. after a profile is added/removed). */
-export function refreshProfileLabels(): void {
+/**
+ * Account a pane's plan usage limits belong to: provider plus the profile's
+ * config dir, the exact dir threaded into the PTY spawn ('' = the provider's
+ * default dir). The provider keeps a non-Claude pane on a default dir from
+ * showing the default Claude login's numbers.
+ */
+function accountKeyOf(instance: TerminalInstance): string {
+  return `${instance.providerId}:${instance.configDir ?? ''}`;
+}
+
+/** The usage-limits account of a session this module owns, else null. */
+export function rateLimitAccountKey(sessionId: string): string | null {
+  const instance = instances.get(sessionId);
+  return instance ? accountKeyOf(instance) : null;
+}
+
+/**
+ * Re-render open panes' cost clusters from their last known cost, including a
+ * fresh usage-limits segment. All panes after a profile or preference change;
+ * only `accountKey`'s panes after its limits change (they are per account).
+ */
+export function refreshCostDisplays(accountKey?: string): void {
   for (const instance of instances.values()) {
     if (getProviderCapabilities(instance.providerId)?.costTracking === false) continue;
+    if (accountKey !== undefined && accountKeyOf(instance) !== accountKey) continue;
+    instance.limitsStale = true;
     updateCostDisplay(instance.sessionId, getCost(instance.sessionId));
   }
+}
+
+/** Rail colour state shared by the context meter and the limit bars (same 70/90 cut-offs). */
+function railSeverity(pct: number): 'ok' | 'warn' | 'crit' {
+  const severity = getContextSeverity(pct);
+  return severity === 'critical' ? 'crit' : severity === 'warning' ? 'warn' : 'ok';
+}
+
+function span(className: string, text?: string): HTMLSpanElement {
+  const el = document.createElement('span');
+  el.className = className;
+  if (text !== undefined) el.textContent = text;
+  return el;
+}
+
+/** Append `nodes` to `parent` with a `·` between each. */
+function appendDotted(parent: HTMLElement, nodes: HTMLElement[]): void {
+  nodes.forEach((node, i) => {
+    if (i > 0) parent.appendChild(span('ssl-dot', '·'));
+    parent.appendChild(node);
+  });
+}
+
+const LIMIT_LABELS: Record<LimitKey, { short: string; long: string }> = {
+  five_hour: { short: '5h', long: '5-hour limit' },
+  seven_day: { short: '7d', long: '7-day limit' },
+  spend_limit: { short: 'spend', long: 'Spend limit' },
+};
+
+function formatUsd(n: number): string {
+  return `$${Math.round(n).toLocaleString()}`;
+}
+
+/** `$271 / $500` for a gateway spend window that carries dollars, else null. */
+function spendText(w: LimitWindow, sep: string): string | null {
+  return w.usedUsd !== undefined && w.limitUsd !== undefined ? `${formatUsd(w.usedUsd)}${sep}${formatUsd(w.limitUsd)}` : null;
+}
+
+function usageLimitsTooltip(accountKey: string): string {
+  const lines = getRateLimits(accountKey).map((w) => {
+    const pct = `${Math.round(w.usedPercentage)}%`;
+    const spend = spendText(w, ' of ');
+    const used = spend ? `${spend} (${pct})` : `${pct} used`;
+    const reset = w.resetsAt !== undefined ? ` · resets in ${formatResetIn(w.resetsAt)}` : '';
+    return `${LIMIT_LABELS[w.key].long}: ${used}${reset}`;
+  });
+  lines.push('Shared by every tab on this profile');
+  return lines.join('\n');
+}
+
+/**
+ * Plan usage limits segment: `5h ▬ 42% · 7d ▬ 18%` (or `spend ▬ $271 / $500`).
+ * Null when the preference is off or Claude sent no live windows for this
+ * account (API-key logins, before any tab's first reply), so the segment and
+ * its rule disappear. The hover text is computed on hover so its reset
+ * countdown is current; the node survives cost ticks (see `limitsSeg`).
+ */
+function buildUsageLimits(accountKey: string): HTMLElement | null {
+  if (appState.preferences.showUsageLimits === false) return null;
+  const windows = getRateLimits(accountKey);
+  if (windows.length === 0) return null;
+
+  const seg = span('ssl-limits seg');
+  appendDotted(seg, windows.map((w) => {
+    const lim = span('ssl-lim');
+    lim.dataset.sev = railSeverity(w.usedPercentage);
+    const mini = span('ssl-mini');
+    const fill = span('ssl-mini-fill');
+    fill.style.width = `${w.usedPercentage}%`;
+    mini.appendChild(fill);
+    lim.append(
+      span('ssl-lim-key', LIMIT_LABELS[w.key].short),
+      mini,
+      span('ssl-lim-val', spendText(w, ' / ') ?? `${Math.round(w.usedPercentage)}%`),
+    );
+    return lim;
+  }));
+  seg.addEventListener('mouseenter', () => { seg.title = usageLimitsTooltip(accountKey); });
+  return seg;
 }
 
 export function updateCostDisplay(sessionId: string, cost: CostInfo | null): void {
@@ -508,10 +619,16 @@ export function updateCostDisplay(sessionId: string, cost: CostInfo | null): voi
   const el = instance.element.querySelector('.cost-display') as HTMLElement | null;
   if (!el) return;
 
-  // Rebuild the rail's right cluster: [profile pill] · [model] · [cost] | [in/out].
+  // Rebuild the rail's right cluster: [usage limits] | [profile pill] · [model] · [cost] | [in/out].
   // Separators are only inserted between segments that are actually present.
   el.replaceChildren();
   const segs: HTMLElement[] = [];
+
+  if (instance.limitsStale) {
+    instance.limitsSeg = buildUsageLimits(accountKeyOf(instance));
+    instance.limitsStale = false;
+  }
+  if (instance.limitsSeg) el.append(instance.limitsSeg, span('ssl-vrule'));
 
   const profileName = resolveProfileName(instance.providerId, instance.configDir);
   if (profileName) {
@@ -531,15 +648,7 @@ export function updateCostDisplay(sessionId: string, cost: CostInfo | null): voi
   costEl.textContent = `$${(cost?.totalCostUsd ?? 0).toFixed(4)}`;
   segs.push(costEl);
 
-  segs.forEach((seg, i) => {
-    if (i > 0) {
-      const dot = document.createElement('span');
-      dot.className = 'ssl-dot';
-      dot.textContent = '·';
-      el.appendChild(dot);
-    }
-    el.appendChild(seg);
-  });
+  appendDotted(el, segs);
 
   // `total_output_tokens` is per-turn and regresses at each turn boundary;
   // hold the session peak so the displayed "out" only ever ratchets up.
@@ -547,9 +656,7 @@ export function updateCostDisplay(sessionId: string, cost: CostInfo | null): voi
   const outTokens = instance.peakOutputTokens;
 
   if (cost && (cost.totalInputTokens > 0 || outTokens > 0)) {
-    const vrule = document.createElement('span');
-    vrule.className = 'ssl-vrule';
-    el.appendChild(vrule);
+    el.appendChild(span('ssl-vrule'));
     const io = document.createElement('span');
     io.className = 'ssl-io seg';
     io.textContent = `${formatTokens(cost.totalInputTokens)} in / ${formatTokens(outTokens)} out`;
@@ -598,8 +705,7 @@ export function updateContextDisplay(sessionId: string, info: ContextWindowInfo)
   el.title = `${info.totalTokens.toLocaleString()} / ${info.contextWindowSize.toLocaleString()} tokens`;
 
   // Context-fill state drives the meter hue (iris → amber → red) on the whole bar.
-  const severity = getContextSeverity(pct);
-  const state = severity === 'critical' ? 'crit' : severity === 'warning' ? 'warn' : 'ok';
+  const state = railSeverity(pct);
   const bar = instance.element.querySelector('.session-status-bar') as HTMLElement | null;
   if (bar) bar.dataset.state = state;
 

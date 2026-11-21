@@ -1,5 +1,5 @@
 export type { McpServer, Agent, Skill, Command, ProviderConfig, ClaudeConfig, GitWorktree, GitFileEntry, CostData, McpResult, ProviderId, CliProviderMeta, CliProviderCapabilities, StatsCache, ReadinessResult, ReadinessCategory, ReadinessCheck, ReadinessCheckStatus, ChromeProfile, ChromeImportOptions, ChromeImportProgress, ChromeImportResult, ClipboardSource } from '../shared/types.js';
-import type { CostData, ProviderConfig, GitWorktree, McpResult, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, TopFilesResult, FsChange, ChromeProfile, ChromeImportOptions, ChromeImportProgress, ChromeImportResult, ClipboardSource } from '../shared/types.js';
+import type { BackgroundTask, CostData, ProviderConfig, GitWorktree, McpResult, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, TopFilesResult, FsChange, ChromeProfile, ChromeImportOptions, ChromeImportProgress, ChromeImportResult, ClipboardSource } from '../shared/types.js';
 import type { CtlCommand, CtlResult } from '../shared/ctl-protocol.js';
 
 export interface VibeyardApi {
@@ -22,6 +22,7 @@ export interface VibeyardApi {
     onClaudeSessionId(callback: (sessionId: string, claudeSessionId: string) => void): () => void;
     onCostData(callback: (sessionId: string, costData: CostData) => void): () => void;
     onSessionName(callback: (sessionId: string, name: string, cliSessionId: string) => void): () => void;
+    onBackgroundTasks(callback: (sessionId: string, tasks: BackgroundTask[]) => void): () => void;
     resyncStatus(): void;
   };
   ctl: {

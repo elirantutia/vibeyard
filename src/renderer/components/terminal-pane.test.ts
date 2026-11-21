@@ -787,6 +787,63 @@ describe('profile label in status-line cost string', () => {
     expect(io()).toBe('5000 in / 300 out');
   });
 
+  it('leads the cost cluster with plan usage limits, and drops them when the preference is off', async () => {
+    const { appState } = await import('../state.js');
+    const { setRateLimits } = await import('../account-rate-limits.js');
+    const { createTerminalPane, refreshCostDisplays } = await import('./terminal-pane.js');
+    const instance = makePane(createTerminalPane, 'pb-lim', 'claude', undefined);
+    const cd = () => instance.element.querySelector('.cost-display')!;
+    const inAnHour = Math.floor(Date.now() / 1000) + 3600;
+
+    // No data (API-key login, or before the first reply): no segment.
+    expect(cd().querySelector('.ssl-limits')).toBeNull();
+
+    setRateLimits('claude:', {
+      five_hour: { used_percentage: 78, resets_at: inAnHour },
+      seven_day: { used_percentage: 18, resets_at: inAnHour + 86400 },
+    });
+    refreshCostDisplays('claude:');
+    const lims = cd().querySelector('.ssl-limits')!;
+    expect(lims).not.toBeNull();
+    expect(cd().children[0]).toBe(lims);
+    expect(cd().children[1].className).toBe('ssl-vrule');
+    const five = lims.children[0];
+    expect(five.dataset.sev).toBe('warn');
+    expect(five.children.map((c: any) => c.textContent)).toEqual(['5h', '', '78%']);
+    expect(lims.children[2].children[2].textContent).toBe('18%');
+
+    appState.preferences.showUsageLimits = false;
+    refreshCostDisplays();
+    expect(cd().querySelector('.ssl-limits')).toBeNull();
+    appState.preferences.showUsageLimits = true;
+  });
+
+  it('repaints every tab on the account, and only that account', async () => {
+    const { setRateLimits } = await import('../account-rate-limits.js');
+    const { createTerminalPane, refreshCostDisplays, rateLimitAccountKey } = await import('./terminal-pane.js');
+    const a = makePane(createTerminalPane, 'acct-a', 'claude', '/cfg/work');
+    const b = makePane(createTerminalPane, 'acct-b', 'claude', '/cfg/work');
+    const other = makePane(createTerminalPane, 'acct-c', 'claude', undefined);
+    expect(rateLimitAccountKey('acct-a')).toBe('claude:/cfg/work');
+    expect(rateLimitAccountKey('acct-c')).toBe('claude:');
+    expect(rateLimitAccountKey('nope')).toBeNull();
+
+    setRateLimits('claude:/cfg/work', { five_hour: { used_percentage: 40 } });
+    refreshCostDisplays('claude:/cfg/work');
+    const has = (p: any) => p.element.querySelector('.cost-display')!.querySelector('.ssl-limits') !== null;
+    expect([has(a), has(b), has(other)]).toEqual([true, true, false]);
+  });
+
+  it('shows gateway spend in dollars when Claude sends them', async () => {
+    const { setRateLimits } = await import('../account-rate-limits.js');
+    const { createTerminalPane, refreshCostDisplays } = await import('./terminal-pane.js');
+    const instance = makePane(createTerminalPane, 'pb-spend', 'claude', '/cfg/gw');
+    setRateLimits('claude:/cfg/gw', { spend_limit: { used_percentage: 54, used_usd: 271.4, limit_usd: 500 } });
+    refreshCostDisplays('claude:/cfg/gw');
+    const lim = instance.element.querySelector('.ssl-lim')!;
+    expect(lim.children.map((c: any) => c.textContent)).toEqual(['spend', '', '$271 / $500']);
+  });
+
   it('ignores profiles belonging to a different provider', async () => {
     const { appState } = await import('../state.js');
     const { createTerminalPane } = await import('./terminal-pane.js');
@@ -798,16 +855,16 @@ describe('profile label in status-line cost string', () => {
     expect(costParts(instance)).toEqual({ pill: null, cost: '$0.0000' });
   });
 
-  it('refreshProfileLabels re-renders the prefix after a second profile is added', async () => {
+  it('refreshCostDisplays re-renders the prefix after a second profile is added', async () => {
     const { appState } = await import('../state.js');
-    const { createTerminalPane, refreshProfileLabels } = await import('./terminal-pane.js');
+    const { createTerminalPane, refreshCostDisplays } = await import('./terminal-pane.js');
     appState.profiles.push(makeProfile('work', 'Work'));
 
     const instance = makePane(createTerminalPane, 'pb-5', 'claude', '/cfg/work');
     expect(costParts(instance)).toEqual({ pill: null, cost: '$0.0000' });
 
     appState.profiles.push(makeProfile('personal', 'Personal'));
-    refreshProfileLabels();
+    refreshCostDisplays();
 
     const cd = instance.element.querySelector('.cost-display')!;
     expect(cd.querySelector('.ssl-pill')!.textContent).toBe('Work');

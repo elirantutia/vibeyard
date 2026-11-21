@@ -6,6 +6,10 @@ import {
   removeSession,
   getStatus,
   onChange,
+  setBackgroundTasks,
+  getBackgroundTasks,
+  showsBackgroundWork,
+  onBackgroundChange,
   _resetForTesting,
 } from './session-activity';
 
@@ -83,7 +87,16 @@ describe('notifyInterrupt', () => {
     expect(getStatus('s1')).toBe('waiting');
   });
 
-  it('does nothing when not in working state', () => {
+  // Esc on a permission prompt / AskUserQuestion / ExitPlanMode ends the turn
+  // with no Stop or PostToolUse, so the interrupt is the only way out of 'input'.
+  it('clears a pending input prompt', () => {
+    initSession('s1');
+    setHookStatus('s1', 'input', 'PreToolUse');
+    notifyInterrupt('s1');
+    expect(getStatus('s1')).toBe('waiting');
+  });
+
+  it('does nothing when not in working or input state', () => {
     initSession('s1');
     notifyInterrupt('s1');
     expect(getStatus('s1')).toBe('waiting');
@@ -252,5 +265,72 @@ describe('Stop-resolved-working fallback', () => {
     setIdle('s1');
     vi.advanceTimersByTime(10 * 60 * 1000);
     expect(getStatus('s1')).toBe('idle');
+  });
+});
+
+describe('background tasks', () => {
+  const shell = { type: 'shell', description: 'npm run dev' };
+
+  it('marks background work only once the turn is over', () => {
+    initSession('s1');
+    setHookStatus('s1', 'working');
+    setBackgroundTasks('s1', [shell]);
+    expect(showsBackgroundWork('s1')).toBe(false);
+    setHookStatus('s1', 'completed', 'Stop');
+    expect(showsBackgroundWork('s1')).toBe(true);
+    expect(getBackgroundTasks('s1')).toEqual([shell]);
+  });
+
+  it('hides the previous turn\'s list once a new turn asks for input or is interrupted', () => {
+    initSession('s1');
+    setHookStatus('s1', 'completed', 'Stop');
+    setBackgroundTasks('s1', [shell]);
+    setHookStatus('s1', 'working', 'UserPromptSubmit');
+    setHookStatus('s1', 'input', 'PermissionRequest');
+    expect(showsBackgroundWork('s1')).toBe(false);
+    notifyInterrupt('s1');
+    expect(showsBackgroundWork('s1')).toBe(false);
+  });
+
+  it('clears on an empty list, notifying only on change', () => {
+    initSession('s1');
+    setHookStatus('s1', 'completed', 'Stop');
+    const cb = vi.fn();
+    onBackgroundChange(cb);
+    setBackgroundTasks('s1', [shell]);
+    setBackgroundTasks('s1', [{ ...shell }]);
+    expect(cb).toHaveBeenCalledTimes(1);
+    setBackgroundTasks('s1', []);
+    expect(cb).toHaveBeenCalledTimes(2);
+    expect(getBackgroundTasks('s1')).toEqual([]);
+  });
+
+  it('stays quiet about changes nobody can see mid-turn', () => {
+    initSession('s1');
+    setHookStatus('s1', 'working');
+    const cb = vi.fn();
+    onBackgroundChange(cb);
+    setBackgroundTasks('s1', [shell]);
+    expect(cb).not.toHaveBeenCalled();
+    expect(getBackgroundTasks('s1')).toEqual([shell]);
+  });
+
+  it('drops the work when the CLI exits, and ignores unknown sessions', () => {
+    initSession('s1');
+    setHookStatus('s1', 'completed', 'Stop');
+    setBackgroundTasks('s1', [shell]);
+    setIdle('s1');
+    expect(getBackgroundTasks('s1')).toEqual([]);
+    expect(showsBackgroundWork('s1')).toBe(false);
+
+    setBackgroundTasks('ghost', [shell]);
+    expect(getBackgroundTasks('ghost')).toEqual([]);
+  });
+
+  it('starts empty for a re-initialised session', () => {
+    initSession('s1');
+    setBackgroundTasks('s1', [shell]);
+    initSession('s1');
+    expect(getBackgroundTasks('s1')).toEqual([]);
   });
 });

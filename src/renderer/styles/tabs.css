@@ -105,6 +105,33 @@
   background: var(--text-muted);
 }
 
+/* The turn is over but background work (a backgrounded shell, a monitor...) is
+   still running: a thin spinning ring around the status dot. */
+.tab-status.bg {
+  position: relative;
+}
+
+.tab-status.bg::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1.5px solid var(--status-working);
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+  animation: tab-status-spin 1.2s linear infinite;
+}
+
+@keyframes tab-status-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-status.bg::after {
+    animation: none;
+  }
+}
+
 .tab-name input {
   background: transparent;
   border: 1px solid var(--accent);

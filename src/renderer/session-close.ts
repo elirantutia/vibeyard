@@ -1,14 +1,62 @@
 import { appState, type SessionRecord } from './state.js';
-import { getStatus } from './session-activity.js';
+import { getStatus, showsBackgroundWork } from './session-activity.js';
 import { showConfirmDialog } from './components/modal.js';
 
 function projectSessions(projectId: string): SessionRecord[] {
   return appState.projects.find((p) => p.id === projectId)?.sessions ?? [];
 }
 
-function isActive(sessionId: string): boolean {
+function isMidTurn(sessionId: string): boolean {
   const status = getStatus(sessionId);
   return status === 'working' || status === 'input';
+}
+
+/**
+ * Background work (a run_in_background shell, a monitor...) dies with the PTY,
+ * so a tab showing the background ring counts as active too. Same predicate as
+ * the ring, so the warning appears exactly when the user can see the marker.
+ */
+function isActive(sessionId: string): boolean {
+  return isMidTurn(sessionId) || showsBackgroundWork(sessionId);
+}
+
+type ConfirmKind = 'close' | 'quit';
+
+/** Dialog body, worded by how many of the active sessions are mid-turn vs. only running background work. */
+function activeMessage(active: SessionRecord[], kind: ConfirmKind): string {
+  const verb = kind === 'close' ? 'Closing' : 'Quitting';
+  const midTurn = active.filter((s) => isMidTurn(s.id)).length;
+  if (active.length === 1) {
+    const name = kind === 'quit' ? 'A session' : `'${active[0].name}'`;
+    return midTurn
+      ? `${name} is still active. ${verb} will interrupt it.`
+      : `${name} has background work that may still be running. ${verb} will stop it.`;
+  }
+  const n = active.length;
+  if (midTurn === n) return `${n} sessions are still active. ${verb} will interrupt them.`;
+  if (midTurn === 0) return `${n} sessions have background work that may still be running. ${verb} will stop it.`;
+  return `${n} sessions are still active or running background work. ${verb} will stop them.`;
+}
+
+/**
+ * The one confirmation gate for closing and quitting: proceed directly when the
+ * preference is off or nothing collected is active, else ask first.
+ */
+function confirmActive(collect: () => SessionRecord[], kind: ConfirmKind, proceed: () => void): void {
+  const active = appState.preferences.confirmCloseWorkingSession ? collect() : [];
+  if (active.length === 0) {
+    proceed();
+    return;
+  }
+  const isSingle = active.length === 1;
+  showConfirmDialog(
+    kind === 'quit' ? 'Quit Vibeyard' : isSingle ? 'Close session' : 'Close sessions',
+    activeMessage(active, kind),
+    {
+      confirmLabel: kind === 'quit' ? 'Quit' : isSingle ? 'Close' : 'Close all',
+      onConfirm: proceed,
+    },
+  );
 }
 
 /** True when closing this session would show the "still active" dialog. */
@@ -21,27 +69,8 @@ function confirmAndClose(
   targetIds: string[],
   remove: () => void,
 ): void {
-  if (!appState.preferences.confirmCloseWorkingSession) {
-    remove();
-    return;
-  }
   const targets = new Set(targetIds);
-  const active = sessions.filter((s) => targets.has(s.id) && isActive(s.id));
-  if (active.length === 0) {
-    remove();
-    return;
-  }
-  const isSingle = active.length === 1;
-  showConfirmDialog(
-    isSingle ? 'Close session' : 'Close sessions',
-    isSingle
-      ? `'${active[0].name}' is still active. Closing will interrupt it.`
-      : `${active.length} sessions are still active. Closing will interrupt them.`,
-    {
-      confirmLabel: isSingle ? 'Close' : 'Close all',
-      onConfirm: remove,
-    },
-  );
+  confirmActive(() => sessions.filter((s) => targets.has(s.id) && isActive(s.id)), 'close', remove);
 }
 
 export function closeSessionWithConfirm(projectId: string, sessionId: string): void {
@@ -105,35 +134,10 @@ export function closeSessionsFromLeftWithConfirm(projectId: string, sessionId: s
   );
 }
 
-function countActiveSessions(): number {
-  let count = 0;
-  for (const project of appState.projects) {
-    for (const session of project.sessions) {
-      if (isActive(session.id)) count++;
-    }
-  }
-  return count;
-}
-
 export function confirmAppClose(onConfirm: () => void): void {
-  if (!appState.preferences.confirmCloseWorkingSession) {
-    onConfirm();
-    return;
-  }
-  const count = countActiveSessions();
-  if (count === 0) {
-    onConfirm();
-    return;
-  }
-  const isSingle = count === 1;
-  showConfirmDialog(
-    'Quit Vibeyard',
-    isSingle
-      ? 'A session is still active. Quitting will interrupt it.'
-      : `${count} sessions are still active. Quitting will interrupt them.`,
-    {
-      confirmLabel: 'Quit',
-      onConfirm,
-    },
+  confirmActive(
+    () => appState.projects.flatMap((p) => p.sessions.filter((s) => isActive(s.id))),
+    'quit',
+    onConfirm,
   );
 }

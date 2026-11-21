@@ -1,5 +1,5 @@
 import { appState } from '../../state.js';
-import { onChange as onStatusChange } from '../../session-activity.js';
+import { onChange as onStatusChange, onBackgroundChange } from '../../session-activity.js';
 import { onChange as onGitStatusChange } from '../../git-status.js';
 import { onChange as onUnreadChange } from '../../session-unread.js';
 import { onChange as onGithubUnreadChange } from '../../github-unread.js';
@@ -65,6 +65,7 @@ export function initTabBar(): void {
   onShareChange(render);
 
   onStatusChange(updateTabStatus);
+  onBackgroundChange(updateTabStatus);
 
   onUnreadChange(render);
   onGithubUnreadChange(render);

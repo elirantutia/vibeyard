@@ -1,12 +1,12 @@
 # Hooks & Session State Map
 
-Verified against Claude Code **2.1.238**. The per-event payload schemas below come
+Verified against Claude Code **2.1.327**. The per-event payload schemas below come
 from the [hooks reference](https://code.claude.com/docs/en/hooks); every field name
 Vibeyard reads is in that reference. An invented field name costs nothing at write
 time and renders a blank timeline row forever, so treat this file as the contract
 and re-check it against the docs whenever a hook changes.
 
-## 25 Hook Events (7 core + 18 inspector-only)
+## 25 Hook Events (9 core + 16 inspector-only)
 
 Installation is **version-gated**: `claude-hook-versions.ts` maps each event to the
 CLI version that introduced it, and `getSupportedHookEvents()` drops anything the
@@ -24,14 +24,41 @@ unrecognized key can never land in a user's `settings.json`.
 | `Stop` | `completed` *or* `working` | See [Stop resolution](#stop-resolution) — a Stop is not always a completion |
 | `StopFailure` | `waiting` | Response stopped with an API error, back to waiting |
 | `PermissionRequest` | `input` | CLI is waiting for user input (permission, plan acceptance, etc.) |
+| `Elicitation` | `input` | An MCP server opened a form or URL prompt; the turn waits on the user |
+| `ElicitationResult` | `working` | The user answered the elicitation; the tool call resumes |
+| `PreToolUse` (matcher `AskUserQuestion\|ExitPlanMode`) | `input` | See [Tools that always wait on the user](#tools-that-always-wait-on-the-user) |
 
 `PostToolUse` fires **only on success**; a tool that ran and failed fires
 `PostToolUseFailure` instead. Tool calls rejected before execution — unknown tool,
 schema/tool-specific validation failure, permission denial — fire neither.
 
+`UserPromptSubmit` does not mean the user typed something. It also fires on
+turns Claude Code starts itself: a `/loop` or cron firing, a background subagent
+reporting back, a message from another session. All of them correctly flip the
+session to `working`; the inspector labels the row "Prompt" rather than "User
+prompt" for that reason.
+
+Since 2.1.319 `PostToolUse` also runs (10s budget) on a tool that finishes after
+a Ctrl+Enter message interrupted the turn. Its stale `working` is swallowed by
+the same interrupt latch as below.
+
 `PostToolUseFailure`'s status writer is `statusCmd`, a plain `sh -c echo` that
 cannot read stdin, so it writes `working` even for an `is_interrupt` (user-abort)
 failure. The renderer's `interrupted` latch (`session-activity.ts`) swallows that.
+
+### Tools that always wait on the user
+
+`AskUserQuestion` and `ExitPlanMode` stop for the user in every permission mode,
+but the docs do not promise a `PermissionRequest` for them, and in
+`bypassPermissions`/`auto` mode nothing else would flip the session to `input`.
+A second `PreToolUse` entry, scoped by `USER_INTERACTION_TOOLS_MATCHER`
+(`claude-cli.ts`), writes `PreToolUse:input` with the stdin-free `statusCmd`;
+the unmatched `PreToolUse` entry stays inspector-only so ordinary tool calls pay
+no status write. When `PermissionRequest` fires too, both write `input`. The
+answer arrives as that tool's `PostToolUse`, which flips back to `working`.
+
+Known gap: no hook fires when the user *approves* a permission prompt, so a long
+approved tool (a 5-minute Bash) stays `input` until its `PostToolUse`.
 
 ## Session State Machine
 
@@ -41,8 +68,10 @@ idle (default/no activity)
   ▼  SessionStart
 waiting ◄──── StopFailure
   │
-  ▼  UserPromptSubmit
-working ◄──── PostToolUse / PostToolUseFailure
+  ▼  UserPromptSubmit (typed, /loop, cron, background-agent report, cross-session message)
+working ◄──── PostToolUse / PostToolUseFailure / ElicitationResult
+  │  ▲
+  │  └── input ◄── PermissionRequest / Elicitation / PreToolUse(AskUserQuestion|ExitPlanMode)
   │
   ▼  Stop (with nothing in flight)
 completed
@@ -70,7 +99,22 @@ output in this turn*:
 | unknown | no | Fail toward `completed` — a missed notification beats a stuck session |
 
 An entry in a terminal `status` (`completed`, `failed`, `cancelled`, …) is not in
-flight. `session_crons` is deliberately **never** consulted: a `/loop` session
+flight.
+
+**Background work is shown, not held.** The non-holding entries still in flight
+(a `run_in_background` shell, a monitor, …) are written to `<sid>.background` as
+`{"tasks": [{type, description}]}` (`description` falls back to `command`, capped
+at 120 chars). The tab keeps its `completed` status and draws a spinning ring
+around the dot, with the list in its tooltip. The file is rewritten only when the
+list changes, only from a main-agent Stop that carries `background_tasks`, never
+created for an empty list, written atomically (temp file + `os.replace`), and
+reset by a `SessionStart` with `source` `clear` (a fresh process finds no file,
+since PTY exit deletes it; a resume or fork may keep the process's tasks). The renderer shows it only while the tab is
+`completed` (a new turn makes the list stale until its own Stop) and drops it when
+the PTY exits. Since that work dies with the PTY, closing such a tab (or quitting,
+or `vibeyard-ctl close`) asks for confirmation like a working one. It only refreshes on a `Stop`: it clears when the turn that a
+finished script wakes up ends, and a task that ends without waking a turn (killed
+from `/tasks`) leaves the ring up until the next Stop. `session_crons` is deliberately **never** consulted: a `/loop` session
 always has a pending cron and would otherwise never report completed.
 
 **Only a non-empty array is authoritative.** An empty `background_tasks` is *not*
@@ -79,16 +123,31 @@ that Task-spawned subagents acquire only after an optional auto-background timer
 so a spurious Stop fired the instant the main agent pauses on freshly-dispatched
 foreground subagents can report `[]` with several still running — the exact false
 completion this writer exists to prevent. So an empty (or absent) array falls
-through to the counter below, and the two signals are OR'd. Erring this way costs
+through to the registry below, and the two signals are OR'd. Erring this way costs
 at most a late notification, bounded by the renderer backstop; erring the other
 way fires a completion mid-orchestration.
 
 **Fallback — `<sid>.subagents`.** When `background_tasks` is empty or absent, the
-writer falls back to a per-session counter that `captureEventCmd` maintains: `SubagentStart` increments,
-`SubagentStop` decrements, `PostToolUse` with an `agent_id` refreshes its
-timestamp, `SessionStart` resets it unless `source == "compact"`. The
-read-modify-write is unlocked and can race, which is why it is a fallback and why
-`STOP_STALE_MS` (10 min) ages it out.
+writer falls back to a per-session **registry of in-flight agent ids**,
+`{"ids": {agent_id: last_seen_ms}}`, that `captureEventCmd` maintains:
+`SubagentStart` adds its `agent_id`, `SubagentStop` removes it (only if present),
+`PostToolUse` with a registered `agent_id` refreshes its time, and `SessionStart`
+clears it unless `source == "compact"` (`startup`/`resume`/`clear`/`fork` all
+reset). Each entry ages out on its own after `STOP_STALE_MS` (10 min).
+
+It is a set, not a counter, because the two events stopped pairing up:
+
+- `SubagentStart` also fires when a subagent is **resumed** and **each time an
+  in-process teammate handles a new message** — a counter over-counts, delaying
+  completion until the stale timeout.
+- `SubagentStop` also fires for Claude Code's **own internal agents** (prompt
+  suggestions, `/btw`), with an empty `agent_type` and no matching start — a
+  counter under-counts, firing a completion mid-orchestration.
+
+Keyed by id, a repeated start is idempotent and an unknown stop is a no-op. A
+pre-registry `{n, t}` file is still honoured by the Stop writer so an upgrade
+mid-orchestration cannot fire a false completion. The read-modify-write is
+unlocked and can race, which is why it is a fallback.
 
 `force_working` keys on **`agent_id` only**, never `agent_type`: `agent_type` is
 also set on the *main thread* of a session started with `--agent` (reachable
@@ -126,11 +185,12 @@ guarantee of eventual completion. Any later hook event cancels it.
 |---|---|---|
 | `.status` | Status-writer hooks | `"<HookEvent>:<status>"` |
 | `.sessionid` | `SessionStart` + `UserPromptSubmit` hooks, and the statusLine | CLI session ID, for resume |
-| `.cost` | `statusline.py` (via the `statusLine` setting) | Cost, tokens, context window, model |
+| `.cost` | `statusline.py` (via the `statusLine` setting) | Cost, tokens, context window, model, and `rate_limits` when Claude sends them |
 | `.name` | `statusline.py` | `session_name` for tab auto-titling |
 | `.toolfailure` | `PostToolUseFailure`, plus a token-capped `Read` (see below) | `tool_name`, `tool_input`, `error` |
 | `.events` | Every event's capture script | JSONL inspector timeline |
-| `.subagents` | `SubagentStart`/`SubagentStop`/`PostToolUse`/`SessionStart` | `{n, t}` in-flight counter (Stop fallback only; never forwarded to the renderer) |
+| `.subagents` | `SubagentStart`/`SubagentStop`/`PostToolUse`/`SessionStart` | `{ids: {agent_id: ms}}` in-flight registry (Stop fallback only; never forwarded to the renderer) |
+| `.background` | `Stop`/`SessionStart` | `{tasks: [{type, description}]}` work outliving the turn → `session:backgroundTasks` → tab ring |
 
 ### The token-capped `Read` case
 
@@ -148,13 +208,13 @@ constant from `TOKEN_TRUNCATION_SENTINEL` (our message prefix, owned by us). One
 constant doing both jobs meant rewording the message silently broke the payload
 lookup, with every test still green because both sides moved together.
 
-## Inspector-Only Hook Events (18 additional)
+## Inspector-Only Hook Events (16 additional)
 
 These write only to the `.events` log — they do NOT change session status.
 
 | Hook Event | Inspector Event Type | Description |
 |---|---|---|
-| `PreToolUse` | `pre_tool_use` | Before a tool executes |
+| `PreToolUse` | `pre_tool_use` | Before a tool executes (plus the matcher-scoped `input` writer above) |
 | `PermissionDenied` | `permission_denied` | Tool call denied by Claude auto permissions |
 | `SubagentStart` | `subagent_start` | Subagent spawned |
 | `SubagentStop` | `subagent_stop` | Subagent finished |
@@ -168,8 +228,6 @@ These write only to the `.events` log — they do NOT change session status.
 | `CwdChanged` | `cwd_changed` | Working directory changed |
 | `FileChanged` | `file_changed` | Watched file modified on disk |
 | `ConfigChange` | `config_change` | Configuration changed |
-| `Elicitation` | `elicitation` | MCP server requests user input |
-| `ElicitationResult` | `elicitation_result` | User answered elicitation |
 | `InstructionsLoaded` | `instructions_loaded` | CLAUDE.md / rules loaded |
 | `TeammateIdle` | `teammate_idle` | Teammate agent became idle |
 
@@ -187,6 +245,25 @@ the budget to the highest configured per-hook timeout. It is a ceiling, not a wa
 | `Setup` | Runs at CLI setup, outside a session, so `CLAUDE_IDE_SESSION_ID` is unset and every script exits immediately. |
 | `PostToolBatch` | Duplicates the per-tool events and would double-count in `getToolStats`. |
 | `DirectoryAdded` | Cheap but near-zero value today; revisit if `/add-dir` becomes user-visible. |
+| `PreModelSwitch` | Same class as `UserPromptExpansion`: it runs before a model switch and can block it, so a cold Python start would delay every `/model`. |
+| `PostModelSwitch` | The status line already reports the model on the next render; nothing reads a timeline row for it. |
+
+## Behavior worth knowing (2.1.327)
+
+- **Idle compaction.** A 200K+ token conversation left idle ~54 minutes is
+  compacted in the background, firing `PreCompact` → `SessionStart`
+  (`source: "compact"`) → `PostCompact` with nobody at the keyboard. The sticky
+  `completed` rule keeps the `SessionStart:waiting` from clearing a completed
+  badge, and the registry is not reset on `compact`.
+- **`SessionStart.source`** gained `"fork"` (`--fork-session`, `/fork`, `/branch`,
+  moving a conversation to the background). It resets the registry like a new
+  session.
+- **`SessionEnd.reason`** no longer sends `bypass_permissions_disabled` (removed
+  in 2.1.234). Nothing here matched on it.
+- **Nested `claude` processes** started from a tab's Bash tool, hooks or scripts
+  inherit `CLAUDE_IDE_SESSION_ID`, so their `SessionStart`/`UserPromptSubmit`
+  write into the parent tab's `.status` and `.sessionid`. Unverified in practice;
+  no guard yet.
 
 ## Inspector Payload Fields
 

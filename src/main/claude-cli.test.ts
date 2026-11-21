@@ -30,11 +30,12 @@ vi.mock('./hook-commands', () => ({
   captureSessionIdCmd: vi.fn((_v: string, marker: string) => `capture-sessionid .sessionid ${marker}`),
   captureToolFailureCmd: vi.fn((_v: string, marker: string) => `capture-toolfailure .toolfailure ${marker}`),
   wrapPythonHookCmd: vi.fn((_name: string, _code: string, marker: string) => `capture-event .events ${marker}`),
+  STOP_STALE_MS: 600000,
 }));
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { getClaudeConfig, installHooks, installHooksOnly, installStatusLine } from './claude-cli';
+import { getClaudeConfig, installHooks, installHooksOnly, installStatusLine, USER_INTERACTION_TOOLS_MATCHER } from './claude-cli';
 import { installEventScript } from './hook-commands';
 import { getClaudeVersion } from './providers/claude-version';
 
@@ -500,23 +501,25 @@ describe('installHooks', () => {
 
     const coreEvents = [
       'SessionStart', 'UserPromptSubmit', 'PostToolUse', 'PostToolUseFailure',
-      'Stop', 'StopFailure', 'PermissionRequest',
+      'Stop', 'StopFailure', 'PermissionRequest', 'Elicitation', 'ElicitationResult',
     ];
     for (const event of coreEvents) {
       expect(hookEvents).toContain(event);
     }
 
     const inspectorEvents = [
-      'PreToolUse', 'PermissionDenied', 'SubagentStart', 'SubagentStop', 'Notification',
+      'PermissionDenied', 'SubagentStart', 'SubagentStop', 'Notification',
       'PreCompact', 'PostCompact', 'SessionEnd', 'TaskCreated', 'TaskCompleted',
       'WorktreeRemove', 'CwdChanged', 'FileChanged',
-      'ConfigChange', 'Elicitation', 'ElicitationResult', 'InstructionsLoaded',
+      'ConfigChange', 'InstructionsLoaded',
       'TeammateIdle',
     ];
     for (const event of inspectorEvents) {
       expect(hookEvents).toContain(event);
     }
 
+    // PreToolUse: an unmatched inspector capture plus a matcher-scoped status writer.
+    expect(hookEvents).toContain('PreToolUse');
     expect(hookEvents).toHaveLength(25);
 
     // Core hooks should have status writer + event logger (at least 2 hooks)
@@ -590,18 +593,36 @@ describe('installHooks', () => {
     // reports nothing holding (empty *or* absent), so it must still be
     // maintained on every CLI version.
     expect(bodyOf('SubagentStart')).toContain('.subagents');
-    expect(bodyOf('SubagentStart')).toContain('n=n+1');
-    expect(bodyOf('SubagentStop')).toContain('n=max(0,n-1)');
-    // SessionStart resets the counter but skips mid-turn auto-compaction.
-    expect(bodyOf('SessionStart')).toContain('"n":0');
+    expect(bodyOf('SubagentStop')).toContain('.subagents');
+    // SessionStart resets the registry but skips mid-turn compaction.
+    expect(bodyOf('SessionStart')).toContain('{"ids":{}}');
     expect(bodyOf('SessionStart')).toContain('!="compact"');
-    // PostToolUse only refreshes the timestamp for subagent tool activity.
+    // PostToolUse only refreshes an entry for subagent tool activity.
     expect(bodyOf('PostToolUse')).toContain('.subagents');
-    expect(bodyOf('PostToolUse')).toContain('if d.get("agent_id")');
-    expect(bodyOf('PostToolUse')).not.toContain('n=n+1');
+    expect(bodyOf('PostToolUse')).toContain('_dirty=_a in _ids');
     // Unrelated event scripts stay counter-free.
     expect(bodyOf('PreToolUse')).not.toContain('.subagents');
     expect(bodyOf('UserPromptSubmit')).not.toContain('.subagents');
+  });
+
+  it('flags AskUserQuestion / ExitPlanMode as input via a matcher-scoped PreToolUse writer', () => {
+    installHooks();
+
+    const written = JSON.parse(String(mockWriteFileSync.mock.calls[0][1]));
+    const entries = written.hooks.PreToolUse as Array<{ matcher: string; hooks: Array<{ command: string }> }>;
+    const scoped = entries.find((m) => m.matcher === USER_INTERACTION_TOOLS_MATCHER);
+    expect(scoped?.hooks.map((h) => h.command)).toEqual([expect.stringContaining('PreToolUse:input')]);
+    // The unmatched entry stays inspector-only: no status write on every tool call.
+    const unmatched = entries.find((m) => m.matcher === '');
+    expect(unmatched?.hooks.some((h) => h.command.includes('.status'))).toBe(false);
+  });
+
+  it('writes input/working status for MCP elicitations', () => {
+    installHooks();
+
+    const written = JSON.parse(String(mockWriteFileSync.mock.calls[0][1]));
+    expect(hookCommandsFor(written, 'Elicitation')).toEqual(expect.arrayContaining([expect.stringContaining('Elicitation:input')]));
+    expect(hookCommandsFor(written, 'ElicitationResult')).toEqual(expect.arrayContaining([expect.stringContaining('ElicitationResult:working')]));
   });
 
   it('wires tool-failure capture onto PostToolUseFailure and nowhere else', () => {
@@ -706,5 +727,98 @@ describe('installHooks', () => {
 
     const installed = vi.mocked(installEventScript).mock.calls.map(([name]) => name);
     expect(installed).not.toContain('claude_event_WorktreeCreate.py');
+  });
+});
+
+// The in-flight subagent registry is executed for real: a counter used to
+// drift because SubagentStart/SubagentStop no longer pair up (a resumed
+// subagent or an in-process teammate re-fires Start; Claude Code's internal
+// agents fire a Stop with no Start). These run the generated Python.
+const realFs = await vi.importActual<typeof import('node:fs')>('node:fs');
+const realOs = await vi.importActual<typeof import('node:os')>('node:os');
+const { spawnSync } = await vi.importActual<typeof import('node:child_process')>('node:child_process');
+const { pythonBin } = await import('./platform');
+const pythonAvailable = spawnSync(pythonBin, ['-c', 'pass']).status === 0;
+
+describe.runIf(pythonAvailable)('subagent registry scripts', () => {
+  const SID = 'vibeyard-registry-test';
+  let dir: string;
+
+  beforeAll(() => { dir = realFs.mkdtempSync(path.join(realOs.tmpdir(), 'vibeyard-reg-')); });
+  afterAll(() => { if (dir) realFs.rmSync(dir, { recursive: true, force: true }); });
+  beforeEach(() => { realFs.rmSync(path.join(dir, `${SID}.subagents`), { force: true }); });
+
+  function fire(event: string, payload: Record<string, unknown>): void {
+    installHooks();
+    // Point the script's embedded STATUS_DIR at the temp dir.
+    const body = eventScriptBody(event).replace(/^status_dir=.*$/m, `status_dir=${JSON.stringify(dir)}`);
+    const res = spawnSync(pythonBin, ['-c', body], {
+      input: JSON.stringify({ hook_event_name: event, ...payload }),
+      env: { ...process.env, CLAUDE_IDE_SESSION_ID: SID },
+      encoding: 'utf8',
+    });
+    expect(res.status, res.stderr).toBe(0);
+  }
+
+  function ids(): string[] | null {
+    const p = path.join(dir, `${SID}.subagents`);
+    if (!realFs.existsSync(p)) return null;
+    return Object.keys(JSON.parse(realFs.readFileSync(p, 'utf8')).ids).sort();
+  }
+
+  it('registers each agent once, however often SubagentStart fires for it', () => {
+    fire('SubagentStart', { agent_id: 'a1' });
+    fire('SubagentStart', { agent_id: 'a1' });
+    fire('SubagentStart', { agent_id: 'a2' });
+    expect(ids()).toEqual(['a1', 'a2']);
+    fire('SubagentStop', { agent_id: 'a1' });
+    expect(ids()).toEqual(['a2']);
+  });
+
+  it('ignores a SubagentStop from an agent that never started (prompt suggestions, /btw)', () => {
+    fire('SubagentStart', { agent_id: 'a1' });
+    fire('SubagentStop', { agent_id: 'internal', agent_type: '' });
+    expect(ids()).toEqual(['a1']);
+  });
+
+  it('never creates the registry from PostToolUse of an unknown agent', () => {
+    fire('PostToolUse', { agent_id: 'a1', tool_name: 'Bash' });
+    expect(ids()).toBeNull();
+  });
+
+  it('carries a pre-registry {n,t} count over as placeholder ids on upgrade', () => {
+    realFs.writeFileSync(path.join(dir, `${SID}.subagents`), JSON.stringify({ n: 2, t: Date.now() }));
+    fire('SubagentStart', { agent_id: 'a1' });
+    expect(ids()).toEqual(['a1', 'legacy-0', 'legacy-1']);
+  });
+
+  it('prunes entries past the stale window when it writes', () => {
+    const old = Date.now() - 600000 - 1000;
+    realFs.writeFileSync(path.join(dir, `${SID}.subagents`), JSON.stringify({ ids: { lost: old } }));
+    fire('SubagentStart', { agent_id: 'a1' });
+    expect(ids()).toEqual(['a1']);
+  });
+
+  it('keeps entries across compaction but resets them on a new session', () => {
+    fire('SubagentStart', { agent_id: 'a1' });
+    fire('SessionStart', { source: 'compact' });
+    expect(ids()).toEqual(['a1']);
+    fire('SessionStart', { source: 'fork' });
+    expect(ids()).toEqual([]);
+  });
+
+  it('clears a background-task marker on /clear only, and never creates one', () => {
+    const bg = path.join(dir, `${SID}.background`);
+    realFs.rmSync(bg, { force: true });
+    fire('SessionStart', { source: 'clear' });
+    expect(realFs.existsSync(bg)).toBe(false);
+
+    realFs.writeFileSync(bg, JSON.stringify({ tasks: [{ type: 'shell', description: 'x' }] }));
+    for (const source of ['compact', 'startup', 'resume', 'fork']) {
+      fire('SessionStart', { source });
+      expect(JSON.parse(realFs.readFileSync(bg, 'utf8')).tasks).toHaveLength(1);
+    }
+    fire('SessionStart', { source: 'clear' });
+    expect(JSON.parse(realFs.readFileSync(bg, 'utf8'))).toEqual({ tasks: [] });
   });
 });

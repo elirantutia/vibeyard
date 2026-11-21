@@ -370,6 +370,8 @@ export interface Preferences {
   copyOnSelect?: boolean;
   /** Render terminals so RTL runs (Hebrew/Arabic) read in the right direction; see terminal-utils.ts. */
   bidiTextEnabled?: boolean;
+  /** Show the plan usage limits (5-hour / 7-day, or gateway spend) in the session status bar. */
+  showUsageLimits?: boolean;
   keybindings?: Record<string, string>;
   theme?: 'dark' | 'light';
   readinessExcludedProviders?: ProviderId[];
@@ -515,9 +517,33 @@ export interface ReadinessSnapshot {
 
 // --- Cost / Context ---
 
+/** One usage window from Claude's statusLine `rate_limits`. `resets_at` is Unix epoch seconds. */
+export interface RateLimitWindow {
+  used_percentage?: number;
+  resets_at?: number;
+}
+
+/**
+ * Claude's statusLine `rate_limits` object: present only for Pro/Max/Ultra
+ * subscribers (or behind a Claude apps gateway with a spend limit), only after
+ * the session's first API response, and each window may be independently absent.
+ */
+export interface RateLimitsData {
+  five_hour?: RateLimitWindow;
+  seven_day?: RateLimitWindow;
+  spend_limit?: RateLimitWindow & { used_usd?: number; limit_usd?: number; period?: string };
+}
+
+/** Work that outlives a Claude turn (a backgrounded shell, a monitor...), as reported by the Stop hook. */
+export interface BackgroundTask {
+  type: string;
+  description: string;
+}
+
 export interface CostData {
   cost: { total_cost_usd: number; total_duration_ms: number; total_api_duration_ms: number };
   model?: string;
+  rate_limits?: RateLimitsData;
   context_window: {
     total_input_tokens: number;
     total_output_tokens: number;

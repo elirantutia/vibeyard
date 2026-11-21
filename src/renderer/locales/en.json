@@ -29,6 +29,8 @@
     "terminal": "Terminal",
     "bidiText": "Bidirectional text (Hebrew/Arabic)",
     "bidiTextDesc": "Renders terminals without GPU acceleration so right-to-left text reads in the correct direction. Slower on heavy output, and text selection may highlight the wrong characters inside RTL runs.",
+    "usageLimits": "Show plan usage limits in the status bar",
+    "usageLimitsDesc": "Shows how much of your 5-hour and 7-day Claude limits you have used (or a gateway spend limit). Appears for Pro, Max and Ultra plans once a session has had its first reply.",
     "sidebarViews": "Sidebar Views",
     "fileTree": "Project File Tree",
     "gitPanel": "Git Panel",
@@ -89,6 +91,7 @@
     "tooltip": {
       "statusPrefix": "Status: {status}",
       "sessionPrefix": "Session: {cliSessionId}",
+      "background": "{count} background task(s) still running",
       "diff": "Diff: {name}",
       "mcpInspector": "MCP Inspector",
       "file": "File: {name}",

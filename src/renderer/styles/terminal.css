@@ -410,6 +410,44 @@
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
+/* Plan usage limits — `5h ▬ 42% · 7d ▬ 18%`. Grey while comfortable, then
+   amber (≥70%) and red (≥90%), matching the context meter's hue shift. */
+.ssl-limits {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.ssl-lim {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.ssl-lim-key { color: var(--text-muted); }
+.ssl-lim-val { color: var(--text-secondary); }
+.ssl-mini {
+  position: relative;
+  width: 34px;
+  height: 4px;
+  border-radius: 99px;
+  background: var(--border);
+  overflow: hidden;
+  flex: none;
+}
+.ssl-mini-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 99px;
+  background: var(--text-muted);
+}
+.ssl-lim[data-sev="warn"] .ssl-lim-val { color: var(--color-warning); }
+.ssl-lim[data-sev="warn"] .ssl-mini-fill { background: var(--color-warning); }
+.ssl-lim[data-sev="crit"] .ssl-lim-val { color: var(--color-critical); }
+.ssl-lim[data-sev="crit"] .ssl-mini-fill {
+  background: var(--color-critical);
+  box-shadow: 0 0 6px -1px var(--color-critical);
+}
+
 .ssl-pill {
   display: inline-flex;
   align-items: center;

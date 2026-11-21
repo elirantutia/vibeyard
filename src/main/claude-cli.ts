@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { homedir } from 'os';
 import { STATUS_DIR, getStatusLineScriptPath } from './hook-status';
-import { statusCmd as mkStatusCmd, stopStatusCmd as mkStopStatusCmd, captureSessionIdCmd as mkCaptureSessionIdCmd, captureToolFailureCmd as mkCaptureToolFailureCmd, installEventScript, wrapPythonHookCmd, installHookScripts } from './hook-commands';
+import { statusCmd as mkStatusCmd, stopStatusCmd as mkStopStatusCmd, captureSessionIdCmd as mkCaptureSessionIdCmd, captureToolFailureCmd as mkCaptureToolFailureCmd, installEventScript, wrapPythonHookCmd, installHookScripts, STOP_STALE_MS } from './hook-commands';
 import { readJsonSafe, readDirSafe } from './fs-utils';
 import { parseFrontmatter } from './frontmatter';
 import { getSupportedHookEvents as computeSupportedHookEvents } from './claude-hook-versions';
@@ -207,6 +207,9 @@ const INSPECTOR_FIELD_MAX_CHARS = 2000;
 /** Per-hook timeout (seconds) requested for SessionEnd. See its use site. */
 const SESSION_END_TIMEOUT_SEC = 5;
 
+/** Built-in tools that always wait on the user; see the PreToolUse status hook in installHooksOnly. */
+export const USER_INTERACTION_TOOLS_MATCHER = 'AskUserQuestion|ExitPlanMode';
+
 export const HOOK_MARKER = '# vibeyard-hook';
 
 /** The default Claude config dir (~/.claude). Profiles override this via CLAUDE_CONFIG_DIR. */
@@ -315,62 +318,94 @@ export function installHooksOnly(configDir: string = defaultClaudeDir()): void {
   // Hook to capture inspector events (tool names, cost snapshots, timestamps) into a JSONL log.
   // Each hook event appends one JSON line to STATUS_DIR/{sessionId}.events
   const captureEventCmd = (hookEvent: string, eventType: string) => {
-    // In-flight subagent counter mutation, injected ONLY into the scripts for
-    // the four events that affect it. All subagents share the parent's
+    // In-flight subagent registry, injected ONLY into the scripts for the four
+    // events that affect it. All subagents share the parent's
     // CLAUDE_IDE_SESSION_ID, so a single <sid>.subagents file tracks the whole
     // session.
     //
     // FALLBACK. Claude Code now reports in-flight work directly on the Stop
     // payload as `background_tasks`, and stop_status_writer.py prefers it — but
-    // consults this counter whenever that payload reports nothing holding, i.e.
+    // consults this registry whenever that payload reports nothing holding, i.e.
     // an empty *or* absent `background_tasks`. An empty array is not proof of an
     // idle session (see the stop_status_writer.py comment in hook-commands.ts),
-    // so the counter still has to be maintained on every CLI version.
+    // so the registry still has to be maintained on every CLI version.
+    //
+    // A SET of agent ids, not a counter. SubagentStart/SubagentStop stopped
+    // pairing up: SubagentStart also fires when a subagent is resumed and each
+    // time an in-process teammate handles a new message (a counter over-counts
+    // → late completion), and SubagentStop also fires for Claude Code's own
+    // internal agents — prompt suggestions, /btw — that never fired a start (a
+    // counter under-counts → completion mid-orchestration). Keyed by agent_id, a
+    // repeated start is idempotent and an unknown stop is a no-op. Each id
+    // carries its own last-seen time so one hung entry ages out alone.
     //
     // The read-modify-write is NOT locked: parallel subagent lifecycle hooks
-    // are separate processes and can race, so the counter may transiently
-    // drift. That is tolerated by design — the renderer arms a completion
+    // are separate processes and can race, so an entry may transiently be lost
+    // or linger. That is tolerated by design — the renderer arms a completion
     // backstop whenever a Stop resolves to 'working' (see session-activity.ts),
-    // so an over-count can never wedge the session and an under-count degrades
-    // to at worst a single stale over-notification.
-    let counterSnippet = '';
-    if (hookEvent === 'SubagentStart' || hookEvent === 'SubagentStop') {
-      const op = hookEvent === 'SubagentStart' ? 'n=n+1' : 'n=max(0,n-1)';
-      counterSnippet = `
-_sf=os.path.join(status_dir,sid+".subagents")
-n=0
-try:
- with open(_sf) as _f:
-  n=int(json.load(_f).get("n",0))
-except:
- pass
-${op}
-with open(_sf,"w") as _f:
- json.dump({"n":n,"t":int(time.time()*1000)},_f)`;
-    } else if (hookEvent === 'SessionStart') {
-      // Reset the counter for a genuinely new/resumed session. Skip auto-compact
-      // (source=="compact"), which fires SessionStart mid-turn and would drop a
-      // live in-flight count, causing a premature completion.
-      counterSnippet = `
-if d.get("source")!="compact":
+    // and a lingering entry ages out after STOP_STALE_MS.
+    // One shape for the three per-agent mutations: load the registry, run a
+    // one-line `body` that sets `_dirty` when it changed something, and save.
+    // A pre-registry {"n":count,"t":ms} file (written by the previous version)
+    // is carried over as placeholder ids, so an upgrade mid-orchestration cannot
+    // drop a live count; no SubagentStop matches them, so they simply age out.
+    // Entries past STOP_STALE_MS are pruned on every write — the Stop writer
+    // already ignores them, and a lost SubagentStop must not grow the file for
+    // the rest of the session.
+    const withRegistry = (body: string) => `
+_a=d.get("agent_id")
+if _a:
+ _a=str(_a)
  _sf=os.path.join(status_dir,sid+".subagents")
- with open(_sf,"w") as _f:
-  json.dump({"n":0,"t":int(time.time()*1000)},_f)`;
-    } else if (hookEvent === 'PostToolUse') {
-      // A subagent's tool activity keeps the counter timestamp fresh so a
-      // slow-but-active subagent never trips the Stop writer's staleness guard.
-      // Never create a counter file for a plain (non-subagent) session.
-      counterSnippet = `
-if d.get("agent_id"):
- _sf=os.path.join(status_dir,sid+".subagents")
+ _now=int(time.time()*1000)
  try:
   with open(_sf) as _f:
    _c=json.load(_f)
-  _c["t"]=int(time.time()*1000)
-  with open(_sf,"w") as _f:
-   json.dump(_c,_f)
+  _ids=_c.get("ids")
+  if not isinstance(_ids,dict):
+   _ids={"legacy-%d"%_i:int(_c.get("t",0)) for _i in range(int(_c.get("n",0)))}
  except:
-  pass`;
+  _ids={}
+ _dirty=False
+ ${body}
+ if _dirty:
+  _ids={_k:_v for _k,_v in _ids.items() if _now-int(_v)<${STOP_STALE_MS}}
+  with open(_sf,"w") as _f:
+   json.dump({"ids":_ids},_f)`;
+    let counterSnippet = '';
+    if (hookEvent === 'SubagentStart') {
+      counterSnippet = withRegistry('_ids[_a]=_now;_dirty=True');
+    } else if (hookEvent === 'SubagentStop') {
+      // Pop only an id we saw start; an internal agent's stop is a no-op.
+      counterSnippet = withRegistry('_dirty=_ids.pop(_a,None) is not None');
+    } else if (hookEvent === 'PostToolUse') {
+      // A subagent's tool activity keeps its entry fresh so a slow-but-active
+      // subagent never trips the Stop writer's staleness guard. Only refreshes
+      // an id already registered — never creates the file for a plain session.
+      counterSnippet = withRegistry('_dirty=_a in _ids\n if _dirty: _ids[_a]=_now');
+    } else if (hookEvent === 'SessionStart') {
+      // Reset the registry for a genuinely new/resumed/forked session. Skip
+      // compaction (source=="compact"), which fires SessionStart mid-turn and
+      // would drop live in-flight entries, causing a premature completion.
+      // /clear starts over, so it also empties the background-task marker. A
+      // fresh process needs nothing (cleanupSessionStatus deletes the file on
+      // PTY exit), and a resume or fork may keep the process's tasks, so those
+      // wait for the next Stop. Atomic and change-only, like the Stop writer.
+      counterSnippet = `
+if d.get("source")!="compact":
+ with open(os.path.join(status_dir,sid+".subagents"),"w") as _f:
+  json.dump({"ids":{}},_f)
+if d.get("source")=="clear":
+ _bp=os.path.join(status_dir,sid+".background")
+ try:
+  with open(_bp) as _f:
+   _stale=_f.read()!=json.dumps({"tasks":[]})
+ except:
+  _stale=False
+ if _stale:
+  with open(_bp+".tmp","w") as _f:
+   json.dump({"tasks":[]},_f)
+  os.replace(_bp+".tmp",_bp)`;
     }
     // An oversized Read no longer fails: Claude Code truncates it and returns a
     // successful PostToolUse flagged with TOKEN_TRUNCATION_KEY. Detect that one
@@ -450,6 +485,10 @@ with open(os.path.join(status_dir,sid+".events"),"a") as f:
     Stop: 'completed',
     StopFailure: 'waiting',
     PermissionRequest: 'input',
+    // An MCP server's form or URL prompt blocks the turn on the user exactly
+    // like a permission prompt does, but fires no PermissionRequest.
+    Elicitation: 'input',
+    ElicitationResult: 'working',
   };
 
   const eventTypeMap: Record<string, InspectorEventType> = {
@@ -460,6 +499,8 @@ with open(os.path.join(status_dir,sid+".events"),"a") as f:
     Stop: 'stop',
     StopFailure: 'stop_failure',
     PermissionRequest: 'permission_request',
+    Elicitation: 'elicitation',
+    ElicitationResult: 'elicitation_result',
   };
 
   for (const [event, status] of Object.entries(ideEvents)) {
@@ -488,6 +529,19 @@ with open(os.path.join(status_dir,sid+".events"),"a") as f:
     cleaned[event] = existing;
   }
 
+  // AskUserQuestion and ExitPlanMode always stop for the user, in every
+  // permission mode, but the docs don't promise a PermissionRequest for them
+  // (in bypassPermissions/auto mode nothing else would flip the session to
+  // 'input'). A matcher-scoped status writer on PreToolUse covers that without
+  // reading stdin; when PermissionRequest does fire too, both write 'input'.
+  // The answer lands as the tool's PostToolUse, which flips back to 'working'.
+  if (supportedEvents.has('PreToolUse')) {
+    (cleaned.PreToolUse ??= []).push({
+      matcher: USER_INTERACTION_TOOLS_MATCHER,
+      hooks: [{ type: 'command', command: statusCmd('PreToolUse', 'input') }],
+    });
+  }
+
   // Inspector-only hooks: log to .events file without changing session status
   const inspectorOnlyEvents: Record<string, InspectorEventType> = {
     PreToolUse: 'pre_tool_use',
@@ -507,8 +561,6 @@ with open(os.path.join(status_dir,sid+".events"),"a") as f:
     CwdChanged: 'cwd_changed',
     FileChanged: 'file_changed',
     ConfigChange: 'config_change',
-    Elicitation: 'elicitation',
-    ElicitationResult: 'elicitation_result',
     InstructionsLoaded: 'instructions_loaded',
     TeammateIdle: 'teammate_idle',
   };

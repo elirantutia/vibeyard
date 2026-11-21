@@ -18,6 +18,7 @@ export function createAppearanceSection(ctx: PreferencesContext): SectionControl
   let statusCheckboxes: Record<keyof ActiveStatuses, HTMLInputElement> | null = null;
   let boardCardMetricsCheckbox: HTMLInputElement | null = null;
   let bidiTextCheckbox: HTMLInputElement | null = null;
+  let usageLimitsCheckbox: HTMLInputElement | null = null;
 
   function unsubZoom() {
     zoomPrefUnsub?.();
@@ -68,6 +69,12 @@ export function createAppearanceSection(ctx: PreferencesContext): SectionControl
       container.appendChild(bidiText.row);
 
       container.appendChild(sectionDesc(t('appearance.bidiTextDesc')));
+
+      const usageLimits = toggleRow('pref-usage-limits', t('appearance.usageLimits'), appState.preferences.showUsageLimits ?? true);
+      usageLimitsCheckbox = usageLimits.checkbox;
+      container.appendChild(usageLimits.row);
+
+      container.appendChild(sectionDesc(t('appearance.usageLimitsDesc')));
 
       container.appendChild(subheading(t('appearance.sidebarViews')));
 
@@ -134,6 +141,9 @@ export function createAppearanceSection(ctx: PreferencesContext): SectionControl
       if (bidiTextCheckbox && bidiTextCheckbox.checked !== (appState.preferences.bidiTextEnabled ?? false)) {
         appState.setPreference('bidiTextEnabled', bidiTextCheckbox.checked);
       }
+      if (usageLimitsCheckbox && usageLimitsCheckbox.checked !== (appState.preferences.showUsageLimits ?? true)) {
+        appState.setPreference('showUsageLimits', usageLimitsCheckbox.checked);
+      }
       if (boardCardMetricsCheckbox && boardCardMetricsCheckbox.checked !== (appState.preferences.boardCardMetrics ?? true)) {
         appState.setPreference('boardCardMetrics', boardCardMetricsCheckbox.checked);
       }
@@ -150,6 +160,7 @@ export function createAppearanceSection(ctx: PreferencesContext): SectionControl
       themeSelect = null;
       zoomSelect = null;
       bidiTextCheckbox = null;
+      usageLimitsCheckbox = null;
     },
   };
 }

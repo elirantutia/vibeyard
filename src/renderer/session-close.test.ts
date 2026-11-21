@@ -23,9 +23,10 @@ vi.mock('./session-context.js', () => ({
   restoreContext: vi.fn(),
 }));
 
-const { mockShowConfirmDialog, mockGetStatus } = vi.hoisted(() => ({
+const { mockShowConfirmDialog, mockGetStatus, mockShowsBackgroundWork } = vi.hoisted(() => ({
   mockShowConfirmDialog: vi.fn(),
   mockGetStatus: vi.fn(),
+  mockShowsBackgroundWork: vi.fn(),
 }));
 
 vi.mock('./components/modal.js', () => ({
@@ -34,6 +35,7 @@ vi.mock('./components/modal.js', () => ({
 
 vi.mock('./session-activity.js', () => ({
   getStatus: mockGetStatus,
+  showsBackgroundWork: mockShowsBackgroundWork,
 }));
 
 import { appState, _resetForTesting } from './state';
@@ -51,6 +53,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   uuidCounter = 0;
   mockGetStatus.mockReturnValue('idle');
+  mockShowsBackgroundWork.mockReturnValue(false);
   _resetForTesting();
 });
 
@@ -68,6 +71,49 @@ function confirmDialog() {
   const [, , options] = mockShowConfirmDialog.mock.calls[0];
   options.onConfirm();
 }
+
+describe('background work', () => {
+  // The predicate is the tab ring's (session-activity's showsBackgroundWork,
+  // true only on a completed turn), so the warning appears exactly when the
+  // user can see the marker.
+  it('warns before closing a tab showing background work', () => {
+    const { project, sessions } = seedProject(1);
+    mockGetStatus.mockReturnValue('completed');
+    mockShowsBackgroundWork.mockReturnValue(true);
+
+    closeSessionWithConfirm(project.id, sessions[0].id);
+
+    const [title, message] = mockShowConfirmDialog.mock.calls[0];
+    expect(title).toBe('Close session');
+    expect(message).toBe("'S1' has background work that may still be running. Closing will stop it.");
+    expect(project.sessions).toHaveLength(1);
+    confirmDialog();
+    expect(project.sessions).toHaveLength(0);
+  });
+
+  it('words multi-session dialogs by what is running', () => {
+    const { project, sessions } = seedProject(2);
+    mockGetStatus.mockImplementation((id: string) => (id === sessions[0].id ? 'working' : 'completed'));
+    mockShowsBackgroundWork.mockImplementation((id: string) => id === sessions[1].id);
+
+    expect(needsCloseConfirmation(sessions[1].id)).toBe(true);
+    closeAllSessionsWithConfirm(project.id);
+    expect(mockShowConfirmDialog.mock.calls[0][1]).toBe(
+      '2 sessions are still active or running background work. Closing will stop them.');
+
+    mockGetStatus.mockReturnValue('completed');
+    const onQuit = vi.fn();
+    confirmAppClose(onQuit);
+    expect(mockShowConfirmDialog.mock.calls[1][1]).toBe(
+      'A session has background work that may still be running. Quitting will stop it.');
+    expect(onQuit).not.toHaveBeenCalled();
+
+    mockShowsBackgroundWork.mockReturnValue(true);
+    closeAllSessionsWithConfirm(project.id);
+    expect(mockShowConfirmDialog.mock.calls[2][1]).toBe(
+      '2 sessions have background work that may still be running. Closing will stop it.');
+  });
+});
 
 describe('closeSessionWithConfirm', () => {
   it.each(['waiting', 'idle', 'completed'] as const)(

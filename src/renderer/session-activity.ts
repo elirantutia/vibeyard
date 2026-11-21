@@ -1,4 +1,5 @@
 import { STOP_INFLIGHT_TRUST_MS } from '../shared/constants';
+import type { BackgroundTask } from '../shared/types';
 export type SessionStatus = 'working' | 'waiting' | 'idle' | 'completed' | 'input';
 
 type StatusChangeCallback = (sessionId: string, status: SessionStatus) => void;
@@ -10,6 +11,13 @@ interface SessionState {
 
 const sessions = new Map<string, SessionState>();
 const listeners: StatusChangeCallback[] = [];
+
+// Work that outlives the turn (a backgrounded shell, a monitor...). Orthogonal
+// to the status: such a turn still completes, because the user is free to type,
+// and the tab only marks the work. Replaced wholesale on every Stop whose list
+// changed (stop_status_writer.py), so an empty list is how it clears.
+const backgroundTasks = new Map<string, BackgroundTask[]>();
+const backgroundListeners: ((sessionId: string) => void)[] = [];
 
 // Backstop for the subagent-aware Stop hook (see stop_status_writer.py). When
 // that hook judges work is still in flight it writes `Stop:working` instead of
@@ -86,14 +94,63 @@ export function setHookStatus(sessionId: string, status: 'working' | 'waiting' |
   }
 }
 
+function subscribe<T>(list: T[], callback: T): () => void {
+  list.push(callback);
+  return () => {
+    const idx = list.indexOf(callback);
+    if (idx !== -1) list.splice(idx, 1);
+  };
+}
+
+/**
+ * Record the session's still-running background work, from the Stop hook.
+ * Listeners hear only changes to what is shown (the ring or its list): the
+ * marker shows only on a completed turn, and a status change already repaints.
+ * The dedupe absorbs resyncAllSessions replaying an unchanged file.
+ */
+export function setBackgroundTasks(sessionId: string, tasks: BackgroundTask[]): void {
+  if (!sessions.has(sessionId)) return;
+  const prev = backgroundTasks.get(sessionId) ?? [];
+  if (prev.length === 0 && tasks.length === 0) return;
+  if (JSON.stringify(prev) === JSON.stringify(tasks)) return;
+  const wasShown = showsBackgroundWork(sessionId);
+  if (tasks.length) backgroundTasks.set(sessionId, tasks);
+  else backgroundTasks.delete(sessionId);
+  if (wasShown || showsBackgroundWork(sessionId)) {
+    for (const cb of backgroundListeners) cb(sessionId);
+  }
+}
+
+export function getBackgroundTasks(sessionId: string): BackgroundTask[] {
+  return backgroundTasks.get(sessionId) ?? [];
+}
+
+/**
+ * Whether to mark background work right now: only on a completed turn. The list
+ * is the one the last Stop reported, so once a new turn starts (working, then
+ * maybe input or an interrupt to waiting) it describes the previous turn and is
+ * hidden until the next Stop replaces it. setIdle empties it on PTY exit.
+ */
+export function showsBackgroundWork(sessionId: string): boolean {
+  return getStatus(sessionId) === 'completed' && getBackgroundTasks(sessionId).length > 0;
+}
+
+export function onBackgroundChange(callback: (sessionId: string) => void): () => void {
+  return subscribe(backgroundListeners, callback);
+}
+
 export function initSession(sessionId: string): void {
   sessions.set(sessionId, { status: 'waiting', interrupted: false });
+  setBackgroundTasks(sessionId, []);
   for (const cb of listeners) cb(sessionId, 'waiting');
 }
 
 export function notifyInterrupt(sessionId: string): void {
   const state = sessions.get(sessionId);
-  if (!state || state.status !== 'working') return;
+  // 'input' too: Esc on a permission prompt, an AskUserQuestion or an
+  // ExitPlanMode dialog ends the turn without a Stop or PostToolUse, so
+  // nothing else would clear the "needs input" state.
+  if (!state || (state.status !== 'working' && state.status !== 'input')) return;
   state.interrupted = true;
   setStatus(sessionId, 'waiting');
 }
@@ -103,11 +160,13 @@ export function setIdle(sessionId: string): void {
   if (!state) return;
   clearStopFallback(sessionId);
   setStatus(sessionId, 'idle');
+  setBackgroundTasks(sessionId, []);
 }
 
 export function removeSession(sessionId: string): void {
   clearStopFallback(sessionId);
   sessions.delete(sessionId);
+  backgroundTasks.delete(sessionId);
 }
 
 export function getStatus(sessionId: string): SessionStatus {
@@ -115,11 +174,7 @@ export function getStatus(sessionId: string): SessionStatus {
 }
 
 export function onChange(callback: StatusChangeCallback): () => void {
-  listeners.push(callback);
-  return () => {
-    const idx = listeners.indexOf(callback);
-    if (idx !== -1) listeners.splice(idx, 1);
-  };
+  return subscribe(listeners, callback);
 }
 
 /** @internal Test-only: reset all module state */
@@ -128,4 +183,6 @@ export function _resetForTesting(): void {
   stopFallbackTimers.clear();
   sessions.clear();
   listeners.length = 0;
+  backgroundTasks.clear();
+  backgroundListeners.length = 0;
 }

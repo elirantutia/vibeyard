@@ -16,7 +16,7 @@ const STATUSLINE_SCRIPT = path.join(SCRIPT_DIR, isWin ? 'statusline.cmd' : 'stat
 // fills it from its statusLine payload (see buildStatusLinePython); another
 // provider can populate it from any source, the way codex-session-watcher.ts
 // already writes `.sessionid` without hooks.
-const KNOWN_EXTENSIONS = ['.status', '.sessionid', '.cost', '.name', '.toolfailure', '.events', '.subagents'];
+const KNOWN_EXTENSIONS = ['.status', '.sessionid', '.cost', '.name', '.toolfailure', '.events', '.subagents', '.background'];
 
 let watcher: fs.FSWatcher | null = null;
 let pollInterval: ReturnType<typeof setInterval> | null = null;
@@ -44,7 +44,8 @@ export function getStatusLineScriptPath(): string {
  * Body of the statusLine helper, shared by the POSIX and Windows branches.
  *
  * Claude invokes the statusLine command on every render, piping it the session
- * JSON on stdin. We extract `cost`, `context_window`, `session_id` and
+ * JSON on stdin. We extract `cost`, `context_window`, `model`, `rate_limits`,
+ * `session_id` and
  * `session_name` and drop them into STATUS_DIR for the watcher to pick up.
  * The `.name` payload carries the CLI session id alongside the title so a
  * stale title can be told apart from the current conversation's.
@@ -80,10 +81,13 @@ status_dir=${JSON.stringify(statusDir)}
 cost=d.get('cost',{})
 ctx=d.get('context_window',{})
 model=d.get('model',{}).get('display_name','')
+rl=d.get('rate_limits')
 if cost or ctx or model:
     payload={'cost':cost,'context_window':ctx}
     if model:
         payload['model']=model
+    if isinstance(rl,dict) and rl:
+        payload['rate_limits']=rl
     with open(os.path.join(status_dir,sid+'.cost'),'w') as f:
         json.dump(payload,f)
 def write_if_changed(path,blob):
@@ -192,6 +196,18 @@ function handleFileChange(win: BrowserWindow, filename: string): void {
       }
     } catch {
       // File may have been deleted or contain invalid JSON
+    }
+  } else if (filename.endsWith('.background')) {
+    // `{"tasks":[{type,description}]}` from stop_status_writer.py: work that
+    // outlives the turn (a backgrounded shell, a monitor...). Rewritten on
+    // every Stop whose list changed, so an empty list clears the marker.
+    try {
+      const { tasks } = JSON.parse(fs.readFileSync(path.join(STATUS_DIR, filename), 'utf-8'));
+      if (Array.isArray(tasks) && !win.isDestroyed()) {
+        win.webContents.send('session:backgroundTasks', extractedId, tasks);
+      }
+    } catch {
+      // File may have been deleted or contain invalid JSON (partial write)
     }
   } else if (filename.endsWith('.name')) {
     const sessionId = extractedId;

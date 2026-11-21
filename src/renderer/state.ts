@@ -121,6 +121,7 @@ const defaultPreferences: Preferences = {
   externalControlEnabled: false,
   copyOnSelect: false,
   bidiTextEnabled: false,
+  showUsageLimits: true,
   zoomFactor: 1.0,
   readinessExcludedProviders: [],
   sidebarViews: { gitPanel: true, sessionHistory: true, discussions: true, fileTree: true, activeSessions: true },

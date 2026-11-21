@@ -25,15 +25,14 @@ import { STOP_INFLIGHT_TRUST_MS } from '../shared/constants';
 let scriptsInstalled = false;
 
 /**
- * How long (ms) an in-flight subagent count is trusted before the Stop writer
- * falls back to 'completed'. Guards against a lost SubagentStop (which is
- * known to be unreliable, anthropics/claude-code#27755) wedging a session in
- * 'working' forever. Generous because a slow-but-active subagent keeps the
- * counter's timestamp fresh via PostToolUse (see claude-cli.ts captureEventCmd).
+ * How long (ms) an in-flight subagent registry entry is trusted before the Stop
+ * writer stops counting it. Guards against a lost SubagentStop (which is known
+ * to be unreliable, anthropics/claude-code#27755) wedging a session in
+ * 'working' forever. Generous because a slow-but-active subagent keeps its
+ * entry fresh via PostToolUse (see claude-cli.ts captureEventCmd).
  *
- * Only reached on the FALLBACK branch of stop_status_writer.py — a CLI whose
- * Stop payload carries no `background_tasks` key. Modern CLIs answer the
- * question directly and never consult the counter or this constant.
+ * Only reached on the FALLBACK branch of stop_status_writer.py — a Stop whose
+ * `background_tasks` is empty or absent.
  */
 export const STOP_STALE_MS = STOP_INFLIGHT_TRUST_MS;
 
@@ -75,14 +74,14 @@ if sid:
   // optional auto-background timer, so a spurious Stop fired the instant the
   // main agent pauses on freshly-dispatched foreground subagents can carry
   // `[]` while three of them are running — exactly the false completion this
-  // writer exists to prevent. So an empty array falls through to the legacy
-  // <sid>.subagents counter, which captureEventCmd still maintains, and the two
-  // signals are OR'd. Being wrong in this direction costs a late notification
+  // writer exists to prevent. So an empty array falls through to the
+  // <sid>.subagents registry of in-flight agent ids, which captureEventCmd
+  // still maintains, and the two signals are OR'd. Being wrong in this direction costs a late notification
   // bounded by the renderer's STOP_FALLBACK_MS backstop; being wrong in the
   // other direction fires a completion mid-orchestration.
   //
-  // The counter is also the whole answer on older CLIs, where the key is absent
-  // entirely.
+  // The registry is also the whole answer on older CLIs, where the key is
+  // absent entirely.
   //
   // argv: [1]=session-id env var, [2]=status_dir, [3]=stale_ms, [4]=marker.
   installEventScript('stop_status_writer.py', `import sys,os,json,time
@@ -108,28 +107,58 @@ force_working=bool(d.get('agent_id') or d.get('hook_event_name')=='SubagentStop'
 HOLD=('subagent','teammate','workflow')
 DONE=('completed','complete','done','failed','error','cancelled','canceled','killed','stopped','timed_out','timeout')
 inflight=False
+# One pass sorts each live task: HOLD types keep the turn open, every other
+# type is work that outlives it (a run_in_background shell, a monitor, an MCP
+# task...) and goes to the tab's background marker instead.
+bg=[]
 bt=d.get('background_tasks')
 if isinstance(bt,list):
     for task in bt:
         if not isinstance(task,dict):
             continue
-        if str(task.get('type','')).strip().lower() in HOLD and str(task.get('status','')).strip().lower() not in DONE:
+        if str(task.get('status','')).strip().lower() in DONE:
+            continue
+        ty=str(task.get('type','')).strip().lower()
+        if ty in HOLD:
             inflight=True
-            break
-# An empty/absent list is not proof of an idle session — fall back to the counter.
+        else:
+            desc=task.get('description') or task.get('command') or ''
+            bg.append({'type':ty,'description':str(desc)[:120]})
+# An empty/absent list is not proof of an idle session — fall back to the registry.
+# The registry is {"ids":{agent_id:last_seen_ms}}; a file from before the
+# registry ({"n":count,"t":ms}) is still honoured so an upgrade mid-orchestration
+# cannot fire a false completion.
 if not inflight:
-    n=0
-    t=0
+    now=int(time.time()*1000)
     try:
         with open(os.path.join(status_dir,sid+'.subagents')) as f:
             c=json.load(f)
-            n=int(c.get('n',0))
-            t=int(c.get('t',0))
+        ids=c.get('ids')
+        if isinstance(ids,dict):
+            inflight=any(now-int(v)<stale_ms for v in ids.values())
+        else:
+            inflight=int(c.get('n',0))>0 and now-int(c.get('t',0))<stale_ms
     except:
         pass
-    inflight=n>0 and (int(time.time()*1000)-t)<stale_ms
 status='working' if (force_working or inflight) else 'completed'
 os.makedirs(status_dir,exist_ok=True)
+# Only a payload that carries the list can say anything about background work,
+# and a subagent's own Stop says nothing about the parent. Rewritten only on
+# change (each write is an fs event plus an IPC round-trip), and atomically: the
+# watcher must never read a truncated file, or a clearing write is lost. The
+# temp name does not end in .background, so the watcher ignores it.
+if isinstance(bt,list) and not force_working:
+    bp=os.path.join(status_dir,sid+'.background')
+    out=json.dumps({'tasks':bg})
+    try:
+        with open(bp) as f:
+            same=f.read()==out
+    except:
+        same=not bg
+    if not same:
+        with open(bp+'.tmp','w') as f:
+            f.write(out)
+        os.replace(bp+'.tmp',bp)
 with open(os.path.join(status_dir,sid+'.status'),'w') as f:
     f.write('Stop:'+status)
 `);

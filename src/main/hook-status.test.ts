@@ -210,6 +210,40 @@ sys.stdout.write(json.dumps({'afterRepeat':after_repeat,'total':len(writes),'fin
       expect(seen.final).toBe('cli-b');
     });
 
+    it('forwards rate_limits into .cost only when Claude sends them', () => {
+      if (!hasPython()) return; // no python3 on this runner
+
+      const tmp = path.join(
+        process.env.TMPDIR || process.env.TEMP || '/tmp',
+        `vibeyard-statusline-rl-${process.pid}`,
+      );
+      const driver = `
+import sys,os,io,json,shutil
+src=sys.stdin.read()
+d=${JSON.stringify(tmp)}
+shutil.rmtree(d,ignore_errors=True)
+os.makedirs(d)
+os.environ['CLAUDE_IDE_SESSION_ID']='sess1'
+def run(payload):
+    sys.stdin=io.StringIO(json.dumps(payload))
+    try:
+        exec(compile(src,'statusline','exec'),{})
+    except SystemExit:
+        pass
+    return json.load(open(os.path.join(d,'sess1.cost')))
+rl={'five_hour':{'used_percentage':42,'resets_at':1900000000}}
+with_rl=run({'cost':{'total_cost_usd':1},'rate_limits':rl})
+without=run({'cost':{'total_cost_usd':2}})
+shutil.rmtree(d,ignore_errors=True)
+sys.stdout.write(json.dumps({'with':with_rl.get('rate_limits'),'without':'rate_limits' in without}))
+`;
+      const result = runPython(driver, buildStatusLinePython(tmp));
+      expect(result.status, result.stderr.toString()).toBe(0);
+      const seen = JSON.parse(result.stdout.toString());
+      expect(seen.with).toEqual({ five_hour: { used_percentage: 42, resets_at: 1900000000 } });
+      expect(seen.without).toBe(false);
+    });
+
     it('is syntactically valid Python', () => {
       // A syntax error here is silent in production: it kills cost, context,
       // sessionid and name at once, with the traceback going only to
@@ -342,6 +376,31 @@ sys.stdout.write(json.dumps({'afterRepeat':after_repeat,'total':len(writes),'fin
       watchCallback!('change', 'abc123.cost');
 
       expect(mockSend).toHaveBeenCalledWith('session:costData', 'abc123', costData);
+    });
+
+    it('.background forwards the task list, including an empty one that clears the marker', () => {
+      const win = createMockWin();
+      startWatching(win);
+      registerSession('abc123');
+
+      const tasks = [{ type: 'shell', description: 'npm run dev' }];
+      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({ tasks }));
+      watchCallback!('change', 'abc123.background');
+      expect(mockSend).toHaveBeenCalledWith('session:backgroundTasks', 'abc123', tasks);
+
+      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({ tasks: [] }));
+      watchCallback!('change', 'abc123.background');
+      expect(mockSend).toHaveBeenCalledWith('session:backgroundTasks', 'abc123', []);
+    });
+
+    it('.background ignores a partial write', () => {
+      const win = createMockWin();
+      startWatching(win);
+      registerSession('abc123');
+
+      vi.mocked(fs.readFileSync).mockReturnValue('{"tasks":[');
+      watchCallback!('change', 'abc123.background');
+      expect(mockSend).not.toHaveBeenCalledWith('session:backgroundTasks', expect.anything(), expect.anything());
     });
 
     it('.name parses JSON and sends session:sessionName with the CLI session id', () => {
@@ -545,7 +604,7 @@ sys.stdout.write(json.dumps({'afterRepeat':after_repeat,'total':len(writes),'fin
   });
 
   describe('cleanupSessionStatus', () => {
-    it('unlinks all 7 file types', () => {
+    it('unlinks all 8 file types', () => {
       cleanupSessionStatus('sess-1');
 
       expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'sess-1.status'));
@@ -555,7 +614,8 @@ sys.stdout.write(json.dumps({'afterRepeat':after_repeat,'total':len(writes),'fin
       expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'sess-1.toolfailure'));
       expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'sess-1.events'));
       expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'sess-1.subagents'));
-      expect(fs.unlinkSync).toHaveBeenCalledTimes(7);
+      expect(fs.unlinkSync).toHaveBeenCalledWith(path.join(STATUS_DIR, 'sess-1.background'));
+      expect(fs.unlinkSync).toHaveBeenCalledTimes(8);
     });
 
     it('handles errors when files do not exist', () => {

@@ -105,7 +105,7 @@ describe.runIf(pythonAvailable)('stop_status_writer.py behaviour', () => {
   });
 
   /** Run the writer with `payload` on stdin and return the status it wrote. */
-  function run(payload: unknown, counter?: { n: number; t: number }): string {
+  function run(payload: unknown, counter?: { n: number; t: number } | { ids: Record<string, number> }): string {
     const counterPath = path.join(dir, `${SID}.subagents`);
     realFs.rmSync(counterPath, { force: true });
     if (counter) realFs.writeFileSync(counterPath, JSON.stringify(counter));
@@ -123,7 +123,7 @@ describe.runIf(pythonAvailable)('stop_status_writer.py behaviour', () => {
   }
 
   const base = { hook_event_name: 'Stop', session_id: 'abc' };
-  const fresh = () => ({ n: 1, t: Date.now() });
+  const fresh = () => ({ ids: { a1: Date.now() } });
 
   it('completes when the payload and the counter both report nothing in flight', () => {
     expect(run({ ...base, background_tasks: [], session_crons: [] })).toBe('Stop:completed');
@@ -157,10 +157,20 @@ describe.runIf(pythonAvailable)('stop_status_writer.py behaviour', () => {
 
   // An empty array means "nothing in flight"; an absent key means the CLI is
   // too old (or the registry is unreachable) and the counter must decide.
-  it('falls back to the counter when background_tasks is absent', () => {
+  it('falls back to the registry when background_tasks is absent', () => {
     expect(run(base, fresh())).toBe('Stop:working');
+    expect(run(base, { ids: {} })).toBe('Stop:completed');
+    // A stale entry must not wedge the session forever...
+    expect(run(base, { ids: { a1: Date.now() - STOP_STALE_MS - 1000 } })).toBe('Stop:completed');
+    // ...but it cannot hide a fresh one beside it.
+    expect(run(base, { ids: { a1: Date.now() - STOP_STALE_MS - 1000, a2: Date.now() } })).toBe('Stop:working');
+  });
+
+  // A pre-registry {n,t} file left by the previous version must still hold the
+  // session, or upgrading mid-orchestration would fire a false completion.
+  it('still honours a legacy {n,t} counter file', () => {
+    expect(run(base, { n: 1, t: Date.now() })).toBe('Stop:working');
     expect(run(base, { n: 0, t: Date.now() })).toBe('Stop:completed');
-    // A stale count must not wedge the session forever.
     expect(run(base, { n: 1, t: Date.now() - STOP_STALE_MS - 1000 })).toBe('Stop:completed');
   });
 
@@ -173,8 +183,8 @@ describe.runIf(pythonAvailable)('stop_status_writer.py behaviour', () => {
     expect(run({ ...base, background_tasks: [] }, fresh())).toBe('Stop:working');
   });
 
-  it('still completes on an empty background_tasks once the counter agrees', () => {
-    expect(run({ ...base, background_tasks: [] }, { n: 0, t: Date.now() })).toBe('Stop:completed');
+  it('still completes on an empty background_tasks once the registry agrees', () => {
+    expect(run({ ...base, background_tasks: [] }, { ids: {} })).toBe('Stop:completed');
   });
 
   it('never completes the parent for a Stop fired inside a subagent', () => {
@@ -187,6 +197,49 @@ describe.runIf(pythonAvailable)('stop_status_writer.py behaviour', () => {
   // until the 10-minute renderer backstop fired.
   it('completes a --agent session, where agent_type is set without agent_id', () => {
     expect(run({ ...base, background_tasks: [], agent_type: 'reviewer' })).toBe('Stop:completed');
+  });
+
+  describe('background-task marker', () => {
+    const bgPath = () => path.join(dir, `${SID}.background`);
+    const readBg = () => JSON.parse(realFs.readFileSync(bgPath(), 'utf8'));
+    const shell = { id: '1', type: 'shell', status: 'running', description: 'npm run dev' };
+
+    it('lists work that outlives the turn, but not subagents or finished tasks', () => {
+      realFs.rmSync(bgPath(), { force: true });
+      const bt = [
+        shell,
+        { id: '2', type: 'monitor', status: 'running', command: 'tail -f log' },
+        { id: '3', type: 'shell', status: 'completed', description: 'done already' },
+      ];
+      expect(run({ ...base, background_tasks: bt })).toBe('Stop:completed');
+      expect(readBg()).toEqual({ tasks: [
+        { type: 'shell', description: 'npm run dev' },
+        { type: 'monitor', description: 'tail -f log' },
+      ] });
+
+      // Alongside a subagent the session holds working, and the shell is still listed.
+      run({ ...base, background_tasks: [shell, { id: '4', type: 'subagent', status: 'running' }] });
+      expect(readBg()).toEqual({ tasks: [{ type: 'shell', description: 'npm run dev' }] });
+    });
+
+    it('clears the marker once the list empties', () => {
+      run({ ...base, background_tasks: [shell] });
+      run({ ...base, background_tasks: [] }, { ids: {} });
+      expect(readBg()).toEqual({ tasks: [] });
+    });
+
+    it('writes no file for a session that never had background work', () => {
+      realFs.rmSync(bgPath(), { force: true });
+      run({ ...base, background_tasks: [] }, { ids: {} });
+      expect(realFs.existsSync(bgPath())).toBe(false);
+    });
+
+    it('leaves the marker alone when the payload has no list, or the Stop is a subagent\'s', () => {
+      run({ ...base, background_tasks: [shell] });
+      run(base, { ids: {} });
+      run({ ...base, background_tasks: [], agent_id: 'a1' });
+      expect(readBg().tasks).toHaveLength(1);
+    });
   });
 
   it('completes on a malformed payload rather than hanging', () => {

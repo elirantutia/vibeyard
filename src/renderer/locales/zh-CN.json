@@ -29,6 +29,8 @@
     "terminal": "终端",
     "bidiText": "双向文字（希伯来语/阿拉伯语）",
     "bidiTextDesc": "关闭终端的 GPU 加速渲染，使从右到左的文字按正确方向显示。输出量大时速度较慢，且在从右到左的文本中选择时可能高亮错误的字符。",
+    "usageLimits": "在状态栏显示套餐用量限额",
+    "usageLimitsDesc": "显示您已使用的 Claude 5 小时和 7 天限额（或网关支出限额）。适用于 Pro、Max 和 Ultra 套餐，会话收到首次回复后显示。",
     "sidebarViews": "侧边栏视图",
     "fileTree": "项目文件树",
     "gitPanel": "Git 面板",
@@ -89,6 +91,7 @@
     "tooltip": {
       "statusPrefix": "状态：{status}",
       "sessionPrefix": "会话：{cliSessionId}",
+      "background": "{count} 个后台任务仍在运行",
       "diff": "差异：{name}",
       "mcpInspector": "MCP 检查器",
       "file": "文件：{name}",

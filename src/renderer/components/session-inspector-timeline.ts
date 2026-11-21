@@ -270,7 +270,7 @@ export function renderTimeline(container: HTMLElement): void {
     } else if (ev.type === 'user_prompt') {
       desc.textContent = ev.prompt
         ? ev.prompt.replace(/\s+/g, ' ').slice(0, 120)
-        : 'User prompt submitted';
+        : 'Prompt submitted';
     } else if (ev.type === 'stop') {
       desc.textContent = 'Response completed';
     } else if (ev.type === 'stop_failure') {

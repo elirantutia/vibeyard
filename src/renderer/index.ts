@@ -3,11 +3,12 @@ import { initSidebar, promptNewProject } from './components/sidebar.js';
 import { initTabBar } from './components/tab-bar.js';
 import { initSplitLayout } from './components/split-layout.js';
 import { initKeybindings } from './keybindings.js';
-import { handlePtyData, destroyTerminal, updateCostDisplay, updateContextDisplay, applyThemeToAllTerminals, refreshProfileLabels } from './components/terminal-pane.js';
-import { setIdle, setHookStatus, notifyInterrupt } from './session-activity.js';
+import { handlePtyData, destroyTerminal, updateCostDisplay, updateContextDisplay, applyThemeToAllTerminals, refreshCostDisplays, rateLimitAccountKey } from './components/terminal-pane.js';
+import { setIdle, setHookStatus, notifyInterrupt, setBackgroundTasks } from './session-activity.js';
 import { parseCost, setCostData, onChange as onCostChange } from './session-cost.js';
 import { applyCliSessionName } from './session-title.js';
 import { setContextData, onChange as onContextChange } from './session-context.js';
+import { setRateLimits, onChange as onRateLimitsChange } from './account-rate-limits.js';
 import { initNotificationSound } from './notification-sound.js';
 import { initNotificationDesktop } from './notification-desktop.js';
 import { init as initSessionUnread } from './session-unread.js';
@@ -99,6 +100,8 @@ async function main(): Promise<void> {
     if (!appState.hasSession(sessionId)) return;
     logDebugEvent('costData', sessionId, costData);
     setCostData(sessionId, costData);
+    const accountKey = rateLimitAccountKey(sessionId);
+    if (accountKey !== null) setRateLimits(accountKey, costData.rate_limits);
     const contextBefore = getContext(sessionId);
     setContextData(sessionId, costData.context_window);
     captureInitialContext(sessionId, costData.context_window);
@@ -125,6 +128,9 @@ async function main(): Promise<void> {
     }
   });
 
+  // Limits are per account: one tab's report repaints every tab on that profile.
+  onRateLimitsChange(refreshCostDisplays);
+
   onCostChange((sessionId, cost) => {
     updateCostDisplay(sessionId, cost);
     appState.updateSessionCost(sessionId, cost);
@@ -139,6 +145,12 @@ async function main(): Promise<void> {
     if (!appState.hasSession(sessionId)) return;
     logDebugEvent('hookStatus', sessionId, hookName ? `${hookName}: ${status}` : status);
     setHookStatus(sessionId, status, hookName);
+  });
+
+  window.vibeyard.session.onBackgroundTasks((sessionId, tasks) => {
+    if (!appState.hasSession(sessionId)) return;
+    logDebugEvent('backgroundTasks', sessionId, { count: tasks.length });
+    setBackgroundTasks(sessionId, tasks);
   });
 
   window.vibeyard.session.onInspectorEvents((sessionId, events) => {
@@ -262,6 +274,10 @@ async function main(): Promise<void> {
     if (autoTitle && !lastAutoTitle) window.vibeyard.session.resyncStatus();
     lastAutoTitle = autoTitle;
 
+    // Status-bar display prefs (usage limits) live in the cost cluster. Repainting
+    // it is cheap and idempotent, so no per-pref change tracking.
+    refreshCostDisplays();
+
     const newLocale = appState.preferences.locale;
     if (newLocale && newLocale !== lastLocale) {
       lastLocale = newLocale;
@@ -271,7 +287,7 @@ async function main(): Promise<void> {
     }
   });
   // Adding/removing a profile changes whether the status-line profile label is shown.
-  appState.on('profiles-changed', () => refreshProfileLabels());
+  appState.on('profiles-changed', () => refreshCostDisplays());
 
   const savedZoom = getZoomFactor();
   if (savedZoom !== 1.0) window.vibeyard.zoom.set(savedZoom);
