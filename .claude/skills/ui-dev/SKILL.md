@@ -111,38 +111,29 @@ For split buttons (main + chevron), add `.btn-primary`/`.btn-secondary` plus the
 
 ```css
 /* Backgrounds */
-var(--bg-primary)    /* #000000 — main background */
-var(--bg-secondary)  /* #0a0a0a — secondary background */
-var(--bg-tertiary)   /* #1a1a1a — tertiary / elevated surfaces */
-var(--bg-hover)      /* #222222 — hover state */
+var(--bg-primary)  var(--bg-secondary)  var(--bg-tertiary)  var(--bg-hover)
 
 /* Text */
-var(--text-primary)  /* #e0e0e0 */
-var(--text-secondary) /* #a0a0b0 */
-var(--text-muted)    /* #606070 */
+var(--text-primary)  var(--text-secondary)  var(--text-muted)
 
 /* Accents & borders */
-var(--accent)        /* #e94560 — primary accent (red) */
-var(--accent-dim)    /* #c73e55 */
-var(--border)        /* #333333 */
-var(--bookmark)      /* #e8a317 */
+var(--accent)  var(--accent-dim)  var(--accent-soft)  var(--accent-fg)
+var(--border)  var(--border-subtle)  var(--border-strong)
+
+/* Status & semantic */
+var(--status-working)  var(--status-waiting)  var(--status-input)  var(--status-completed)
+var(--color-warning)  var(--color-critical)  var(--bookmark)
 ```
 
-**Semantic status colors** (these are not CSS variables — use the hex values directly):
-- Working/Active: `var(--accent)` with pulse animation
-- Waiting: `#f4b400` (yellow)
-- Completed/Success: `#34a853` (green)
-- Input: `#e67e22` (orange)
-- Info: `#4285f4` (blue)
-- Idle: `var(--text-muted)`
+`base.css` is the source of truth for the values; read it rather than copying hex codes. Idle status uses `var(--text-muted)`; working pairs `var(--status-working)` with the pulse animation.
 
 ## Styling Conventions
 
 - **Class naming**: `.component-child` pattern (e.g., `.modal-field`, `.tab-status`)
 - **State modifiers**: `.active`, `.disabled`, `.hidden`, `.focused` (e.g., `.tab-item.active`)
-- **Border radius**: `4px` standard, `2-3px` small, `8px` rounded/pills, `50%` circular
+- **Border radius**: `var(--radius-sm)` / `var(--radius-md)` / `var(--radius-lg)`, `50%` circular
 - **Transitions**: `0.15s` for hover/focus states
-- **Font**: System sans-serif for UI, monospace (`JetBrains Mono`, `Fira Code`, etc.) for code/terminal
+- **Font**: `var(--font-ui)` for UI, `var(--font-mono)` for code/terminal
 - **Font sizes**: 9-13px for UI elements, 13px base
 - **Scrollbars**: Use webkit custom scrollbar (6px width, `var(--border)` thumb, 3px radius)
 
@@ -176,7 +167,7 @@ Always provide a `destroy()` method that removes event listeners and DOM nodes. 
 
 ### DOM creation
 - Prefer `document.createElement()` + property assignment over `innerHTML`
-- When using `innerHTML`, always escape user content with `esc()` from `src/renderer/components/dom-utils.ts`
+- When using `innerHTML`, always escape user content with `esc()` from `src/renderer/dom-utils.ts`
 - Use `classList.toggle()` / `classList.add()` / `classList.remove()` for conditional classes
 - Use `element.dataset.*` for data attributes
 
@@ -212,3 +203,13 @@ Add styles to the appropriate existing CSS file — do not create new CSS files 
 | `styles/git-panel.css` | Git panel, worktree selector |
 | `styles/mcp-inspector.css` | MCP inspector pane |
 | `styles/session-inspector.css` | Session inspector panel |
+| `styles/file-tree.css` | Sidebar file tree |
+| `styles/kanban.css` | Kanban board |
+| `styles/team.css` | Team tab, member cards, predefined picker |
+| `styles/project-tab.css` | Overview page toolbar and grid |
+| `styles/widgets.css` | Shared Overview widget chrome |
+| `styles/usage.css` | Usage-stats widget |
+| `styles/browser-tab.css` | Browser tab pane |
+| `styles/chrome-import.css` | Chrome import dialog |
+| `styles/debug-panel.css` | Debug panel |
+| `styles/p2p-sharing.css` | Session sharing UI |
