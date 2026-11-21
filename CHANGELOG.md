@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.11] - 2026-11-21
+
+### Features
+
+- Current-project scope in global session search
+
+### Fixes
+
+- Hooks and status line failing where /usr/bin/python3 is missing
+
+### Changes
+
+- Improve session state for current Claude Code hooks and show plan usage limits
+
 ## [0.3.10] - 2026-11-13
 
 No user-facing changes; this release only fixes the release pipeline.
