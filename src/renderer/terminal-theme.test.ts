@@ -3,11 +3,11 @@ import { darkTerminalTheme, lightTerminalTheme, getTerminalTheme } from './termi
 
 describe('darkTerminalTheme', () => {
   it('has the correct background', () => {
-    expect(darkTerminalTheme.background).toBe('#0e0f13');
+    expect(darkTerminalTheme.background).toBe('#1c1e24');
   });
 
   it('has the correct foreground', () => {
-    expect(darkTerminalTheme.foreground).toBe('#e9eaf1');
+    expect(darkTerminalTheme.foreground).toBe('#d8dae3');
   });
 });
 
