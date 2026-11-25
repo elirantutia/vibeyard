@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as path from 'path';
+import { EventEmitter } from 'events';
 import type { PersistedState, Preferences } from '../shared/types';
 
 const DEFAULT_DIR = path.join('/home/test', '.claude');
@@ -32,7 +33,10 @@ vi.mock('electron', () => ({
     once: vi.fn((_channel: string, handler: (event: unknown, choice: string) => void) => {
       ipc.handlers.push(handler);
     }),
-    removeListener: vi.fn(),
+    removeListener: vi.fn((_channel: string, handler: (event: unknown, choice: string) => void) => {
+      const i = ipc.handlers.indexOf(handler);
+      if (i >= 0) ipc.handlers.splice(i, 1);
+    }),
   },
 }));
 
@@ -55,7 +59,8 @@ vi.mock('./fs-utils', () => ({
   readJsonSafe: (file: string) => mocks.settingsByDir.get(file) ?? null,
 }));
 
-vi.mock('./store', () => ({
+vi.mock('./store', async (importOriginal) => ({
+  consentDirKey: (await importOriginal<typeof import('./store')>()).consentDirKey,
   loadState: () => structuredClone(mocks.state.current),
   saveState: (state: PersistedState) => { mocks.state.current = structuredClone(state); },
 }));
@@ -68,12 +73,10 @@ function setStatusLine(dir: string, command: string | null): void {
 }
 
 function makeWindow() {
-  return {
+  return Object.assign(new EventEmitter(), {
     isDestroyed: () => false,
-    once: vi.fn(),
-    removeListener: vi.fn(),
-    webContents: { isLoading: () => false, once: vi.fn(), send: vi.fn() },
-  };
+    webContents: Object.assign(new EventEmitter(), { isLoading: () => false, send: vi.fn() }),
+  });
 }
 
 type FakeWindow = ReturnType<typeof makeWindow>;
@@ -222,6 +225,68 @@ describe('guardedInstall prompts', () => {
 
     expect(win.webContents.send).toHaveBeenCalledTimes(1);
     expect(mocks.installStatusLine).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells every waiting caller when it has to ask, including one that joined late', async () => {
+    setStatusLine(PROFILE_DIR, FOREIGN);
+    const win = makeWindow();
+    const first = vi.fn();
+    const joined = vi.fn();
+
+    const run = guardedInstall(win as never, PROFILE_DIR, first);
+    await vi.waitFor(() => expect(first).toHaveBeenCalledTimes(1));
+    guardedInstall(win as never, PROFILE_DIR, joined);
+    await vi.waitFor(() => expect(joined).toHaveBeenCalledTimes(1));
+    expect(win.webContents.send).toHaveBeenCalledTimes(1);
+    answer('keep');
+    await run;
+  });
+
+  it('does not report a prompt when no dialog is needed', async () => {
+    setStatusLine(PROFILE_DIR, null);
+    const onPrompt = vi.fn();
+
+    await guardedInstall(makeWindow() as never, PROFILE_DIR, onPrompt);
+
+    expect(onPrompt).not.toHaveBeenCalled();
+  });
+
+  it('stores nothing and asks again after a reload removes an open dialog', async () => {
+    setStatusLine(PROFILE_DIR, FOREIGN);
+    const win = makeWindow();
+
+    const interrupted = install(win, PROFILE_DIR);
+    await vi.waitFor(() => expect(win.webContents.send).toHaveBeenCalledTimes(1));
+    win.webContents.emit('did-start-loading');
+    await interrupted;
+
+    expect(getStatusLineConsent(prefs(), PROFILE_DIR).consent).toBeUndefined();
+    expect(mocks.installStatusLine).not.toHaveBeenCalled();
+
+    const retried = install(win, PROFILE_DIR);
+    await vi.waitFor(() => expect(win.webContents.send).toHaveBeenCalledTimes(2));
+    answer('replace');
+    await retried;
+    expect(getStatusLineConsent(prefs(), PROFILE_DIR).consent).toBe('granted');
+  });
+
+  it('does not decline the prompts still queued when the window closes', async () => {
+    setStatusLine(PROFILE_DIR, FOREIGN);
+    setStatusLine(OTHER_PROFILE_DIR, FOREIGN);
+    const win = makeWindow();
+    let destroyed = false;
+    win.isDestroyed = () => destroyed;
+
+    const work = install(win, PROFILE_DIR);
+    const personal = install(win, OTHER_PROFILE_DIR);
+    await vi.waitFor(() => expect(win.webContents.send).toHaveBeenCalledTimes(1));
+    destroyed = true;
+    win.emit('closed');
+    await Promise.all([work, personal]);
+
+    expect(win.webContents.send).toHaveBeenCalledTimes(1);
+    expect(getStatusLineConsent(prefs(), PROFILE_DIR).consent).toBeUndefined();
+    expect(getStatusLineConsent(prefs(), OTHER_PROFILE_DIR).consent).toBeUndefined();
   });
 
   it('shows one dialog at a time and keeps both answers', async () => {

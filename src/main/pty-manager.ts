@@ -129,16 +129,27 @@ export async function spawnPty(
         'all profiles would share one macOS keychain login, mixing the accounts.\r\n' +
         'Update Claude Code, then start the profile session again.\x1b[0m\r\n',
     );
+    spawnRequests.delete(sessionId);
     onExit(1);
     return;
   }
 
   if (providerId === 'claude' && configDir) {
+    // The pane stays blank until the statusLine dialog is answered, and a
+    // background tab (vibeyard-ctl new-session) can raise it while the user is
+    // in another project, so say what the tab is waiting for. No newline, so
+    // the line can be erased before the CLI starts drawing.
+    let hinted = false;
+    const showHint = () => {
+      hinted = true;
+      onData('\x1b[2mWaiting for the statusLine decision in the dialog…\x1b[0m');
+    };
     try {
-      await guardedInstall(BrowserWindow.getAllWindows()[0] ?? null, configDir);
+      await guardedInstall(BrowserWindow.getAllWindows()[0] ?? null, configDir, showHint);
     } catch (err) {
       console.warn('Failed to install hooks into profile config dir:', configDir, err);
     }
+    if (hinted && spawnRequests.get(sessionId) === request) onData('\r\x1b[2K');
   }
 
   if (spawnRequests.get(sessionId) !== request) return;

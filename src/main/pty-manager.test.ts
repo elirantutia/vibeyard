@@ -3,7 +3,7 @@ import * as path from 'path';
 import { isMac, isWin } from './platform';
 
 const { mockSpawn, mockWrite, mockResize, mockKill, mockExecFile, mockNvmDefaultNodeBinDir, mockGuardedInstall } = vi.hoisted(() => ({
-  mockGuardedInstall: vi.fn(async () => {}),
+  mockGuardedInstall: vi.fn(async (_win: unknown, _configDir?: string, _onPrompt?: () => void) => {}),
   mockSpawn: vi.fn(),
   mockWrite: vi.fn(),
   mockResize: vi.fn(),
@@ -125,12 +125,42 @@ describe('spawnPty', () => {
     const configDir = path.join('/mock/home', '.claude-work');
 
     const spawned = spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, '', vi.fn(), vi.fn(), configDir);
-    await vi.waitFor(() => expect(mockGuardedInstall).toHaveBeenCalledWith(null, configDir));
+    await vi.waitFor(() => expect(mockGuardedInstall).toHaveBeenCalledWith(null, configDir, expect.any(Function)));
     expect(mockSpawn).not.toHaveBeenCalled();
 
     release();
     await spawned;
     expect(mockSpawn).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a hint in the pane while the statusLine dialog is open, and erases it before spawning', async () => {
+    mockSpawn.mockReturnValue(createMockPtyProcess());
+    let release!: () => void;
+    mockGuardedInstall.mockImplementationOnce((_win, _dir, onPrompt) => {
+      onPrompt!();
+      return new Promise<void>((resolve) => { release = resolve; });
+    });
+    const onData = vi.fn();
+
+    const spawned = spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, '', onData, vi.fn(), path.join('/mock/home', '.claude-work'));
+    await vi.waitFor(() => expect(onData).toHaveBeenCalledTimes(1));
+    expect(onData.mock.calls[0][0]).toContain('Waiting for the statusLine decision');
+
+    release();
+    await spawned;
+    expect(onData).toHaveBeenLastCalledWith('\r\x1b[2K');
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+    killPty('s1');
+  });
+
+  it('writes nothing to the pane when the guarded install does not prompt', async () => {
+    mockSpawn.mockReturnValue(createMockPtyProcess());
+    const onData = vi.fn();
+
+    await spawnPty('s1', '/project', null, false, '', 'claude', undefined, undefined, '', onData, vi.fn(), path.join('/mock/home', '.claude-work'));
+
+    expect(onData).not.toHaveBeenCalled();
+    killPty('s1');
   });
 
   it('does not spawn when the session is closed while the guarded install waits', async () => {

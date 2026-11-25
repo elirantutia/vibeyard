@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import type { PersistedState } from '../shared/types';
+import type { PersistedState, Preferences, Profile } from '../shared/types';
 
 export type { SessionRecord, ProjectRecord, Preferences, PersistedState } from '../shared/types';
 
@@ -64,8 +64,31 @@ export function saveRendererState(state: PersistedState): void {
   const current = (lastState ?? loadState()).preferences;
   state.preferences.statusLineConsent = current.statusLineConsent;
   state.preferences.statusLineConsentCommand = current.statusLineConsentCommand;
-  state.preferences.statusLineConsentByDir = current.statusLineConsentByDir;
+  state.preferences.statusLineConsentByDir = consentOfLiveProfiles(current.statusLineConsentByDir, state.profiles);
   saveState(state);
+}
+
+/**
+ * Key of a config dir in `preferences.statusLineConsentByDir`. Lives here, not
+ * in settings-guard (which writes the keys), so the pruning below uses the
+ * same rule without an import cycle.
+ */
+export function consentDirKey(configDir: string): string {
+  return path.resolve(configDir);
+}
+
+/**
+ * Drops consent recorded for config dirs no profile uses anymore. The renderer
+ * owns the profile list but cannot clear these prefs (see above), so a removed
+ * profile's entry is pruned here, on the renderer's next save.
+ */
+function consentOfLiveProfiles(
+  byDir: Preferences['statusLineConsentByDir'],
+  profiles: Profile[] | undefined,
+): Preferences['statusLineConsentByDir'] {
+  if (!byDir) return byDir;
+  const liveDirs = new Set((profiles ?? []).map((p) => consentDirKey(p.configDir)));
+  return Object.fromEntries(Object.entries(byDir).filter(([dir]) => liveDirs.has(dir)));
 }
 
 export function flushState(): void {

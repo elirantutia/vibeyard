@@ -12,8 +12,10 @@ vi.mock('os', () => ({
 }));
 
 import * as fs from 'fs';
+import * as path from 'path';
 import { loadState, saveState, saveRendererState, flushState, saveStateSync } from './store';
 import type { PersistedState } from './store';
+import type { Profile } from '../shared/types';
 
 const mockExistsSync = vi.mocked(fs.existsSync);
 const mockReadFileSync = vi.mocked(fs.readFileSync);
@@ -26,6 +28,13 @@ const DEFAULT_STATE: PersistedState = {
   activeProjectId: null,
   preferences: { soundOnSessionWaiting: true, notificationsDesktop: true, debugMode: false, sessionHistoryEnabled: true, insightsEnabled: true, autoTitleEnabled: true, confirmCloseWorkingSession: true, externalControlEnabled: false, locale: 'en' },
 };
+
+// Consent keys are resolved paths (settings-guard's profileConsentKey).
+const WORK_DIR = path.resolve('/home/u/.claude-work');
+
+function profileAt(configDir: string): Profile {
+  return { id: configDir, name: 'p', providerId: 'claude', configDir, managed: false, createdAt: 0 };
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -143,13 +152,18 @@ describe('pending saves', () => {
   });
 
   it('saveRendererState keeps the statusLine consent written by the main process', () => {
-    const byDir = { '/home/u/.claude-work': { consent: 'declined' as const, command: '/bin/other' } };
+    const byDir = { [WORK_DIR]: { consent: 'declined' as const, command: '/bin/other' } };
     saveState({
       ...DEFAULT_STATE,
       preferences: { ...DEFAULT_STATE.preferences, statusLineConsent: 'granted', statusLineConsentCommand: '/bin/x', statusLineConsentByDir: byDir },
     });
 
-    saveRendererState({ ...DEFAULT_STATE, activeProjectId: 'p2', preferences: { ...DEFAULT_STATE.preferences, debugMode: true } });
+    saveRendererState({
+      ...DEFAULT_STATE,
+      activeProjectId: 'p2',
+      profiles: [profileAt(WORK_DIR)],
+      preferences: { ...DEFAULT_STATE.preferences, debugMode: true },
+    });
     vi.advanceTimersByTime(300);
 
     const written = JSON.parse(String(mockWriteFileSync.mock.calls.at(-1)![1]));
@@ -158,5 +172,20 @@ describe('pending saves', () => {
     expect(written.preferences.statusLineConsent).toBe('granted');
     expect(written.preferences.statusLineConsentCommand).toBe('/bin/x');
     expect(written.preferences.statusLineConsentByDir).toEqual(byDir);
+  });
+
+  it('saveRendererState drops the statusLine consent of a removed profile', () => {
+    const personalDir = path.resolve('/home/u/.claude-personal');
+    const record = { consent: 'granted' as const, command: '/bin/other' };
+    saveState({
+      ...DEFAULT_STATE,
+      preferences: { ...DEFAULT_STATE.preferences, statusLineConsentByDir: { [WORK_DIR]: record, [personalDir]: record } },
+    });
+
+    saveRendererState({ ...DEFAULT_STATE, profiles: [profileAt(personalDir)] });
+    vi.advanceTimersByTime(300);
+
+    const written = JSON.parse(String(mockWriteFileSync.mock.calls.at(-1)![1]));
+    expect(written.preferences.statusLineConsentByDir).toEqual({ [personalDir]: record });
   });
 });
