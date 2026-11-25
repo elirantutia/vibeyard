@@ -105,9 +105,8 @@ describe('hook-status', () => {
       const opts = { input, env: { ...process.env, PYTHONIOENCODING: 'utf-8' } };
       return spawnSync(findPython()!, ['-c', code], opts);
     };
-    // Memoised: three tests need Python, and each probe is a process launch.
-    // Searches PATH rather than using pythonBin (/usr/bin/python3 on macOS and
-    // Linux), so a Homebrew, pyenv or Nix install still runs these tests.
+    // Memoised: several tests need Python, and each probe is a process launch.
+    // Searches PATH, so a Homebrew, pyenv or Nix install runs these tests.
     // Checks the exit status, not just a spawn error: on Windows a bare
     // `python3` is usually the Microsoft Store stub, which launches fine and
     // exits 9009. On macOS without the Command Line Tools, /usr/bin/python3 is
@@ -227,7 +226,7 @@ sys.stdout.write(json.dumps({'afterRepeat':after_repeat,'total':len(writes),'fin
     });
 
     it('forwards rate_limits into .cost only when Claude sends them', () => {
-      if (!hasPython()) return; // no python3 on this runner
+      if (!findPython()) return; // no Python on this runner
 
       const tmp = path.join(
         process.env.TMPDIR || process.env.TEMP || '/tmp',
