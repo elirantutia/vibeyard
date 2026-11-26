@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import type { PersistedState } from '../shared/types';
+import type { PersistedState, Preferences, Profile } from '../shared/types';
 
 export type { SessionRecord, ProjectRecord, Preferences, PersistedState } from '../shared/types';
 
@@ -20,6 +20,9 @@ function defaultState(): PersistedState {
 }
 
 export function loadState(): PersistedState {
+  // Saves are debounced, so while one is pending the file is behind what was
+  // last saved; reading the file then would drop that save.
+  if (saveTimer && lastState) return structuredClone(lastState);
   for (const file of [STATE_FILE, STATE_FILE + '.tmp']) {
     try {
       if (!fs.existsSync(file)) continue;
@@ -50,6 +53,43 @@ export function saveState(state: PersistedState): void {
 }
 
 let lastState: PersistedState | null = null;
+
+/**
+ * Save a state sent by the renderer. The statusLine consent preferences are
+ * written only by the main process, but the renderer saves the whole state it
+ * loaded at startup, so they are taken from the current state instead or the
+ * renderer's next save would roll them back to their launch-time values.
+ */
+export function saveRendererState(state: PersistedState): void {
+  const current = (lastState ?? loadState()).preferences;
+  state.preferences.statusLineConsent = current.statusLineConsent;
+  state.preferences.statusLineConsentCommand = current.statusLineConsentCommand;
+  state.preferences.statusLineConsentByDir = consentOfLiveProfiles(current.statusLineConsentByDir, state.profiles);
+  saveState(state);
+}
+
+/**
+ * Key of a config dir in `preferences.statusLineConsentByDir`. Lives here, not
+ * in settings-guard (which writes the keys), so the pruning below uses the
+ * same rule without an import cycle.
+ */
+export function consentDirKey(configDir: string): string {
+  return path.resolve(configDir);
+}
+
+/**
+ * Drops consent recorded for config dirs no profile uses anymore. The renderer
+ * owns the profile list but cannot clear these prefs (see above), so a removed
+ * profile's entry is pruned here, on the renderer's next save.
+ */
+function consentOfLiveProfiles(
+  byDir: Preferences['statusLineConsentByDir'],
+  profiles: Profile[] | undefined,
+): Preferences['statusLineConsentByDir'] {
+  if (!byDir) return byDir;
+  const liveDirs = new Set((profiles ?? []).map((p) => consentDirKey(p.configDir)));
+  return Object.fromEntries(Object.entries(byDir).filter(([dir]) => liveDirs.has(dir)));
+}
 
 export function flushState(): void {
   if (lastState) {

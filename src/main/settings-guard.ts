@@ -2,10 +2,10 @@ import * as path from 'path';
 import { homedir } from 'os';
 import { ipcMain, BrowserWindow } from 'electron';
 import { getStatusLineScriptPath } from './hook-status';
-import { HOOK_MARKER, installHooksOnly, installStatusLine, getSupportedHookEvents } from './claude-cli';
+import { HOOK_MARKER, defaultClaudeDir, installHooksOnly, installStatusLine, getSupportedHookEvents } from './claude-cli';
 import { readJsonSafe } from './fs-utils';
-import { loadState, saveState } from './store';
-import type { SettingsValidationResult } from '../shared/types';
+import { consentDirKey, loadState, saveState } from './store';
+import type { Preferences, SettingsValidationResult, StatusLineConflictData } from '../shared/types';
 
 const LEGACY_STATUSLINE_RE = /[/\\]vibeyard[/\\]statusline\.(sh|cmd)$/;
 
@@ -104,33 +104,141 @@ export function shouldWarnStatusLine(
   return true;
 }
 
+/** Key of a profile config dir in `statusLineConsentByDir`; null for ~/.claude. */
+function profileConsentKey(configDir: string | undefined): string | null {
+  if (!configDir) return null;
+  const key = consentDirKey(configDir);
+  return key === consentDirKey(defaultClaudeDir()) ? null : key;
+}
+
+/** Stored statusLine consent for a config dir (~/.claude when omitted). */
+export function getStatusLineConsent(
+  prefs: Preferences,
+  configDir?: string,
+): { consent: 'granted' | 'declined' | null | undefined; command: string | null | undefined } {
+  const key = profileConsentKey(configDir);
+  if (key === null) {
+    return { consent: prefs.statusLineConsent, command: prefs.statusLineConsentCommand };
+  }
+  const record = prefs.statusLineConsentByDir?.[key];
+  return { consent: record?.consent, command: record?.command };
+}
+
+function setStatusLineConsent(
+  prefs: Preferences,
+  configDir: string | undefined,
+  consent: 'granted' | 'declined',
+  command: string,
+): void {
+  const key = profileConsentKey(configDir);
+  if (key === null) {
+    prefs.statusLineConsent = consent;
+    prefs.statusLineConsentCommand = command;
+    return;
+  }
+  prefs.statusLineConsentByDir = { ...prefs.statusLineConsentByDir, [key]: { consent, command } };
+}
+
+// The renderer has a single conflict modal (opening a second one answers the
+// first with 'keep') and replies on one shared channel, so prompts must never
+// overlap: each waits for the previous one to be answered.
+let dialogChain: Promise<unknown> = Promise.resolve();
+
 /**
- * Guarded hook/statusLine installation. Shows a dialog if a foreign statusLine
- * is detected and the user hasn't previously granted/declined consent for
- * that specific foreign command.
+ * The user's choice, or null when the dialog went away unanswered: the window
+ * closed, the page reloaded, or the renderer crashed. Nothing is stored for
+ * null, so the question is asked again on the next install.
  */
-export async function guardedInstall(win: BrowserWindow | null): Promise<void> {
-  const validation = validateSettings();
+type ConflictAnswer = 'replace' | 'keep' | null;
+
+function askConflict(win: BrowserWindow, data: StatusLineConflictData): Promise<ConflictAnswer> {
+  const ask = dialogChain.then(() => showConflictDialog(win, data));
+  dialogChain = ask.catch(() => undefined);
+  return ask;
+}
+
+function showConflictDialog(win: BrowserWindow, data: StatusLineConflictData): Promise<ConflictAnswer> {
+  if (win.isDestroyed()) return Promise.resolve(null);
+
+  // A reload or crash removes the modal without an answer and without a
+  // 'closed' event; left unsettled, it would hang the profile spawns waiting
+  // on this install and every prompt queued behind it in dialogChain.
+  const channel = 'settings:conflictDialogResponse';
+  return new Promise<ConflictAnswer>((resolve) => {
+    const send = () => win.webContents.send('settings:showConflictDialog', data);
+    const settle = (answer: ConflictAnswer) => {
+      ipcMain.removeListener(channel, onResponse);
+      win.removeListener('closed', onGone);
+      if (!win.isDestroyed()) {
+        win.webContents.removeListener('did-finish-load', send);
+        win.webContents.removeListener('did-start-loading', onGone);
+        win.webContents.removeListener('render-process-gone', onGone);
+      }
+      resolve(answer);
+    };
+    const onResponse = (_event: Electron.IpcMainEvent, c: string) => settle(c === 'replace' ? 'replace' : 'keep');
+    const onGone = () => settle(null);
+    ipcMain.once(channel, onResponse);
+    win.once('closed', onGone);
+    win.webContents.once('did-start-loading', onGone);
+    win.webContents.once('render-process-gone', onGone);
+    // The renderer can only show the modal once it has loaded.
+    if (win.webContents.isLoading()) win.webContents.once('did-finish-load', send);
+    else send();
+  });
+}
+
+// Several sessions of one profile can spawn at once (e.g. restore on launch);
+// they share one guarded install instead of each prompting. `prompted` settles
+// when the install starts waiting on the dialog, and never when it needs none.
+const inFlight = new Map<string, { run: Promise<void>; prompted: Promise<void> }>();
+
+/**
+ * Guarded hook/statusLine installation into `configDir` (~/.claude when
+ * omitted). Shows a dialog if a foreign statusLine is detected and the user
+ * hasn't previously granted/declined consent for that specific foreign
+ * command in that config dir. `onPrompt` runs once the install is waiting on
+ * that dialog, also for a caller that joined an install already in flight.
+ */
+export function guardedInstall(win: BrowserWindow | null, configDir?: string, onPrompt?: () => void): Promise<void> {
+  const key = consentDirKey(configDir ?? defaultClaudeDir());
+  let entry = inFlight.get(key);
+  if (!entry) {
+    let markPrompted!: () => void;
+    const prompted = new Promise<void>((resolve) => { markPrompted = resolve; });
+    const run = runGuardedInstall(win, configDir, markPrompted).finally(() => inFlight.delete(key));
+    entry = { run, prompted };
+    inFlight.set(key, entry);
+  }
+  if (onPrompt) void entry.prompted.then(onPrompt);
+  return entry.run;
+}
+
+async function runGuardedInstall(
+  win: BrowserWindow | null,
+  configDir: string | undefined,
+  onPrompt: () => void,
+): Promise<void> {
+  const validation = validateSettings(configDir);
 
   // Always install hooks (additive, non-destructive)
-  installHooksOnly();
+  installHooksOnly(configDir);
 
   if (validation.statusLine === 'vibeyard' || validation.statusLine === 'missing') {
-    installStatusLine();
+    installStatusLine(configDir);
     return;
   }
 
   // Foreign statusLine detected — check stored consent
   const state = loadState();
-  const consent = state.preferences.statusLineConsent;
-  const consentCommand = state.preferences.statusLineConsentCommand;
+  const { consent, command: consentCommand } = getStatusLineConsent(state.preferences, configDir);
   const currentForeign = validation.foreignStatusLineCommand ?? '';
 
   // Legacy 'declined' without recorded command: assume the current foreign
   // is what the user originally chose to keep, and freeze it. Future edits
   // to a different command will re-prompt.
   if (consent === 'declined' && !consentCommand) {
-    state.preferences.statusLineConsentCommand = currentForeign;
+    setStatusLineConsent(state.preferences, configDir, 'declined', currentForeign);
     saveState(state);
     return;
   }
@@ -138,7 +246,7 @@ export async function guardedInstall(win: BrowserWindow | null): Promise<void> {
   // Consent applies only to the specific foreign command it was given for.
   // A different (or unknown) foreign command is a new conflict — re-prompt.
   if (consent === 'granted' && consentCommand && consentCommand === currentForeign) {
-    installStatusLine();
+    installStatusLine(configDir);
     return;
   }
   if (consent === 'declined' && consentCommand === currentForeign) {
@@ -148,33 +256,21 @@ export async function guardedInstall(win: BrowserWindow | null): Promise<void> {
   // No prior decision for this foreign command — ask the user via in-app modal
   if (!win) return;
 
-  // Wait for renderer to be ready before sending IPC
-  if (win.webContents.isLoading()) {
-    await new Promise<void>(resolve => win.webContents.once('did-finish-load', resolve));
-  }
-
-  const foreignCmd = validation.foreignStatusLineCommand ?? '(unknown)';
-  const channel = 'settings:conflictDialogResponse';
-  const choice = await new Promise<'replace' | 'keep'>((resolve) => {
-    const onResponse = (_event: Electron.IpcMainEvent, c: string) => {
-      win.removeListener('closed', onClose);
-      resolve(c === 'replace' ? 'replace' : 'keep');
-    };
-    const onClose = () => {
-      ipcMain.removeListener(channel, onResponse);
-      resolve('keep');
-    };
-    ipcMain.once(channel, onResponse);
-    win.once('closed', onClose);
-    win.webContents.send('settings:showConflictDialog', { foreignCommand: foreignCmd });
+  onPrompt();
+  const choice = await askConflict(win, {
+    foreignCommand: validation.foreignStatusLineCommand ?? '(unknown)',
+    configDir: profileConsentKey(configDir) ?? undefined,
   });
+  if (choice === null) return;
 
-  state.preferences.statusLineConsent = choice === 'replace' ? 'granted' : 'declined';
-  state.preferences.statusLineConsentCommand = currentForeign;
-  saveState(state);
+  // Reload rather than reuse `state`: the prompt may have waited behind
+  // others whose answers were saved in the meantime.
+  const fresh = loadState();
+  setStatusLineConsent(fresh.preferences, configDir, choice === 'replace' ? 'granted' : 'declined', currentForeign);
+  saveState(fresh);
 
   if (choice === 'replace') {
-    installStatusLine();
+    installStatusLine(configDir);
   }
 }
 

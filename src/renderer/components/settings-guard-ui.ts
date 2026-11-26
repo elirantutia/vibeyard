@@ -9,7 +9,7 @@ export function initSettingsGuard(): void {
   initialized = true;
 
   window.vibeyard.settings.onConflictDialog((data) => {
-    showStatusLineConflictModal(data.foreignCommand).then((choice) => {
+    showStatusLineConflictModal(data.foreignCommand, data.configDir).then((choice) => {
       window.vibeyard.settings.respondConflictDialog(choice);
     });
   });
