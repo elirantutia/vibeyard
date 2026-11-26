@@ -24,16 +24,17 @@
 }
 
 :root {
-  /* surfaces — toned cool-slate instead of pure #000 for depth */
-  --bg-primary: #0e0f13;   /* main canvas            */
-  --bg-secondary: #101116; /* sidebar                */
-  --bg-tertiary: #171922;  /* cards / raised panels  */
-  --bg-hover: #1b1d27;
+  /* surfaces — cool slate; the sidebar and tab bar sit a visible step below
+     the main canvas so the regions read apart at a glance */
+  --bg-primary: #1c1e24;   /* main canvas            */
+  --bg-secondary: #16171c; /* sidebar                */
+  --bg-tertiary: #23252d;  /* cards / raised panels  */
+  --bg-hover: #2a2d36;
 
   /* text */
-  --text-primary: #e9eaf1;
-  --text-secondary: #969aac;
-  --text-muted: #5d6172;
+  --text-primary: #d8dae3;
+  --text-secondary: #9a9dad;
+  --text-muted: #6a6e7f;
 
   /* accent — iris replaces the generic coral #e94560 */
   --accent: #8588f2;
@@ -43,9 +44,9 @@
   --accent-text: #ffffff;
 
   /* borders — hairline alpha rather than a solid #333 slab */
-  --border: rgba(255, 255, 255, 0.10);
-  --border-subtle: rgba(255, 255, 255, 0.055); /* inner dividers */
-  --border-strong: rgba(255, 255, 255, 0.16);
+  --border: rgba(255, 255, 255, 0.11);
+  --border-subtle: rgba(255, 255, 255, 0.07); /* inner dividers */
+  --border-strong: rgba(255, 255, 255, 0.17);
 
   /* status / semantic (harmonised with the Studio palette) */
   --status-working: var(--accent); /* single source of truth for the "working" state */
@@ -56,8 +57,8 @@
   --color-warning: #e2b65f;
   --color-critical: #f0656b;
 
-  --tab-active: #0e0f13;
-  --tab-inactive: #101116;
+  --tab-active: var(--bg-primary);
+  --tab-inactive: var(--bg-secondary);
   --pane-focus: var(--accent);
   --pane-unfocus: var(--border);
 
@@ -74,21 +75,21 @@
 }
 
 [data-theme="dark"] {
-  --bg-primary: #0e0f13;
-  --bg-secondary: #101116;
-  --bg-tertiary: #171922;
-  --bg-hover: #1b1d27;
-  --text-primary: #e9eaf1;
-  --text-secondary: #969aac;
-  --text-muted: #5d6172;
+  --bg-primary: #1c1e24;
+  --bg-secondary: #16171c;
+  --bg-tertiary: #23252d;
+  --bg-hover: #2a2d36;
+  --text-primary: #d8dae3;
+  --text-secondary: #9a9dad;
+  --text-muted: #6a6e7f;
   --accent: #8588f2;
   --accent-dim: #6d70e6;
   --accent-soft: rgba(133, 136, 242, 0.15);
   --accent-fg: #ffffff;
   --accent-text: #ffffff;
-  --border: rgba(255, 255, 255, 0.10);
-  --border-subtle: rgba(255, 255, 255, 0.055);
-  --border-strong: rgba(255, 255, 255, 0.16);
+  --border: rgba(255, 255, 255, 0.11);
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.17);
   --status-working: var(--accent);
   --status-waiting: #f4b400;
   --status-input: #e67e22;
@@ -96,8 +97,8 @@
   --bookmark: #e8a317;
   --color-warning: #e2b65f;
   --color-critical: #f0656b;
-  --tab-active: #0e0f13;
-  --tab-inactive: #101116;
+  --tab-active: var(--bg-primary);
+  --tab-inactive: var(--bg-secondary);
   --pane-focus: var(--accent);
   --pane-unfocus: var(--border);
 }
