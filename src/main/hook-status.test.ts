@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as path from 'path';
-import { isWin } from './platform';
+import { isWin, isMac, whichCmd } from './platform';
 
 const STATUS_DIR = path.join('/tmp', 'vibeyard');
 const SCRIPT_DIR = path.join('/home/test', '.vibeyard', 'run');
@@ -95,7 +95,7 @@ describe('hook-status', () => {
     // used by the Windows branch is exercised on every platform's CI run.
     const body = () => buildStatusLinePython(STATUS_DIR);
 
-    // Feeds the script to python3 on stdin. PYTHONIOENCODING is required:
+    // Feeds the script to Python on stdin. PYTHONIOENCODING is required:
     // Node writes `input` as UTF-8, but on Windows sys.stdin defaults to the
     // locale codepage, so a non-ascii path comes back mojibake'd (\u00fc ->
     // \u00c3\u00bc). Production is unaffected — the body is written to a .py file,
@@ -103,16 +103,27 @@ describe('hook-status', () => {
     const runPython = (code: string, input: string) => {
       const { spawnSync } = require('child_process') as typeof import('child_process');
       const opts = { input, env: { ...process.env, PYTHONIOENCODING: 'utf-8' } };
-      return spawnSync('python3', ['-c', code], opts);
+      return spawnSync(findPython()!, ['-c', code], opts);
     };
-    // Memoised: three tests probe for python3, and each probe is a process launch.
-    let pythonAvailable: boolean | undefined;
-    const hasPython = () => {
-      if (pythonAvailable === undefined) {
+    // Memoised: several tests need Python, and each probe is a process launch.
+    // Searches PATH, so a Homebrew, pyenv or Nix install runs these tests.
+    // Checks the exit status, not just a spawn error: on Windows a bare
+    // `python3` is usually the Microsoft Store stub, which launches fine and
+    // exits 9009. On macOS without the Command Line Tools, /usr/bin/python3 is
+    // a stub that opens an install dialog, so it is never launched there.
+    let python: string | null | undefined;
+    const findPython = () => {
+      if (python === undefined) {
         const { spawnSync } = require('child_process') as typeof import('child_process');
-        pythonAvailable = !spawnSync('python3', ['-c', 'pass']).error;
+        const macStubOnly = isMac && spawnSync('xcode-select', ['-p']).status !== 0;
+        const isMacStub = (bin: string) =>
+          macStubOnly && spawnSync(whichCmd, [bin], { encoding: 'utf8' }).stdout?.trim() === `/usr/bin/${bin}`;
+        python = ['python3', 'python'].find(
+          (bin) => !isMacStub(bin) && spawnSync(bin, ['-c', 'pass']).status === 0,
+        ) ?? null;
+        if (!python) console.warn('hook-status.test: no Python on PATH, skipping the statusline script runs');
       }
-      return pythonAvailable;
+      return python;
     };
 
     it('extracts cost, context_window, session_id and session_name', () => {
@@ -145,7 +156,7 @@ describe('hook-status', () => {
       const literal = script.split('\n').find((l) => l.startsWith('status_dir='))!;
       expect(literal).toBe(`status_dir=${JSON.stringify(dir)}`);
 
-      if (!hasPython()) return; // no python3 here
+      if (!findPython()) return; // no Python here
 
       const result = runPython(
         `import sys,json;ns={};exec(sys.stdin.read(),ns);print(json.dumps(ns["status_dir"]))`,
@@ -168,7 +179,7 @@ describe('hook-status', () => {
       // renderer as an IPC that ends in a persist plus a full renderLayout(),
       // which used to re-append the terminal pane many times a second — blurring
       // the in-pane find bar and collapsing an in-progress selection.
-      if (!hasPython()) return; // no python3 on this runner
+      if (!findPython()) return; // no Python on this runner
 
       // Real fs, deliberately: `fs` is mocked in this suite, so the script's own
       // writes are observed from inside Python instead.
@@ -215,7 +226,7 @@ sys.stdout.write(json.dumps({'afterRepeat':after_repeat,'total':len(writes),'fin
     });
 
     it('forwards rate_limits into .cost only when Claude sends them', () => {
-      if (!hasPython()) return; // no python3 on this runner
+      if (!findPython()) return; // no Python on this runner
 
       const tmp = path.join(
         process.env.TMPDIR || process.env.TEMP || '/tmp',
@@ -252,7 +263,7 @@ sys.stdout.write(json.dumps({'with':with_rl.get('rate_limits'),'without':'rate_l
       // A syntax error here is silent in production: it kills cost, context,
       // sessionid and name at once, with the traceback going only to
       // statusline.log. Nothing else in this suite would catch it.
-      if (!hasPython()) return; // no python3 on this runner
+      if (!findPython()) return; // no Python on this runner
 
       const result = runPython('import sys;compile(sys.stdin.read(),"statusline","exec")', body());
 
